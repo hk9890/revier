@@ -7,6 +7,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -210,24 +211,90 @@ func TestShutdownCountsAWindowThatGoesDuringTheWaitAsClosed(t *testing.T) {
 	}
 }
 
-// A cancel during the wait ends it at the next listing: a window its
-// application keeps open does not hold the shutdown for the whole wait, and
-// it is reported still open.
-func TestShutdownEndsTheWaitWhenTheCallerCancels(t *testing.T) {
+// A window its application keeps open costs the wait a listing of every
+// host each time it asks. The gap between two listings doubles, so a wait of
+// two seconds lists a handful of times, not once each ClosePoll.
+func TestTheWaitListsLessOftenAsItGoesOn(t *testing.T) {
 	c, _, wm, projects := openDesktop(t, revier.StatusIdle)
 	report := survey(t, c, projects, nil)
 	wm.Refuses = map[string]bool{report.Windows[0].Ref.ID: true}
+	var before int
+	wm.OnClose = func(revier.TargetRef) { before = wm.InstancesCalls }
+
+	out, err := c.Shutdown(context.Background(), c.ShutdownPlan(report, "", core.ShutdownAll), 20*core.ClosePoll, reading(projects))
+	if err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	if _, open, _ := out.Counts(); open != 1 {
+		t.Fatalf("%d still open, want the editor", open)
+	}
+	if n := wm.InstancesCalls - before; n > 8 {
+		t.Errorf("the wait listed %d times in %v, want the gap to grow", n, 20*core.ClosePoll)
+	}
+}
+
+// A cancel during the wait ends it at once, a listing that hangs included: a
+// window host that does not answer does not hold the shutdown for the whole
+// wait, and the window no listing showed gone is reported still open.
+func TestShutdownEndsTheWaitWhenTheCallerCancels(t *testing.T) {
+	c, _, wm, projects := openDesktop(t, revier.StatusIdle)
+	report := survey(t, c, projects, nil)
+	hang := &atomic.Bool{}
+	c.Window = hangingWindows{Fake: wm, hang: hang}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	wm.OnClose = func(revier.TargetRef) { time.AfterFunc(2*core.ClosePoll, cancel) }
+	var cancelledAt atomic.Int64
+	wm.OnClose = func(revier.TargetRef) {
+		hang.Store(true)
+		time.AfterFunc(2*core.ClosePoll, func() {
+			cancelledAt.Store(time.Now().UnixNano())
+			cancel()
+		})
+	}
 
-	start := time.Now()
 	out, err := c.Shutdown(ctx, c.ShutdownPlan(report, "", core.ShutdownAll), time.Minute, reading(projects))
 	if err != nil {
 		t.Fatalf("Shutdown: %v", err)
 	}
-	if took := time.Since(start); took > 10*time.Second {
-		t.Errorf("shutdown took %v; want the cancel to end the one-minute wait", took)
+	if lag := time.Since(time.Unix(0, cancelledAt.Load())); lag > 4*core.ClosePoll {
+		t.Errorf("shutdown returned %v after the cancel; want it at once", lag)
+	}
+	if closed, open, _ := out.Counts(); closed != 2 || open != 1 {
+		t.Errorf("counts = %d closed, %d open; want the editor still open", closed, open)
+	}
+}
+
+// hangingWindows is a window host whose listing, once hang is set, answers
+// only when its context ends.
+type hangingWindows struct {
+	*hosttest.Fake
+	hang *atomic.Bool
+}
+
+func (w hangingWindows) Instances(ctx context.Context) ([]revier.Instance, error) {
+	if w.hang.Load() {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	return w.Fake.Instances(ctx)
+}
+
+// A listing the wait's budget cuts short says nothing about what went: the
+// window it was asked about is still open, not taken as gone, so the
+// shutdown never says it is safe to leave on a listing that did not answer.
+func TestAListingTheWaitCutsShortLeavesTheStepOpen(t *testing.T) {
+	was := core.CloseListBudget
+	t.Cleanup(func() { core.CloseListBudget = was })
+	core.CloseListBudget = 2 * core.ClosePoll
+	c, _, wm, projects := openDesktop(t, revier.StatusIdle)
+	report := survey(t, c, projects, nil)
+	hang := &atomic.Bool{}
+	c.Window = hangingWindows{Fake: wm, hang: hang}
+	wm.OnClose = func(revier.TargetRef) { hang.Store(true) }
+
+	out, err := c.Shutdown(context.Background(), c.ShutdownPlan(report, "", core.ShutdownAll), 0, reading(projects))
+	if err != nil {
+		t.Fatalf("Shutdown: %v", err)
 	}
 	if closed, open, _ := out.Counts(); closed != 2 || open != 1 {
 		t.Errorf("counts = %d closed, %d open; want the editor still open", closed, open)

@@ -189,6 +189,8 @@ ctrl+c again to quit at once: the command the step waits for ends too.
 
 - A window its application keeps open, for example to ask about unsaved
   work, is named `still open`. revier does not kill it.
+- A window revier cannot see go, because the window manager stopped
+  answering, is named `still open` too.
 - A shutdown of one project leaves open what another project also holds,
   such as a shared target's window.
 - When revier cannot read a step's agents, for example because a host did

@@ -12,7 +12,8 @@ import (
 // interruptible is ctx without its deadline, cancelled by the first
 // interrupt: ctrl+c on a shutdown or a restore. The walk reads the cancel
 // between two steps, so the step that runs finishes and the rest is not
-// reached. The host commands a step runs are in a process group of their
+// reached, and a shutdown's wait for what it closed reads it between two
+// listings. The host commands a step runs are in a process group of their
 // own, so the interrupt the terminal sends to revier's group does not end
 // them too.
 //

@@ -43,7 +43,8 @@ var closeWait = core.CloseWait
 // first when it changed, so a restore brings back what the shutdown closed,
 // and it refuses while an agent is busy unless forced (decisions.md D78). A
 // shutdown of every project, all of each, is recorded in the state, so the
-// next surface offers the restore (D141). ctrl+c stops it between two steps.
+// next surface offers the restore (D141). ctrl+c stops it between two steps,
+// and ends its wait for what it closed.
 func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("shutdown", flag.ContinueOnError)
 	agents := fs.Bool("agents", false, "close only the agents")
@@ -148,9 +149,10 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		said = append(said, p.Closed.Note())
 		_, _ = fmt.Fprintln(a.out, said[len(said)-1])
 	}
-	// ctrl+c stops the close between two steps. A second ctrl+c ends the
-	// command before the shutdown returns, so it abandons the record of a
-	// full shutdown, which takes it back or keeps it.
+	// ctrl+c stops the close between two steps, and ends the wait after
+	// them. A second ctrl+c ends the command before the shutdown returns, so
+	// it abandons the record of a full shutdown, which takes it back or keeps
+	// it.
 	var record *usecase.ShutdownRecord
 	var abandon func()
 	if only == "" && scope == core.ShutdownAll {

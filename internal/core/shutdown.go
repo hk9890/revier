@@ -507,18 +507,29 @@ func (cs Closed) Counts() (closed, open, failed int) {
 	return closed, open, failed
 }
 
-// ClosePoll is how often a shutdown lists the hosts while it waits for what
-// it closed to go.
+// ClosePoll is how soon a shutdown lists the hosts again while it waits for
+// what it closed to go. Each listing doubles the gap, up to ClosePollMax: most
+// closes go within the first second, and a step that stays costs every host a
+// listing each time.
 const ClosePoll = 100 * time.Millisecond
+
+// ClosePollMax is the longest gap between two listings of the wait.
+const ClosePollMax = time.Second
 
 // CloseWait is how long a shutdown waits for what it closed to go. The wait
 // ends as soon as nothing is pending, so only a step that stays costs it all.
 // An IDE window can take more than 4 s to go after its close.
 const CloseWait = 10 * time.Second
 
-// CloseBudget is how long the closes themselves may take, on top of the wait
-// that follows them. It counts from the moment the save is done.
-const CloseBudget = 30 * time.Second
+// CloseBudget is how long the closes themselves may take. It counts from the
+// moment the save is done. The wait after them has a budget of its own, so a
+// slow close leaves it whole.
+const CloseBudget = 40 * time.Second
+
+// CloseListBudget is how long a listing the wait started before its end may
+// still take. A listing it cuts short changes nothing: each step keeps what
+// the listing before said of it. A variable so a test can cut one short.
+var CloseListBudget = 5 * time.Second
 
 // SaveBudget is how long the save before the closes may take. It counts from
 // the moment the recheck is done. Within it the hosts of the links open
@@ -610,16 +621,19 @@ func (r *BusyRefusal) Unwrap() error { return ErrAgentBusy }
 // refused close saves nothing, and a saved session holds what is open now
 // rather than what was open when the plan was drawn.
 //
-// The closes and the wait after them then run on a budget of their own, as
-// the save before them does (phaseContext), so however long the recheck took,
-// the save is made and every step is asked to close.
+// The closes and the wait after them then each run on a budget of their own,
+// counted from where each starts, so however long the recheck took, the save
+// is made, every step is asked to close, and the wait runs whole. Unlike the
+// save's, their budgets are out of the cancel's reach. A shutdown whose every
+// host hangs ends after RecheckBudget, SaveBudget, CloseBudget, the wait and
+// CloseListBudget.
 //
 // A caller that cancels stops the walk between two steps: the step that runs
 // does not see the cancel and finishes, and the steps not yet reached are left
-// out of the result. A cancel also ends the wait after its next listing, so a
-// step that closed is still open in the result when that listing still holds
-// it. A budget that runs out is no such decision, and every step is still
-// asked.
+// out of the result. A cancel also ends the wait at once, a listing that runs
+// included, so a step that closed is still open in the result when no
+// listing showed it gone. A budget that runs out is no such decision, and
+// every step is still asked.
 func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duration, opts ShutdownOpts) (Closed, error) {
 	start := time.Now()
 	opts.report(Progress{Phase: PhaseRecheck, Of: len(plan)})
@@ -647,9 +661,9 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 			return nil, err
 		}
 	}
-	// The steps and the wait run on a budget the cancel does not reach; the
+	// The steps and the wait run on budgets the cancel does not reach; the
 	// cancel is read between two steps, and between two listings of the wait.
-	closing, stop := context.WithTimeout(context.WithoutCancel(ctx), CloseBudget+wait)
+	closing, stop := context.WithTimeout(context.WithoutCancel(ctx), CloseBudget)
 	defer stop()
 	cancelled := func() bool { return errors.Is(ctx.Err(), context.Canceled) }
 	out := make(Closed, 0, len(plan))
@@ -687,7 +701,9 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 		opts.report(Progress{Phase: PhaseClose, N: i + 1, Of: len(plan), Label: s.Name(), Done: true, Closed: res})
 	}
 	opts.report(Progress{Phase: PhaseWait, Of: len(plan)})
-	c.awaitClosed(closing, out, wait, cancelled)
+	waiting, stopWaiting := phaseContext(ctx, wait+CloseListBudget)
+	defer stopWaiting()
+	c.awaitClosed(waiting, out, wait)
 	closed, open, failed := out.Counts()
 	// A cancel stopped something when it left a step unreached, or ended the
 	// wait with a step still listed; one after the last step stopped nothing
@@ -805,14 +821,28 @@ func (c *Core) panelsOf(instances []revier.Instance, s CloseStep) []revier.Panel
 }
 
 // awaitClosed marks every closed step that is still listed once wait has
-// passed. A step whose host cannot list is taken as gone, since the close
-// itself answered without an error; a step whose host answered is judged by
-// that listing, whatever another host did (decisions.md D89). A close that
-// failed on something the listing no longer holds is closed all the same:
-// whether it is gone is the listing's word, not Close's (revier.Closer).
-// cancelled ends the wait after a listing, which it never cuts short.
-func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration, cancelled func() bool) {
+// passed. A step asked to close is open until a listing shows it gone. A host
+// whose listing fails, or that ctx cuts short, says nothing of what went: its
+// steps stay as the listing before left them, and a step whose host answered
+// is judged by that listing, whatever another host did (decisions.md D89). A
+// close that failed on something the listing no longer holds is closed all
+// the same: whether it is gone is the listing's word, not Close's
+// (revier.Closer).
+//
+// ctx ends the wait at once, a listing that runs included: it is done when
+// the caller cancels or the wait's budget is spent. A wait with no step asked
+// to close lists nothing.
+func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration) {
+	if !slices.ContainsFunc(out, func(r CloseResult) bool { return !r.Action.Leaves() }) {
+		return
+	}
+	for i := range out {
+		if !out[i].Action.Leaves() {
+			out[i].Open = out[i].Err == nil
+		}
+	}
 	deadline := time.Now().Add(wait)
+	poll := ClosePoll
 	for {
 		snap, failed := c.listing(ctx)
 		pending := false
@@ -821,25 +851,24 @@ func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration, 
 			if r.Action.Leaves() {
 				continue
 			}
-			if failed[r.Ref.Host] != nil {
-				r.Open = false
-				continue
+			if failed[r.Ref.Host] == nil {
+				still := listed(snap, r.CloseStep)
+				if r.Err != nil && !still {
+					r.Err = nil
+				}
+				r.Open = r.Err == nil && still
 			}
-			still := listed(snap, r.CloseStep)
-			if r.Err != nil && !still {
-				r.Err = nil
-			}
-			r.Open = r.Err == nil && still
 			pending = pending || r.Open
 		}
-		if !pending || time.Now().After(deadline) || cancelled() {
+		if !pending || ctx.Err() != nil || time.Now().After(deadline) {
 			return
 		}
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(ClosePoll):
+		case <-time.After(min(poll, time.Until(deadline))):
 		}
+		poll = min(2*poll, ClosePollMax)
 	}
 }
 
