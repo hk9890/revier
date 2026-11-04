@@ -332,7 +332,7 @@ func (m Model) planned(msg plannedMsg) (tea.Model, tea.Cmd) {
 func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.running = true
-	c, root, projects, plan, saves, full := m.core, m.stateRoot, s.projects, s.plan, s.saves(), s.whole
+	c, root, projects, plan, saves, full, wait := m.core, m.stateRoot, s.projects, s.plan, s.saves(), s.whole, m.closeWait
 	reason := session.ReasonProjectClosed
 	if s.whole {
 		reason = session.ReasonShutdown
@@ -379,7 +379,7 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 		// No deadline over the close: each phase bounds its own, and once a
 		// deadline laid over the cancel passed, a ctrl+c would no longer
 		// reach the walk.
-		answer := closeAnswer(app.Shutdown(cancelled, c, plan, core.CloseWait, opts, save, record))
+		answer := closeAnswer(app.Shutdown(cancelled, c, plan, wait, opts, save, record))
 		if answer.err == nil && answer.recheck == nil {
 			answer.saved, answer.recorded = note, record != nil && record.Recorded()
 		}

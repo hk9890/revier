@@ -17,7 +17,7 @@ import (
 // A theme change repaints the field of every screen, also of a screen that is
 // not up: the next visit must not show a field in the old theme's colours.
 func TestAThemeChangeRepaintsTheFieldOfEveryScreen(t *testing.T) {
-	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, t.TempDir(), &config.Config{}, time.Second, theme.Default(), "")
+	m := NewWithoutWaits(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, t.TempDir(), &config.Config{}, time.Second, theme.Default(), "")
 	th, err := theme.Lookup("catppuccin-latte", "")
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +43,7 @@ func TestAThemeChangeRepaintsTheFieldOfEveryScreen(t *testing.T) {
 // A terminal with 16 or 256 colours gets the theme in the indices revier has
 // always drawn it with, and so does a theme chosen after it said so.
 func TestTheThemeIsInTheColoursTheTerminalShows(t *testing.T) {
-	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, t.TempDir(), &config.Config{}, time.Second, theme.Default(), "")
+	m := NewWithoutWaits(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, t.TempDir(), &config.Config{}, time.Second, theme.Default(), "")
 	next, _ := m.Update(tea.ColorProfileMsg{Profile: colorprofile.ANSI})
 	m = next.(Model)
 

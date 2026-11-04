@@ -167,7 +167,7 @@ func TestTheNewProjectScreenNamesItsOwnHomeAndTheSharedTargets(t *testing.T) {
 			"launch": []any{"firefox"}, "match": map[string]any{"class": "^firefox$"},
 		},
 	}}
-	m := tui.New(c, projects, stateWith(t, nil), &config.Config{Targets: shared}, time.Second, theme.Default(), "")
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{Targets: shared}, time.Second, theme.Default(), "")
 	m = resize(m, 120, 20)
 
 	m, _ = press(m, "alt+n")
@@ -193,7 +193,7 @@ func TestTheNewProjectScreenNamesTheSharedTargetsWhenOneIsHome(t *testing.T) {
 			"name": "session:{{.Name}}", "match": map[string]any{"title": "^session:{{.Name}}$"},
 		},
 	}}
-	m := tui.New(c, projects, stateWith(t, nil), &config.Config{Targets: shared}, time.Second, theme.Default(), "")
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{Targets: shared}, time.Second, theme.Default(), "")
 	m = resize(m, 120, 20)
 
 	m, _ = press(m, "alt+n")

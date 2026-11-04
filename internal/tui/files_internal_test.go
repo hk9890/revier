@@ -31,7 +31,7 @@ func editableModel(t *testing.T) (Model, string) {
 		t.Fatal(err)
 	}
 	p := config.LoadProject(file, config.Inherited{})
-	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, []core.Project{p}, t.TempDir(), &config.Config{}, time.Second, theme.Default(), "")
+	m := NewWithoutWaits(&core.Core{Runtime: hosttest.NewRuntime("rt")}, []core.Project{p}, t.TempDir(), &config.Config{}, time.Second, theme.Default(), "")
 	return m, file
 }
 

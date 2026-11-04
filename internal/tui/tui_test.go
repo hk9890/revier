@@ -51,7 +51,7 @@ func TestProjectsNeedingAttentionSortFirst(t *testing.T) {
 // are ninety. The survey lays the marks over the same rows.
 func TestTheFrameBeforeTheFirstSurveyListsTheProjects(t *testing.T) {
 	_, _, c, projects := world(t, 90)
-	m := resize(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), ""), 150, 20)
+	m := resize(tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), ""), 150, 20)
 
 	view := drawn(m)
 	for _, wrong := range []string{"0 projects", "0/0", "No items", "No project"} {
@@ -150,14 +150,29 @@ func TestTheRuleKeepsTheTotalsItHasRoomFor(t *testing.T) {
 	// Every total the rule does carry stands over its own state's counts,
 	// whatever the terminal's width.
 	for w := 100; w <= 200; w++ {
-		wide := resize(m, w, 30)
-		head, row := ruleLine(wide), rows(wide)[0]
+		shown := lines(resize(m, w, 30))
+		head, row := shown[chromeLines-1], shown[chromeLines]
 		for _, glyph := range []string{g.NeedsYou, g.Working, g.Idle, g.Unknown} {
 			if over := column(head, glyph); over >= 0 && over != column(row, glyph) {
 				t.Fatalf("%d columns: %q totalled at column %d, counted at %d:\n%s\n%s",
 					w, glyph, over, column(row, glyph), head, row)
 			}
 		}
+	}
+}
+
+// A surface waits the core's close wait for what a shutdown closed, and
+// reads the mirror once a mirror interval. Every other test builds with
+// NewWithoutWaits, which waits for neither, so no other test would see a New
+// that sets neither.
+func TestASurfaceWaitsTheCloseWaitAndTheMirrorInterval(t *testing.T) {
+	_, _, c, projects := world(t, 1)
+	m := tui.New(c, projects, t.TempDir(), &config.Config{}, time.Second, theme.Default(), "")
+	if got := m.CloseWait(); got != core.CloseWait {
+		t.Errorf("close wait = %v, want core.CloseWait (%v)", got, core.CloseWait)
+	}
+	if got := m.MirrorGap(); got != tui.MirrorInterval {
+		t.Errorf("mirror gap = %v, want the mirror interval (%v)", got, tui.MirrorInterval)
 	}
 }
 
@@ -168,13 +183,13 @@ func TestTheRuleKeepsTheTotalsItHasRoomFor(t *testing.T) {
 // the user moved on those rows stays on the project they moved it to.
 func TestTheFirstSurveyPlacesTheCursor(t *testing.T) {
 	_, _, c, projects := world(t, 4)
-	m := resize(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), ""), 150, 20)
+	m := resize(tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), ""), 150, 20)
 	m = survey(m)
 	if row := selectedRow(t, m); !strings.Contains(row, "project-03") {
 		t.Errorf("after the first survey the cursor should be on the top row, project-03: %q", row)
 	}
 
-	m = resize(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), ""), 150, 20)
+	m = resize(tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), ""), 150, 20)
 	m, _ = press(m, "down")
 	m, _ = press(m, "down")
 	if row := selectedRow(t, m); !strings.Contains(row, "project-02") {
@@ -193,7 +208,7 @@ func TestTheFirstSurveyPlacesTheCursor(t *testing.T) {
 func TestADeleteBeforeTheFirstSurveyIsRefused(t *testing.T) {
 	_, _, c, projects := world(t, 4)
 	inFiles(projects)
-	m := resize(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), ""), 150, 20)
+	m := resize(tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), ""), 150, 20)
 	for range 3 {
 		m, _ = press(m, "down")
 	}
@@ -213,7 +228,7 @@ func TestNoProjectsNamesTheConfigurationDirectory(t *testing.T) {
 	t.Setenv("REVIER_CONFIG_HOME", root)
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
 	// Wide enough that the temporary directory's long name is not cut.
-	m := resize(tui.New(c, nil, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), ""), 200, 20)
+	m := resize(tui.NewWithoutWaits(c, nil, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), ""), 200, 20)
 
 	// Nothing to survey, so the first frame is already the answer.
 	view := drawn(m)
@@ -1134,7 +1149,7 @@ func TestTargetKeyOnAProjectWithoutThatTargetSaysSo(t *testing.T) {
 // scrolling to.
 func TestTheSurfaceOpensOnTheStartingProject(t *testing.T) {
 	_, _, c, projects := world(t, 6)
-	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "project-04")
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "project-04")
 	m = survey(m)
 
 	if row := selectedRow(t, m); !strings.Contains(row, "project-04") {
@@ -1146,7 +1161,7 @@ func TestTheSurfaceOpensOnTheStartingProject(t *testing.T) {
 // the cursor back to where the process started.
 func TestTheStartingProjectDoesNotRecaptureTheCursor(t *testing.T) {
 	_, _, c, projects := world(t, 6)
-	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "project-04")
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "project-04")
 	m = survey(m)
 	m, _ = press(m, "down")
 	moved := selectedRow(t, m)
@@ -1162,7 +1177,7 @@ func TestTheStartingProjectDoesNotRecaptureTheCursor(t *testing.T) {
 // frame, and its answer places the cursor.
 func TestTheLookedUpStartPlacesTheCursor(t *testing.T) {
 	_, _, c, projects := world(t, 6)
-	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").
 		WithStart(func(context.Context) (revier.ProjectName, bool) { return "project-04", true })
 
 	m = run(m, m.LookupStart())
@@ -1179,7 +1194,7 @@ func TestTheLookedUpStartPlacesTheCursor(t *testing.T) {
 // answer leaves them there.
 func TestTheLookedUpStartDoesNotMoveACursorTheUserMoved(t *testing.T) {
 	_, _, c, projects := world(t, 6)
-	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").
 		WithStart(func(context.Context) (revier.ProjectName, bool) { return "project-04", true })
 	m, _ = press(m, "down")
 	moved := selectedRow(t, m)
@@ -1193,7 +1208,7 @@ func TestTheLookedUpStartDoesNotMoveACursorTheUserMoved(t *testing.T) {
 // A starting project from the working directory needs no lookup.
 func TestAStartFromTheDirectoryRunsNoLookup(t *testing.T) {
 	_, _, c, projects := world(t, 6)
-	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "project-02").
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "project-02").
 		WithStart(func(context.Context) (revier.ProjectName, bool) { t.Error("looked up"); return "", false })
 	if m.LookupStart() != nil {
 		t.Error("a start from the directory still runs the lookup")
@@ -1210,7 +1225,7 @@ func TestEscHidesThePopupAndTheRaiseSurveysAgain(t *testing.T) {
 	t.Setenv("REVIER_CONFIG_HOME", root)
 	_, wm, c, projects := world(t, 3)
 	popup := wm.Add("revier", core.PopupClass)
-	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup()
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup()
 	m = survey(m)
 
 	m, hide := press(m, "esc")
@@ -1274,7 +1289,7 @@ func TestAFocusReportWithAMouseReportBehindItIsTheRaise(t *testing.T) {
 	t.Setenv("REVIER_CONFIG_HOME", t.TempDir())
 	_, wm, c, projects := world(t, 3)
 	wm.Add("revier", core.PopupClass)
-	m := survey(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup())
+	m := survey(tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup())
 	m, hide := press(m, "esc")
 	m = run(m, hide)
 	// The survey that was running answers: the chain ends there.
@@ -1309,7 +1324,7 @@ func TestTheSpinnerStopsWhileThePopupIsHidden(t *testing.T) {
 	_, wm, c, projects := world(t, 3)
 	wm.Add("revier", core.PopupClass)
 	c.Probes[0].(*hosttest.FakeProbe).State.Status = revier.StatusRunning
-	m := survey(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup())
+	m := survey(tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup())
 	if next, cmd := m.Update(tui.Spin()); cmd == nil {
 		t.Fatal("a working agent on a shown surface scheduled no spin")
 	} else {
@@ -1328,7 +1343,7 @@ func TestTheSpinnerStopsWhileThePopupIsHidden(t *testing.T) {
 // nothing.
 func TestEscQuitsWhereThePopupCannotHide(t *testing.T) {
 	_, wm, c, projects := world(t, 3)
-	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "")
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "")
 	m = survey(m)
 	if _, cmd := press(m, "esc"); cmd == nil || cmd() != (tea.QuitMsg{}) {
 		t.Error("esc in a terminal of the user's own did not quit")
@@ -1336,7 +1351,7 @@ func TestEscQuitsWhereThePopupCannotHide(t *testing.T) {
 
 	wm.Add("revier", core.PopupClass)
 	wm.HideErr = fmt.Errorf("wctl: no such window")
-	m = survey(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup())
+	m = survey(tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup())
 	m, hide := press(m, "esc")
 	if _, cmd := deliver(m, hide); cmd == nil || cmd() != (tea.QuitMsg{}) {
 		t.Error("a hide that failed did not quit")
@@ -1721,7 +1736,7 @@ func visibleProjects(m tui.Model) []string {
 // is waiting.
 func TestTheStartingProjectOpensWithTheRowsAboveItInView(t *testing.T) {
 	_, _, c, projects := world(t, 60)
-	m := resize(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "project-40"), 120, 60)
+	m := resize(tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "project-40"), 120, 60)
 	m = survey(m)
 
 	rows := visibleProjects(m)
@@ -1743,7 +1758,7 @@ func TestTheStartingProjectOpensWithTheRowsAboveItInView(t *testing.T) {
 // same way: it is the same start, found later.
 func TestTheLookedUpStartOpensWithTheRowsAboveItInView(t *testing.T) {
 	_, _, c, projects := world(t, 60)
-	m := resize(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").
+	m := resize(tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").
 		WithStart(func(context.Context) (revier.ProjectName, bool) { return "project-40", true }), 120, 60)
 	m = survey(m)
 
@@ -1757,7 +1772,7 @@ func TestTheLookedUpStartOpensWithTheRowsAboveItInView(t *testing.T) {
 // it is the last row in view, with as many of the others as fit.
 func TestASmallScreenPutsTheStartingProjectOnTheLastRow(t *testing.T) {
 	_, _, c, projects := world(t, 60)
-	m := resize(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "project-40"), 120, 16)
+	m := resize(tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "project-40"), 120, 16)
 	m = survey(m)
 
 	rows := visibleProjects(m)
@@ -1775,7 +1790,7 @@ func TestASmallScreenPutsTheStartingProjectOnTheLastRow(t *testing.T) {
 // that keeps the cursor in view, as every other scroll does.
 func TestARefreshUnderAQueryThatMatchesNothingDoesNotPlaceTheListLater(t *testing.T) {
 	_, _, c, projects := world(t, 60)
-	m := resize(tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "project-40"), 120, 60)
+	m := resize(tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "project-40"), 120, 60)
 	m = survey(m)
 
 	for range 3 {

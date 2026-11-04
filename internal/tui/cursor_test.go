@@ -106,7 +106,7 @@ func TestTheFirstSurveyDroppingAStaleAttachmentIsNoClose(t *testing.T) {
 	ref := wm.Add("Pull requests", "chrome")
 	wm.Remove(ref)
 	root := stateWith(t, map[revier.ProjectName][]revier.TargetRef{"project-01": {ref}})
-	m := resize(tui.New(c, projects, root, &config.Config{}, time.Second, theme.Default(), ""), 150, 30)
+	m := resize(tui.NewWithoutWaits(c, projects, root, &config.Config{}, time.Second, theme.Default(), ""), 150, 30)
 
 	m, _ = press(m, "down")
 	wantSelected(t, m, "project-01", "the second row in file order")

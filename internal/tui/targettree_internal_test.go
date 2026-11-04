@@ -116,7 +116,7 @@ func TestARowDrawsItsKind(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, th, "")
+		m := NewWithoutWaits(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, th, "")
 		g := th.Glyphs
 		blank := func(s string) string {
 			if s == "" {
