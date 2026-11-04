@@ -89,12 +89,10 @@ description = "Coverage per package, then the 25 least-covered functions. Report
 run = """
 set -e
 trap 'rm -f coverage.out' EXIT
-go test -tags=integration -coverprofile=coverage.out -covermode=atomic ./...
+go test -tags=integration -coverprofile=coverage.out ./...
 go tool cover -func=coverage.out | awk '$1 != "total:" {print}' | sort -k3 -n | head -25
 go tool cover -func=coverage.out | grep total:
 """
-[tasks."test:coverage:summary".env]
-CGO_ENABLED = "1"
 
 # ---- gates -----------------------------------------------------------------
 
