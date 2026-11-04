@@ -179,9 +179,9 @@ cancel, its last line is `shutdown complete; safe to leave`. Otherwise it
 exits `1`, so `revier shutdown && poweroff` powers off only when it is safe.
 
 To stop a shutdown or a restore, press ctrl+c. The step that runs finishes,
-the rest is not reached, and revier prints how many steps it left. Pressed
-while a shutdown waits for what it closed to go, ctrl+c ends the wait, and
-what has not gone yet is named `still open`. A full
+the rest is not reached, and revier prints how many steps it left. ctrl+c
+also ends the wait for what was closed to go: what has not gone yet is named
+`still open`. A full
 shutdown you stop is not remembered, because what it did not reach is still
 open; one you stop after its last step ran is, and one you stop before it
 saved the session leaves an earlier one remembered. When a step hangs, press

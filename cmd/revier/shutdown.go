@@ -186,10 +186,14 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	n, open, failed := closed.Counts()
 	_, _ = fmt.Fprintf(a.out, "closed %d, %d still open\n", n, open)
 	// A cancel that came after the last step was walked left no step
-	// unreached; it can only have ended the wait, and the counts say so.
+	// unreached; it can only have ended the wait, which is said when
+	// something was still open then.
 	left := len(plan) - len(closed)
-	if cancelled && left > 0 {
+	switch {
+	case cancelled && left > 0:
 		_, _ = fmt.Fprintf(a.out, "cancelled: %s not reached\n", core.Count(left, "step"))
+	case cancelled && open > 0:
+		_, _ = fmt.Fprintln(a.out, "cancelled: the wait for what was closed to go ended")
 	}
 	if failed > 0 {
 		return fmt.Errorf("%s did not close", core.Count(failed, "step"))
