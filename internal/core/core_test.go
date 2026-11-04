@@ -840,6 +840,37 @@ func TestClaimBounds(t *testing.T) {
 	}
 }
 
+// A restore launches one project's editor after another's. The window the
+// first step bound is still new to the next survey, and the class rule of the
+// second launch accepts it while its title is empty: a window that a binding
+// already holds is not the launch's to claim.
+func TestClaimSkipsAWindowAnotherTargetHolds(t *testing.T) {
+	projects := []core.Project{prepared(t, project())}
+	now := time.Now()
+	wm := hosttest.New("wm")
+	wm.Add("old", "x")
+	l := &ledger{st: state.State{Launch: &state.Launch{Project: "revier", Target: "editor", At: now.Add(-time.Second)}}}
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm, Ledger: l}
+	survey := func() core.Report {
+		r, err := c.Survey(context.Background(), projects)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	c.Settle(survey(), projects, now)
+	held := wm.AddInstance(revier.Instance{Title: "", Class: "code"})
+	l.st.Bind("other", "editor", held)
+
+	st := c.Settle(survey(), projects, now)
+	if got, ok := st.Bound["revier"]["editor"]; ok {
+		t.Errorf("revier/editor bound to %v, which other/editor holds", got)
+	}
+	if st.Launch == nil {
+		t.Error("the launch was settled; want it still coming up")
+	}
+}
+
 // A project file outlives the checkout it names. The survey reports whether
 // the directory is there, so the surface can say so before a target launches
 // into a path that is not.

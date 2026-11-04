@@ -400,6 +400,11 @@ func (s *State) Prune(hosts []string, instances []revier.Instance, before *State
 	return changed
 }
 
+// Holds reports whether a binding or an attachment holds ref.
+func (s *State) Holds(ref revier.TargetRef) bool {
+	return s.refs()[key(ref)]
+}
+
 // refs is every attached and bound ref, by key. A nil state holds none.
 func (s *State) refs() map[string]bool {
 	out := map[string]bool{}

@@ -1475,15 +1475,18 @@ func (c *Core) listed(ctx context.Context, projects []Project, st *state.State, 
 }
 
 // claim finds the window that is new since the previous survey and belongs to
-// l, the last launch, which is of the project p. For a target's launch it is
+// st's launch, which is of the project p. For a target's launch it is
 // a binding: the window the target's rule accepts by class, which the
 // activation may have missed because the window took longer than its wait.
 // For an action's launch, which has no target, it is an attachment: a window
 // no declared target of any project matches, since a declared one is reached
 // by its key already. Either way it claims nothing rather than the wrong
-// thing: nothing outside the window after the launch, and nothing when more
-// than one candidate appeared at once.
-func (c *Core) claim(before, after []revier.Instance, p Project, l *state.Launch, now time.Time, projects []Project) (revier.TargetRef, bool) {
+// thing: nothing outside the window after the launch, nothing a binding or an
+// attachment already holds, and nothing when more than one candidate appeared
+// at once. A restore launches one step after another, so the window an earlier
+// step bound can still be new to this survey.
+func (c *Core) claim(before, after []revier.Instance, p Project, st *state.State, now time.Time, projects []Project) (revier.TargetRef, bool) {
+	l := st.Launch
 	// A launch stamped after now was written after the listing was taken, so
 	// no window in the listing is its.
 	if !l.Pending(now) || l.At.After(now) {
@@ -1495,7 +1498,7 @@ func (c *Core) claim(before, after []revier.Instance, p Project, l *state.Launch
 	}
 	var candidates []revier.Instance
 	for _, inst := range after {
-		if !seen[key(inst.Ref)] && c.candidate(inst, p, l.Target, projects) {
+		if !seen[key(inst.Ref)] && !st.Holds(inst.Ref) && c.candidate(inst, p, l.Target, projects) {
 			candidates = append(candidates, inst)
 		}
 	}
