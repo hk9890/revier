@@ -81,10 +81,11 @@ func stateWith(t *testing.T, attached map[revier.ProjectName][]revier.TargetRef)
 
 // refreshed builds the model over a state root and applies one survey, as the
 // timer does. Its clock stands still, so no test measures a window on the
-// machine's own speed: one that moves time takes clocked's hand.
+// machine's own speed: one that moves time takes clocked's hand. Its mirror
+// ticks at once, so a test that delivers the tick does not wait out a second.
 func refreshed(t *testing.T, c *core.Core, projects []core.Project, root string, actions []config.Action) tui.Model {
 	t.Helper()
-	m, _ := clocked(tui.New(c, projects, root, &config.Config{Actions: actions}, time.Second, theme.Default(), "").StaticCursors())
+	m, _ := clocked(tui.New(c, projects, root, &config.Config{Actions: actions}, time.Second, theme.Default(), "").StaticCursors().WithMirrorGap(0))
 	return survey(m)
 }
 
@@ -830,9 +831,11 @@ func saved(t *testing.T, root, name string, minute int, projects ...session.Proj
 }
 
 // fullShutdownPlanned opens the wizard on a full shutdown and shows its plan.
+// The shutdown lists the hosts once after its steps and waits no longer, so
+// a window that refuses to close is found still open without the wait.
 func fullShutdownPlanned(t *testing.T, c *core.Core, projects []core.Project, root string) tui.Model {
 	t.Helper()
-	m := resize(refreshed(t, c, projects, root, nil), 150, 30)
+	m := resize(refreshed(t, c, projects, root, nil).WithCloseWait(0), 150, 30)
 	m, _ = press(m, "alt+q")
 	m, cmd := press(m, "enter")
 	return run(m, cmd)
@@ -852,13 +855,14 @@ func shutDownOnRecord(t *testing.T, root string) *state.ShutDown {
 // seenWorld is world(t, 2) on a surface over root that refreshes at once, so
 // a test runs what each survey answers with: the check for an end with no
 // shutdown, and the write of what it saw. project-01's workspace holds no
-// agent, so no mirror's tick holds a test up for its second.
+// agent, and the mirror ticks at once, so no mirror's tick holds a test up
+// for its second.
 func seenWorld(t *testing.T, root string) (tui.Model, *hosttest.FakeRuntime) {
 	t.Helper()
 	rt, _, c, projects := world(t, 2)
 	rt.Remove(revier.TargetRef{Host: "rt", ID: "1"})
 	rt.Add("session:project-01", "kitty")
-	m, _ := clocked(tui.New(c, projects, root, &config.Config{}, time.Nanosecond, theme.Default(), "").StaticCursors())
+	m, _ := clocked(tui.New(c, projects, root, &config.Config{}, time.Nanosecond, theme.Default(), "").StaticCursors().WithMirrorGap(0))
 	return resize(m, 150, 30), rt
 }
 

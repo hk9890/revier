@@ -88,7 +88,7 @@ func (m Model) mirrorEvery() time.Duration {
 	if m.blurred {
 		return blurredRefresh
 	}
-	return mirrorInterval
+	return m.mirrorGap
 }
 
 // restart drops the tick that is out, so the next ask reads at once and

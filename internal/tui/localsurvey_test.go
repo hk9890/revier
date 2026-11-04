@@ -27,14 +27,15 @@ func surveyedHere(m tui.Model) (tui.Model, tea.Cmd) {
 }
 
 // besideALink is the world of three projects, the last one open, beside a
-// link to buildbox.
+// link to buildbox. Its mirror ticks at once, so a test that delivers the
+// tick does not wait out a second.
 func besideALink(t *testing.T) (tui.Model, *hosttest.FakeRuntime, *hosttest.FakeRemote) {
 	t.Helper()
 	rt, _, c, local := world(t, 3)
 	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusIdle))
 	c.Remotes = map[string]revier.Remote{"buildbox": remote}
 	projects := append(remoteOnDisk(t, "alpha"), local...)
-	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Millisecond, theme.Default(), "").StaticCursors()
+	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Millisecond, theme.Default(), "").StaticCursors().WithMirrorGap(0)
 	return resize(m, 150, 30), rt, remote
 }
 

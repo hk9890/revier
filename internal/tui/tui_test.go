@@ -150,8 +150,8 @@ func TestTheRuleKeepsTheTotalsItHasRoomFor(t *testing.T) {
 	// Every total the rule does carry stands over its own state's counts,
 	// whatever the terminal's width.
 	for w := 100; w <= 200; w++ {
-		wide := resize(m, w, 30)
-		head, row := ruleLine(wide), rows(wide)[0]
+		shown := lines(resize(m, w, 30))
+		head, row := shown[chromeLines-1], shown[chromeLines]
 		for _, glyph := range []string{g.NeedsYou, g.Working, g.Idle, g.Unknown} {
 			if over := column(head, glyph); over >= 0 && over != column(row, glyph) {
 				t.Fatalf("%d columns: %q totalled at column %d, counted at %d:\n%s\n%s",

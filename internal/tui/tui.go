@@ -125,6 +125,8 @@ type Model struct {
 	refresh   time.Duration
 	status    statuses
 	now       func() time.Time     // the clock the double-click window, a host's gap and a launch's claim are measured on; a test sets it
+	closeWait time.Duration        // how long a shutdown waits for what it closed to go; a test shortens it
+	mirrorGap time.Duration        // how often the mirror reads the panel with the focus; a test shortens it
 	theme     *theme.Theme         // the palette and glyphs, held by pointer as the large screens are
 	profile   colorprofile.Profile // the colours the terminal shows, which the theme is drawn in
 	frame     int                  // the spinner frame a working agent shows
@@ -247,7 +249,8 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	keys := newKeyMap(actions)
 	m := Model{
 		core: c, stateRoot: stateRoot, actions: actions,
-		refresh: refresh, now: time.Now, theme: &th, width: 80, height: 24,
+		refresh: refresh, now: time.Now, closeWait: core.CloseWait, mirrorGap: mirrorInterval,
+		theme: &th, width: 80, height: 24,
 		plist: newProjectList(th),
 		link:  new(newLinkScreen(th)), sessions: new(newSessionsScreen(th)),
 		keys: keys, help: newHelp(th), detail: newDetail(th),

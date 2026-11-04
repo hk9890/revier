@@ -35,6 +35,20 @@ func (m Model) WithClock(now func() time.Time) Model {
 	return m
 }
 
+// WithCloseWait replaces how long a shutdown waits for what it closed to go,
+// so a test whose host keeps a closed instance listed does not wait it out.
+func (m Model) WithCloseWait(d time.Duration) Model {
+	m.closeWait = d
+	return m
+}
+
+// WithMirrorGap replaces how often the mirror reads the panel with the
+// focus, so a test that delivers the mirror's tick does not wait it out.
+func (m Model) WithMirrorGap(d time.Duration) Model {
+	m.mirrorGap = d
+	return m
+}
+
 // Said is the model once the pane's ask for what the agents of the project
 // under the cursor said has been answered, as the command it sends would
 // answer it: at once, on this goroutine.
