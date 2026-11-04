@@ -45,6 +45,22 @@ func TestDecodeKeepsEveryHiddenWindowActivateCanRaise(t *testing.T) {
 	}
 }
 
+// A minimized window says so: a press that raises the popup learns from it
+// that the desktop hid it.
+func TestDecodeReportsAMinimizedWindow(t *testing.T) {
+	raw := `[
+		{"id": 1, "title": "revier", "wm_class": "revier-popup", "is_hidden": true, "is_minimized": true, "workspace_index": 0},
+		{"id": 2, "title": "session:revier", "wm_class": "kitty", "is_hidden": false, "is_minimized": false, "workspace_index": 0}
+	]`
+	got, err := (&gnome.Host{}).Decode([]byte(raw), func() (int, bool) { return 0, true })
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if len(got) != 2 || !got[0].Minimized || got[1].Minimized {
+		t.Errorf("got %+v, want the first window alone minimized", got)
+	}
+}
+
 // A shown window tells the active workspace, so a desktop in use costs no
 // second wctl call however many of its windows are on other workspaces.
 func TestDecodeReadsTheActiveWorkspaceFromAShownWindow(t *testing.T) {

@@ -38,6 +38,15 @@ func (m Model) Interval() time.Duration { return m.interval() }
 // without waiting it out.
 func (m Model) Ticked() tea.Msg { return tickMsg{chain: m.chain} }
 
+// Hidden reports whether the popup takes itself as off the screen.
+func (m Model) Hidden() bool { return m.hidden }
+
+// WithErr is the surface with err in its footer, as a failed press leaves it.
+func (m Model) WithErr(err error) Model {
+	m.err = err
+	return m
+}
+
 // ShutQuit is the end of the wait after a full shutdown, as it arrives: a
 // test delivers it without waiting it out.
 func ShutQuit() tea.Msg { return shutQuitMsg{} }

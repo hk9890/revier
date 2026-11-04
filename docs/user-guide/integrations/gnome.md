@@ -31,6 +31,29 @@ revier uses GNOME when `XDG_CURRENT_DESKTOP` names GNOME (or is not set) and
    `revier: popup` in GNOME Settings; an install renames one that an older
    revier wrote as `revier: picker`.
 
+## Keep the popup on top
+
+With `wctl` 0.20.0 or later and version 20 or later of the extension, the
+extension can keep the popup over every other window and out of Alt+Tab, and
+hide it when another window takes the focus or the overview opens. To turn
+this on, add `"overlay": true` to a rule for the popup's class in your
+`~/.config/gnome-window-control/rules.json`:
+
+```json
+[
+  { "match": { "class": "revier-popup" }, "overlay": true }
+]
+```
+
+- The first rule that matches a window wins. Put this rule above any other
+  rule that matches the popup.
+- An older extension rejects the whole file, and with it every rule. Upgrade
+  the extension first.
+- A hide by the extension acts as Esc: the next press raises the popup on the
+  project list, with no query. An error the popup showed stays. A screen or a
+  question the popup showed, such as the help or a delete, still waits for
+  you.
+
 ## Windows that open late
 
 Many applications open their window a while after the command starts. revier

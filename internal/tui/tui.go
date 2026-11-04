@@ -176,13 +176,14 @@ type Model struct {
 	start        revier.ProjectName               // the project to open on, from the working directory
 	placing      bool                             // the cursor was put on the starting project; the next body sync places the list around it
 	lookup       StartLookup                      // the project to open on when start is none, asked once the surface shows
-	popup        bool                             // the surface is the popup: Esc hides it, and the next press raises it
+	popup        bool                             // the surface is the popup: Esc or the desktop hides it, and the next press raises it
 	endHung      func()                           // ends the host command of a step that hangs, as the second ctrl+c quits; nil to leave it
 	hidden       bool                             // the popup is off the screen; nothing surveys until it is raised, unless a launch is coming up
 	errands      int                              // the raises, presses, pastes, clicks and wheel turns so far; a go hides the popup only when none came since its own press
 	raises       int                              // the times the popup was raised; a close a del planned before the last raise asks nothing
 	idle         bool                             // a survey waits for the files read again: the chain ended while hidden, or a raise or a focus regained dropped its tick
 	blurred      bool                             // the terminal said its window lost the focus; the surface refreshes slowly until it is back
+	look         int                              // the blurs, focuses, hides and restores ended so far; a survey listed before the last says nothing of a hide by the desktop
 	surveying    bool                             // a survey is out, so a focus regained starts no second one
 	chain        int                              // the number of the refresh tick that is out; an older one is dropped
 	local        core.Report                      // the last survey of this machine, with no host's answer laid over
@@ -318,7 +319,7 @@ func (m Model) WithStart(lookup StartLookup) Model {
 // WithPopup makes the surface the popup: Esc on the list and a go hide its
 // window instead of exiting, nothing surveys while it is hidden unless a
 // launch is coming up, and the raise surveys once and resumes (decisions.md
-// D86, D129).
+// D86, D129). A hide by the desktop is Esc's hide (D169).
 func (m Model) WithPopup() Model {
 	m.popup = true
 	return m
@@ -339,8 +340,8 @@ type startMsg struct {
 	ok   bool
 }
 
-// hiddenMsg follows the hide of the popup's window. went is a hide after a
-// go, not after Esc.
+// hiddenMsg follows the hide of the popup's window, after Esc or after a go.
+// went is a hide after a go.
 type hiddenMsg struct {
 	err  error
 	went bool
@@ -425,6 +426,7 @@ func (m *Model) reloadViews() {
 type surveyMsg struct {
 	report core.Report
 	err    error
+	look   int // Model.look when the survey started
 }
 
 // remotesMsg is what the hosts asked said, each about its projects.
@@ -494,6 +496,49 @@ func (m Model) hide(went bool) tea.Cmd {
 	}
 }
 
+// takesHide reports a popup that takes a hide by the desktop as Esc's: one
+// in a state Esc hides from, which the surface has not hidden itself
+// (decisions.md D169). A popup that asks a question or shows a screen does
+// not, as Esc's raise would drop the question, or the offer or the question
+// the screen holds, and both wait for the user; nor does one that walks a
+// restore or a shutdown, which Esc cannot hide either.
+func (m Model) takesHide() bool {
+	return m.popup && !m.hidden && m.dialog == dialogNone && m.confirm == "" && !m.shut.one && !m.walking()
+}
+
+// hideTaken is the popup's state once its window is off the screen, by Esc,
+// a go or the desktop: the raise that follows is one, whichever hid it
+// (decisions.md D169).
+func (m *Model) hideTaken() {
+	m.hidden = true
+}
+
+// clearForRaise leaves what Esc leaves before it hides: no query and no
+// note, and the cursor on the project list. Esc clears them on its way out,
+// a go and the desktop do not, so the raise clears them for all three
+// (decisions.md D169). An error stays, to be read: a go may fail once its
+// window took the focus and the desktop hid the popup.
+func (m *Model) clearForRaise() {
+	m.copied, m.closeDone = 0, ""
+	if m.afilter != "" {
+		m.query(focusAgents, "")
+	}
+	if m.filter != "" {
+		m.query(focusList, "")
+	}
+	if m.agents.filter != "" {
+		m.agents.endSearch()
+	}
+	m.toList()
+}
+
+// hiddenByDesktop takes the desktop's hide of the popup as Esc's, and the
+// next raise as Esc's raise (decisions.md D169).
+func (m *Model) hiddenByDesktop() {
+	slog.Info("popup: hidden by the desktop")
+	m.hideTaken()
+}
+
 // leave is Esc on the list with no query: the popup hides, any other
 // surface quits.
 func (m Model) leave() tea.Cmd {
@@ -522,7 +567,7 @@ const localHostWait = 10 * time.Second
 // is a command so the terminal stays responsive while hosts answer, and it
 // schedules nothing itself, so two surveys never run at once.
 func (m Model) Survey() tea.Cmd {
-	c, projects := m.core, m.projects
+	c, projects, look := m.core, m.projects, m.look
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), localHostWait)
 		defer cancel()
@@ -531,7 +576,7 @@ func (m Model) Survey() tea.Cmd {
 			// The agents here. A link's are recorded when its host answers.
 			events.Sessions(report.Views)
 		}
-		return surveyMsg{report: report, err: err}
+		return surveyMsg{report: report, err: err, look: look}
 	}
 }
 
@@ -827,6 +872,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.local, m.surveyed = msg.report, true
 			m.show()
 			seen = m.observe(nil)
+			// The desktop hid the popup while it had no focus: it stops
+			// surveying, as after Esc (decisions.md D169).
+			if msg.look == m.look && m.blurred && m.takesHide() && msg.report.PopupMinimized() {
+				m.hiddenByDesktop()
+			}
 		}
 		// Hidden, nobody reads the answer, and the chain ends here, and with
 		// it the rounds of the linked hosts that a survey starts: a round
@@ -921,17 +971,25 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			slog.Warn("popup hide, quitting instead", "err", msg.err)
 			return m, tea.Quit
 		}
-		m.hidden = true
+		m.hideTaken()
 		return m, nil
 	case tea.BlurMsg:
 		// The window lost the focus: the surface refreshes slowly, and the
 		// spinner and the hover stop, until the focus is back (decisions.md
 		// D129).
 		m.blurred = true
+		m.look++
 		return m, nil
 	case tea.FocusMsg:
+		// A press that raised the popup from minimized raises it as after
+		// Esc, whatever hid it: wctl tells of no hide (decisions.md D87,
+		// D169).
+		if m.popup && m.core.TakePopupHidden() && m.takesHide() {
+			m.hiddenByDesktop()
+		}
 		refocused := m.blurred
 		m.blurred = false
+		m.look++
 		// A raise, also of a popup still on the screen, is the next errand.
 		m.errands++
 		// The raise: the files again, then one survey, then the chain as
@@ -942,6 +1000,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// delete, or a close a del planned, still asked from before the
 			// hide is not asked again, nor once a plan still out lands.
 			m.hidden, m.agents.shown = false, false
+			m.clearForRaise()
 			m.raises++
 			m.confirm, m.ctarget = "", ""
 			if m.shut.one && !m.shut.running {

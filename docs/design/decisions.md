@@ -322,9 +322,9 @@ Esc exited the surface, so every press was a cold start: a kitty process, the
 TUI, and a first survey that is a round trip to every linked host - a second
 from the key to the agent states. The popup now minimizes on Esc through the
 window host, and `revier popup` raises it under D76's run-or-raise in tens of
-milliseconds, with the cursor and the query where they were. Hidden, it
-surveys nothing, since nobody reads the answer, unless a launch of its own is
-still coming up (D129).
+milliseconds, with what Esc left on the screen. Hidden, it surveys nothing,
+since nobody reads the answer, unless a launch of its own is still coming up
+(D129).
 
 ### D87 — claim-on-appear polls; there is no window-event port
 
@@ -939,3 +939,14 @@ Listing them would put a terminal with no target beside every workspace, and
 the user who wants one opens it in a kitty of their own, which revier reads
 and can attach. Rejected: listing them as nameless windows for the core to
 pair, which costs core work for a terminal the user has elsewhere.
+
+### D169 — a hide by the desktop is Esc's hide
+
+wctl's overlay minimizes the popup when another window takes the focus, and
+tells of no hide (D87). A press that raises the popup from minimized marks it
+in a file beside the state, not fsynced, and the surface takes the mark at the
+focus as Esc's hide, where Esc hides from: no screen, question or walk. So
+does a slow refresh's survey that lists it minimized. Every raise clears what
+Esc clears, the query and the note, but no error. Rejected: a key typed in at
+the raise, two kitty round trips; looks after the blur, a gap; revier writing
+the user's rules.json (D30, D147).

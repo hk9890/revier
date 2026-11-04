@@ -79,9 +79,25 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 		return ref, nil
 	}
 	if w, ok := popupWindow(before); ok {
-		slog.Info("popup: raise", "ref", w.Ref)
-		return w.Ref, c.Window.Focus(ctx, w.Ref)
+		slog.Info("popup: raise", "ref", w.Ref, "minimized", w.Minimized)
+		// The surface reads it at the focus the raise gives it, so it is on
+		// record first (decisions.md D169).
+		marks, ok := c.Ledger.(PopupMarks)
+		marked := ok && w.Minimized
+		if marked {
+			if err := marks.MarkPopupHidden(); err != nil {
+				slog.Warn("popup: mark the raise", "err", err)
+			}
+		}
+		err := c.Window.Focus(ctx, w.Ref)
+		if err != nil && marked {
+			// No focus comes to take it, and a later one must not.
+			marks.TakePopupHidden()
+		}
+		return w.Ref, err
 	}
+	// A mark left by a popup that went away is no raise of the new one.
+	c.TakePopupHidden()
 	width, err := area.WorkareaWidth(ctx)
 	if err != nil {
 		return revier.TargetRef{}, fmt.Errorf("%s: workarea: %w", c.Window.Name(), err)
@@ -260,6 +276,22 @@ func (c *Core) raisePopup(ctx context.Context, snap snapshot, failed hostErrs) e
 		return fmt.Errorf("popup: no window of class %s to raise", PopupClass)
 	}
 	return c.Window.Focus(ctx, w.Ref)
+}
+
+// TakePopupHidden reports whether the press that raised the popup found it
+// minimized, and takes it off the record: the surface asks at each focus, so
+// the next focus, with no press, finds none (decisions.md D169).
+func (c *Core) TakePopupHidden() bool {
+	marks, ok := c.Ledger.(PopupMarks)
+	return ok && marks.TakePopupHidden()
+}
+
+// PopupMinimized reports whether the survey listed the popup's window
+// minimized: a popup without the focus finds the desktop's hide in it, and
+// stops surveying (decisions.md D169).
+func (r Report) PopupMinimized() bool {
+	w, ok := popupWindow(r.Windows)
+	return ok && w.Minimized
 }
 
 // popupWindow is the popup among the windows listed: the first of its class.

@@ -7,6 +7,8 @@ import (
 	"errors"
 	"log/slog"
 	"maps"
+	"os"
+	"path/filepath"
 	"slices"
 	"sync"
 
@@ -36,6 +38,24 @@ type File struct {
 	Written chan<- struct{}
 	// Failed, when set, is told why a write did not reach the file.
 	Failed func(error)
+}
+
+// popupHidden is the file whose presence is the mark of a raise of the
+// minimized popup (core.PopupMarks). It is no part of state.json: it lives
+// from one press to the focus the press gives, and state.json's save waits
+// for the disk, milliseconds on the raise's path.
+const popupHidden = "popup-hidden"
+
+// MarkPopupHidden leaves the mark of a raise of the minimized popup.
+// The root is there: the surface of the popup to raise writes to it.
+func (f File) MarkPopupHidden() error {
+	return os.WriteFile(filepath.Join(f.Root, popupHidden), nil, 0o644)
+}
+
+// TakePopupHidden reports whether the mark was there, and removes it: one
+// call, so two focuses never both take one raise.
+func (f File) TakePopupHidden() bool {
+	return os.Remove(filepath.Join(f.Root, popupHidden)) == nil
 }
 
 // read is the state each root held when this process last read or wrote it.

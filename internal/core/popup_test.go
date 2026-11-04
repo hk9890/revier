@@ -133,6 +133,75 @@ func TestHidePopupIsRefusedWithNothingToHide(t *testing.T) {
 	}
 }
 
+// A raise of a minimized popup puts that on record for the surface, and
+// costs what the raise of one on the screen costs otherwise: the same
+// listings, and nothing typed (decisions.md D169).
+func TestARaiseOfAMinimizedPopupIsOnRecord(t *testing.T) {
+	raise := func(minimized bool) (*hosttest.Fake, *hosttest.FakeRuntime) {
+		wm := hosttest.New("wm")
+		open := wm.AddInstance(revier.Instance{Title: "revier", Class: core.PopupClass, Minimized: minimized})
+		wm.SetFocus(wm.Add("session:demo", "kitty"))
+		rt := hosttest.NewRuntime("rt")
+		rt.Add("revier", core.PopupClass, revier.Panel{ID: "9", Command: []string{"revier"}})
+		l := &ledger{}
+		if _, err := (&core.Core{Window: wm, Runtime: rt, Ledger: l}).Popup(context.Background(), popupArgv); err != nil {
+			t.Fatalf("Popup: %v", err)
+		}
+		if !slices.Equal(wm.Focuses, []revier.TargetRef{open}) || len(rt.Sent) != 0 {
+			t.Errorf("minimized %v: focuses = %v, sent = %+v; want the popup raised and nothing typed", minimized, wm.Focuses, rt.Sent)
+		}
+		if l.popupHidden != minimized {
+			t.Errorf("minimized %v: marked = %v, want %v", minimized, l.popupHidden, minimized)
+		}
+		return wm, rt
+	}
+	wm, rt := raise(true)
+	shownWM, shownRT := raise(false)
+	if wm.InstancesCalls != shownWM.InstancesCalls || rt.InstancesCalls != shownRT.InstancesCalls {
+		t.Errorf("listings minimized = %d window, %d runtime; on the screen = %d, %d; want the same",
+			wm.InstancesCalls, rt.InstancesCalls, shownWM.InstancesCalls, shownRT.InstancesCalls)
+	}
+}
+
+// No mark outlives a raise that failed, as no focus comes to take it, and a
+// launch takes the mark a popup that went away left.
+func TestNoMarkOutlivesAFailedRaiseOrALaunch(t *testing.T) {
+	wm := hosttest.New("wm")
+	wm.AddInstance(revier.Instance{Title: "revier", Class: core.PopupClass, Minimized: true})
+	wm.FocusErr = errors.New("wctl: no answer")
+	l := &ledger{}
+	if _, err := (&core.Core{Window: wm, Ledger: l}).Popup(context.Background(), popupArgv); err == nil {
+		t.Fatal("a raise whose focus failed reported no error")
+	}
+	if l.popupHidden {
+		t.Error("a raise whose focus failed left its mark")
+	}
+
+	l = &ledger{popupHidden: true}
+	if _, err := (&core.Core{Window: hosttest.New("wm"), Ledger: l}).Popup(context.Background(), popupArgv); err != nil {
+		t.Fatalf("launch: %v", err)
+	}
+	if l.popupHidden {
+		t.Error("a launch kept the mark a popup that went away left")
+	}
+}
+
+// The surface takes the raise of a minimized popup once: the next focus,
+// with no press, finds none. A core with no ledger has none to take.
+func TestTakePopupHiddenTakesItOnce(t *testing.T) {
+	if (&core.Core{}).TakePopupHidden() {
+		t.Error("a core with no ledger took a raise")
+	}
+	l := &ledger{popupHidden: true}
+	c := &core.Core{Ledger: l}
+	if !c.TakePopupHidden() {
+		t.Error("the marked raise was not taken")
+	}
+	if c.TakePopupHidden() || l.popupHidden {
+		t.Errorf("taken again = true or still marked = %v, want neither", l.popupHidden)
+	}
+}
+
 // With no popup open, the terminal is launched, and its window is placed and
 // raised. Height is always 100%. Width is a fixed 1800 px, centred, where the
 // workarea holds it, and 100% where it does not.

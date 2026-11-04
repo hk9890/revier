@@ -114,7 +114,7 @@ to the surface, so what an agent printed cannot repaint the surface that shows
 it.
 
 The popup is the surface in a window revier places and run-or-raises (D76).
-Leaving it hides it, and the next press raises it as it was (D86). A cold start on
+Leaving it hides it, and the next press raises it as Esc left it (D86, D169). A cold start on
 every press — a terminal, the TUI, and a first survey of every linked host —
 is too slow for the one keystroke the product promises. A full shutdown is the
 exception: it quits the popup, because nothing is left to raise it over, and

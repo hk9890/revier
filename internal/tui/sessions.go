@@ -224,6 +224,9 @@ func (m Model) restored(msg restoredMsg) (tea.Model, tea.Cmd) {
 	}
 	m.dialog = dialogNone
 	m.uncleanOffer = nil
+	// The windows the restore opened came up over the popup: a survey that
+	// listed it minimized then is no hide by the desktop.
+	m.look++
 	if msg.err != nil {
 		return m, nil
 	}

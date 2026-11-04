@@ -33,6 +33,16 @@ type Ledger interface {
 	Note(l record.Line)
 }
 
+// PopupMarks is a ledger that keeps the mark of a press that raised the
+// popup from minimized, until the popup's surface takes it at the focus the
+// raise gives it (decisions.md D169). The mark is on the raise's path, so it
+// is kept apart from the state, whose save is made to last.
+type PopupMarks interface {
+	MarkPopupHidden() error
+	// TakePopupHidden reports whether the mark was there, and removes it.
+	TakePopupHidden() bool
+}
+
 // state is the state an operation starts from. Each operation reads it once,
 // so one operation never sees two states. A core with no ledger remembers
 // nothing: every state is empty, and a write is dropped.

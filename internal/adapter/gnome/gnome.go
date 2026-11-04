@@ -235,10 +235,11 @@ func (h *Host) decode(raw []byte, active func() (int, bool)) ([]revier.Instance,
 			continue
 		}
 		out = append(out, revier.Instance{
-			Ref:   revier.TargetRef{Host: h.Name(), ID: strconv.FormatInt(w.ID, 10), Title: w.Title},
-			Title: w.Title,
-			Class: w.WMClass,
-			PID:   w.PID,
+			Ref:       revier.TargetRef{Host: h.Name(), ID: strconv.FormatInt(w.ID, 10), Title: w.Title},
+			Title:     w.Title,
+			Class:     w.WMClass,
+			PID:       w.PID,
+			Minimized: w.IsMinimized,
 		})
 	}
 	return out, nil

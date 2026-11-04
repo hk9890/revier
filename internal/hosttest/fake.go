@@ -308,13 +308,27 @@ func (f *Fake) Close(_ context.Context, ref revier.TargetRef) error {
 	return nil
 }
 
-// Hide records the call and leaves the instance listed, as a minimized
-// window is. Fake implements revier.Hider; HideErr makes it fail.
+// Hide records the call and leaves the instance listed, minimized. Fake
+// implements revier.Hider; HideErr makes it fail.
 func (f *Fake) Hide(_ context.Context, ref revier.TargetRef) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.Hidden = append(f.Hidden, ref)
-	return f.HideErr
+	if f.HideErr != nil {
+		return f.HideErr
+	}
+	f.setMinimized(ref, true)
+	return nil
+}
+
+// setMinimized marks the instance of ref minimized or not. The caller holds
+// the lock.
+func (f *Fake) setMinimized(ref revier.TargetRef, minimized bool) {
+	for i := range f.instances {
+		if f.instances[i].Ref.ID == ref.ID {
+			f.instances[i].Minimized = minimized
+		}
+	}
 }
 
 // ClosePanel removes the panel from its instance and records the call.
@@ -509,6 +523,7 @@ func (f *Fake) Focus(_ context.Context, ref revier.TargetRef) error {
 		return f.FocusErr
 	}
 	f.focused = ref
+	f.setMinimized(ref, false)
 	return nil
 }
 

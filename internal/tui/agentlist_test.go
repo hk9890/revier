@@ -244,8 +244,8 @@ func TestTheSwitchKeepsTheProjectListAndTheRaiseOpensOnIt(t *testing.T) {
 	}
 
 	m = switched(m).Raised()
-	if q := query(m); !strings.Contains(q, "b") || strings.Contains(q, "filter agents") {
-		t.Errorf("query line = %q after a raise, want the projects", q)
+	if q := query(m); !strings.Contains(q, "filter projects") {
+		t.Errorf("query line = %q after a raise, want the projects with no query, as Esc leaves them", q)
 	}
 }
 
