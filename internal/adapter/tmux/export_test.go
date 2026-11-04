@@ -14,6 +14,22 @@ func (h *Host) SetRunner(fn func(ctx context.Context, args ...string) (string, e
 	h.run = fn
 }
 
+// SetHook keeps tmux and runs before ahead of each call and after behind it,
+// with what the call printed, so a live test can act between two steps.
+// Either may be nil.
+func (h *Host) SetHook(before func(args []string), after func(args []string, out string)) {
+	h.run = func(ctx context.Context, args ...string) (string, error) {
+		if before != nil {
+			before(args)
+		}
+		out, err := h.exec(ctx, args...)
+		if after != nil {
+			after(args, out)
+		}
+		return out, err
+	}
+}
+
 // SetTTY replaces the terminal on standard input, so the tests need no
 // terminal.
 func (h *Host) SetTTY(tty string) {
