@@ -133,6 +133,60 @@ func TestHidePopupIsRefusedWithNothingToHide(t *testing.T) {
 	}
 }
 
+// The surface asks whether the desktop minimized its popup: true for a
+// minimized popup alone (decisions.md D169).
+func TestPopupMinimizedReadsThePopupsWindow(t *testing.T) {
+	ctx := context.Background()
+	if _, err := (&core.Core{}).PopupMinimized(ctx); !errors.Is(err, core.ErrNoPopupHost) {
+		t.Errorf("no window host: err = %v, want ErrNoPopupHost", err)
+	}
+	wm := hosttest.New("wm")
+	wm.AddInstance(revier.Instance{Title: "session:demo", Class: "kitty", Minimized: true})
+	c := &core.Core{Window: wm}
+	if got, err := c.PopupMinimized(ctx); err != nil || got {
+		t.Errorf("no popup open = %v, %v; want false, as only another window is minimized", got, err)
+	}
+	open := wm.Add("revier", core.PopupClass)
+	if got, err := c.PopupMinimized(ctx); err != nil || got {
+		t.Errorf("popup on the screen = %v, %v; want false", got, err)
+	}
+	wm.Remove(open)
+	wm.AddInstance(revier.Instance{Title: "revier", Class: core.PopupClass, Minimized: true})
+	if got, err := c.PopupMinimized(ctx); err != nil || !got {
+		t.Errorf("popup minimized = %v, %v; want true", got, err)
+	}
+	wm.SetInstancesErr(errors.New("wctl: no answer"))
+	if _, err := c.PopupMinimized(ctx); err == nil {
+		t.Error("a failed listing reported no error")
+	}
+}
+
+// A raise of a minimized popup costs what the raise of one on the screen
+// costs, and types nothing: the surface learns of the desktop's hide by
+// itself (decisions.md D169).
+func TestPopupRaisesAMinimizedPopupAsAnyOther(t *testing.T) {
+	raise := func(minimized bool) (*hosttest.Fake, *hosttest.FakeRuntime) {
+		wm := hosttest.New("wm")
+		open := wm.AddInstance(revier.Instance{Title: "revier", Class: core.PopupClass, Minimized: minimized})
+		wm.SetFocus(wm.Add("session:demo", "kitty"))
+		rt := hosttest.NewRuntime("rt")
+		rt.Add("revier", core.PopupClass, revier.Panel{ID: "9", Command: []string{"revier"}})
+		if _, err := (&core.Core{Window: wm, Runtime: rt}).Popup(context.Background(), popupArgv); err != nil {
+			t.Fatalf("Popup: %v", err)
+		}
+		if !slices.Equal(wm.Focuses, []revier.TargetRef{open}) || len(rt.Sent) != 0 {
+			t.Errorf("minimized %v: focuses = %v, sent = %+v; want the popup raised and nothing typed", minimized, wm.Focuses, rt.Sent)
+		}
+		return wm, rt
+	}
+	wm, rt := raise(true)
+	shownWM, shownRT := raise(false)
+	if wm.InstancesCalls != shownWM.InstancesCalls || rt.InstancesCalls != shownRT.InstancesCalls {
+		t.Errorf("listings minimized = %d window, %d runtime; on the screen = %d, %d; want the same",
+			wm.InstancesCalls, rt.InstancesCalls, shownWM.InstancesCalls, shownRT.InstancesCalls)
+	}
+}
+
 // With no popup open, the terminal is launched, and its window is placed and
 // raised. Height is always 100%. Width is a fixed 1800 px, centred, where the
 // workarea holds it, and 100% where it does not.

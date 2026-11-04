@@ -38,6 +38,10 @@ func (m Model) Interval() time.Duration { return m.interval() }
 // without waiting it out.
 func (m Model) Ticked() tea.Msg { return tickMsg{chain: m.chain} }
 
+// Looked is the time for the popup's look for a hide by the desktop, as it
+// arrives: a test delivers it without waiting it out.
+func (m Model) Looked() tea.Msg { return lookMsg{gen: m.look} }
+
 // ShutQuit is the end of the wait after a full shutdown, as it arrives: a
 // test delivers it without waiting it out.
 func ShutQuit() tea.Msg { return shutQuitMsg{} }

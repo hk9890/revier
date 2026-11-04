@@ -79,7 +79,7 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 		return ref, nil
 	}
 	if w, ok := popupWindow(before); ok {
-		slog.Info("popup: raise", "ref", w.Ref)
+		slog.Info("popup: raise", "ref", w.Ref, "minimized", w.Minimized)
 		return w.Ref, c.Window.Focus(ctx, w.Ref)
 	}
 	width, err := area.WorkareaWidth(ctx)
@@ -260,6 +260,28 @@ func (c *Core) raisePopup(ctx context.Context, snap snapshot, failed hostErrs) e
 		return fmt.Errorf("popup: no window of class %s to raise", PopupClass)
 	}
 	return c.Window.Focus(ctx, w.Ref)
+}
+
+// PopupMinimized reports whether the popup's window is minimized: the desktop
+// may hide it without the surface's asking, and the surface asks after a blur
+// (decisions.md D169). It is false with no popup open, and ErrNoPopupHost with
+// no window host.
+func (c *Core) PopupMinimized(ctx context.Context) (bool, error) {
+	if c.Window == nil {
+		return false, ErrNoPopupHost
+	}
+	windows, err := c.Window.Instances(ctx)
+	if err != nil {
+		return false, err
+	}
+	return Report{Windows: windows}.PopupMinimized(), nil
+}
+
+// PopupMinimized reports whether the survey listed the popup's window
+// minimized: the look a slow refresh makes for free (decisions.md D169).
+func (r Report) PopupMinimized() bool {
+	w, ok := popupWindow(r.Windows)
+	return ok && w.Minimized
 }
 
 // popupWindow is the popup among the windows listed: the first of its class.

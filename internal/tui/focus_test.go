@@ -405,3 +405,263 @@ func TestAGoOutsideThePopupHidesNothing(t *testing.T) {
 	}
 	_ = m
 }
+
+// agentsPopup is the popup with the agent list in view and the focus, the
+// window host it is listed by, and its window: the raise after a hide opens
+// on the projects, and a focus regained leaves the list where it was, so the
+// list in view says which of the two ran.
+func agentsPopup(t *testing.T, minimized bool) (tui.Model, *hosttest.Fake, revier.TargetRef) {
+	t.Helper()
+	_, wm, c, projects := world(t, 3)
+	popup := wm.AddInstance(revier.Instance{Title: "revier", Class: core.PopupClass, Minimized: minimized})
+	m, _ := clocked(tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").
+		WithPopup().StaticCursors())
+	m = switched(survey(m))
+	if q := query(m); !strings.Contains(q, "filter agents") {
+		t.Fatalf("query line = %q, want the agent list", q)
+	}
+	return m, wm, popup
+}
+
+// onAgents reports whether the agent list is in view: the popup was not taken
+// as hidden and raised.
+func onAgents(m tui.Model) bool { return strings.Contains(query(m), "filter agents") }
+
+// surveys reports whether the next tick of m surveys: a popup taken as
+// hidden does not (decisions.md D86).
+func surveys(m tui.Model) bool {
+	_, cmd := update(m, m.Ticked())
+	return cmd != nil
+}
+
+// A popup the desktop hid while another window had the focus is found hidden
+// by a look after the blur, surveys no more, and is raised as Esc's hide is:
+// on the projects, exactly as after Esc.
+func TestAHideByTheDesktopIsTakenAsEscs(t *testing.T) {
+	escaped, _, _ := agentsPopup(t, false)
+	escaped, hide := press(escaped, "esc")
+	escaped = run(escaped, hide)
+	escaped, _ = update(escaped, tea.BlurMsg{})
+	escaped, _ = update(escaped, tea.FocusMsg{})
+
+	overlaid, _, _ := agentsPopup(t, true)
+	overlaid, looking := update(overlaid, tea.BlurMsg{})
+	if looking == nil {
+		t.Fatal("a blurred popup set no look")
+	}
+	overlaid, look := update(overlaid, overlaid.Looked())
+	overlaid = run(overlaid, look)
+	if _, cmd := update(overlaid, overlaid.Ticked()); cmd != nil {
+		t.Error("a popup the desktop hid still surveys")
+	}
+	overlaid, _ = update(overlaid, tea.FocusMsg{})
+
+	if onAgents(overlaid) {
+		t.Errorf("query line = %q after the raise, want the projects", query(overlaid))
+	}
+	if got, want := screen(overlaid), screen(escaped); got != want {
+		t.Errorf("raised after the desktop's hide:\n%s\nwant as after Esc:\n%s", got, want)
+	}
+}
+
+// A desktop hide over a query and the targets leaves what Esc leaves: no
+// query, and the cursor on the project list.
+func TestADesktopHideClearsTheQueryAsEscDoes(t *testing.T) {
+	popup := func(minimized bool) tui.Model {
+		_, wm, c, projects := world(t, 3)
+		wm.AddInstance(revier.Instance{Title: "revier", Class: core.PopupClass, Minimized: minimized})
+		m, _ := clocked(tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").
+			WithPopup().StaticCursors())
+		m = survey(m)
+		m, _ = press(m, "1")
+		m, _ = press(m, "alt+t")
+		return m
+	}
+	escaped := popup(false)
+	for range 2 {
+		escaped, _ = press(escaped, "esc")
+	}
+	escaped, hide := press(escaped, "esc")
+	escaped = run(escaped, hide)
+	escaped, _ = update(escaped, tea.BlurMsg{})
+	escaped, _ = update(escaped, tea.FocusMsg{})
+
+	overlaid := popup(true)
+	overlaid, _ = update(overlaid, tea.BlurMsg{})
+	overlaid, look := update(overlaid, overlaid.Looked())
+	overlaid = run(overlaid, look)
+	overlaid, _ = update(overlaid, tea.FocusMsg{})
+
+	if q := query(overlaid); !strings.Contains(q, "filter projects") {
+		t.Errorf("query line = %q after the raise, want the projects with no query", q)
+	}
+	if got, want := screen(overlaid), screen(escaped); got != want {
+		t.Errorf("raised after the desktop's hide:\n%s\nwant as after Esc:\n%s", got, want)
+	}
+}
+
+// A look that answers once the focus is back, or a look's time set before
+// it, is dropped: the popup is on the screen, whatever the look found.
+func TestALookAfterTheFocusIsBackIsDropped(t *testing.T) {
+	m, _, _ := agentsPopup(t, true)
+	m, _ = update(m, tea.BlurMsg{})
+	stale := m.Looked()
+	_, look := update(m, stale)
+	found := look()
+	m, _ = update(m, tea.FocusMsg{})
+
+	if _, cmd := update(m, stale); cmd != nil {
+		t.Error("a look's time set before the focus came back looked")
+	}
+	m, _ = update(m, found)
+	if !onAgents(m) {
+		t.Errorf("query line = %q, want the popup still on the agent list", query(m))
+	}
+	m, _ = update(m, tea.BlurMsg{})
+	if _, cmd := update(m, m.Ticked()); cmd == nil {
+		t.Error("a look that answered late hid the popup")
+	}
+}
+
+// A popup still on the screen without the focus stays as it is, and looks
+// again at each slow refresh: the desktop may hide it later.
+func TestAPopupNotHiddenLooksAgainAtEachRefresh(t *testing.T) {
+	m, wm, popup := agentsPopup(t, false)
+	m, _ = update(m, tea.BlurMsg{})
+	m, look := update(m, m.Looked())
+	m = run(m, look)
+	if !onAgents(m) {
+		t.Fatalf("query line = %q, want the popup on the agent list", query(m))
+	}
+
+	wm.Remove(popup)
+	wm.AddInstance(revier.Instance{Title: "revier", Class: core.PopupClass, Minimized: true})
+	calls := wm.InstancesCalls
+	m, tick := update(m, m.Ticked())
+	m = run(m, tick)
+	if got := wm.InstancesCalls - calls; got != 1 {
+		t.Errorf("the slow refresh listed the windows %d times, want once: its survey is the look", got)
+	}
+	if surveys(m) {
+		t.Error("the refresh's survey did not find the hide: the popup still surveys")
+	}
+}
+
+// A look that fails changes nothing: the popup stays on the screen, and the
+// next look asks again.
+func TestAFailedLookChangesNothing(t *testing.T) {
+	m, wm, _ := agentsPopup(t, true)
+	m, _ = update(m, tea.BlurMsg{})
+	wm.SetInstancesErr(errors.New("wctl: no answer"))
+	for range 2 {
+		var look tea.Cmd
+		m, look = update(m, m.Looked())
+		m = run(m, look)
+	}
+	wm.SetInstancesErr(nil)
+	if !onAgents(m) {
+		t.Errorf("query line = %q, want the popup on the agent list", query(m))
+	}
+	m, look := update(m, m.Looked())
+	m = run(m, look)
+	if _, cmd := update(m, m.Ticked()); cmd != nil {
+		t.Error("the look after the failures did not find the hide")
+	}
+}
+
+// Only a popup without the focus looks: one with the focus is on the screen,
+// one that hid itself knows, and no other surface hides.
+func TestOnlyABlurredPopupLooks(t *testing.T) {
+	focused, _, _ := agentsPopup(t, true)
+	if _, cmd := update(focused, focused.Looked()); cmd != nil {
+		t.Error("a popup with the focus looked")
+	}
+	focused = survey(focused)
+	if !surveys(focused) || !onAgents(focused) {
+		t.Error("the refresh of a popup with the focus took it as hidden")
+	}
+
+	escaped, _, _ := agentsPopup(t, true)
+	escaped, hide := press(escaped, "esc")
+	escaped = run(escaped, hide)
+	escaped, looking := update(escaped, tea.BlurMsg{})
+	if looking != nil {
+		t.Error("a popup that hid itself set a look at its blur")
+	}
+	if _, cmd := update(escaped, escaped.Looked()); cmd != nil {
+		t.Error("a popup that hid itself looked")
+	}
+
+	_, wm, c, projects := world(t, 3)
+	wm.AddInstance(revier.Instance{Title: "revier", Class: core.PopupClass, Minimized: true})
+	own := refreshed(t, c, projects, stateWith(t, nil), nil)
+	own, looking = update(own, tea.BlurMsg{})
+	if looking != nil {
+		t.Error("a surface in a terminal of its own set a look at its blur")
+	}
+	if _, cmd := update(own, own.Looked()); cmd != nil {
+		t.Error("a surface in a terminal of its own looked")
+	}
+	own = survey(own)
+	if !surveys(own) {
+		t.Error("the slow refresh of a surface in a terminal of its own took it as hidden")
+	}
+}
+
+// On GNOME the hide after Esc takes the focus before wctl answers, so the
+// blur comes first: the looks it sets are dropped once the hide is in.
+func TestTheLooksOfEscsOwnBlurAreDropped(t *testing.T) {
+	m, _, _ := agentsPopup(t, true)
+	m, hide := press(m, "esc")
+	m, looking := update(m, tea.BlurMsg{})
+	if looking == nil {
+		t.Fatal("a blur before the hide answered set no look")
+	}
+	stale := m.Looked()
+	m = run(m, hide)
+	if _, cmd := update(m, stale); cmd != nil {
+		t.Error("a look the blur before Esc's hide set still looked")
+	}
+}
+
+// What a look or a survey found during an earlier blur is dropped in the
+// next: the press between raised the popup.
+func TestALookFromAnEarlierBlurIsDropped(t *testing.T) {
+	m, _, _ := agentsPopup(t, true)
+	m, _ = update(m, tea.BlurMsg{})
+	_, look := update(m, m.Looked())
+	found := look()
+	_, tick := update(m, m.Ticked())
+	surveyed := tick()
+	m, _ = update(m, tea.FocusMsg{})
+	m, _ = update(m, tea.BlurMsg{})
+
+	m, _ = update(m, found)
+	m, _ = update(m, surveyed)
+	if !onAgents(m) || !surveys(m) {
+		t.Errorf("query line = %q, want the popup still on the agent list and surveying", query(m))
+	}
+}
+
+// A popup that asks a question, here a delete, is not taken as hidden: the
+// raise after a hide would drop the question, and it waits for its answer.
+func TestAPopupThatAsksIsNotTakenAsHidden(t *testing.T) {
+	wm := hosttest.New("wm")
+	wm.AddInstance(revier.Instance{Title: "revier", Class: core.PopupClass, Minimized: true})
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm}
+	projects, _ := onDisk(t, []string{"alpha", "beta"}, nil, nil)
+	m, _ := clocked(tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").
+		WithPopup().StaticCursors())
+	m = survey(m)
+	m, _ = press(m, "alt+d")
+	m, looking := update(m, tea.BlurMsg{})
+	if looking != nil {
+		t.Error("a popup that asks set a look at its blur")
+	}
+	m, tick := update(m, m.Ticked())
+	m = run(m, tick)
+	m, _ = update(m, tea.FocusMsg{})
+	if f := footer(m); !strings.Contains(f, "delete alpha?") {
+		t.Errorf("footer = %q, want the delete question still asked", f)
+	}
+}

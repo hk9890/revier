@@ -61,13 +61,16 @@ type Capabilities struct {
 }
 
 // Instance is one live thing a host holds: a kitty OS window, a tmux session, a
-// Meld window. Panels is populated by runtime hosts only.
+// Meld window. Panels is populated by runtime hosts only. Minimized is set
+// only by a window host that can tell a minimized window apart; any other host
+// leaves it false.
 type Instance struct {
-	Ref    TargetRef `json:"ref"`
-	Title  string    `json:"title"`
-	Class  string    `json:"class,omitempty"`
-	PID    int       `json:"pid,omitempty"`
-	Panels []Panel   `json:"panels,omitempty"`
+	Ref       TargetRef `json:"ref"`
+	Title     string    `json:"title"`
+	Class     string    `json:"class,omitempty"`
+	PID       int       `json:"pid,omitempty"`
+	Panels    []Panel   `json:"panels,omitempty"`
+	Minimized bool      `json:"minimized,omitempty"`
 }
 
 // TargetRef points at a live instance. Host names which host produced it, so
