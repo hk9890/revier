@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
@@ -133,7 +134,7 @@ func (m Model) closePlanned(msg closePlannedMsg) (tea.Model, tea.Cmd) {
 	}
 	if len(msg.plan) == 0 {
 		m.err = fmt.Errorf("%s: nothing of it is open here", msg.label)
-		if p, ok := m.project(msg.project); ok && p.File != "" && msg.row == (core.CloseRow{}) {
+		if msg.row == (core.CloseRow{}) && m.deletable(msg.project) {
 			m.err = fmt.Errorf("%w; alt+del deletes its project file", m.err)
 		}
 		return m, nil
@@ -147,6 +148,17 @@ func (m Model) closePlanned(msg closePlannedMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m.shutRun(false)
+}
+
+// deletable reports a project alt+del would delete at once: one in a file,
+// with nothing of it unsettled or possibly running.
+func (m Model) deletable(project revier.ProjectName) bool {
+	p, ok := m.project(project)
+	if !ok || p.File == "" {
+		return false
+	}
+	i := slices.IndexFunc(m.views, func(v revier.ProjectView) bool { return v.Project.Name == project })
+	return i >= 0 && m.refuseRunning(m.views[i], "deleting") == nil
 }
 
 // confirms reports a close to ask about first: a delete, a project, a target

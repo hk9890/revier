@@ -34,6 +34,8 @@ func TestSameRepoIgnoresHowTheURLIsSpelled(t *testing.T) {
 		"git@github.com:o/widget.git",
 		"ssh://git@github.com/o/widget.git",
 		"https://GitHub.com/o/widget",
+		"github.com:o/widget.git",
+		"git@github.com:/o/widget.git",
 	} {
 		if got := sameRepo(u); got != want {
 			t.Errorf("sameRepo(%q) = %q, want %q", u, got, want)

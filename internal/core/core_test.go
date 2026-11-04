@@ -207,6 +207,9 @@ func TestGoOnALinkSaysWhyItLacksASharedTarget(t *testing.T) {
 			t.Errorf("%s: err = %v, want %q", name, err, want)
 		}
 	}
+	if _, err := c.Agent(context.Background(), p, "editor"); err == nil || !strings.Contains(err.Error(), "the shared target editor has no [target.remote] part") {
+		t.Errorf("agent address far:editor: err = %v, want why far lacks editor", err)
+	}
 }
 
 // A match that constrains nothing would select whichever instance the host
