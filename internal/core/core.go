@@ -868,7 +868,8 @@ const BindPoll = 50 * time.Millisecond
 // a title settles later, which is exactly when a rule would miss it. A window
 // the full rule matches is taken at once; otherwise a single class candidate
 // is taken and two at once are left alone, because the launch does not say
-// which. It gives up after wait and reports false. A window it found and
+// which. A class candidate another project holds is not this launch's: a
+// press of that project in another process bound it while this one waited. It gives up after wait and reports false. A window it found and
 // could not raise is reported with the failure, as goTo reports an instance it
 // launched and could not focus, so the activation pins it.
 func (c *Core) bindWindow(ctx context.Context, p Project, name revier.TargetName, before []revier.Instance, wait time.Duration, raise bool) (inst revier.Instance, ok bool, err error) {
@@ -890,7 +891,7 @@ func (c *Core) bind(ctx context.Context, p Project, name revier.TargetName, befo
 			if p.compiled[i].window.Matches(w) {
 				return w, true, false
 			}
-			if c.classOK(p, i, w) {
+			if c.classOK(p, i, w) && !c.state().HeldByAnother(p.Name, w.Ref) {
 				candidates = append(candidates, w)
 			}
 		}
@@ -1475,15 +1476,18 @@ func (c *Core) listed(ctx context.Context, projects []Project, st *state.State, 
 }
 
 // claim finds the window that is new since the previous survey and belongs to
-// l, the last launch, which is of the project p. For a target's launch it is
+// st's launch, which is of the project p. For a target's launch it is
 // a binding: the window the target's rule accepts by class, which the
 // activation may have missed because the window took longer than its wait.
 // For an action's launch, which has no target, it is an attachment: a window
 // no declared target of any project matches, since a declared one is reached
 // by its key already. Either way it claims nothing rather than the wrong
-// thing: nothing outside the window after the launch, and nothing when more
-// than one candidate appeared at once.
-func (c *Core) claim(before, after []revier.Instance, p Project, l *state.Launch, now time.Time, projects []Project) (revier.TargetRef, bool) {
+// thing: nothing outside the window after the launch, nothing another
+// project's binding or attachment holds, and nothing when more than one
+// candidate appeared at once. A restore launches one step after another, so
+// the window an earlier step bound can still be new to this survey.
+func (c *Core) claim(before, after []revier.Instance, p Project, st *state.State, now time.Time, projects []Project) (revier.TargetRef, bool) {
+	l := st.Launch
 	// A launch stamped after now was written after the listing was taken, so
 	// no window in the listing is its.
 	if !l.Pending(now) || l.At.After(now) {
@@ -1495,7 +1499,7 @@ func (c *Core) claim(before, after []revier.Instance, p Project, l *state.Launch
 	}
 	var candidates []revier.Instance
 	for _, inst := range after {
-		if !seen[key(inst.Ref)] && c.candidate(inst, p, l.Target, projects) {
+		if !seen[key(inst.Ref)] && !st.HeldByAnother(p.Name, inst.Ref) && c.candidate(inst, p, l.Target, projects) {
 			candidates = append(candidates, inst)
 		}
 	}

@@ -135,7 +135,7 @@ func (c *Core) settle(st *state.State, r Report, prev []revier.Instance, surveye
 	if !ok {
 		return changed
 	}
-	if ref, ok := c.claim(prev, r.Windows, p, l, now, projects); ok {
+	if ref, ok := c.claim(prev, r.Windows, p, st, now, projects); ok {
 		say("claim", "project", p.Name, "target", l.Target, "ref", ref)
 		// An attachment records the terminal inside the window as well
 		// (decisions.md D95); a binding is of the window itself.

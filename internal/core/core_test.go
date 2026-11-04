@@ -840,6 +840,83 @@ func TestClaimBounds(t *testing.T) {
 	}
 }
 
+// A restore launches one project's editor after another's. The window the
+// first step bound is still new to the next survey, and the class rule of the
+// second launch accepts it while its title is empty: a window another
+// project's binding or attachment holds is not the launch's to claim. One the
+// launch's own project holds still is.
+func TestClaimSkipsAWindowAnotherProjectHolds(t *testing.T) {
+	projects := []core.Project{prepared(t, project())}
+	now := time.Now()
+	editor := state.Launch{Project: "revier", Target: "editor", At: now.Add(-time.Second)}
+	action := state.Launch{Project: "revier", At: now.Add(-time.Second)}
+	bind := func(st *state.State, p revier.ProjectName, ref revier.TargetRef) { st.Bind(p, "editor", ref) }
+	attach := func(st *state.State, p revier.ProjectName, ref revier.TargetRef) { st.Attach(p, ref) }
+
+	// settled settles once before the windows appear and once after. Before
+	// the second settle, hold gives the first window to the project holder.
+	// It returns the state and the refs of the windows.
+	settled := func(l state.Launch, holder revier.ProjectName, hold func(*state.State, revier.ProjectName, revier.TargetRef), appear ...revier.Instance) (*state.State, []revier.TargetRef) {
+		t.Helper()
+		wm := hosttest.New("wm")
+		wm.Add("old", "x")
+		led := &ledger{st: state.State{Launch: &l}}
+		c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm, Ledger: led}
+		survey := func() core.Report {
+			r, err := c.Survey(context.Background(), projects)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return r
+		}
+		c.Settle(survey(), projects, now)
+		var refs []revier.TargetRef
+		for _, inst := range appear {
+			refs = append(refs, wm.AddInstance(inst))
+		}
+		hold(&led.st, holder, refs[0])
+		return c.Settle(survey(), projects, now), refs
+	}
+	code := revier.Instance{Title: "", Class: "code"}
+	stray := revier.Instance{Title: "Pull requests", Class: "chromium"}
+
+	st, _ := settled(editor, "other", bind, code)
+	if got, ok := st.Bound["revier"]["editor"]; ok || st.Launch == nil {
+		t.Errorf("bound %v, launch %v; want the window other/editor holds left alone and the launch still coming up", got, st.Launch)
+	}
+	st, refs := settled(editor, "other", bind, code, code)
+	if got := st.Bound["revier"]["editor"]; got.ID != refs[1].ID {
+		t.Errorf("bound %v, want the one window nobody holds, %v", got, refs[1])
+	}
+	if st, _ := settled(editor, "other", attach, code); len(st.Bound["revier"]) != 0 {
+		t.Errorf("bound %v; want the window other's attachment holds left alone", st.Bound["revier"])
+	}
+	st, refs = settled(action, "revier", attach, stray)
+	if got := st.Attached["revier"]; len(got) != 1 || got[0].ID != refs[0].ID || st.Launch != nil {
+		t.Errorf("attached %v, launch %v; want the window revier holds claimed and the launch settled", got, st.Launch)
+	}
+}
+
+// Two presses run in two processes: the window the other project's press
+// bound while this one waited is not this launch's, though its class is.
+func TestADetachedLaunchSkipsAWindowAnotherProjectBound(t *testing.T) {
+	wm := hosttest.New("wm")
+	led := &ledger{}
+	var fresh revier.TargetRef
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: detached{wm, func() {
+		other := wm.AddInstance(revier.Instance{Title: "Untitled", Class: "code"})
+		led.Update(func(st *state.State) bool { st.Bind("other", "editor", other); return true })
+		fresh = wm.AddInstance(revier.Instance{Title: "Untitled", Class: "code"})
+	}}, Ledger: led}
+
+	if _, err := press(context.Background(), c, classAndTitle(t), "editor"); err != nil {
+		t.Fatalf("ActivateWaiting: %v", err)
+	}
+	if ref := landed(t, c, "editor"); ref != fresh {
+		t.Errorf("bound %v, want %v, the window no other project holds", ref, fresh)
+	}
+}
+
 // A project file outlives the checkout it names. The survey reports whether
 // the directory is there, so the surface can say so before a target launches
 // into a path that is not.
