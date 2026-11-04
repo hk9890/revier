@@ -42,6 +42,17 @@ func (m Model) WithCloseWait(d time.Duration) Model {
 	return m
 }
 
+// CloseWait is how long a shutdown on the model waits for what it closed to
+// go.
+func (m Model) CloseWait() time.Duration { return m.closeWait }
+
+// MirrorGap is how often the mirror on the model reads the panel with the
+// focus.
+func (m Model) MirrorGap() time.Duration { return m.mirrorGap }
+
+// MirrorInterval is how often the mirror of a surface reads the panel.
+const MirrorInterval = mirrorInterval
+
 // WithMirrorGap replaces how often the mirror reads the panel with the
 // focus, so a test that delivers the mirror's tick does not wait it out.
 func (m Model) WithMirrorGap(d time.Duration) Model {

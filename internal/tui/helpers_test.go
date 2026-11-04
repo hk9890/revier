@@ -193,7 +193,7 @@ func barLine(m tui.Model) string { return lines(m)[0] }
 
 func query(m tui.Model) string { return lines(m)[2] }
 
-func ruleLine(m tui.Model) string { return lines(m)[3] }
+func ruleLine(m tui.Model) string { return lines(m)[chromeLines-1] }
 
 // footer is the last content line: the key legend, or the last failure.
 func footer(m tui.Model) string {
@@ -855,8 +855,8 @@ func shutDownOnRecord(t *testing.T, root string) *state.ShutDown {
 // seenWorld is world(t, 2) on a surface over root that refreshes at once, so
 // a test runs what each survey answers with: the check for an end with no
 // shutdown, and the write of what it saw. project-01's workspace holds no
-// agent, and the mirror ticks at once, so no mirror's tick holds a test up
-// for its second.
+// agent, which the seen and record tests count on. The mirror ticks at once,
+// so no mirror's tick holds a test up for its second.
 func seenWorld(t *testing.T, root string) (tui.Model, *hosttest.FakeRuntime) {
 	t.Helper()
 	rt, _, c, projects := world(t, 2)

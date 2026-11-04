@@ -161,6 +161,20 @@ func TestTheRuleKeepsTheTotalsItHasRoomFor(t *testing.T) {
 	}
 }
 
+// A surface waits the core's close wait for what a shutdown closed, and
+// reads the mirror once a mirror interval: a test shortens both, so no test
+// would see a surface that waits for neither.
+func TestASurfaceWaitsTheCloseWaitAndTheMirrorInterval(t *testing.T) {
+	_, _, c, projects := world(t, 1)
+	m := tui.New(c, projects, t.TempDir(), &config.Config{}, time.Second, theme.Default(), "")
+	if got := m.CloseWait(); got != core.CloseWait {
+		t.Errorf("close wait = %v, want core.CloseWait (%v)", got, core.CloseWait)
+	}
+	if got := m.MirrorGap(); got != tui.MirrorInterval {
+		t.Errorf("mirror gap = %v, want the mirror interval (%v)", got, tui.MirrorInterval)
+	}
+}
+
 // The rows before the first survey are in file order, and the survey re-sorts
 // them. The list component keeps the cursor's index across that, not its
 // project, so a cursor left where it was would land on whatever sorted into
