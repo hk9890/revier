@@ -400,9 +400,27 @@ func (s *State) Prune(hosts []string, instances []revier.Instance, before *State
 	return changed
 }
 
-// Holds reports whether a binding or an attachment holds ref.
-func (s *State) Holds(ref revier.TargetRef) bool {
-	return s.refs()[key(ref)]
+// HeldByAnother reports whether a binding or an attachment of a project other
+// than p holds ref. A nil state holds none.
+func (s *State) HeldByAnother(p revier.ProjectName, ref revier.TargetRef) bool {
+	if s == nil {
+		return false
+	}
+	for project, targets := range s.Bound {
+		for _, bound := range targets {
+			if project != p && key(bound) == key(ref) {
+				return true
+			}
+		}
+	}
+	for project, refs := range s.Attached {
+		for _, attached := range refs {
+			if project != p && key(attached) == key(ref) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // refs is every attached and bound ref, by key. A nil state holds none.
