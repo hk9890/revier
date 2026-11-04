@@ -26,11 +26,22 @@ func TestCommonPrefixKeepsWholeCharacters(t *testing.T) {
 	}
 }
 
-func TestSameRepoIgnoresTheGitSuffixAndATrailingSlash(t *testing.T) {
+func TestSameRepoIgnoresHowTheURLIsSpelled(t *testing.T) {
 	want := sameRepo("https://github.com/o/widget")
-	for _, u := range []string{"https://github.com/o/widget.git", "https://github.com/o/widget/"} {
+	for _, u := range []string{
+		"https://github.com/o/widget.git",
+		"https://github.com/o/widget/",
+		"git@github.com:o/widget.git",
+		"ssh://git@github.com/o/widget.git",
+		"https://GitHub.com/o/widget",
+	} {
 		if got := sameRepo(u); got != want {
 			t.Errorf("sameRepo(%q) = %q, want %q", u, got, want)
+		}
+	}
+	for _, u := range []string{"https://github.com/o/other", "https://gitlab.com/o/widget", "git@github.com:p/widget.git"} {
+		if got := sameRepo(u); got == want {
+			t.Errorf("sameRepo(%q) = %q, want it apart from https://github.com/o/widget", u, got)
 		}
 	}
 }
