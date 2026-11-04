@@ -428,7 +428,7 @@ func (a *app) closeAgent(ctx context.Context, address string, force bool) error 
 	if busy := core.Busy(plan); len(busy) > 0 && !force {
 		return busyAgent(address, busy)
 	}
-	closed, err := a.core.Shutdown(ctx, plan, core.CloseWait, core.ShutdownOpts{Force: force, Projects: projects})
+	closed, err := a.core.Shutdown(ctx, plan, closeWait, core.ShutdownOpts{Force: force, Projects: projects})
 	var refused *core.BusyRefusal
 	switch {
 	case errors.As(err, &refused):

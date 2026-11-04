@@ -86,7 +86,8 @@ keys, so every letter goes to the query.
 While a shutdown, a close or a restore runs, the TUI shows each step as it
 runs and what came of it. No other key and no click does anything until it
 ends. ctrl+c lets the step that runs finish, then stops, and the TUI stays
-open to show what was done and what was not reached. A restore stopped after
+open to show what was done and what was not reached. After the last step,
+ctrl+c ends the wait for what was closed to go. A restore stopped after
 its last target says `return home cancelled`. When a step hangs, press ctrl+c
 again to quit: the command the step waits for ends too.
 

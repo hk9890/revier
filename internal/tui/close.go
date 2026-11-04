@@ -185,7 +185,8 @@ func (m Model) closed(msg shutdownMsg, cancelled bool) (tea.Model, tea.Cmd) {
 	_, open, failed := msg.closed.Counts()
 	var err error
 	switch {
-	// A cancel that came after the last step was walked stopped nothing.
+	// A cancel that came after the last step was walked left no step
+	// unreached; it can only have ended the wait, and the counts say so.
 	case one.walk.cancelled && len(one.unreached()) > 0:
 		err = errors.New(one.notReached())
 	case failed > 0:

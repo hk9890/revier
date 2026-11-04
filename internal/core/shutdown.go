@@ -511,8 +511,10 @@ func (cs Closed) Counts() (closed, open, failed int) {
 // it closed to go.
 const ClosePoll = 100 * time.Millisecond
 
-// CloseWait is how long a shutdown waits for what it closed to go.
-const CloseWait = 3 * time.Second
+// CloseWait is how long a shutdown waits for what it closed to go. The wait
+// ends as soon as nothing is pending, so only a step that stays costs it all.
+// An IDE window can take more than 4 s to go after its close.
+const CloseWait = 10 * time.Second
 
 // CloseBudget is how long the closes themselves may take, on top of the wait
 // that follows them. It counts from the moment the save is done.
@@ -613,10 +615,11 @@ func (r *BusyRefusal) Unwrap() error { return ErrAgentBusy }
 // the save is made and every step is asked to close.
 //
 // A caller that cancels stops the walk between two steps: the step that runs
-// does not see the cancel and finishes, the steps not yet reached are left out
-// of the result, and the wait still runs for the steps that closed, so what
-// the result says is still open is true. A budget that runs out is no such
-// decision, and every step is still asked.
+// does not see the cancel and finishes, and the steps not yet reached are left
+// out of the result. A cancel also ends the wait after its next listing, so a
+// step that closed is still open in the result when that listing still holds
+// it. A budget that runs out is no such decision, and every step is still
+// asked.
 func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duration, opts ShutdownOpts) (Closed, error) {
 	start := time.Now()
 	opts.report(Progress{Phase: PhaseRecheck, Of: len(plan)})
@@ -645,7 +648,7 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 		}
 	}
 	// The steps and the wait run on a budget the cancel does not reach; the
-	// cancel is read between two steps.
+	// cancel is read between two steps, and between two listings of the wait.
 	closing, stop := context.WithTimeout(context.WithoutCancel(ctx), CloseBudget+wait)
 	defer stop()
 	cancelled := func() bool { return errors.Is(ctx.Err(), context.Canceled) }
@@ -683,13 +686,15 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 		out = append(out, res)
 		opts.report(Progress{Phase: PhaseClose, N: i + 1, Of: len(plan), Label: s.Name(), Done: true, Closed: res})
 	}
-	// A cancel that came during the last step stopped nothing.
-	if cancelled() && len(out) < len(plan) {
+	opts.report(Progress{Phase: PhaseWait, Of: len(plan)})
+	c.awaitClosed(closing, out, wait, cancelled)
+	closed, open, failed := out.Counts()
+	// A cancel stopped something when it left a step unreached, or ended the
+	// wait with a step still listed; one after the last step stopped nothing
+	// else.
+	if cancelled() && (len(out) < len(plan) || open > 0) {
 		slog.Info("shutdown cancelled", "walked", len(out), "steps", len(plan))
 	}
-	opts.report(Progress{Phase: PhaseWait, Of: len(plan)})
-	c.awaitClosed(closing, out, wait)
-	closed, open, failed := out.Counts()
 	logging.Op("shutdown", start, nil, "closed", closed, "open", open, "failed", failed)
 	c.note(record.Line{Kind: record.KindShutdown, Counts: map[string]int{"closed": closed, "open": open, "failed": failed}})
 	return out, nil
@@ -805,7 +810,8 @@ func (c *Core) panelsOf(instances []revier.Instance, s CloseStep) []revier.Panel
 // that listing, whatever another host did (decisions.md D89). A close that
 // failed on something the listing no longer holds is closed all the same:
 // whether it is gone is the listing's word, not Close's (revier.Closer).
-func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration) {
+// cancelled ends the wait after a listing, which it never cuts short.
+func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration, cancelled func() bool) {
 	deadline := time.Now().Add(wait)
 	for {
 		snap, failed := c.listing(ctx)
@@ -826,7 +832,7 @@ func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration) 
 			r.Open = r.Err == nil && still
 			pending = pending || r.Open
 		}
-		if !pending || time.Now().After(deadline) {
+		if !pending || time.Now().After(deadline) || cancelled() {
 			return
 		}
 		select {

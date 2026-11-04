@@ -138,6 +138,36 @@ func TestACtrlCDuringTheLastCloseLeavesTheShutdownOnRecord(t *testing.T) {
 	}
 }
 
+// ctrl+c while `revier shutdown` waits for a target that stays ends the wait:
+// the command says the cancel ended it, names the target still open, and
+// fails.
+func TestACtrlCEndsTheWaitOfTheShutdown(t *testing.T) {
+	a, rt := demoDesktop(t, &state.State{}, "home")
+	rt.Refuses = map[string]bool{rt.Add("diff", "").ID: true}
+	was := closeWait
+	t.Cleanup(func() { closeWait = was })
+	closeWait = time.Minute
+	cancel, _ := interruptedBy(t)
+	rt.OnClose = func(revier.TargetRef) {
+		if len(rt.Closed) == 1 {
+			time.AfterFunc(2*core.ClosePoll, cancel)
+		}
+	}
+
+	start := time.Now()
+	var err error
+	out := output(t, a, func() error { err = cmdShutdown(context.Background(), a, nil); return nil })
+	if took := time.Since(start); took > 10*time.Second {
+		t.Errorf("shutdown took %v; want the cancel to end the one-minute wait", took)
+	}
+	if !errors.Is(err, errShutdownIncomplete) {
+		t.Errorf("err = %v, want the shutdown incomplete", err)
+	}
+	if !strings.Contains(out, "1 still open") || !strings.Contains(out, "cancelled: the wait for what was closed to go ended") {
+		t.Errorf("output = %q, want the target still open and the ended wait said", out)
+	}
+}
+
 // A second ctrl+c ends `revier shutdown` before the shutdown returns, so it
 // takes a full shutdown that left a step off the record as it goes.
 func TestASecondCtrlCTakesTheFullShutdownOffTheRecord(t *testing.T) {

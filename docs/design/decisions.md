@@ -685,9 +685,9 @@ line for it. Each now reports every step before and after it runs, so a host
 that hangs is the step left on the screen. While one runs, no key or click
 acts: a press that left the screen, or started a second close, acted on a
 desktop half changed. ctrl+c lets the step that runs finish and stops before
-the next, so the surface stays to say what was done; a second ctrl+c quits, for
-a step that hangs. Rejected: Esc leaving a running restore, which used the
-surface while the restore still opened windows.
+the next, so the surface stays to say what was done, and ends a shutdown's wait
+for what it closed; a second ctrl+c quits, for a step that hangs. Rejected: Esc
+leaving a running restore, which used the surface while it still opened windows.
 
 ### D141 — a full shutdown is remembered until anything opens
 

@@ -151,8 +151,9 @@ func (w cancelAwareWindows) Close(ctx context.Context, ref revier.TargetRef) err
 }
 
 // A cancel during a close lets that close finish, closes nothing after it,
-// and still waits for what closed: a step that did not go reads as still open.
-func TestACancelledShutdownFinishesTheStepThatRunsAndWaitsForIt(t *testing.T) {
+// and ends the wait after one listing: a step that did not go reads as still
+// open.
+func TestACancelledShutdownFinishesTheStepThatRunsAndListsItOnce(t *testing.T) {
 	c, rt, wm, projects := openDesktop(t, revier.StatusIdle)
 	c.Self = func(p revier.Panel) bool { return p.ID == "1" }
 	c.Window = cancelAwareWindows{wm}
@@ -184,7 +185,7 @@ func TestACancelledShutdownFinishesTheStepThatRunsAndWaitsForIt(t *testing.T) {
 		t.Errorf("walked %d steps, runtime closed %v; want notes and the editor, and home not reached", len(out), rt.Closed)
 	}
 	if closed, open, _ := out.Counts(); closed != 1 || open != 1 {
-		t.Errorf("closed %d, %d still open; want the wait to find the editor still listed", closed, open)
+		t.Errorf("closed %d, %d still open; want the listing to find the editor still there", closed, open)
 	}
 	want := progressLog{
 		"recheck 0/3 ",
