@@ -19,6 +19,9 @@ where it knows the fix.
 1 project, 1 file with problems
 ```
 
+It also warns when two project files name one checkout. A warning does not
+change the exit status.
+
 A mistake stops only the part it is in; see
 [configuration.md](configuration.md#mistakes). When every other command
 fails, `revier doctor` still prints the error, and `revier assist` still
