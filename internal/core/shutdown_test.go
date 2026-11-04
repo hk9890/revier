@@ -233,19 +233,20 @@ func TestTheWaitListsLessOftenAsItGoesOn(t *testing.T) {
 	}
 }
 
-// A cancel during the wait ends it at once, not at the next listing: a window
-// its application keeps open does not hold the shutdown for the whole wait,
-// and it is reported still open. The cancel lands in a gap of most of a
-// second between two listings.
+// A cancel during the wait ends it at once, a listing that hangs included: a
+// window host that does not answer does not hold the shutdown for the whole
+// wait, and the window no listing showed gone is reported still open.
 func TestShutdownEndsTheWaitWhenTheCallerCancels(t *testing.T) {
 	c, _, wm, projects := openDesktop(t, revier.StatusIdle)
 	report := survey(t, c, projects, nil)
-	wm.Refuses = map[string]bool{report.Windows[0].Ref.ID: true}
+	hang := &atomic.Bool{}
+	c.Window = hangingWindows{Fake: wm, hang: hang}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var cancelledAt atomic.Int64
 	wm.OnClose = func(revier.TargetRef) {
-		time.AfterFunc(16*core.ClosePoll, func() {
+		hang.Store(true)
+		time.AfterFunc(2*core.ClosePoll, func() {
 			cancelledAt.Store(time.Now().UnixNano())
 			cancel()
 		})

@@ -130,7 +130,8 @@ func TestATabOfARuntimeThatCannotListIsUnknown(t *testing.T) {
 }
 
 // A window host that cannot list after a shutdown does not make the
-// runtime's window that stayed read as closed.
+// runtime's window that stayed read as closed, and its own window, which no
+// listing showed gone, is not taken as gone either.
 func TestShutdownJudgesEachStepByItsOwnHost(t *testing.T) {
 	c, rt, wm, projects := openDesktop(t, revier.StatusIdle)
 	report := survey(t, c, projects, nil)
@@ -145,7 +146,7 @@ func TestShutdownJudgesEachStepByItsOwnHost(t *testing.T) {
 	if !out[0].Open {
 		t.Errorf("%s = %+v, want still open: its own host lists it", out[0].Name(), out[0])
 	}
-	if closed, open, _ := out.Counts(); closed != 2 || open != 1 {
-		t.Errorf("counts = %d closed, %d open; want 2 and 1", closed, open)
+	if closed, open, _ := out.Counts(); closed != 1 || open != 2 {
+		t.Errorf("counts = %d closed, %d open; want the notes closed, and the runtime's window and the editor open", closed, open)
 	}
 }

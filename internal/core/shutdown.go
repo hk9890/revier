@@ -528,7 +528,7 @@ const CloseBudget = 40 * time.Second
 
 // CloseListBudget is how long a listing the wait started before its end may
 // still take. A listing it cuts short changes nothing: each step keeps what
-// the last listing said of it. A variable so a test can cut one short.
+// the listing before said of it. A variable so a test can cut one short.
 var CloseListBudget = 5 * time.Second
 
 // SaveBudget is how long the save before the closes may take. It counts from
@@ -630,9 +630,10 @@ func (r *BusyRefusal) Unwrap() error { return ErrAgentBusy }
 //
 // A caller that cancels stops the walk between two steps: the step that runs
 // does not see the cancel and finishes, and the steps not yet reached are left
-// out of the result. A cancel also ends the wait at once, so a step that
-// closed is still open in the result when the last listing still held it. A budget that runs out is no such decision, and every step is still
-// asked.
+// out of the result. A cancel also ends the wait at once, a listing that runs
+// included, so a step that closed is still open in the result when no
+// listing showed it gone. A budget that runs out is no such decision, and
+// every step is still asked.
 func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duration, opts ShutdownOpts) (Closed, error) {
 	start := time.Now()
 	opts.report(Progress{Phase: PhaseRecheck, Of: len(plan)})
@@ -700,17 +701,9 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 		opts.report(Progress{Phase: PhaseClose, N: i + 1, Of: len(plan), Label: s.Name(), Done: true, Closed: res})
 	}
 	opts.report(Progress{Phase: PhaseWait, Of: len(plan)})
-	waiting, stopWaiting := context.WithTimeout(context.WithoutCancel(ctx), wait+CloseListBudget)
+	waiting, stopWaiting := phaseContext(ctx, wait+CloseListBudget)
 	defer stopWaiting()
-	// halt closes on the cancel alone: a deadline of the caller's is no
-	// decision to stop waiting.
-	halt := make(chan struct{})
-	defer context.AfterFunc(ctx, func() {
-		if cancelled() {
-			close(halt)
-		}
-	})()
-	c.awaitClosed(waiting, out, wait, halt)
+	c.awaitClosed(waiting, out, wait)
 	closed, open, failed := out.Counts()
 	// A cancel stopped something when it left a step unreached, or ended the
 	// wait with a step still listed; one after the last step stopped nothing
@@ -828,17 +821,18 @@ func (c *Core) panelsOf(instances []revier.Instance, s CloseStep) []revier.Panel
 }
 
 // awaitClosed marks every closed step that is still listed once wait has
-// passed. A step whose host cannot list is taken as gone, since the close
-// itself answered without an error; a step whose host answered is judged by
-// that listing, whatever another host did (decisions.md D89). A close that
-// failed on something the listing no longer holds is closed all the same:
-// whether it is gone is the listing's word, not Close's (revier.Closer).
+// passed. A step asked to close is open until a listing shows it gone. A host
+// whose listing fails, or that ctx cuts short, says nothing of what went: its
+// steps stay as the listing before left them, and a step whose host answered
+// is judged by that listing, whatever another host did (decisions.md D89). A
+// close that failed on something the listing no longer holds is closed all
+// the same: whether it is gone is the listing's word, not Close's
+// (revier.Closer).
 //
-// A step asked to close is open until a listing says it went, so a host
-// whose listing ctx cut short, which says nothing, leaves its steps as the
-// listing before it did; the hosts that answered are judged as ever. halt ends the wait at once, with what the last listing said. A wait
-// with no step asked to close lists nothing.
-func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration, halt <-chan struct{}) {
+// ctx ends the wait at once, a listing that runs included: it is done when
+// the caller cancels or the wait's budget is spent. A wait with no step asked
+// to close lists nothing.
+func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration) {
 	if !slices.ContainsFunc(out, func(r CloseResult) bool { return !r.Action.Leaves() }) {
 		return
 	}
@@ -851,29 +845,26 @@ func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration, 
 	poll := ClosePoll
 	for {
 		snap, failed := c.listing(ctx)
-		cut := ctx.Err() != nil
 		pending := false
 		for i := range out {
 			r := &out[i]
 			if r.Action.Leaves() {
 				continue
 			}
-			if failed[r.Ref.Host] != nil {
-				r.Open = r.Open && cut
-				continue
+			if failed[r.Ref.Host] == nil {
+				still := listed(snap, r.CloseStep)
+				if r.Err != nil && !still {
+					r.Err = nil
+				}
+				r.Open = r.Err == nil && still
 			}
-			still := listed(snap, r.CloseStep)
-			if r.Err != nil && !still {
-				r.Err = nil
-			}
-			r.Open = r.Err == nil && still
 			pending = pending || r.Open
 		}
-		if !pending || cut || time.Now().After(deadline) {
+		if !pending || ctx.Err() != nil || time.Now().After(deadline) {
 			return
 		}
 		select {
-		case <-halt:
+		case <-ctx.Done():
 			return
 		case <-time.After(min(poll, time.Until(deadline))):
 		}
