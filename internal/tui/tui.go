@@ -183,7 +183,7 @@ type Model struct {
 	raises       int                              // the times the popup was raised; a close a del planned before the last raise asks nothing
 	idle         bool                             // a survey waits for the files read again: the chain ended while hidden, or a raise or a focus regained dropped its tick
 	blurred      bool                             // the terminal said its window lost the focus; the surface refreshes slowly until it is back
-	look         int                              // the blurs, focuses and hides so far; a survey listed before the last says nothing of a hide by the desktop
+	look         int                              // the blurs, focuses, hides and restores ended so far; a survey listed before the last says nothing of a hide by the desktop
 	surveying    bool                             // a survey is out, so a focus regained starts no second one
 	chain        int                              // the number of the refresh tick that is out; an older one is dropped
 	local        core.Report                      // the last survey of this machine, with no host's answer laid over
@@ -497,26 +497,29 @@ func (m Model) hide(went bool) tea.Cmd {
 }
 
 // takesHide reports a popup that takes a hide by the desktop as Esc's: one
-// the surface has not hidden itself (decisions.md D169). A popup that asks a
-// question, a delete or a close, does not, as Esc's raise drops the question
-// and a question waits for its answer; nor does one that walks a restore or
-// a shutdown, which Esc cannot hide either.
+// in a state Esc hides from, which the surface has not hidden itself
+// (decisions.md D169). A popup that asks a question or shows a screen does
+// not, as Esc's raise would drop the question, or the offer or the question
+// the screen holds, and both wait for the user; nor does one that walks a
+// restore or a shutdown, which Esc cannot hide either.
 func (m Model) takesHide() bool {
-	return m.popup && !m.hidden && m.confirm == "" && !m.shut.one && !m.walking()
+	return m.popup && !m.hidden && m.dialog == dialogNone && m.confirm == "" && !m.shut.one && !m.walking()
 }
 
 // hideTaken is the popup's state once its window is off the screen, by Esc,
-// a go or the desktop: Esc's, with no screen over the surface, no query, no
-// note and the cursor on the project list, whichever hid it (decisions.md
-// D169).
+// a go or the desktop: the raise that follows is one, whichever hid it
+// (decisions.md D169).
 func (m *Model) hideTaken() {
 	m.hidden = true
-	m.look++
-	m.err, m.copied, m.closeDone = nil, 0, ""
-	if m.dialog != dialogNone {
-		m.dialog = dialogNone
-		m.layout()
-	}
+}
+
+// clearForRaise leaves what Esc leaves before it hides: no query and no
+// note, and the cursor on the project list. Esc clears them on its way out,
+// a go and the desktop do not, so the raise clears them for all three
+// (decisions.md D169). An error stays, to be read: a go may fail once its
+// window took the focus and the desktop hid the popup.
+func (m *Model) clearForRaise() {
+	m.copied, m.closeDone = 0, ""
 	if m.afilter != "" {
 		m.query(focusAgents, "")
 	}
@@ -870,7 +873,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.show()
 			seen = m.observe(nil)
 			// The desktop hid the popup while it had no focus: it stops
-			// surveying, as after Esc (D169).
+			// surveying, as after Esc (decisions.md D169).
 			if msg.look == m.look && m.blurred && m.takesHide() && msg.report.PopupMinimized() {
 				m.hiddenByDesktop()
 			}
@@ -997,6 +1000,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// delete, or a close a del planned, still asked from before the
 			// hide is not asked again, nor once a plan still out lands.
 			m.hidden, m.agents.shown = false, false
+			m.clearForRaise()
 			m.raises++
 			m.confirm, m.ctarget = "", ""
 			if m.shut.one && !m.shut.running {

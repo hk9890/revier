@@ -945,8 +945,8 @@ pair, which costs core work for a terminal the user has elsewhere.
 wctl's overlay minimizes the popup when another window takes the focus, and
 tells of no hide (D87). A press that raises the popup from minimized marks it
 in a file beside the state, not fsynced, and the surface takes the mark at the
-focus: a raise as after Esc, unless the popup asks a question or walks. A slow
-refresh's survey that lists the popup minimized stops the surveys. Every hide
-leaves Esc's state: no screen, query or note, the cursor on the project list.
-Rejected: a key typed in at the raise, two kitty round trips; looks after the
-blur, a gap; revier writing the user's rules.json (D30, D147).
+focus as Esc's hide, where Esc hides from: no screen, question or walk. So
+does a slow refresh's survey that lists it minimized. Every raise clears what
+Esc clears, the query and the note, but no error. Rejected: a key typed in at
+the raise, two kitty round trips; looks after the blur, a gap; revier writing
+the user's rules.json (D30, D147).

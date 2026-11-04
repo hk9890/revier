@@ -50,8 +50,9 @@ this on, add `"overlay": true` to a rule for the popup's class in your
 - An older extension rejects the whole file, and with it every rule. Upgrade
   the extension first.
 - A hide by the extension acts as Esc: the next press raises the popup on the
-  project list, with no query and no screen open. A question the popup asked,
-  such as a delete, still waits for your answer.
+  project list, with no query. An error the popup showed stays. A screen or a
+  question the popup showed, such as the help or a delete, still waits for
+  you.
 
 ## Windows that open late
 

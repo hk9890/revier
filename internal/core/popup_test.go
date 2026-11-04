@@ -163,6 +163,29 @@ func TestARaiseOfAMinimizedPopupIsOnRecord(t *testing.T) {
 	}
 }
 
+// No mark outlives a raise that failed, as no focus comes to take it, and a
+// launch takes the mark a popup that went away left.
+func TestNoMarkOutlivesAFailedRaiseOrALaunch(t *testing.T) {
+	wm := hosttest.New("wm")
+	wm.AddInstance(revier.Instance{Title: "revier", Class: core.PopupClass, Minimized: true})
+	wm.FocusErr = errors.New("wctl: no answer")
+	l := &ledger{}
+	if _, err := (&core.Core{Window: wm, Ledger: l}).Popup(context.Background(), popupArgv); err == nil {
+		t.Fatal("a raise whose focus failed reported no error")
+	}
+	if l.popupHidden {
+		t.Error("a raise whose focus failed left its mark")
+	}
+
+	l = &ledger{popupHidden: true}
+	if _, err := (&core.Core{Window: hosttest.New("wm"), Ledger: l}).Popup(context.Background(), popupArgv); err != nil {
+		t.Fatalf("launch: %v", err)
+	}
+	if l.popupHidden {
+		t.Error("a launch kept the mark a popup that went away left")
+	}
+}
+
 // The surface takes the raise of a minimized popup once: the next focus,
 // with no press, finds none. A core with no ledger has none to take.
 func TestTakePopupHiddenTakesItOnce(t *testing.T) {

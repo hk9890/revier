@@ -438,14 +438,16 @@ func raisedByKey(t *testing.T, m tui.Model, c *core.Core) tui.Model {
 // and raised by its key.
 func escapedAndRaised(t *testing.T, m tui.Model, c *core.Core) tui.Model {
 	t.Helper()
-	for {
+	for range 4 {
 		next, cmd := press(m, "esc")
-		if cmd == nil {
-			m = next
-			continue
+		m = next
+		if cmd != nil {
+			m = run(m, cmd)
+			break
 		}
-		m = run(next, cmd)
-		break
+	}
+	if !m.Hidden() {
+		t.Fatal("Esc did not hide the popup")
 	}
 	m, _ = update(m, tea.BlurMsg{})
 	return raisedByKey(t, m, c)
@@ -480,46 +482,72 @@ func TestAHideByTheDesktopIsTakenAsEscs(t *testing.T) {
 	}
 }
 
-// A desktop hide over a query, the targets, a screen and a note leaves what
-// Esc leaves: no screen, no query, no note, and the cursor on the project
-// list.
+// overlaidPopup is the popup the desktop hid, over what over left on it, its
+// core, and its window host.
+func overlaidPopup(t *testing.T, over func(tui.Model) tui.Model) (tui.Model, *core.Core) {
+	t.Helper()
+	_, wm, c, projects := world(t, 3)
+	wm.AddInstance(revier.Instance{Title: "revier", Class: core.PopupClass, Minimized: true})
+	m, _ := clocked(tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").
+		WithPopup().StaticCursors())
+	m, _ = update(over(survey(m)), tea.BlurMsg{})
+	return m, c
+}
+
+// A desktop hide over a query and the targets leaves what Esc leaves: no
+// query, and the cursor on the project list.
 func TestADesktopHideClearsWhatEscClears(t *testing.T) {
-	for name, over := range map[string]func(tui.Model) tui.Model{
-		"a query and the targets": func(m tui.Model) tui.Model {
-			m, _ = press(m, "1")
-			m, _ = press(m, "alt+t")
-			return m
-		},
-		"the help": func(m tui.Model) tui.Model {
-			m, _ = press(m, "alt+h")
-			return m
-		},
-		"a note": func(m tui.Model) tui.Model {
-			return m.WithErr(errors.New("plain has no web target"))
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			popup := func(minimized bool) (tui.Model, *core.Core) {
-				_, wm, c, projects := world(t, 3)
-				wm.AddInstance(revier.Instance{Title: "revier", Class: core.PopupClass, Minimized: minimized})
-				m, _ := clocked(tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").
-					WithPopup().StaticCursors())
-				return over(survey(m)), c
-			}
-			escaped, ec := popup(false)
-			escaped = escapedAndRaised(t, escaped, ec)
+	over := func(m tui.Model) tui.Model {
+		m, _ = press(m, "1")
+		m, _ = press(m, "alt+t")
+		return m
+	}
+	_, wm, c, projects := world(t, 3)
+	wm.Add("revier", core.PopupClass)
+	escaped, _ := clocked(tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").
+		WithPopup().StaticCursors())
+	escaped = escapedAndRaised(t, over(survey(escaped)), c)
 
-			overlaid, oc := popup(true)
-			overlaid, _ = update(overlaid, tea.BlurMsg{})
-			overlaid = raisedByKey(t, overlaid, oc)
+	overlaid, oc := overlaidPopup(t, over)
+	overlaid = raisedByKey(t, overlaid, oc)
 
-			if q := query(overlaid); !strings.Contains(q, "filter projects") {
-				t.Errorf("query line = %q after the raise, want the projects with no query", q)
-			}
-			if got, want := screen(overlaid), screen(escaped); got != want {
-				t.Errorf("raised after the desktop's hide:\n%s\nwant as after Esc:\n%s", got, want)
-			}
-		})
+	if q := query(overlaid); !strings.Contains(q, "filter projects") {
+		t.Errorf("query line = %q after the raise, want the projects with no query", q)
+	}
+	if got, want := screen(overlaid), screen(escaped); got != want {
+		t.Errorf("raised after the desktop's hide:\n%s\nwant as after Esc:\n%s", got, want)
+	}
+}
+
+// A desktop hide over a screen is no hide Esc makes, as Esc cannot hide from
+// one: the screen, with what it asks or offers, waits for the user, and the
+// popup surveys on.
+func TestADesktopHideOverAScreenLeavesIt(t *testing.T) {
+	m, c := overlaidPopup(t, func(m tui.Model) tui.Model {
+		m, _ = press(m, "alt+h")
+		return m
+	})
+	m, tick := update(m, m.Ticked())
+	m = run(m, tick)
+	if !surveys(m) {
+		t.Error("a popup over a screen took the desktop's hide in its survey")
+	}
+	m = raisedByKey(t, m, c)
+	if head := barLine(m); !strings.Contains(head, "Keyboard shortcuts") {
+		t.Errorf("top line = %q after the raise, want the help screen still open", head)
+	}
+}
+
+// A desktop hide keeps an error on the footer: a go may fail once its window
+// took the focus and the desktop hid the popup, and the failure is to be
+// read.
+func TestADesktopHideKeepsAnError(t *testing.T) {
+	m, c := overlaidPopup(t, func(m tui.Model) tui.Model {
+		return m.WithErr(errors.New("plain has no web target"))
+	})
+	m = raisedByKey(t, m, c)
+	if f := footer(m); !strings.Contains(f, "plain has no web target") {
+		t.Errorf("footer = %q after the raise, want the error still there", f)
 	}
 }
 

@@ -47,10 +47,8 @@ type File struct {
 const popupHidden = "popup-hidden"
 
 // MarkPopupHidden leaves the mark of a raise of the minimized popup.
+// The root is there: the surface of the popup to raise writes to it.
 func (f File) MarkPopupHidden() error {
-	if err := os.MkdirAll(f.Root, 0o755); err != nil {
-		return err
-	}
 	return os.WriteFile(filepath.Join(f.Root, popupHidden), nil, 0o644)
 }
 
