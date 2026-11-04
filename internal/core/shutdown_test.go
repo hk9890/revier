@@ -210,6 +210,30 @@ func TestShutdownCountsAWindowThatGoesDuringTheWaitAsClosed(t *testing.T) {
 	}
 }
 
+// A cancel during the wait ends it at the next listing: a window its
+// application keeps open does not hold the shutdown for the whole wait, and
+// it is reported still open.
+func TestShutdownEndsTheWaitWhenTheCallerCancels(t *testing.T) {
+	c, _, wm, projects := openDesktop(t, revier.StatusIdle)
+	report := survey(t, c, projects, nil)
+	wm.Refuses = map[string]bool{report.Windows[0].Ref.ID: true}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	wm.OnClose = func(revier.TargetRef) { time.AfterFunc(2*core.ClosePoll, cancel) }
+
+	start := time.Now()
+	out, err := c.Shutdown(ctx, c.ShutdownPlan(report, "", core.ShutdownAll), time.Minute, reading(projects))
+	if err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	if took := time.Since(start); took > 10*time.Second {
+		t.Errorf("shutdown took %v; want the cancel to end the one-minute wait", took)
+	}
+	if closed, open, _ := out.Counts(); closed != 2 || open != 1 {
+		t.Errorf("counts = %d closed, %d open; want the editor still open", closed, open)
+	}
+}
+
 // A close that fails is that step's failure, and the rest still close.
 func TestShutdownGoesOnPastAFailedClose(t *testing.T) {
 	c, rt, _, projects := openDesktop(t, revier.StatusIdle)

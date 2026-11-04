@@ -13,8 +13,9 @@ import (
 // A shutdown and a restore report each step as they walk it, and the surface
 // draws the walk as it goes. While one runs, the surface takes no key and no
 // click but ctrl+c: the first cancels the walk once the step that runs is
-// done, and leaves the surface up to say what it did; a second quits, for a
-// step that hangs (decisions.md D140).
+// done, or ends a shutdown's wait after its last step, and leaves the surface
+// up to say what it did; a second quits, for a step that hangs (decisions.md
+// D140).
 
 // walk is what a running shutdown or restore has reported so far, and how to
 // stop it.
@@ -55,6 +56,8 @@ func (w walk) line() string {
 	p := w.last
 	now := ""
 	switch {
+	case w.cancelled && p.Phase == core.PhaseWait:
+		return "no longer waiting for what was closed… ctrl+c again quits"
 	case w.cancelled:
 		return "cancelling once the step that runs is done… ctrl+c again quits"
 	case p.Phase == core.PhaseRecheck:

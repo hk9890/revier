@@ -647,7 +647,7 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 		}
 	}
 	// The steps and the wait run on a budget the cancel does not reach; the
-	// cancel is read between two steps.
+	// cancel is read between two steps, and between two listings of the wait.
 	closing, stop := context.WithTimeout(context.WithoutCancel(ctx), CloseBudget+wait)
 	defer stop()
 	cancelled := func() bool { return errors.Is(ctx.Err(), context.Canceled) }
@@ -690,7 +690,11 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 		slog.Info("shutdown cancelled", "walked", len(out), "steps", len(plan))
 	}
 	opts.report(Progress{Phase: PhaseWait, Of: len(plan)})
-	c.awaitClosed(closing, out, wait)
+	// A cancel after the last step ends the wait, and what is still listed
+	// stays open.
+	if c.awaitClosed(closing, out, wait, cancelled) && len(out) == len(plan) {
+		slog.Info("shutdown cancelled", "walked", len(out), "steps", len(plan))
+	}
 	closed, open, failed := out.Counts()
 	logging.Op("shutdown", start, nil, "closed", closed, "open", open, "failed", failed)
 	c.note(record.Line{Kind: record.KindShutdown, Counts: map[string]int{"closed": closed, "open": open, "failed": failed}})
@@ -807,7 +811,9 @@ func (c *Core) panelsOf(instances []revier.Instance, s CloseStep) []revier.Panel
 // that listing, whatever another host did (decisions.md D89). A close that
 // failed on something the listing no longer holds is closed all the same:
 // whether it is gone is the listing's word, not Close's (revier.Closer).
-func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration) {
+// cancelled ends the wait after a listing, which it never cuts short; it
+// reports whether it ended the wait with a step still listed.
+func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration, cancelled func() bool) bool {
 	deadline := time.Now().Add(wait)
 	for {
 		snap, failed := c.listing(ctx)
@@ -829,11 +835,14 @@ func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration) 
 			pending = pending || r.Open
 		}
 		if !pending || time.Now().After(deadline) {
-			return
+			return false
+		}
+		if cancelled() {
+			return true
 		}
 		select {
 		case <-ctx.Done():
-			return
+			return false
 		case <-time.After(ClosePoll):
 		}
 	}
