@@ -37,9 +37,10 @@ const quitAfterShutdown = 1500 * time.Millisecond
 type shutQuitMsg struct{}
 
 // shutdownWait bounds the survey a plan is made from. The close keeps none
-// of it: the recheck, the save and the closes each run on a budget of their
-// own, core.RecheckBudget, core.SaveBudget and core.CloseBudget, counted from
-// where each starts.
+// of it: the recheck, the save, the closes and the wait after them each run
+// on a budget of their own, core.RecheckBudget, core.SaveBudget,
+// core.CloseBudget and the wait with core.CloseListBudget, counted from where
+// each starts.
 const shutdownWait = 30 * time.Second
 
 type shutStep int
