@@ -25,7 +25,7 @@ func statusSurface(t *testing.T, shared []core.Status, w, h int, own ...core.Sta
 	t.Helper()
 	projects := core.Prepare([]revier.Project{{Name: "alpha", Path: "/p/alpha"}, {Name: "beta", Path: "/p/beta"}})
 	projects[0].Status = own
-	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, projects, t.TempDir(), &config.Config{}, time.Second, theme.Default(), "")
+	m := NewWithoutWaits(&core.Core{Runtime: hosttest.NewRuntime("rt")}, projects, t.TempDir(), &config.Config{}, time.Second, theme.Default(), "")
 	m.status = newStatuses(shared)
 	next, _ := m.Update(m.Survey()())
 	next, _ = next.Update(tea.WindowSizeMsg{Width: w, Height: h})
@@ -382,7 +382,7 @@ func TestStatusBeatEndsWithTheLastStatus(t *testing.T) {
 func TestStatusInitBeatIsKept(t *testing.T) {
 	projects := core.Prepare([]revier.Project{{Name: "alpha", Path: "/p/alpha"}})
 	projects[0].Status = []core.Status{{At: core.StatusProject, Run: []string{"p"}}}
-	m := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, projects, t.TempDir(), &config.Config{}, time.Second, theme.Default(), "")
+	m := NewWithoutWaits(&core.Core{Runtime: hosttest.NewRuntime("rt")}, projects, t.TempDir(), &config.Config{}, time.Second, theme.Default(), "")
 	if m.firstBeat() == nil || !m.status.beating {
 		t.Fatal("a surface with a status starts no beat")
 	}
@@ -392,7 +392,7 @@ func TestStatusInitBeatIsKept(t *testing.T) {
 		}
 	}
 
-	none := New(&core.Core{Runtime: hosttest.NewRuntime("rt")}, core.Prepare([]revier.Project{{Name: "beta", Path: "/p/beta"}}), t.TempDir(), &config.Config{}, time.Second, theme.Default(), "")
+	none := NewWithoutWaits(&core.Core{Runtime: hosttest.NewRuntime("rt")}, core.Prepare([]revier.Project{{Name: "beta", Path: "/p/beta"}}), t.TempDir(), &config.Config{}, time.Second, theme.Default(), "")
 	if none.firstBeat() != nil {
 		t.Error("a surface with no status started a beat")
 	}

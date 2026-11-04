@@ -6,8 +6,23 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/theme"
+	"github.com/hk9890/revier/pkg/revier"
 )
+
+// NewWithoutWaits is New with no close wait and no mirror gap, the model
+// every test builds: a shutdown whose host keeps a closed instance listed
+// does not wait out core.CloseWait, and the mirror's tick fires at once.
+// TestASurfaceWaitsTheCloseWaitAndTheMirrorInterval builds with New, so the
+// real ones stay pinned.
+func NewWithoutWaits(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Config, refresh time.Duration, th theme.Theme, start revier.ProjectName) Model {
+	m := New(c, projects, stateRoot, cfg, refresh, th, start)
+	m.closeWait = 0
+	m.mirrorGap = 0
+	return m
+}
 
 // LookupStart exposes the command Init runs for the starting project, so a
 // test delivers its answer at a moment of its choosing.
@@ -35,13 +50,6 @@ func (m Model) WithClock(now func() time.Time) Model {
 	return m
 }
 
-// WithCloseWait replaces how long a shutdown waits for what it closed to go,
-// so a test whose host keeps a closed instance listed does not wait it out.
-func (m Model) WithCloseWait(d time.Duration) Model {
-	m.closeWait = d
-	return m
-}
-
 // CloseWait is how long a shutdown on the model waits for what it closed to
 // go.
 func (m Model) CloseWait() time.Duration { return m.closeWait }
@@ -52,13 +60,6 @@ func (m Model) MirrorGap() time.Duration { return m.mirrorGap }
 
 // MirrorInterval is how often the mirror of a surface reads the panel.
 const MirrorInterval = mirrorInterval
-
-// WithMirrorGap replaces how often the mirror reads the panel with the
-// focus, so a test that delivers the mirror's tick does not wait it out.
-func (m Model) WithMirrorGap(d time.Duration) Model {
-	m.mirrorGap = d
-	return m
-}
 
 // Said is the model once the pane's ask for what the agents of the project
 // under the cursor said has been answered, as the command it sends would

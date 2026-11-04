@@ -27,15 +27,14 @@ func surveyedHere(m tui.Model) (tui.Model, tea.Cmd) {
 }
 
 // besideALink is the world of three projects, the last one open, beside a
-// link to buildbox. Its mirror ticks at once, so a test that delivers the
-// tick does not wait out a second.
+// link to buildbox.
 func besideALink(t *testing.T) (tui.Model, *hosttest.FakeRuntime, *hosttest.FakeRemote) {
 	t.Helper()
 	rt, _, c, local := world(t, 3)
 	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusIdle))
 	c.Remotes = map[string]revier.Remote{"buildbox": remote}
 	projects := append(remoteOnDisk(t, "alpha"), local...)
-	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Millisecond, theme.Default(), "").StaticCursors().WithMirrorGap(0)
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Millisecond, theme.Default(), "").StaticCursors()
 	return resize(m, 150, 30), rt, remote
 }
 
@@ -87,7 +86,7 @@ func TestARowHereChangesBeforeALinkedHostAnswers(t *testing.T) {
 func TestALinkSaysSurveyingUntilItsHostAnswers(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusIdle))
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Remotes: map[string]revier.Remote{"buildbox": remote}}
-	m := tui.New(c, remoteOnDisk(t, "alpha"), stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").StaticCursors()
+	m := tui.NewWithoutWaits(c, remoteOnDisk(t, "alpha"), stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").StaticCursors()
 	m, _ = surveyedHere(resize(m, 140, 30))
 
 	if body := pane(m); !strings.Contains(body, "surveying") || strings.Contains(body, "not available") || strings.Contains(body, "clone") {
@@ -120,7 +119,7 @@ func TestAHostsAnswerKeepsAProjectAsItWasJustWritten(t *testing.T) {
 	}
 	remote := hosttest.NewRemote("buildbox", hostSays("far", revier.StatusIdle))
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Remotes: map[string]revier.Remote{"buildbox": remote}}
-	m := tui.New(c, projects, stateWith(t, nil), cfg, time.Second, theme.Default(), "").StaticCursors()
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), cfg, time.Second, theme.Default(), "").StaticCursors()
 	m = resize(survey(m), 140, 60)
 	asked := m.AskRemotes() // a round that answers after the file is written
 
@@ -155,7 +154,7 @@ func TestARenamedLinkKeepsWhatItsHostSaid(t *testing.T) {
 	}
 	remote := hosttest.NewRemote("buildbox", hostSays("far", revier.StatusIdle))
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Remotes: map[string]revier.Remote{"buildbox": remote}}
-	m := tui.New(c, projects, stateWith(t, nil), cfg, time.Second, theme.Default(), "").StaticCursors()
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), cfg, time.Second, theme.Default(), "").StaticCursors()
 	m = resize(survey(m), 140, 60)
 
 	m, _ = press(m, "alt+e")
@@ -349,7 +348,7 @@ func TestASlowHostHoldsNoOtherHostsLinkUp(t *testing.T) {
 	fast := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusIdle))
 	slow := hosttest.NewRemote("slowbox", hostSays("beta", revier.StatusIdle))
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Remotes: map[string]revier.Remote{"buildbox": fast, "slowbox": slow}}
-	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Millisecond, theme.Default(), "").StaticCursors()
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Millisecond, theme.Default(), "").StaticCursors()
 	m, now := clocked(m)
 
 	// The survey starts a round of each host; only buildbox answers.
@@ -392,7 +391,7 @@ func linkOpenHere(t *testing.T) tui.Model {
 			Name: "session:local", Launch: []string{"x"}, Match: revier.Match{Title: "^session:local$"}}},
 	}}})
 	projects := append(local, remoteOnDisk(t, "alpha")...)
-	m := tui.New(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").StaticCursors()
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").StaticCursors()
 	return resize(m, 150, 30)
 }
 

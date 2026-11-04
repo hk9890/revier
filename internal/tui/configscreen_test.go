@@ -69,7 +69,7 @@ func TestTheConfigScreenWritesTheThemeAndKeepsComments(t *testing.T) {
 	root := configRoot(t, "# mine\n[ui]\ntheme = \"catppuccin-mocha\" # dark\n")
 	_, _, c, projects := world(t, 1)
 	cfg := &config.Config{UI: config.UI{Theme: "catppuccin-mocha"}}
-	m := resize(tui.New(c, projects, stateWith(t, nil), cfg, time.Second, theme.Default(), ""), 120, 20)
+	m := resize(tui.NewWithoutWaits(c, projects, stateWith(t, nil), cfg, time.Second, theme.Default(), ""), 120, 20)
 
 	m, _ = press(m, "alt+c")
 	m, _ = press(m, "left")
