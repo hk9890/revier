@@ -112,12 +112,12 @@ doc reads what it already did.
   up (`docs/design/decisions.md` D86), so it writes no `saw` line until its
   next raise. A change made while it was hidden carries the time of that
   raise, not of the change.
-- A popup that wctl's overlay hid is hidden as after Esc once it looks at its
-  own window and finds it minimized, and logs `popup: hidden by the desktop`.
-  It looks up to two seconds after the blur, then in each slow refresh's
-  survey; until a look finds the hide, it surveys every ten seconds and
-  writes `saw` lines. A popup that asks a question, such as a delete, does
-  not look (`docs/design/decisions.md` D169).
+- A popup that wctl's overlay hid logs `popup: hidden by the desktop` when
+  the next press raises it, or when a slow refresh's survey lists it
+  minimized; until then it surveys every ten seconds and writes `saw` lines.
+  The press's own `popup: raise` line says `minimized=true`. A popup that asks
+  a question, such as a delete, or walks a restore or a shutdown, logs no such
+  line (`docs/design/decisions.md` D169).
 - A `snapshot` is a whole survey of one scope, this machine or one linked
   host (`machine`): at a surface's first survey, at the first of a day, when
   the project list changed, and at each save, with `saved`. Each other `saw`

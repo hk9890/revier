@@ -943,10 +943,10 @@ pair, which costs core work for a terminal the user has elsewhere.
 ### D169 — a hide by the desktop is Esc's hide
 
 wctl's overlay minimizes the popup when another window takes the focus, and
-the next press raised it as a focus regained (D129), not as D86's raise. After
-a blur the popup looks at its own window a few times, then in the slow
-refresh's survey (no events, D87), and takes a minimized window as Esc's hide,
-unless it asks a question, which that raise would drop. Every hide, a go's too,
-leaves Esc's state: no query, the cursor on the project list. Rejected: a key
-typed in at the raise, two kitty round trips per raise; revier writing the
-user's rules.json (D30, D147). Gap: a press in the first half second.
+tells of no hide (D87). A press that raises the popup from minimized marks it
+in a file beside the state, not fsynced, and the surface takes the mark at the
+focus: a raise as after Esc, unless the popup asks a question or walks. A slow
+refresh's survey that lists the popup minimized stops the surveys. Every hide
+leaves Esc's state: no screen, query or note, the cursor on the project list.
+Rejected: a key typed in at the raise, two kitty round trips; looks after the
+blur, a gap; revier writing the user's rules.json (D30, D147).

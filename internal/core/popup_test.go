@@ -133,49 +133,25 @@ func TestHidePopupIsRefusedWithNothingToHide(t *testing.T) {
 	}
 }
 
-// The surface asks whether the desktop minimized its popup: true for a
-// minimized popup alone (decisions.md D169).
-func TestPopupMinimizedReadsThePopupsWindow(t *testing.T) {
-	ctx := context.Background()
-	if _, err := (&core.Core{}).PopupMinimized(ctx); !errors.Is(err, core.ErrNoPopupHost) {
-		t.Errorf("no window host: err = %v, want ErrNoPopupHost", err)
-	}
-	wm := hosttest.New("wm")
-	wm.AddInstance(revier.Instance{Title: "session:demo", Class: "kitty", Minimized: true})
-	c := &core.Core{Window: wm}
-	if got, err := c.PopupMinimized(ctx); err != nil || got {
-		t.Errorf("no popup open = %v, %v; want false, as only another window is minimized", got, err)
-	}
-	open := wm.Add("revier", core.PopupClass)
-	if got, err := c.PopupMinimized(ctx); err != nil || got {
-		t.Errorf("popup on the screen = %v, %v; want false", got, err)
-	}
-	wm.Remove(open)
-	wm.AddInstance(revier.Instance{Title: "revier", Class: core.PopupClass, Minimized: true})
-	if got, err := c.PopupMinimized(ctx); err != nil || !got {
-		t.Errorf("popup minimized = %v, %v; want true", got, err)
-	}
-	wm.SetInstancesErr(errors.New("wctl: no answer"))
-	if _, err := c.PopupMinimized(ctx); err == nil {
-		t.Error("a failed listing reported no error")
-	}
-}
-
-// A raise of a minimized popup costs what the raise of one on the screen
-// costs, and types nothing: the surface learns of the desktop's hide by
-// itself (decisions.md D169).
-func TestPopupRaisesAMinimizedPopupAsAnyOther(t *testing.T) {
+// A raise of a minimized popup puts that on record for the surface, and
+// costs what the raise of one on the screen costs otherwise: the same
+// listings, and nothing typed (decisions.md D169).
+func TestARaiseOfAMinimizedPopupIsOnRecord(t *testing.T) {
 	raise := func(minimized bool) (*hosttest.Fake, *hosttest.FakeRuntime) {
 		wm := hosttest.New("wm")
 		open := wm.AddInstance(revier.Instance{Title: "revier", Class: core.PopupClass, Minimized: minimized})
 		wm.SetFocus(wm.Add("session:demo", "kitty"))
 		rt := hosttest.NewRuntime("rt")
 		rt.Add("revier", core.PopupClass, revier.Panel{ID: "9", Command: []string{"revier"}})
-		if _, err := (&core.Core{Window: wm, Runtime: rt}).Popup(context.Background(), popupArgv); err != nil {
+		l := &ledger{}
+		if _, err := (&core.Core{Window: wm, Runtime: rt, Ledger: l}).Popup(context.Background(), popupArgv); err != nil {
 			t.Fatalf("Popup: %v", err)
 		}
 		if !slices.Equal(wm.Focuses, []revier.TargetRef{open}) || len(rt.Sent) != 0 {
 			t.Errorf("minimized %v: focuses = %v, sent = %+v; want the popup raised and nothing typed", minimized, wm.Focuses, rt.Sent)
+		}
+		if l.popupHidden != minimized {
+			t.Errorf("minimized %v: marked = %v, want %v", minimized, l.popupHidden, minimized)
 		}
 		return wm, rt
 	}
@@ -184,6 +160,22 @@ func TestPopupRaisesAMinimizedPopupAsAnyOther(t *testing.T) {
 	if wm.InstancesCalls != shownWM.InstancesCalls || rt.InstancesCalls != shownRT.InstancesCalls {
 		t.Errorf("listings minimized = %d window, %d runtime; on the screen = %d, %d; want the same",
 			wm.InstancesCalls, rt.InstancesCalls, shownWM.InstancesCalls, shownRT.InstancesCalls)
+	}
+}
+
+// The surface takes the raise of a minimized popup once: the next focus,
+// with no press, finds none. A core with no ledger has none to take.
+func TestTakePopupHiddenTakesItOnce(t *testing.T) {
+	if (&core.Core{}).TakePopupHidden() {
+		t.Error("a core with no ledger took a raise")
+	}
+	l := &ledger{popupHidden: true}
+	c := &core.Core{Ledger: l}
+	if !c.TakePopupHidden() {
+		t.Error("the marked raise was not taken")
+	}
+	if c.TakePopupHidden() || l.popupHidden {
+		t.Errorf("taken again = true or still marked = %v, want neither", l.popupHidden)
 	}
 }
 

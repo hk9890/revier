@@ -50,9 +50,8 @@ this on, add `"overlay": true` to a rule for the popup's class in your
 - An older extension rejects the whole file, and with it every rule. Upgrade
   the extension first.
 - A hide by the extension acts as Esc: the next press raises the popup on the
-  project list. A press in the first half second after the hide raises the
-  popup on what it showed, as revier has not seen the hide yet. A question
-  the popup asked, such as a delete, still waits for your answer.
+  project list, with no query and no screen open. A question the popup asked,
+  such as a delete, still waits for your answer.
 
 ## Windows that open late
 

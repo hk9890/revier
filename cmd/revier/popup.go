@@ -25,7 +25,7 @@ func cmdPopup(ctx context.Context, a *app) error {
 	// The project the surface opens on is resolved here, at the keypress,
 	// where the focused window is still the user's: once the popup is up it
 	// is the focused window itself, and no target matches it. A launch alone
-	// pays for it; a raise keeps the cursor where it was (decisions.md D86).
+	// pays for it; a raise shows what the hide left (decisions.md D86, D169).
 	_, err = a.core.Popup(ctx, func(ctx context.Context) []string {
 		start := revier.ProjectName("")
 		if p, err := a.resolveProject(ctx, ""); err == nil {

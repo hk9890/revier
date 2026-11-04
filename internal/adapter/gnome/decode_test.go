@@ -45,7 +45,7 @@ func TestDecodeKeepsEveryHiddenWindowActivateCanRaise(t *testing.T) {
 	}
 }
 
-// A minimized window says so: the popup looks at its own window to learn
+// A minimized window says so: a press that raises the popup learns from it
 // that the desktop hid it.
 func TestDecodeReportsAMinimizedWindow(t *testing.T) {
 	raw := `[

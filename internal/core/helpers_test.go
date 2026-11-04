@@ -89,10 +89,26 @@ func osWindowHosts() (*hosttest.FakeRuntime, *hosttest.Fake, revier.TargetRef, r
 // a state read earlier is not changed by a later write. An event goes to the
 // event file of the test, where recording reads it.
 type ledger struct {
-	mu     sync.Mutex
-	st     state.State
-	writes []string
-	notes  []record.Line
+	mu          sync.Mutex
+	st          state.State
+	writes      []string
+	notes       []record.Line
+	popupHidden bool
+}
+
+func (l *ledger) MarkPopupHidden() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.popupHidden = true
+	return nil
+}
+
+func (l *ledger) TakePopupHidden() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	was := l.popupHidden
+	l.popupHidden = false
+	return was
 }
 
 func (l *ledger) State() *state.State {

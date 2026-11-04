@@ -80,6 +80,13 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 	}
 	if w, ok := popupWindow(before); ok {
 		slog.Info("popup: raise", "ref", w.Ref, "minimized", w.Minimized)
+		// The surface reads it at the focus the raise gives it, so it is on
+		// record first (decisions.md D169).
+		if marks, ok := c.Ledger.(PopupMarks); ok && w.Minimized {
+			if err := marks.MarkPopupHidden(); err != nil {
+				slog.Warn("popup: mark the raise", "err", err)
+			}
+		}
 		return w.Ref, c.Window.Focus(ctx, w.Ref)
 	}
 	width, err := area.WorkareaWidth(ctx)
@@ -262,23 +269,17 @@ func (c *Core) raisePopup(ctx context.Context, snap snapshot, failed hostErrs) e
 	return c.Window.Focus(ctx, w.Ref)
 }
 
-// PopupMinimized reports whether the popup's window is minimized: the desktop
-// may hide it without the surface's asking, and the surface asks after a blur
-// (decisions.md D169). It is false with no popup open, and ErrNoPopupHost with
-// no window host.
-func (c *Core) PopupMinimized(ctx context.Context) (bool, error) {
-	if c.Window == nil {
-		return false, ErrNoPopupHost
-	}
-	windows, err := c.Window.Instances(ctx)
-	if err != nil {
-		return false, err
-	}
-	return Report{Windows: windows}.PopupMinimized(), nil
+// TakePopupHidden reports whether the press that raised the popup found it
+// minimized, and takes it off the record: the surface asks at each focus, so
+// the next focus, with no press, finds none (decisions.md D169).
+func (c *Core) TakePopupHidden() bool {
+	marks, ok := c.Ledger.(PopupMarks)
+	return ok && marks.TakePopupHidden()
 }
 
 // PopupMinimized reports whether the survey listed the popup's window
-// minimized: the look a slow refresh makes for free (decisions.md D169).
+// minimized: a popup without the focus finds the desktop's hide in it, and
+// stops surveying (decisions.md D169).
 func (r Report) PopupMinimized() bool {
 	w, ok := popupWindow(r.Windows)
 	return ok && w.Minimized

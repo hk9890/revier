@@ -304,3 +304,22 @@ func TestACorruptStateFileIsLogged(t *testing.T) {
 		}
 	})
 }
+
+// The mark of a raise of the minimized popup is taken once, and leaves the
+// state file as it was: it is no part of the state.
+func TestFileTakesThePopupMarkOnce(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "state")
+	f := ledger.File{Root: root}
+	if f.TakePopupHidden() {
+		t.Error("a root with no mark took one")
+	}
+	if err := f.MarkPopupHidden(); err != nil {
+		t.Fatalf("MarkPopupHidden: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "state.json")); !os.IsNotExist(err) {
+		t.Errorf("state.json after the mark: err = %v, want none written", err)
+	}
+	if !f.TakePopupHidden() || f.TakePopupHidden() {
+		t.Error("the mark was not taken exactly once")
+	}
+}
