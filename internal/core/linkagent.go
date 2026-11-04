@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/hk9890/revier/internal/session"
@@ -39,6 +40,15 @@ func (c *Core) tagOf(panel revier.Panel) revier.PanelID {
 		name = machine()
 	}
 	return revier.PanelID(name + "." + strconv.Itoa(panel.PID))
+}
+
+// machineOf is the machine whose panel gave a tag: tagOf read backwards. A
+// machine's name may hold a dot, its pid holds none.
+func machineOf(tag revier.PanelID) string {
+	if i := strings.LastIndex(string(tag), "."); i >= 0 {
+		return string(tag)[:i]
+	}
+	return string(tag)
 }
 
 // shown is where a tag is shown here.
