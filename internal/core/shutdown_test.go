@@ -211,20 +211,6 @@ func TestShutdownCountsAWindowThatGoesDuringTheWaitAsClosed(t *testing.T) {
 	}
 }
 
-// listedWindows is a window host that counts its listings once closed is set.
-type listedWindows struct {
-	*hosttest.Fake
-	closed   *atomic.Bool
-	listings *atomic.Int32
-}
-
-func (w listedWindows) Instances(ctx context.Context) ([]revier.Instance, error) {
-	if w.closed.Load() {
-		w.listings.Add(1)
-	}
-	return w.Fake.Instances(ctx)
-}
-
 // A window its application keeps open costs the wait a listing of every
 // host each time it asks. The gap between two listings doubles, so a wait of
 // two seconds lists a handful of times, not once each ClosePoll.
@@ -232,9 +218,14 @@ func TestTheWaitListsLessOftenAsItGoesOn(t *testing.T) {
 	c, _, wm, projects := openDesktop(t, revier.StatusIdle)
 	report := survey(t, c, projects, nil)
 	wm.Refuses = map[string]bool{report.Windows[0].Ref.ID: true}
-	w := listedWindows{Fake: wm, closed: &atomic.Bool{}, listings: &atomic.Int32{}}
-	c.Window = w
-	wm.OnClose = func(revier.TargetRef) { w.closed.Store(true) }
+	var closed atomic.Bool
+	var listings atomic.Int32
+	wm.OnClose = func(revier.TargetRef) { closed.Store(true) }
+	wm.OnInstances = func() {
+		if closed.Load() {
+			listings.Add(1)
+		}
+	}
 
 	out, err := c.Shutdown(context.Background(), c.ShutdownPlan(report, "", core.ShutdownAll), 20*core.ClosePoll, reading(projects))
 	if err != nil {
@@ -243,7 +234,7 @@ func TestTheWaitListsLessOftenAsItGoesOn(t *testing.T) {
 	if _, open, _ := out.Counts(); open != 1 {
 		t.Fatalf("%d still open, want the editor", open)
 	}
-	if n := w.listings.Load(); n > 8 {
+	if n := listings.Load(); n > 8 {
 		t.Errorf("the wait listed %d times in %v, want the gap to grow", n, 20*core.ClosePoll)
 	}
 }
