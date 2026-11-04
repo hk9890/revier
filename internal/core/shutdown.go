@@ -615,10 +615,11 @@ func (r *BusyRefusal) Unwrap() error { return ErrAgentBusy }
 // the save is made and every step is asked to close.
 //
 // A caller that cancels stops the walk between two steps: the step that runs
-// does not see the cancel and finishes, the steps not yet reached are left out
-// of the result, and the wait still runs for the steps that closed, so what
-// the result says is still open is true. A budget that runs out is no such
-// decision, and every step is still asked.
+// does not see the cancel and finishes, and the steps not yet reached are left
+// out of the result. A cancel also ends the wait after its next listing, so a
+// step that closed is still open in the result when that listing still holds
+// it. A budget that runs out is no such decision, and every step is still
+// asked.
 func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duration, opts ShutdownOpts) (Closed, error) {
 	start := time.Now()
 	opts.report(Progress{Phase: PhaseRecheck, Of: len(plan)})
@@ -685,7 +686,8 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 		out = append(out, res)
 		opts.report(Progress{Phase: PhaseClose, N: i + 1, Of: len(plan), Label: s.Name(), Done: true, Closed: res})
 	}
-	// A cancel that came during the last step stopped nothing.
+	// A cancel that came during the last step left no step unreached; it can
+	// only end the wait.
 	if cancelled() && len(out) < len(plan) {
 		slog.Info("shutdown cancelled", "walked", len(out), "steps", len(plan))
 	}

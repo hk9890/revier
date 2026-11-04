@@ -440,8 +440,10 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	s.step, s.row, s.saved, s.closed = shutDone, 0, msg.saved, msg.closed
-	// A cancel that came after the last step was walked stopped nothing: the
-	// result is that of a shutdown nobody cancelled, and a full one quits.
+	// A cancel that came after the last step was walked left no step
+	// unreached: it can only have ended the wait, so the result is that of a
+	// shutdown nobody cancelled, with what was still listed open, and a full
+	// one quits.
 	if len(s.unreached()) == 0 {
 		s.walk.cancelled = false
 	}
