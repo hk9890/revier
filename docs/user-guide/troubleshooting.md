@@ -19,10 +19,8 @@ where it knows the fix.
 1 project, 1 file with problems
 ```
 
-It also warns when two project files name one checkout: local projects whose
-paths are one directory, or links to one project on one host. Both files
-load as separate projects, so the work of one checkout splits across two
-names. A warning does not change the exit status.
+It also warns when two project files name one checkout. A warning does not
+change the exit status.
 
 A mistake stops only the part it is in; see
 [configuration.md](configuration.md#mistakes). When every other command
