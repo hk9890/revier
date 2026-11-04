@@ -201,9 +201,12 @@ func TestShutdownCountsAWindowThatGoesDuringTheWaitAsClosed(t *testing.T) {
 		time.AfterFunc(3*core.ClosePoll, func() { wm.Remove(ref) })
 	}
 
-	out, _ := c.Shutdown(context.Background(), c.ShutdownPlan(report, "", core.ShutdownAll), 30*core.ClosePoll, reading(projects))
+	out, err := c.Shutdown(context.Background(), c.ShutdownPlan(report, "", core.ShutdownAll), 30*core.ClosePoll, reading(projects))
+	if err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
 	if closed, open, _ := out.Counts(); closed != 3 || open != 0 {
-		t.Errorf("counts = %d closed, %d open, last %q; want the editor closed", closed, open, out[2].Note())
+		t.Errorf("counts = %d closed, %d open; want the editor closed", closed, open)
 	}
 }
 

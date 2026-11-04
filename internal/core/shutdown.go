@@ -512,8 +512,8 @@ func (cs Closed) Counts() (closed, open, failed int) {
 const ClosePoll = 100 * time.Millisecond
 
 // CloseWait is how long a shutdown waits for what it closed to go. The wait
-// ends as soon as nothing is pending, so only a window that stays costs it.
-// An IDE can take more than 3 s to close its window.
+// ends as soon as nothing is pending, so only a step that stays costs it all.
+// An IDE window can take more than 4 s to go after its close.
 const CloseWait = 10 * time.Second
 
 // CloseBudget is how long the closes themselves may take, on top of the wait

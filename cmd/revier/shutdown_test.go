@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/state"
 )
 
@@ -31,6 +32,9 @@ func TestAShutdownSaysWhenItWaitsAndWhenItIsComplete(t *testing.T) {
 func TestAShutdownThatLeavesATargetOpenFails(t *testing.T) {
 	a, rt := demoDesktop(t, &state.State{}, "home")
 	rt.Refuses = map[string]bool{rt.Add("diff", "").ID: true}
+	was := closeWait
+	t.Cleanup(func() { closeWait = was })
+	closeWait = 2 * core.ClosePoll
 
 	var err error
 	out := output(t, a, func() error { err = cmdShutdown(context.Background(), a, nil); return nil })

@@ -33,6 +33,11 @@ var errShutdownTurnedBusy = errors.New("agents turned busy since the plan was ma
 // still asks about unsaved work.
 var errShutdownIncomplete = errors.New("shutdown incomplete; not safe to leave")
 
+// closeWait is how long a shutdown or an agent close waits for what it
+// closed to go. A variable, so a test of a target that stays does not wait
+// the whole core.CloseWait.
+var closeWait = core.CloseWait
+
 // cmdShutdown closes what is open: every project's targets, or one project's,
 // or only their agents or only what holds no agent. It saves the session
 // first when it changed, so a restore brings back what the shutdown closed,
@@ -154,7 +159,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	}
 	walk, stop := interruptible(ctx, abandon)
 	defer stop()
-	closed, err := usecase.Shutdown(walk, a.core, plan, core.CloseWait, opts, save, record)
+	closed, err := usecase.Shutdown(walk, a.core, plan, closeWait, opts, save, record)
 	cancelled := errors.Is(walk.Err(), context.Canceled)
 	var refused *core.BusyRefusal
 	switch {

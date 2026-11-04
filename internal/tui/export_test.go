@@ -35,6 +35,13 @@ func (m Model) WithClock(now func() time.Time) Model {
 	return m
 }
 
+// WithCloseWait replaces how long a shutdown waits for what it closed to go,
+// so a test of a target that stays does not wait the whole core.CloseWait.
+func (m Model) WithCloseWait(wait time.Duration) Model {
+	m.closeWait = wait
+	return m
+}
+
 // Said is the model once the pane's ask for what the agents of the project
 // under the cursor said has been answered, as the command it sends would
 // answer it: at once, on this goroutine.

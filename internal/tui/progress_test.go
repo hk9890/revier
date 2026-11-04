@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/tui"
@@ -75,7 +76,7 @@ func TestAShutdownShowsEachStepHoldsTheInputAndCtrlCCancelsIt(t *testing.T) {
 	editor := newHeld()
 	wm.OnClose = func(revier.TargetRef) { editor.hold() }
 	root := stateWith(t, nil)
-	m := fullShutdownPlanned(t, c, projects, root)
+	m := fullShutdownPlanned(t, c, projects, root).WithCloseWait(2 * core.ClosePoll)
 
 	m, cmd := press(m, "enter")
 	answer, wait := walkInBackground(t, cmd)
@@ -177,7 +178,7 @@ func TestOnlyASecondCtrlCOnAHungStepEndsItsCommand(t *testing.T) {
 		t.Fatalf("a quit with nothing running ended the commands %d times, want none", ended)
 	}
 
-	m := fullShutdownPlanned(t, c, projects, root).WithHungEnd(end)
+	m := fullShutdownPlanned(t, c, projects, root).WithHungEnd(end).WithCloseWait(2 * core.ClosePoll)
 	m, cmd := press(m, "enter")
 	answer, _ := walkInBackground(t, cmd)
 	<-editor.entered
