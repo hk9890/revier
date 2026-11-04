@@ -270,7 +270,7 @@ func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.Target
 	bound := c.state().Bound[p.Name]
 	i, ok := p.index(name)
 	if !ok {
-		return Workspace{}, fmt.Errorf("%w: %s", ErrNoTarget, name)
+		return Workspace{}, p.noTarget(name)
 	}
 	if t := p.Targets[i]; panelTab(p.Project, t) {
 		name = t.Runtime.Inside

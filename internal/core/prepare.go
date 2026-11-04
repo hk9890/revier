@@ -43,6 +43,12 @@ type Project struct {
 	Agents       []NamedAgent
 	AgentRefused []error
 
+	// LocalOnly is, for a link, each shared target of config.toml the link
+	// does not get because it has no [target.remote] part, by name, and true
+	// for a command target: a link runs no command target. A press on such
+	// a name says why the link has no target of that name.
+	LocalOnly map[revier.TargetName]bool
+
 	compiled []compiledTarget // parallel to Project.Targets
 }
 
@@ -104,6 +110,20 @@ func (p Project) RenderErr(i int) error { return p.compiled[i].renderErr }
 // by the same route too, which is what keeps a refused target out of every
 // lookup and not only out of the ones that resolve.
 func (p *Project) Refuse(i int, err error) { p.compiled[i].refuse(err) }
+
+// noTarget is the refusal of a name the project has no target of. A link
+// that lacks a shared target says why: else the target is in config.toml,
+// and a bare "no such target" points at the wrong file.
+func (p Project) noTarget(name revier.TargetName) error {
+	command, local := p.LocalOnly[name]
+	switch {
+	case local && command:
+		return fmt.Errorf("%w: %s; %s is a link, and a link runs no command target", ErrNoTarget, name, p.Name)
+	case local:
+		return fmt.Errorf("%w: %s; %s is a link, and the shared target %s has no [target.remote] part", ErrNoTarget, name, p.Name, name)
+	}
+	return fmt.Errorf("%w: %s", ErrNoTarget, name)
+}
 
 // index returns the position of the named target.
 func (p Project) index(name revier.TargetName) (int, bool) {

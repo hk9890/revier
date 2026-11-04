@@ -652,7 +652,7 @@ func (c *Core) goToResuming(ctx context.Context, p Project, name revier.TargetNa
 func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName, bound Bindings, resumes []Resume) (Result, error) {
 	i, ok := p.index(name)
 	if !ok {
-		return Result{}, fmt.Errorf("%w: %s", ErrNoTarget, name)
+		return Result{}, p.noTarget(name)
 	}
 	if p.isTab(i) {
 		return c.goTab(ctx, p, i, bound, resumes)
@@ -835,7 +835,7 @@ func (c *Core) Running(ctx context.Context, p Project, name revier.TargetName) (
 func (c *Core) isUp(ctx context.Context, p Project, name revier.TargetName, bound Bindings) (bool, error) {
 	i, ok := p.index(name)
 	if !ok {
-		return false, fmt.Errorf("%w: %s", ErrNoTarget, name)
+		return false, p.noTarget(name)
 	}
 	if p.isTab(i) {
 		snap, err := c.answered(ctx, nameOf(c.Runtime))
