@@ -30,13 +30,15 @@ import (
 )
 
 // server returns a Host on a socket private to this test, and kills the server
-// when the test ends.
+// when the test ends. A subtest's name loses its slash: under a test that once
+// had no subtests, its dead socket file stands where the path needs a
+// directory.
 func server(t *testing.T) *tmux.Host {
 	t.Helper()
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not installed; L4 needs it")
 	}
-	socket := "revier-test-" + t.Name()
+	socket := "revier-test-" + strings.ReplaceAll(t.Name(), "/", "-")
 	h := &tmux.Host{Socket: socket}
 	t.Cleanup(func() { killServer(t, socket) })
 	return h
@@ -893,29 +895,58 @@ func TestCoreRunOrRaiseAgainstRealTmux(t *testing.T) {
 
 // A tab whose command exits as soon as it starts is named as having exited,
 // on every press, whether the exit comes before OpenTab returns or between it
-// and the focus of the tab.
+// and the focus of the tab. The runner waits before the step that comes after
+// the exit, so the command has ended by then: without the wait, a slow
+// machine ends it after the focus, where nothing can see it.
 func TestCoreSaysATabWhoseCommandEndsAtOnceExited(t *testing.T) {
-	h, c := server(t), ctx(t)
-	cr := &core.Core{Runtime: h}
-	p := core.PrepareProject(revier.Project{Name: "revier", Targets: []revier.Target{
-		{Name: "home", Home: true, Runtime: &revier.Realization{
-			Name: "home", Launch: []string{"sh", "-c", "sleep 30"},
-			Match: revier.Match{Title: "^home$"},
+	for _, tc := range []struct {
+		name   string
+		script string
+		before func(args []string) bool
+	}{
+		{"before OpenTab returns", "exit 0", func(args []string) bool {
+			return args[0] == "set-option" && args[1] == "-p"
 		}},
-		{Name: "quick", Runtime: &revier.Realization{
-			Inside: "home",
-			Panels: []revier.PanelSpec{{Kind: revier.PanelTool, Command: []string{"true"}}},
+		{"before the focus", "sleep 0.1", func(args []string) bool {
+			return args[0] == "display-message" && args[len(args)-1] == "#{window_id}"
 		}},
-	}})
-	if _, err := press(c, cr, p, "home"); err != nil {
-		t.Fatalf("open home: %v", err)
-	}
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, c := server(t), ctx(t)
+			h.SetRunner(func(ctx context.Context, args ...string) (string, error) {
+				if tc.before(args) {
+					time.Sleep(300 * time.Millisecond)
+				}
+				var out, stderr strings.Builder
+				cmd := exec.CommandContext(ctx, "tmux", append([]string{"-u", "-L", h.Socket}, args...)...)
+				cmd.Stdout, cmd.Stderr = &out, &stderr
+				if err := cmd.Run(); err != nil {
+					return "", fmt.Errorf("tmux %s: %w: %s", strings.Join(args, " "), err, stderr.String())
+				}
+				return out.String(), nil
+			})
+			cr := &core.Core{Runtime: h}
+			p := core.PrepareProject(revier.Project{Name: "revier", Targets: []revier.Target{
+				{Name: "home", Home: true, Runtime: &revier.Realization{
+					Name: "home", Launch: []string{"sh", "-c", "sleep 30"},
+					Match: revier.Match{Title: "^home$"},
+				}},
+				{Name: "quick", Runtime: &revier.Realization{
+					Inside: "home",
+					Panels: []revier.PanelSpec{{Kind: revier.PanelTool, Command: []string{"sh", "-c", tc.script}}},
+				}},
+			}})
+			if _, err := press(c, cr, p, "home"); err != nil {
+				t.Fatalf("open home: %v", err)
+			}
 
-	want := `tmux: open tab quick: the tool panel's command "true" exited as soon as it started`
-	for range 2 {
-		if _, err := press(c, cr, p, "quick"); err == nil || err.Error() != want {
-			t.Errorf("press quick = %v, want %q", err, want)
-		}
+			want := fmt.Sprintf("tmux: open tab quick: the tool panel's command %q exited as soon as it started", "sh -c "+tc.script)
+			for range 2 {
+				if _, err := press(c, cr, p, "quick"); err == nil || err.Error() != want {
+					t.Errorf("press quick = %v, want %q", err, want)
+				}
+			}
+		})
 	}
 }
 
