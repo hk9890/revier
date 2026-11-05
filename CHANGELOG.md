@@ -9,8 +9,8 @@ Each section is also the text of its release on the
 ## v0.25.0
 
 - **Action required: revier refuses a project file with a relative `path`,
-  or with a file name that has whitespace, a control character or a `:`.**
-  Before, such a file loaded, and a relative path named a different directory
+  or with a file name that has whitespace or a control character.** Before,
+  such a file loaded, and a relative path named a different directory
   for each directory you ran revier in. Now the project is listed with the
   reason. Write the path from `/` or `~`, and rename the file.
 - **Action required: `place` is counted after its templates render.** A var
@@ -21,6 +21,9 @@ Each section is also the text of its release on the
   `term` subcommands refuse an extra word.** Before,
   `revier session save before-reboot` saved a session with no name and
   dropped the word. Name a session with `--name`.
+- **Action required: an action whose `key` is a bare `plus` or `minus` is
+  refused.** It never fired, because the TUI took the press as typed text.
+  Give it ctrl or alt, such as `ctrl-plus`.
 - **`revier shutdown` exits 1 when it is not safe to leave.** Before, it
   exited 0 when a target was still open after the wait, so
   `revier shutdown && poweroff` powered off while an editor still asked about
@@ -34,8 +37,8 @@ Each section is also the text of its release on the
   no query, as after Esc. A popup that asks a question or shows a screen
   stays as it was.
 - **`revier doctor` warns when two project files name one directory, or two
-  links name one remote project.** Each such file showed its own agents and
-  history, so the work of one checkout was split across two names.
+  links name one remote project.** Both files loaded as separate projects, so
+  the work of one checkout was split across two names.
 - **A command target runs when pressed in the TUI.** Before, the TUI refused
   it with `no command runner is configured`; only `revier go` ran it.
 - **A restore no longer binds one project's editor to another project's
@@ -73,11 +76,11 @@ Each section is also the text of its release on the
 - **A new project from a folder takes an https URL and a `git@host:` origin
   of one repository as the same repository.** Before, the footer said the
   URL was ignored.
-- **Linked hosts:** a project name with `=`, a backtick or a backslash now
-  reaches the remote revier whole under a zsh or fish login shell. A
-  relative `Include` inside an included ssh configuration file resolves as
-  ssh resolves it. `revier | grep ...` no longer hangs on a linked host whose
-  remote revier hangs.
+- **Linked hosts:** a project name that starts with `=`, or that has a
+  backtick or a backslash, now reaches the remote revier whole under a zsh or
+  fish login shell. A relative `Include` inside an included ssh configuration
+  file resolves as ssh resolves it. `revier | grep ...` no longer hangs on a
+  linked host whose remote revier hangs.
 - **Sessions save on a filesystem with no hard links**, such as some FUSE
   and SMB mounts, and two saves in one second keep two sessions.
 - **`revier agent wait --timeout` refuses a value that is too large,
