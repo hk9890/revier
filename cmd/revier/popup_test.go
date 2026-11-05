@@ -20,6 +20,8 @@ func TestPopupArgvMarksTheSurfaceWithItsProject(t *testing.T) {
 		"-o", "clear_all_shortcuts=yes",
 		"-o", "map=kitty_mod+c copy_to_clipboard",
 		"-o", "map=kitty_mod+v paste_from_clipboard",
+		"-o", "map=ctrl+c copy_and_clear_or_interrupt",
+		"-o", "map=ctrl+v paste_from_clipboard",
 		"-e", "env", core.PopupEnv + "=demo", "/usr/bin/revier"}
 	if !slices.Equal(argv, want) {
 		t.Errorf("argv = %q, want %q", argv, want)
