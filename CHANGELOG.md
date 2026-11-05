@@ -31,7 +31,8 @@ Each section is also the text of its release on the
   editor still asked about unsaved work. It now prints
   `shutdown incomplete; not safe to leave` and exits 1, also when ctrl+c
   stopped it. It waits up to 10 seconds for what it closed to go, in place
-  of 3, so a slow IDE window no longer shows as still open. ctrl+c ends that wait at once and says so.
+  of 3, so a slow IDE window no longer shows as still open. ctrl+c ends
+  that wait at once and says so.
 - **The popup knows when the desktop hid it.** Where a window rule minimizes
   the popup when another window takes the focus, the next press showed the
   popup as you left it, with its query. It now shows the project list with
