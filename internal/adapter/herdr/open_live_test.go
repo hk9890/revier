@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/hk9890/revier/internal/adapter/herdr"
+	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -233,7 +234,7 @@ func TestOpenStartsTheServerWhenNoneRuns(t *testing.T) {
 	if _, err := exec.LookPath("herdr"); err != nil {
 		t.Skip("herdr not installed; L4 needs it")
 	}
-	dir, err := os.MkdirTemp("", "rvh-"+shortName(t)+"-")
+	dir, err := os.MkdirTemp("", "rvh-"+testenv.ShortName(t)+"-")
 	if err != nil {
 		t.Fatal(err)
 	}

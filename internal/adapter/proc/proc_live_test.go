@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/hk9890/revier/internal/adapter/proc"
+	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -24,7 +25,7 @@ func TestAProcessStartedAsANamedAgentCarriesItsMark(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not installed; L4 needs it for a terminal")
 	}
-	socket := "revier-test-" + t.Name()
+	socket := "revier-test-" + testenv.ShortName(t)
 	workspace := "session:" + t.Name()
 	t.Cleanup(func() { _ = exec.Command("tmux", "-L", socket, "kill-server").Run() })
 	start := func(session, tag string, env ...string) {

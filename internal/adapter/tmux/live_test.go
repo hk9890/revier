@@ -26,19 +26,21 @@ import (
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
 // server returns a Host on a socket private to this test, and kills the server
-// when the test ends. A subtest's name loses its slash: tmux makes no
-// directory for a socket name that holds one, and new-session then prints
-// nothing and exits 0, which Open reads as a command that exited at once.
+// when the test ends. The socket is named by testenv.ShortName, which also
+// drops a subtest's slash: tmux makes no directory for a socket name that
+// holds one, and new-session then prints nothing and exits 0, which Open
+// reads as a command that exited at once.
 func server(t *testing.T) *tmux.Host {
 	t.Helper()
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not installed; L4 needs it")
 	}
-	socket := "revier-test-" + strings.ReplaceAll(t.Name(), "/", "-")
+	socket := "revier-test-" + testenv.ShortName(t)
 	h := &tmux.Host{Socket: socket}
 	t.Cleanup(func() { killServer(t, socket) })
 	return h
