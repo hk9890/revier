@@ -2,16 +2,18 @@
 // configuration, the state, the ssh configuration a link is checked
 // against, and kitty's configuration, which `revier term` writes. A package whose code reaches any of them calls Run from its
 // TestMain; see docs/TESTING.md. NoTools keeps one test off the tools on the
-// PATH.
+// PATH. ShortName names a live test's socket.
 package testenv
 
 import (
 	"fmt"
+	"hash/fnv"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode"
 )
 
 // noHosts is the scratch configuration: it names no host, so a test that
@@ -55,6 +57,22 @@ func Run(m *testing.M) int {
 func NoTools(t *testing.T) {
 	t.Helper()
 	t.Setenv("PATH", t.TempDir())
+}
+
+// ShortName is at most 32 of the test name's letters and digits, enough to
+// tell which test left a socket behind, and a hash of the whole name, so two
+// tests whose names differ only in what was cut or dropped still differ. It
+// is at most 40 bytes, short enough for a socket path, which tmux caps at 107.
+func ShortName(t *testing.T) string {
+	name := strings.Map(func(r rune) rune {
+		if r < 128 && (unicode.IsLetter(r) || unicode.IsDigit(r)) {
+			return r
+		}
+		return -1
+	}, strings.TrimPrefix(t.Name(), "Test"))
+	sum := fnv.New32a()
+	sum.Write([]byte(t.Name()))
+	return fmt.Sprintf("%s%08x", name[:min(len(name), 32)], sum.Sum32())
 }
 
 // prepare makes the scratch configuration under dir and returns its root.

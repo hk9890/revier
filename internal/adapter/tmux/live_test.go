@@ -11,6 +11,7 @@ package tmux_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -26,17 +27,21 @@ import (
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
 // server returns a Host on a socket private to this test, and kills the server
-// when the test ends.
+// when the test ends. The socket is named by testenv.ShortName, which also
+// drops a subtest's slash: tmux makes no directory for a socket name that
+// holds one, and new-session then prints nothing and exits 0, which Open
+// reads as a command that exited at once.
 func server(t *testing.T) *tmux.Host {
 	t.Helper()
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("tmux not installed; L4 needs it")
 	}
-	socket := "revier-test-" + t.Name()
+	socket := "revier-test-" + testenv.ShortName(t)
 	h := &tmux.Host{Socket: socket}
 	t.Cleanup(func() { killServer(t, socket) })
 	return h
@@ -53,7 +58,7 @@ func killServer(t *testing.T, socket string) {
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		out, _ := exec.Command("tmux", "-L", socket, "list-sessions").CombinedOutput()
-		if strings.Contains(string(out), "no server running") || strings.Contains(string(out), "error connecting") {
+		if noServerIn(out) {
 			return
 		}
 		if time.Now().After(deadline) {
@@ -61,6 +66,12 @@ func killServer(t *testing.T, socket string) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+}
+
+// noServerIn reports whether what a tmux command printed says no server runs
+// on its socket, in the words the host counts as that.
+func noServerIn(out []byte) bool {
+	return tmux.NoServer(errors.New(string(out)))
 }
 
 func ctx(t *testing.T) context.Context {
@@ -786,8 +797,9 @@ func TestOpenRefusesAPanelWhoseCommandIsNotOnPath(t *testing.T) {
 // A panel whose command exits as soon as it starts is named as having exited,
 // and again on the next Open. It ends before tmux prints the new session, or
 // after: then the step that follows fails on a session tmux has closed, and
-// with it the server when no other session kept it. The runner waits after
-// starting the session, so the command has ended before that step.
+// with it the server when no other session kept it. The hook waits after
+// starting the session until its pane is gone, so the command has ended
+// before that step.
 func TestOpenSaysAPanelWhoseCommandExitsAtOnceExited(t *testing.T) {
 	for _, tc := range []struct {
 		script string
@@ -804,17 +816,10 @@ func TestOpenSaysAPanelWhoseCommandExitsAtOnceExited(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			h.SetRunner(func(ctx context.Context, args ...string) (string, error) {
-				var out, stderr strings.Builder
-				cmd := exec.CommandContext(ctx, "tmux", append([]string{"-u", "-L", h.Socket}, args...)...)
-				cmd.Stdout, cmd.Stderr = &out, &stderr
-				if err := cmd.Run(); err != nil {
-					return "", fmt.Errorf("tmux %s: %w: %s", strings.Join(args, " "), err, stderr.String())
-				}
+			h.SetHook(nil, func(args []string, out string) {
 				if args[0] == "new-session" {
-					time.Sleep(300 * time.Millisecond)
+					waitGone(t, h, lastField(out))
 				}
-				return out.String(), nil
 			})
 			r := revier.Realization{
 				Name: "home", Match: revier.Match{Title: "^home$"},
@@ -893,30 +898,143 @@ func TestCoreRunOrRaiseAgainstRealTmux(t *testing.T) {
 
 // A tab whose command exits as soon as it starts is named as having exited,
 // on every press, whether the exit comes before OpenTab returns or between it
-// and the focus of the tab.
+// and the focus of the tab. The hook holds each step until the tab's pane is
+// gone: after the new-window, or, for a command that waits for the hook to
+// release it, before the focus. Without the hook, a slow machine ends the
+// command after the focus, where nothing can see it.
 func TestCoreSaysATabWhoseCommandEndsAtOnceExited(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		command []string
+		atFocus bool
+	}{
+		{"before OpenTab returns", []string{"true"}, false},
+		{"before the focus", waitsForRelease, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, c := server(t), ctx(t)
+			dir := t.TempDir()
+			release := filepath.Join(dir, "release")
+			var tab string
+			var focused bool
+			h.SetHook(func(args []string) {
+				if !focuses(args, tab) {
+					return
+				}
+				focused = true
+				if tc.atFocus {
+					if err := os.WriteFile(release, nil, 0o600); err != nil {
+						t.Fatal(err)
+					}
+					waitGone(t, h, tab)
+					if err := os.Remove(release); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}, func(args []string, out string) {
+				if args[0] != "new-window" {
+					return
+				}
+				tab = lastField(out)
+				if !tc.atFocus {
+					waitGone(t, h, tab)
+				}
+			})
+			cr := &core.Core{Runtime: h}
+			p := quickProject(dir, tc.command)
+			if _, err := press(c, cr, p, "home"); err != nil {
+				t.Fatalf("open home: %v", err)
+			}
+
+			want := exitedAtOnce(tc.command)
+			for range 2 {
+				focused = false
+				if _, err := press(c, cr, p, "quick"); err == nil || err.Error() != want {
+					t.Errorf("press quick = %v, want %q", err, want)
+				}
+				if focused != tc.atFocus {
+					t.Errorf("the press reached the focus: %v, want %v", focused, tc.atFocus)
+				}
+			}
+		})
+	}
+}
+
+// A tab that is open and ends as a press focuses it is opened again by that
+// press, and its command, which now ends at once, is named as having exited:
+// not tmux's "can't find pane" of the tab that was there. The command waits
+// until the hook releases it, which the hook does before the second press
+// focuses the tab.
+func TestCoreOpensAgainATabThatEndsAsItIsFocused(t *testing.T) {
 	h, c := server(t), ctx(t)
+	dir := t.TempDir()
+	release := filepath.Join(dir, "release")
+	var tab string
+	var armed bool
+	h.SetHook(func(args []string) {
+		if !armed || !focuses(args, tab) {
+			return
+		}
+		if err := os.WriteFile(release, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		waitGone(t, h, tab)
+	}, func(args []string, out string) {
+		if args[0] == "new-window" {
+			tab = lastField(out)
+		}
+	})
 	cr := &core.Core{Runtime: h}
-	p := core.PrepareProject(revier.Project{Name: "revier", Targets: []revier.Target{
+	p := quickProject(dir, waitsForRelease)
+	if _, err := press(c, cr, p, "home"); err != nil {
+		t.Fatalf("open home: %v", err)
+	}
+	if _, err := press(c, cr, p, "quick"); err != nil {
+		t.Fatalf("open quick: %v", err)
+	}
+	first := tab
+	// Off the tab, so the next press focuses it and does not return home.
+	if err := exec.Command("tmux", "-L", h.Socket, "select-window", "-t", "home:^").Run(); err != nil {
+		t.Fatalf("select home's window: %v", err)
+	}
+
+	armed = true
+	want := exitedAtOnce(waitsForRelease)
+	if _, err := press(c, cr, p, "quick"); err == nil || err.Error() != want {
+		t.Errorf("press quick = %v, want %q", err, want)
+	}
+	if tab == first {
+		t.Errorf("the press opened no tab after %s ended", first)
+	}
+}
+
+// waitsForRelease is a tab command that runs until a file named release is
+// in its directory: a hook ends it at the step it chooses.
+var waitsForRelease = []string{"sh", "-c", "while [ ! -e release ]; do sleep 0.01; done"}
+
+// focuses reports whether a tmux call is FocusPanel's first step on the pane.
+func focuses(args []string, pane string) bool {
+	return args[0] == "display-message" && len(args) > 3 && args[3] == pane
+}
+
+// quickProject is a home session and quick, a tab in it of one tool panel
+// that runs command in dir.
+func quickProject(dir string, command []string) core.Project {
+	return core.PrepareProject(revier.Project{Name: "revier", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "home", Launch: []string{"sh", "-c", "sleep 30"},
 			Match: revier.Match{Title: "^home$"},
 		}},
 		{Name: "quick", Runtime: &revier.Realization{
 			Inside: "home",
-			Panels: []revier.PanelSpec{{Kind: revier.PanelTool, Command: []string{"true"}}},
+			Panels: []revier.PanelSpec{{Kind: revier.PanelTool, Dir: dir, Command: command}},
 		}},
 	}})
-	if _, err := press(c, cr, p, "home"); err != nil {
-		t.Fatalf("open home: %v", err)
-	}
+}
 
-	want := `tmux: open tab quick: the tool panel's command "true" exited as soon as it started`
-	for range 2 {
-		if _, err := press(c, cr, p, "quick"); err == nil || err.Error() != want {
-			t.Errorf("press quick = %v, want %q", err, want)
-		}
-	}
+// exitedAtOnce is what a press of quick says when its command exited.
+func exitedAtOnce(command []string) string {
+	return fmt.Sprintf("tmux: open tab quick: the tool panel's command %q exited as soon as it started", strings.Join(command, " "))
 }
 
 // tmux escapes non-printable bytes in format output on some versions and not
@@ -1357,17 +1475,42 @@ func TestTmuxRunsInAProcessGroupOfItsOwn(t *testing.T) {
 func cancelAfter(t *testing.T, h *tmux.Host, step string) context.Context {
 	t.Helper()
 	c, cancel := context.WithCancel(ctx(t))
-	h.SetRunner(func(c context.Context, args ...string) (string, error) {
-		out, err := exec.CommandContext(c, "tmux", append([]string{"-u", "-L", h.Socket}, args...)...).Output()
+	h.SetHook(nil, func(args []string, _ string) {
 		if args[0] == step {
 			cancel()
 		}
-		if err != nil {
-			return "", fmt.Errorf("tmux %s: %w", strings.Join(args, " "), err)
-		}
-		return string(out), nil
 	})
 	return c
+}
+
+// waitGone returns once the server lists no pane with the id, or has gone
+// with its last pane: a server on its way out fails the next command with
+// "server exited unexpectedly", as killServer says. An empty id, of a pane
+// tmux ended before it could print it, is gone once the server answers or
+// has gone.
+func waitGone(t *testing.T, h *tmux.Host, pane string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		out, err := exec.Command("tmux", "-L", h.Socket, "list-panes", "-a", "-F", "#{pane_id}").CombinedOutput()
+		if err == nil && !slices.Contains(strings.Fields(string(out)), pane) {
+			return
+		}
+		if err != nil && noServerIn(out) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("pane %s is not gone after 5s; list-panes: %v: %s", pane, err, out)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// lastField is the last field of a line a step printed with -P: the pane id
+// of new-session's and new-window's formats here.
+func lastField(out string) string {
+	f := strings.Split(strings.TrimSpace(out), "|")
+	return f[len(f)-1]
 }
 
 // sessionNames lists the sessions on the host's server, none when no server

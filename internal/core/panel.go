@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 
 	"github.com/hk9890/revier/internal/panelstart"
@@ -376,7 +377,35 @@ func ownPanel(in revier.Instance) (revier.PanelID, bool) {
 // panel of the tab is current in it, the press goes home. Home that is the same instance is
 // reached by making its own first panel current, because focusing the
 // instance alone would leave the tab where it is.
+//
+// A tab the listing holds can end before its focus. Its panel is then gone
+// from the instance, and the press is made once more: the listing it reads
+// holds the tab without that panel, or not at all, and then the tab opens.
+// That second pass does not go home: the first pass focused the instance,
+// which would make the press read as one made on the tab.
 func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resumes []Resume) (Result, error) {
+	res, err := c.goTabOnce(ctx, p, i, bound, resumes, false)
+	var gone tabGone
+	if !errors.As(err, &gone) {
+		return res, err
+	}
+	slog.Info("tab gone at its focus, pressed again", "project", p.Name, "target", p.Targets[i].Name, "err", gone.err)
+	res, err = c.goTabOnce(ctx, p, i, bound, resumes, true)
+	if errors.As(err, &gone) {
+		return res, gone.err
+	}
+	return res, err
+}
+
+// tabGone is the focus error of a tab the listing held, whose panel is gone
+// from the instance by its focus.
+type tabGone struct{ err error }
+
+func (g tabGone) Error() string { return g.err.Error() }
+
+// goTabOnce is one press of goTab, on one listing. again is the press made
+// once more, which does not go home.
+func (c *Core) goTabOnce(ctx context.Context, p Project, i int, bound Bindings, resumes []Resume, again bool) (Result, error) {
 	t := p.Targets[i]
 	opener, err := c.tabHost(p, i)
 	if err != nil {
@@ -428,7 +457,7 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 		}
 	}
 
-	if !opened && open && c.focusedOn(ctx, snap, in) {
+	if !again && !opened && open && c.focusedOn(ctx, snap, in) {
 		if cur, err := opener.FocusedPanel(ctx, in.Ref); err == nil && slices.Contains(tabAt(in, tab), cur) {
 			return c.goHomeFromTab(ctx, p, snap, in, bound, opener)
 		}
@@ -475,7 +504,11 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 		if !open && ended(ctx, c.Runtime, in.Ref, tab, real.PanelSpecs()) {
 			return failed, fmt.Errorf("%s: open tab %s: %w", c.Runtime.Name(), t.Name, panelstart.ExitedAtOnce(real.PanelSpecs()[0]))
 		}
-		return failed, fmt.Errorf("%s: focus tab %s: %w", c.Runtime.Name(), t.Name, err)
+		err = fmt.Errorf("%s: focus tab %s: %w", c.Runtime.Name(), t.Name, err)
+		if open && !opened && lost(ctx, c.Runtime, in.Ref, tab) {
+			return failed, tabGone{err}
+		}
+		return failed, err
 	}
 	if err := c.raise(ctx, osw, t.Name); err != nil {
 		return Result{}, err
@@ -484,15 +517,17 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 }
 
 // ended reports whether a tab of one panel, just opened, is gone because its
-// command exited before its focus: the instance is still listed and no longer
-// holds the panel. A tab of more panels keeps the others when the first
-// exits, so it opened, and its focus error stands. An instance that is not
-// listed, or a host that cannot list, failed in another way, and its own
-// error says how.
+// command exited before its focus: the panel is lost. A tab of more panels
+// keeps the others when the first exits, so it opened, and its focus error
+// stands.
 func ended(ctx context.Context, host revier.Host, ref revier.TargetRef, panel revier.PanelID, specs []revier.PanelSpec) bool {
-	if len(specs) != 1 {
-		return false
-	}
+	return len(specs) == 1 && lost(ctx, host, ref, panel)
+}
+
+// lost reports whether the instance is still listed and no longer holds the
+// panel. An instance that is not listed, or a host that cannot list, failed
+// in another way, and its own error says how.
+func lost(ctx context.Context, host revier.Host, ref revier.TargetRef, panel revier.PanelID) bool {
 	instances, err := host.Instances(ctx)
 	if err != nil {
 		return false

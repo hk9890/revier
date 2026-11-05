@@ -111,6 +111,11 @@ func (h *Host) tmux(ctx context.Context, args ...string) (string, error) {
 	if h.run != nil {
 		return h.run(ctx, args...)
 	}
+	return h.exec(ctx, args...)
+}
+
+// exec runs tmux itself, whatever runner the tests put in its place.
+func (h *Host) exec(ctx context.Context, args ...string) (string, error) {
 	var out, errb bytes.Buffer
 	c := h.cmd(ctx, args...)
 	c.Stdout, c.Stderr = &out, &errb

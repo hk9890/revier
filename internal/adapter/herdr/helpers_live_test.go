@@ -12,9 +12,9 @@ import (
 	"syscall"
 	"testing"
 	"time"
-	"unicode"
 
 	"github.com/hk9890/revier/internal/adapter/herdr"
+	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -39,7 +39,7 @@ func serverWith(t *testing.T, env ...string) *herdr.Host {
 	}
 	// Named after the test, cut short: a Unix socket path longer than 107
 	// bytes cannot be bound, and t.TempDir carries the test's whole name.
-	dir, err := os.MkdirTemp("", "rvh-"+shortName(t)+"-")
+	dir, err := os.MkdirTemp("", "rvh-"+testenv.ShortName(t)+"-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,18 +94,6 @@ func scrubbed(env []string) []string {
 		out = append(out, kv)
 	}
 	return out
-}
-
-// shortName is the test's name with its letters and digits alone, at most 40
-// of them: enough to tell which test left a socket behind.
-func shortName(t *testing.T) string {
-	name := strings.Map(func(r rune) rune {
-		if r < 128 && (unicode.IsLetter(r) || unicode.IsDigit(r)) {
-			return r
-		}
-		return -1
-	}, strings.TrimPrefix(t.Name(), "Test"))
-	return name[:min(len(name), 40)]
 }
 
 func ctx(t *testing.T) context.Context {

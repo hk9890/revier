@@ -309,6 +309,106 @@ func TestATabWhoseCommandEndedBeforeItsFocusSaysItExited(t *testing.T) {
 	}
 }
 
+// quickTab is a project with a tab of one tool panel inside home, and a
+// runtime whose home already holds that tab, as panel "2".
+func quickTab(t *testing.T) (*hosttest.FakeRuntime, core.Project) {
+	t.Helper()
+	rt := hosttest.NewRuntime("tmux")
+	rt.Add("session:revier", "",
+		revier.Panel{ID: "1", Kind: revier.PanelTool, Tab: "t1"},
+		revier.Panel{ID: "2", Kind: revier.PanelTool, Tab: "t2", Vars: map[string]string{core.PanelTargetVar: "quick"}})
+	proj := tabProject()
+	proj.Targets = append(proj.Targets, revier.Target{Name: "quick", Runtime: &revier.Realization{
+		Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelTool, Command: []string{"true"}}}}})
+	return rt, prepared(t, proj)
+}
+
+// endedOnce is a runtime whose panel "2" ends as the core focuses it, as a
+// tab's command does that exits between the listing and the focus.
+type endedOnce struct{ *hosttest.FakeRuntime }
+
+func (e endedOnce) FocusPanel(ctx context.Context, ref revier.TargetRef, panel revier.PanelID) error {
+	if panel == "2" {
+		_ = e.ClosePanel(ctx, ref, panel)
+		return errPaneGone
+	}
+	return e.FakeRuntime.FocusPanel(ctx, ref, panel)
+}
+
+// A tab the listing holds and that ends before its focus is opened again by
+// the same press: a press on a tab that is not there opens it.
+func TestATabThatEndsBeforeItsFocusOpensAgain(t *testing.T) {
+	rt, p := quickTab(t)
+	c := &core.Core{Runtime: endedOnce{rt}}
+
+	res, err := press(context.Background(), c, p, "quick")
+	if err != nil {
+		t.Fatalf("press: %v", err)
+	}
+	if !res.Launched || len(rt.Tabs) != 1 || rt.Tabs[0].Vars[core.PanelTargetVar] != "quick" {
+		t.Errorf("launched %v, tabs %+v; want one new tab for quick", res.Launched, rt.Tabs)
+	}
+}
+
+// When the tab that opens again ends at once too, the press names the
+// command as exited, not the focus of the tab that was there.
+func TestATabThatEndsBeforeItsFocusAndAgainSaysItExited(t *testing.T) {
+	rt, p := quickTab(t)
+	c := &core.Core{Runtime: endingTab{rt}}
+
+	_, err := press(context.Background(), c, p, "quick")
+	want := `tmux: open tab quick: the tool panel's command "true" exited as soon as it started`
+	if err == nil || err.Error() != want {
+		t.Fatalf("err = %v, want %q", err, want)
+	}
+}
+
+// A tab whose focus fails while its panel is still listed keeps the focus
+// error, and the press is not made again: it focuses once.
+func TestATabThatStaysButCannotBeFocusedKeepsItsError(t *testing.T) {
+	rt, p := quickTab(t)
+	rt.FocusPanelErr = errPaneGone
+	c := &core.Core{Runtime: rt}
+
+	_, err := press(context.Background(), c, p, "quick")
+	if err == nil || !errors.Is(err, errPaneGone) || !strings.Contains(err.Error(), "focus tab quick") {
+		t.Fatalf("err = %v, want the focus error of tab quick", err)
+	}
+	if len(rt.PanelFocuses) != 1 || len(rt.Tabs) != 0 {
+		t.Errorf("focuses %v, tabs %+v; want one focus and no tab opened", rt.PanelFocuses, rt.Tabs)
+	}
+}
+
+// A tab of two panels whose first ends as the press focuses it lands on the
+// second. The first pass focused the instance, so the press made again would
+// read as one made on the tab, which goes home: it does not.
+func TestATabThatLosesItsFirstPanelAtItsFocusLandsOnTheRest(t *testing.T) {
+	rt := hosttest.NewRuntime("tmux")
+	ref := rt.Add("session:revier", "",
+		revier.Panel{ID: "1", Kind: revier.PanelTool, Tab: "t1"},
+		revier.Panel{ID: "2", Kind: revier.PanelTool, Tab: "t2", Vars: map[string]string{core.PanelTargetVar: "quick"}},
+		revier.Panel{ID: "3", Kind: revier.PanelShell, Tab: "t2", Vars: map[string]string{core.PanelTargetVar: "quick"}})
+	if err := rt.FocusPanel(context.Background(), ref, "3"); err != nil {
+		t.Fatal(err)
+	}
+	rt.PanelFocuses = nil
+	proj := tabProject()
+	proj.Targets = append(proj.Targets, revier.Target{Name: "quick", Runtime: &revier.Realization{
+		Inside: "home", Panels: []revier.PanelSpec{
+			{Kind: revier.PanelTool, Command: []string{"true"}},
+			{Kind: revier.PanelShell}}}})
+	c := &core.Core{Runtime: endedOnce{rt}}
+
+	res, err := press(context.Background(), c, prepared(t, proj), "quick")
+	if err != nil {
+		t.Fatalf("press: %v", err)
+	}
+	// endedOnce answers the focus of "2" itself, so the fake records only "3".
+	if res.Tab != "quick" || !slices.Equal(rt.PanelFocuses, []revier.PanelID{"3"}) {
+		t.Errorf("tab %q, focuses %v; want tab quick, focused on 3", res.Tab, rt.PanelFocuses)
+	}
+}
+
 // A terminal key's plain tab is one shell panel: when the runtime's shell
 // exits before the focus, the error says the shell exited, not the focus.
 func TestAPlainTabWhoseShellEndedBeforeItsFocusSaysItExited(t *testing.T) {
