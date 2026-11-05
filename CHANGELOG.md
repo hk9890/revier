@@ -6,6 +6,92 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## v0.25.0
+
+- **Action required: revier refuses a project file with a relative `path`,
+  or with a file name that has whitespace or a control character.** Before,
+  such a file loaded, and a relative path named a different directory
+  for each directory you ran revier in. Now the project is listed with the
+  reason. Write the path from `/` or `~`, and rename the file.
+- **Action required: `place` is counted after its templates render.** A var
+  that holds the whole geometry now loads. A var that adds a token past four
+  is now refused when the project loads; before, the window opened and the
+  window manager then refused to place it. Shorten such a `place`.
+- **Action required: `revier session save`, `session list`, and the `keys` and
+  `term` subcommands refuse an extra word.** Before,
+  `revier session save before-reboot` saved a session with no name and
+  dropped the word. Name a session with `--name`.
+- **Action required: an action whose `key` is `plus` or `minus`, bare or
+  with shift, is refused.** It never fired, because the TUI took the press
+  as typed text. Give it ctrl or alt, such as `ctrl-plus`. A target with
+  such a key no longer shows the key in the TUI's footer.
+- **`revier shutdown` exits 1 when it is not safe to leave.** Before, it
+  exited 0 when a target was still open after the wait, or when its agents
+  could not be read, so `revier shutdown && poweroff` powered off while an
+  editor still asked about unsaved work. It now prints
+  `shutdown incomplete; not safe to leave` and exits 1, also when ctrl+c
+  stopped it. It waits up to 10 seconds for what it closed to go, in place
+  of 3, so a slow IDE window no longer shows as still open. ctrl+c ends
+  that wait at once and says so.
+- **The popup knows when the desktop hid it.** Where a window rule minimizes
+  the popup when another window takes the focus, the next press showed the
+  popup as you left it, with its query. It now shows the project list with
+  no query, as after Esc. A popup that asks a question or shows a screen
+  stays as it was.
+- **`revier doctor` warns when two project files name one directory, or two
+  links name one remote project.** Both files loaded as separate projects, so
+  the work of one checkout was split across two names.
+- **A command target runs when pressed in the TUI.** Before, the TUI refused
+  it with `no command runner is configured`; only `revier go` ran it.
+- **A restore no longer binds one project's editor to another project's
+  window.** When two editors opened close together, the editor key of the
+  second project could raise the first project's window.
+- **A workspace that fails to open leaves no half-built window behind**, in
+  kitty, tmux and herdr. Before, the next press raised it, for example as an
+  agent with no shell beside it. A failed open also no longer closes a
+  workspace that another press opened at the same time.
+- **`exit` in a workspace's shell panel closes the panel** in kitty. Before,
+  it started a new shell.
+- **Action required: revier no longer talks to a kitty on an abstract
+  socket**, such as `listen_on unix:@mykitty`. Another local user could
+  answer on such a socket and read the prompts revier sends to an agent.
+  revier now reaches only the socket files in your runtime directory. Set
+  `listen_on unix:${XDG_RUNTIME_DIR}/kitty` in `kitty.conf` and restart
+  kitty.
+- **A kitty of your own whose socket asks a password no longer stops
+  revier.** Before, every press failed before revier started its own kitty.
+- **A key that ends in plus or minus, such as `ctrl-plus`, fires in the
+  TUI.** Before, it loaded and did nothing.
+- **ctrl+c quits at a delete question**, as on every other screen. Before,
+  it answered no.
+- **The config screen saves to the entry it opened.** When `config.toml`
+  changed while a form or a delete question was open, a save could
+  overwrite another action or target, or end the TUI. Now an entry that is
+  gone or changed is refused in the footer.
+- **The dialog after an end with no shutdown is no longer lost or out of
+  date.** A query typed before the first survey dropped it. A save, a
+  restore or a shutdown made while it waited no longer leaves it offering
+  the older session.
+- **A refusal names the way out.** `revier agent new --resume` on a closed
+  workspace names `revier go home -p <project>`. `revier agent read --screen`
+  of an agent shown on another machine names that machine. A press on a
+  shared target that a link does not get says why. A press whose window
+  host did not answer names that host, not a missing window. del on a
+  project with nothing open names alt+del.
+- **A new project from a folder takes an https URL and a `git@host:` origin
+  of one repository as the same repository.** Before, the footer said the
+  URL was ignored.
+- **Linked hosts:** a project name that starts with `=`, or that has a
+  backtick or a backslash, now reaches the remote revier whole under a zsh or
+  fish login shell. A relative `Include` inside an included ssh configuration
+  file resolves as ssh resolves it. `revier | grep ...` no longer hangs on a
+  linked host whose remote revier hangs.
+- **Two session saves that run at the same moment keep two sessions.**
+  Before, the second could overwrite the first.
+- **`revier agent wait --timeout` refuses a value that is too large,
+  infinite or not a number.** Before, such a value timed out at once or
+  waited for good.
+
 ## v0.24.0
 
 - **Action required: revier now needs kitty 0.42 or later.** With an older
