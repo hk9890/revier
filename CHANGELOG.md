@@ -20,7 +20,8 @@ Each section is also the text of its release on the
 - **Action required: `revier session save`, `session list`, and the `keys` and
   `term` subcommands refuse an extra word.** Before,
   `revier session save before-reboot` saved a session with no name and
-  dropped the word. Name a session with `--name`.
+  dropped the word. Name a session with `--name`, and remove the extra word
+  from the other commands.
 - **Action required: an action whose `key` is `plus` or `minus`, bare or
   with shift, is refused.** It never fired, because the TUI took the press
   as typed text. Give it ctrl or alt, such as `ctrl-plus`. A target with
@@ -66,8 +67,9 @@ Each section is also the text of its release on the
   it answered no.
 - **The config screen saves to the entry it opened.** When `config.toml`
   changed while a form or a delete question was open, a save could
-  overwrite another action or target, or end the TUI. Now an entry that is
-  gone or changed is refused in the footer.
+  overwrite another action or target, a delete could remove another entry,
+  or the TUI could end. Now an entry that is gone or changed is refused in
+  the footer.
 - **The dialog after an end with no shutdown is no longer lost or out of
   date.** A query typed before the first survey dropped it. A save, a
   restore or a shutdown made while it waited no longer leaves it offering
@@ -86,6 +88,19 @@ Each section is also the text of its release on the
   fish login shell. A relative `Include` inside an included ssh configuration
   file resolves as ssh resolves it. `revier | grep ...` no longer hangs on a
   linked host whose remote revier hangs.
+- **A tmux tab whose program name has a `|` is found again.** Before, each
+  press of its key opened another copy of it.
+- **A press that places a new terminal window waits for it once.** Before,
+  when the window did not come, the press waited for it twice and held about
+  4 seconds.
+- **A shutdown whose state file could not be written keeps what revier last
+  saw**, for example on a full disk. Before, the next start offered no
+  dialog for the end with no shutdown, and after a shutdown with no session
+  save, the last-seen snapshot was gone.
+- **A `state.json` that does not parse is logged when revier discards it.**
+  Before, revier replaced it with an empty state and wrote no log line, so
+  the windows bound to targets and the shutdown on record were lost with no
+  trace.
 - **Two session saves that run at the same moment keep two sessions.**
   Before, the second could overwrite the first.
 - **`revier agent wait --timeout` refuses a value that is too large,

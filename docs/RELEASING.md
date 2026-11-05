@@ -105,6 +105,9 @@ message.
   `the TUI stalled for a second on every refresh` is an entry.
 - A change with no user-visible effect gets no entry — a refactor, added
   coverage, a doc fix, a dependency bump nobody has to act on.
+- Every other change since the last tag gets an entry, each fix included.
+  Check each commit of `git log vPREV..HEAD` against the section. A fix of a
+  defect that no tagged release had gets none.
 - Anything that now refuses a project file, a config or a habit the operator
   already has leads with **Action required** and names the fix.
 
