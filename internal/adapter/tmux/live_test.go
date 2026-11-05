@@ -962,6 +962,64 @@ func TestCoreSaysATabWhoseCommandEndsAtOnceExited(t *testing.T) {
 	}
 }
 
+// A tab that is open and ends as a press focuses it is opened again by that
+// press, and its command, which now ends at once, is named as having exited:
+// not tmux's "can't find pane" of the tab that was there. The command waits
+// until the hook releases it, which the hook does before the second press
+// focuses the tab.
+func TestCoreOpensAgainATabThatEndsAsItIsFocused(t *testing.T) {
+	h, c := server(t), ctx(t)
+	dir := t.TempDir()
+	release := filepath.Join(dir, "release")
+	var tab string
+	var armed bool
+	h.SetHook(func(args []string) {
+		if !armed || args[0] != "display-message" || len(args) < 4 || args[3] != tab {
+			return
+		}
+		if err := os.WriteFile(release, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		waitGone(t, h, tab)
+	}, func(args []string, out string) {
+		if args[0] == "new-window" {
+			tab = lastField(out)
+		}
+	})
+	cr := &core.Core{Runtime: h}
+	command := []string{"sh", "-c", "while [ ! -e release ]; do sleep 0.01; done"}
+	p := core.PrepareProject(revier.Project{Name: "revier", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "home", Launch: []string{"sh", "-c", "sleep 30"},
+			Match: revier.Match{Title: "^home$"},
+		}},
+		{Name: "quick", Runtime: &revier.Realization{
+			Inside: "home",
+			Panels: []revier.PanelSpec{{Kind: revier.PanelTool, Dir: dir, Command: command}},
+		}},
+	}})
+	if _, err := press(c, cr, p, "home"); err != nil {
+		t.Fatalf("open home: %v", err)
+	}
+	if _, err := press(c, cr, p, "quick"); err != nil {
+		t.Fatalf("open quick: %v", err)
+	}
+	first := tab
+	// Off the tab, so the next press focuses it and does not return home.
+	if err := exec.Command("tmux", "-L", h.Socket, "select-window", "-t", "home:^").Run(); err != nil {
+		t.Fatalf("select home's window: %v", err)
+	}
+
+	armed = true
+	want := fmt.Sprintf("tmux: open tab quick: the tool panel's command %q exited as soon as it started", strings.Join(command, " "))
+	if _, err := press(c, cr, p, "quick"); err == nil || err.Error() != want {
+		t.Errorf("press quick = %v, want %q", err, want)
+	}
+	if tab == first {
+		t.Errorf("the press opened no tab after %s ended", first)
+	}
+}
+
 // tmux escapes non-printable bytes in format output on some versions and not
 // others: 3.4 renders a raw \x1f as the literal text "\037" while 3.7 emits the
 // byte. A control-character delimiter therefore parsed on the author's machine
