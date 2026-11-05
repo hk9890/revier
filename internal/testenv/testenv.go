@@ -59,10 +59,10 @@ func NoTools(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 }
 
-// ShortName is the test's name with its letters and digits alone, at most 40
-// of them: enough to tell which test left a socket behind, and short enough
-// for a socket path, which tmux caps at 107 bytes. A longer name keeps 32 and
-// ends in a hash of the whole, so two subtests that share the 32 still differ.
+// ShortName is at most 32 of the test name's letters and digits, enough to
+// tell which test left a socket behind, and a hash of the whole name, so two
+// tests whose names differ only in what was cut or dropped still differ. It
+// is at most 40 bytes, short enough for a socket path, which tmux caps at 107.
 func ShortName(t *testing.T) string {
 	name := strings.Map(func(r rune) rune {
 		if r < 128 && (unicode.IsLetter(r) || unicode.IsDigit(r)) {
@@ -70,12 +70,9 @@ func ShortName(t *testing.T) string {
 		}
 		return -1
 	}, strings.TrimPrefix(t.Name(), "Test"))
-	if len(name) <= 40 {
-		return name
-	}
 	sum := fnv.New32a()
 	sum.Write([]byte(t.Name()))
-	return fmt.Sprintf("%s%08x", name[:32], sum.Sum32())
+	return fmt.Sprintf("%s%08x", name[:min(len(name), 32)], sum.Sum32())
 }
 
 // prepare makes the scratch configuration under dir and returns its root.

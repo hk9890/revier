@@ -11,6 +11,7 @@ package tmux_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -57,7 +58,7 @@ func killServer(t *testing.T, socket string) {
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		out, _ := exec.Command("tmux", "-L", socket, "list-sessions").CombinedOutput()
-		if strings.Contains(string(out), "no server running") || strings.Contains(string(out), "error connecting") {
+		if noServerIn(out) {
 			return
 		}
 		if time.Now().After(deadline) {
@@ -65,6 +66,12 @@ func killServer(t *testing.T, socket string) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+}
+
+// noServerIn reports whether what a tmux command printed says no server runs
+// on its socket, in the words the host counts as that.
+func noServerIn(out []byte) bool {
+	return tmux.NoServer(errors.New(string(out)))
 }
 
 func ctx(t *testing.T) context.Context {
@@ -902,7 +909,7 @@ func TestCoreSaysATabWhoseCommandEndsAtOnceExited(t *testing.T) {
 		atFocus bool
 	}{
 		{"before OpenTab returns", []string{"true"}, false},
-		{"before the focus", []string{"sh", "-c", "while [ ! -e release ]; do sleep 0.01; done"}, true},
+		{"before the focus", waitsForRelease, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h, c := server(t), ctx(t)
@@ -911,7 +918,7 @@ func TestCoreSaysATabWhoseCommandEndsAtOnceExited(t *testing.T) {
 			var tab string
 			var focused bool
 			h.SetHook(func(args []string) {
-				if args[0] != "display-message" || len(args) < 4 || args[3] != tab {
+				if !focuses(args, tab) {
 					return
 				}
 				focused = true
@@ -934,21 +941,12 @@ func TestCoreSaysATabWhoseCommandEndsAtOnceExited(t *testing.T) {
 				}
 			})
 			cr := &core.Core{Runtime: h}
-			p := core.PrepareProject(revier.Project{Name: "revier", Targets: []revier.Target{
-				{Name: "home", Home: true, Runtime: &revier.Realization{
-					Name: "home", Launch: []string{"sh", "-c", "sleep 30"},
-					Match: revier.Match{Title: "^home$"},
-				}},
-				{Name: "quick", Runtime: &revier.Realization{
-					Inside: "home",
-					Panels: []revier.PanelSpec{{Kind: revier.PanelTool, Dir: dir, Command: tc.command}},
-				}},
-			}})
+			p := quickProject(dir, tc.command)
 			if _, err := press(c, cr, p, "home"); err != nil {
 				t.Fatalf("open home: %v", err)
 			}
 
-			want := fmt.Sprintf("tmux: open tab quick: the tool panel's command %q exited as soon as it started", strings.Join(tc.command, " "))
+			want := exitedAtOnce(tc.command)
 			for range 2 {
 				focused = false
 				if _, err := press(c, cr, p, "quick"); err == nil || err.Error() != want {
@@ -974,7 +972,7 @@ func TestCoreOpensAgainATabThatEndsAsItIsFocused(t *testing.T) {
 	var tab string
 	var armed bool
 	h.SetHook(func(args []string) {
-		if !armed || args[0] != "display-message" || len(args) < 4 || args[3] != tab {
+		if !armed || !focuses(args, tab) {
 			return
 		}
 		if err := os.WriteFile(release, nil, 0o600); err != nil {
@@ -987,17 +985,7 @@ func TestCoreOpensAgainATabThatEndsAsItIsFocused(t *testing.T) {
 		}
 	})
 	cr := &core.Core{Runtime: h}
-	command := []string{"sh", "-c", "while [ ! -e release ]; do sleep 0.01; done"}
-	p := core.PrepareProject(revier.Project{Name: "revier", Targets: []revier.Target{
-		{Name: "home", Home: true, Runtime: &revier.Realization{
-			Name: "home", Launch: []string{"sh", "-c", "sleep 30"},
-			Match: revier.Match{Title: "^home$"},
-		}},
-		{Name: "quick", Runtime: &revier.Realization{
-			Inside: "home",
-			Panels: []revier.PanelSpec{{Kind: revier.PanelTool, Dir: dir, Command: command}},
-		}},
-	}})
+	p := quickProject(dir, waitsForRelease)
 	if _, err := press(c, cr, p, "home"); err != nil {
 		t.Fatalf("open home: %v", err)
 	}
@@ -1011,13 +999,42 @@ func TestCoreOpensAgainATabThatEndsAsItIsFocused(t *testing.T) {
 	}
 
 	armed = true
-	want := fmt.Sprintf("tmux: open tab quick: the tool panel's command %q exited as soon as it started", strings.Join(command, " "))
+	want := exitedAtOnce(waitsForRelease)
 	if _, err := press(c, cr, p, "quick"); err == nil || err.Error() != want {
 		t.Errorf("press quick = %v, want %q", err, want)
 	}
 	if tab == first {
 		t.Errorf("the press opened no tab after %s ended", first)
 	}
+}
+
+// waitsForRelease is a tab command that runs until a file named release is
+// in its directory: a hook ends it at the step it chooses.
+var waitsForRelease = []string{"sh", "-c", "while [ ! -e release ]; do sleep 0.01; done"}
+
+// focuses reports whether a tmux call is FocusPanel's first step on the pane.
+func focuses(args []string, pane string) bool {
+	return args[0] == "display-message" && len(args) > 3 && args[3] == pane
+}
+
+// quickProject is a home session and quick, a tab in it of one tool panel
+// that runs command in dir.
+func quickProject(dir string, command []string) core.Project {
+	return core.PrepareProject(revier.Project{Name: "revier", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "home", Launch: []string{"sh", "-c", "sleep 30"},
+			Match: revier.Match{Title: "^home$"},
+		}},
+		{Name: "quick", Runtime: &revier.Realization{
+			Inside: "home",
+			Panels: []revier.PanelSpec{{Kind: revier.PanelTool, Dir: dir, Command: command}},
+		}},
+	}})
+}
+
+// exitedAtOnce is what a press of quick says when its command exited.
+func exitedAtOnce(command []string) string {
+	return fmt.Sprintf("tmux: open tab quick: the tool panel's command %q exited as soon as it started", strings.Join(command, " "))
 }
 
 // tmux escapes non-printable bytes in format output on some versions and not
@@ -1479,11 +1496,11 @@ func waitGone(t *testing.T, h *tmux.Host, pane string) {
 		if err == nil && !slices.Contains(strings.Fields(string(out)), pane) {
 			return
 		}
-		if err != nil && (strings.Contains(string(out), "no server running") || strings.Contains(string(out), "error connecting")) {
+		if err != nil && noServerIn(out) {
 			return
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("pane %s still runs after 5s", pane)
+			t.Fatalf("pane %s is not gone after 5s; list-panes: %v: %s", pane, err, out)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

@@ -8,6 +8,9 @@ var ParseVars = parseVars
 // KindOf is kindOf, for the classification test outside the package.
 var KindOf = kindOf
 
+// NoServer is noServer, for the live tests that wait for a server to go.
+var NoServer = noServer
+
 // SetRunner replaces tmux, so the tests drive the host against a recorder
 // with no tmux and no process.
 func (h *Host) SetRunner(fn func(ctx context.Context, args ...string) (string, error)) {
