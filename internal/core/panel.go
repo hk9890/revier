@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 
 	"github.com/hk9890/revier/internal/panelstart"
@@ -380,13 +381,16 @@ func ownPanel(in revier.Instance) (revier.PanelID, bool) {
 // A tab the listing holds can end before its focus. Its panel is then gone
 // from the instance, and the press is made once more: the listing it reads
 // holds the tab without that panel, or not at all, and then the tab opens.
+// That second pass does not go home: the first pass focused the instance,
+// which would make the press read as one made on the tab.
 func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resumes []Resume) (Result, error) {
-	res, err := c.goTabOnce(ctx, p, i, bound, resumes)
+	res, err := c.goTabOnce(ctx, p, i, bound, resumes, false)
 	var gone tabGone
 	if !errors.As(err, &gone) {
 		return res, err
 	}
-	res, err = c.goTabOnce(ctx, p, i, bound, resumes)
+	slog.Info("tab gone at its focus, pressed again", "project", p.Name, "target", p.Targets[i].Name, "err", gone.err)
+	res, err = c.goTabOnce(ctx, p, i, bound, resumes, true)
 	if errors.As(err, &gone) {
 		return res, gone.err
 	}
@@ -398,10 +402,10 @@ func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resu
 type tabGone struct{ err error }
 
 func (g tabGone) Error() string { return g.err.Error() }
-func (g tabGone) Unwrap() error { return g.err }
 
-// goTabOnce is one press of goTab, on one listing.
-func (c *Core) goTabOnce(ctx context.Context, p Project, i int, bound Bindings, resumes []Resume) (Result, error) {
+// goTabOnce is one press of goTab, on one listing. again is the press made
+// once more, which does not go home.
+func (c *Core) goTabOnce(ctx context.Context, p Project, i int, bound Bindings, resumes []Resume, again bool) (Result, error) {
 	t := p.Targets[i]
 	opener, err := c.tabHost(p, i)
 	if err != nil {
@@ -453,7 +457,7 @@ func (c *Core) goTabOnce(ctx context.Context, p Project, i int, bound Bindings, 
 		}
 	}
 
-	if !opened && open && c.focusedOn(ctx, snap, in) {
+	if !again && !opened && open && c.focusedOn(ctx, snap, in) {
 		if cur, err := opener.FocusedPanel(ctx, in.Ref); err == nil && slices.Contains(tabAt(in, tab), cur) {
 			return c.goHomeFromTab(ctx, p, snap, in, bound, opener)
 		}
