@@ -24,7 +24,7 @@ A findability map: where things live, and how to search for them.
 | `internal/runlog/` | The record of every `revier each`: each project's output and a summary, under the state root. |
 | `internal/sshconfig/` | The hosts `~/.ssh/config` names, for the remote screen's "new", and the `HostName` that tells this machine apart. |
 | `internal/hosttest/` | The fake host, probe, key binder, terminal keys and remote that layer L2 runs against. |
-| `internal/testenv/` | The scratch configuration, state, ssh configuration and kitty configuration a test binary runs in, in place of the user's own; the empty PATH of a test that must start no tool. |
+| `internal/testenv/` | The scratch configuration, state, ssh configuration and kitty configuration a test binary runs in, in place of the user's own; the empty PATH of a test that must start no tool; the short socket name of a live test. |
 | `internal/tui/` | The TUI surface: the project list, the pane, the dialogs and the config screen. |
 | `internal/theme/` | Every colour and glyph the TUI draws with, named by role. |
 | `internal/build/` | The version, commit and date that `.goreleaser.yaml` and `.mise.toml` stamp in by ldflags. |
