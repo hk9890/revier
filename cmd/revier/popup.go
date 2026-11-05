@@ -53,7 +53,8 @@ func cmdPopup(ctx context.Context, a *app) error {
 // no title bar, and no kitty key but copy and paste: any other, kitty's or
 // the user's or revier's own, could open a window or a tab in it. Copy and
 // paste are on kitty's keys and on ctrl+c and ctrl+v; ctrl+c copies only a
-// selection, and reaches the surface otherwise, where it quits. env(1)
+// selection, and reaches the surface otherwise, where it quits, or cancels a
+// shutdown, close or restore that runs. env(1)
 // marks the surface as the popup's (core.PopupEnv) and
 // names its project, empty when none resolved, and nothing else: kitty's own
 // env option would reach every window this kitty opens. The variable is set
