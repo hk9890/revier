@@ -155,8 +155,10 @@ kitty, and GNOME with the Window Control extension. See
 
 - The popup opens on the project of the window that had the focus.
 - The popup holds the TUI alone and has no title bar. Of kitty's keys, only
-  copy (ctrl+shift+c) and paste (ctrl+shift+v) work in it: every other kitty
-  key, revier's and your own included, does nothing there.
+  copy (ctrl+shift+c, or ctrl+c on a selection) and paste (ctrl+shift+v or
+  ctrl+v) work in it: every other kitty key, revier's and your own included,
+  does nothing there. With no selection, ctrl+c does what the table above
+  says.
 - When Enter or a target key brings a window to the front, the popup hides.
   As after Esc, the next raise opens on the project list with no query.
   It stays when you press a key, click, scroll or raise it again before the

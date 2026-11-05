@@ -51,7 +51,9 @@ func cmdPopup(ctx context.Context, a *app) error {
 // maximized window refuses the placement. The option also keeps the popup's
 // own size out of what the user's next kitty window opens at. The popup has
 // no title bar, and no kitty key but copy and paste: any other, kitty's or
-// the user's or revier's own, could open a window or a tab in it. env(1)
+// the user's or revier's own, could open a window or a tab in it. Copy and
+// paste are on kitty's keys and on ctrl+c and ctrl+v; ctrl+c copies only a
+// selection, and reaches the surface otherwise, where it quits. env(1)
 // marks the surface as the popup's (core.PopupEnv) and
 // names its project, empty when none resolved, and nothing else: kitty's own
 // env option would reach every window this kitty opens. The variable is set
@@ -74,5 +76,7 @@ func popupArgv(self string, start revier.ProjectName, listenOn string) []string 
 		"-o", "clear_all_shortcuts=yes",
 		"-o", "map=kitty_mod+c copy_to_clipboard",
 		"-o", "map=kitty_mod+v paste_from_clipboard",
+		"-o", "map=ctrl+c copy_or_interrupt",
+		"-o", "map=ctrl+v paste_from_clipboard",
 		"-e", "env", mark, self)
 }
