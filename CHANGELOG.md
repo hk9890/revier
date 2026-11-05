@@ -44,9 +44,10 @@ Each section is also the text of its release on the
   the work of one checkout was split across two names.
 - **A command target runs when pressed in the TUI.** Before, the TUI refused
   it with `no command runner is configured`; only `revier go` ran it.
-- **A restore no longer binds one project's editor to another project's
-  window.** When two editors opened close together, the editor key of the
-  second project could raise the first project's window.
+- **A restore, or two presses close together, no longer binds one project's
+  editor to another project's window.** When two editors opened close
+  together, the editor key of the second project could raise the first
+  project's window.
 - **A workspace that fails to open leaves no half-built window behind**, in
   kitty, tmux and herdr. Before, the next press raised it, for example as an
   agent with no shell beside it. A failed open also no longer closes a
