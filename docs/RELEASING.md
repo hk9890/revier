@@ -34,6 +34,15 @@ compares them.
    mise -C .claude/worktrees/release-vX.Y.Z run quality:full
    ```
 
+   Check each commit since the last tag against the section, as
+   [What goes in the CHANGELOG section](#what-goes-in-the-changelog-section)
+   says. A change with no entry goes back to step 2.
+
+   ```bash
+   git -C .claude/worktrees/release-vX.Y.Z log --no-merges --oneline \
+     "$(git describe --tags --abbrev=0 origin/main)"..HEAD
+   ```
+
 4. Tag the worktree's commit, push the tag, then remove the worktree:
 
    ```bash
@@ -105,9 +114,9 @@ message.
   `the TUI stalled for a second on every refresh` is an entry.
 - A change with no user-visible effect gets no entry — a refactor, added
   coverage, a doc fix, a dependency bump nobody has to act on.
-- Every other change since the last tag gets an entry, each fix included.
-  Check each commit of `git log vPREV..HEAD` against the section. A fix of a
-  defect that no tagged release had gets none.
+- Every other change the operator can see since the last tag gets an entry,
+  each fix included. Several commits of one change share one entry. A fix of
+  a defect that no tagged release had gets none.
 - Anything that now refuses a project file, a config or a habit the operator
   already has leads with **Action required** and names the fix.
 
