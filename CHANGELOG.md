@@ -21,16 +21,17 @@ Each section is also the text of its release on the
   `term` subcommands refuse an extra word.** Before,
   `revier session save before-reboot` saved a session with no name and
   dropped the word. Name a session with `--name`.
-- **Action required: an action whose `key` is a bare `plus` or `minus` is
-  refused.** It never fired, because the TUI took the press as typed text.
-  Give it ctrl or alt, such as `ctrl-plus`.
+- **Action required: an action whose `key` is `plus` or `minus`, bare or
+  with shift, is refused.** It never fired, because the TUI took the press
+  as typed text. Give it ctrl or alt, such as `ctrl-plus`. A target with
+  such a key no longer shows the key in the TUI's footer.
 - **`revier shutdown` exits 1 when it is not safe to leave.** Before, it
-  exited 0 when a target was still open after the wait, so
-  `revier shutdown && poweroff` powered off while an editor still asked about
-  unsaved work. It now prints `shutdown incomplete; not safe to leave` and
-  exits 1, also when ctrl+c stopped it. It waits up to 10 seconds for what
-  it closed to go, in place of 3, so a slow IDE window no longer shows as
-  still open. ctrl+c ends that wait at once and says so.
+  exited 0 when a target was still open after the wait, or when its agents
+  could not be read, so `revier shutdown && poweroff` powered off while an
+  editor still asked about unsaved work. It now prints
+  `shutdown incomplete; not safe to leave` and exits 1, also when ctrl+c
+  stopped it. It waits up to 10 seconds for what it closed to go, in place
+  of 3, so a slow IDE window no longer shows as still open. ctrl+c ends that wait at once and says so.
 - **The popup knows when the desktop hid it.** Where a window rule minimizes
   the popup when another window takes the focus, the next press showed the
   popup as you left it, with its query. It now shows the project list with
@@ -50,9 +51,12 @@ Each section is also the text of its release on the
   workspace that another press opened at the same time.
 - **`exit` in a workspace's shell panel closes the panel** in kitty. Before,
   it started a new shell.
-- **revier no longer talks to an abstract kitty socket.** Another local user
-  could answer on such a socket and read the prompts revier sends to an
-  agent. revier now uses only the socket files in your runtime directory.
+- **Action required: revier no longer talks to a kitty on an abstract
+  socket**, such as `listen_on unix:@mykitty`. Another local user could
+  answer on such a socket and read the prompts revier sends to an agent.
+  revier now reaches only the socket files in your runtime directory. Set
+  `listen_on unix:${XDG_RUNTIME_DIR}/kitty` in `kitty.conf` and restart
+  kitty.
 - **A kitty of your own whose socket asks a password no longer stops
   revier.** Before, every press failed before revier started its own kitty.
 - **A key that ends in plus or minus, such as `ctrl-plus`, fires in the
@@ -81,8 +85,8 @@ Each section is also the text of its release on the
   fish login shell. A relative `Include` inside an included ssh configuration
   file resolves as ssh resolves it. `revier | grep ...` no longer hangs on a
   linked host whose remote revier hangs.
-- **Sessions save on a filesystem with no hard links**, such as some FUSE
-  and SMB mounts, and two saves in one second keep two sessions.
+- **Two session saves that run at the same moment keep two sessions.**
+  Before, the second could overwrite the first.
 - **`revier agent wait --timeout` refuses a value that is too large,
   infinite or not a number.** Before, such a value timed out at once or
   waited for good.
