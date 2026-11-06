@@ -47,8 +47,9 @@ func TestEnsureRefusesAPageLink(t *testing.T) {
 	}
 }
 
-// A clone refused before git runs is a clone line of the log too: the TUI
-// names a failed clone alone and leaves why to the log.
+// A clone refused before git runs is a clone line of the log too: the TUI's
+// footer names a failed clone alone and leaves why to the log, and its detail
+// pane says why.
 func TestEnsureLogsAFailureBeforeGitRuns(t *testing.T) {
 	var logged bytes.Buffer
 	previous := slog.Default()
