@@ -299,13 +299,24 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 		b.WriteString(th.PathMissing.Render(clipTo("Directory is not on "+where, w)))
 		b.WriteString("\n")
 		// What Enter does about it. After a clone that failed, why it failed
-		// is said in full, for the same reason as a file that did not load.
-		why, failed := m.lastClone(v.Project)
+		// is said in full, for the same reason as a file that did not load;
+		// Enter is offered again only when git ran, since a refusal before it
+		// repeats until the file changes. A git_url that cannot be cloned is
+		// said before Enter is pressed.
+		last, cloneFailed := m.lastClone(v.Project)
+		var unclonable error
+		if v.Project.Remote == nil && v.Project.GitURL != "" {
+			unclonable = config.ValidateCloneURL(v.Project.GitURL)
+		}
 		switch {
-		case failed:
-			b.WriteString(hang("", "Clone failed: "+why, w, th.PathMissing))
+		case cloneFailed && last.ran:
+			b.WriteString(hang("", "Clone failed: "+last.why, w, th.PathMissing))
 			b.WriteString("\n")
 			b.WriteString(th.Meta.Render(clipTo("Enter: clone again", w)))
+		case cloneFailed:
+			b.WriteString(hang("", "Clone failed: "+last.why, w, th.PathMissing))
+		case unclonable != nil:
+			b.WriteString(hang("", "git_url: "+unclonable.Error(), w, th.PathMissing))
 		case v.Project.GitURL != "":
 			b.WriteString(th.Meta.Render(clipTo(clone, w)))
 		default:

@@ -66,12 +66,12 @@ func TestAFailedCloneIsForgottenWhenTheFileChanges(t *testing.T) {
 	p := revier.Project{Name: "alpha", Path: "/p/alpha", GitURL: "https://github.com/o/r/tree/main/x"}
 	next, _ := bare(Model{}).cloned(clonedMsg{project: core.Project{Project: p}, err: errors.New("boom")})
 	m := next.(Model)
-	if why, ok := m.lastClone(p); !ok || why != "boom" {
-		t.Fatalf("lastClone = %q, %v; want the failure", why, ok)
+	if last, ok := m.lastClone(p); !ok || last.why != "boom" || last.ran {
+		t.Fatalf("lastClone = %+v, %v; want the failure, refused before git", last, ok)
 	}
 	p.GitURL = "https://github.com/o/r"
-	if why, ok := m.lastClone(p); ok {
-		t.Errorf("lastClone = %q after git_url changed, want nothing", why)
+	if last, ok := m.lastClone(p); ok {
+		t.Errorf("lastClone = %+v after git_url changed, want nothing", last)
 	}
 }
 

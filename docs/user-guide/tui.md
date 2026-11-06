@@ -52,7 +52,7 @@ sections:
 When a file does not load or a host does not answer, the pane gives the
 reason. When the project directory is missing and the project has a
 `git_url`, Enter clones it. When the clone fails, the pane gives git's reason
-until a clone succeeds or you change `git_url`.
+until a clone succeeds or you change `git_url` or `path`.
 
 | Target state | Means |
 |---|---|

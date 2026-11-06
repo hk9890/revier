@@ -64,6 +64,9 @@ func TestACloneURLIsNotAPageLink(t *testing.T) {
 		"https://github.com/o/r/blob/main/README.md":       "https://github.com/o/r",
 		"https://codeberg.org/o/r/src/branch/main":         "https://codeberg.org/o/r",
 		"https://gitlab.com/group/sub/r/-/tree/main":       "https://gitlab.com/group/sub/r",
+		"https://git.example.com/group/r/-/blob/main/x":    "https://git.example.com/group/r",
+		"https://github.com/o/r?tab=readme-ov-file":        "https://github.com/o/r",
+		"https://github.com/o/r#readme":                    "https://github.com/o/r",
 		"http://GitHub.com/o/r/pull/1":                     "http://GitHub.com/o/r",
 		"https://bitbucket.org/team/r/src/main/README.md/": "https://bitbucket.org/team/r",
 	} {

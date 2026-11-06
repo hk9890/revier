@@ -1,6 +1,7 @@
 package tui_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -277,6 +278,41 @@ func TestDetailPaneSaysWhyTheLastCloneFailed(t *testing.T) {
 	m, _ = m.Cloned(projects[0], nil)
 	if body := pane(m); strings.Contains(body, "Clone failed") {
 		t.Errorf("pane = %q after a clone that succeeded, want the failure gone", body)
+	}
+}
+
+// A clone refused before git ran is refused again until the file changes, so
+// the pane says why and offers no retry.
+func TestDetailPaneOffersNoRetryOfARefusedClone(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	projects, _ := onDisk(t, []string{"cloneable"}, map[string]string{"cloneable": "/nowhere/a"},
+		map[string]string{"cloneable": "/srv/git/a.git"})
+	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 140, 30)
+
+	m, _ = m.Cloned(projects[0], errors.New(`project "cloneable": /nowhere/a exists and is not a directory`))
+	body := pane(m)
+	if !strings.Contains(body, "Clone failed: project") {
+		t.Errorf("pane = %q, want the refusal", body)
+	}
+	if strings.Contains(body, "Enter: clone") {
+		t.Errorf("pane = %q, want no retry offered", body)
+	}
+}
+
+// A git_url that is a page link is said in the pane before Enter is pressed,
+// in place of an offer to clone it.
+func TestDetailPaneSaysAPageLinkCannotBeCloned(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	projects, _ := onDisk(t, []string{"paged"}, map[string]string{"paged": "/nowhere/a"},
+		map[string]string{"paged": "https://github.com/o/r/tree/main/paged"})
+	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 160, 30)
+
+	body := pane(m)
+	if !strings.Contains(body, "not a clone URL") || !strings.Contains(body, "https://github.com/o/r\n") {
+		t.Errorf("pane = %q, want the page refused and the repository named", body)
+	}
+	if strings.Contains(body, "Enter: clone") {
+		t.Errorf("pane = %q, want no clone offered", body)
 	}
 }
 

@@ -437,10 +437,11 @@ func (m Model) clone(p core.Project, home revier.TargetName) tea.Cmd {
 	})
 }
 
-// cloneFail is a clone that failed: the URL and the path it was for, and why.
+// cloneFail is a clone that failed: the URL and the path it was for, why,
+// and whether git ran, so that Enter may give another answer.
 type cloneFail struct {
-	url, path string
-	err       error
+	url, path, why string
+	ran            bool
 }
 
 // cloned is the end of a clone. A failure is named in the footer
@@ -452,7 +453,12 @@ func (m Model) cloned(msg clonedMsg) (tea.Model, tea.Cmd) {
 		if m.cloneFailed == nil {
 			m.cloneFailed = map[revier.ProjectName]cloneFail{}
 		}
-		m.cloneFailed[msg.project.Name] = cloneFail{url: msg.project.GitURL, path: msg.project.Path, err: msg.err}
+		f := cloneFail{url: msg.project.GitURL, path: msg.project.Path, why: msg.err.Error()}
+		var ce *checkout.CloneError
+		if errors.As(msg.err, &ce) {
+			f.why, f.ran = ce.Reason, true
+		}
+		m.cloneFailed[msg.project.Name] = f
 		m.err = fail("clone", msg.project.Name, msg.err)
 		return m, nil
 	}
@@ -460,18 +466,14 @@ func (m Model) cloned(msg clonedMsg) (tea.Model, tea.Cmd) {
 	return m, m.goTarget(msg.project, msg.home)
 }
 
-// lastClone is why the last clone of p failed, when it was for the git_url
+// lastClone is the last clone of p that failed, when it was for the git_url
 // and the path p has now: a corrected file is cloned afresh.
-func (m Model) lastClone(p revier.Project) (string, bool) {
+func (m Model) lastClone(p revier.Project) (cloneFail, bool) {
 	f, ok := m.cloneFailed[p.Name]
 	if !ok || f.url != p.GitURL || f.path != p.Path {
-		return "", false
+		return cloneFail{}, false
 	}
-	var ce *checkout.CloneError
-	if errors.As(f.err, &ce) {
-		return ce.Reason, true
-	}
-	return f.err.Error(), true
+	return f, true
 }
 
 // cloneCmd is app.Clone as something bubbletea can hand the terminal to. The
