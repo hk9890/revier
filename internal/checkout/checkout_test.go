@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/hk9890/revier/internal/checkout"
+	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -29,6 +30,20 @@ func TestEnsureRefusesToCloneALink(t *testing.T) {
 	}
 	if err == nil || !strings.Contains(err.Error(), "buildbox") {
 		t.Errorf("err = %v, want the clone refused, naming the host that holds the checkout", err)
+	}
+}
+
+// A git_url written by hand as a forge's page link is refused before git
+// runs, naming the repository to clone instead, and nothing is created.
+func TestEnsureRefusesAPageLink(t *testing.T) {
+	testenv.NoTools(t)
+	path := filepath.Join(t.TempDir(), "x", "demo")
+	_, err := checkout.Ensure(revier.Project{Name: "demo", Path: path, GitURL: "https://github.com/o/r/tree/main/demo"}, io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "git_url") || !strings.Contains(err.Error(), "its repository is https://github.com/o/r") {
+		t.Fatalf("err = %v, want the page refused, naming the repository", err)
+	}
+	if _, err := os.Stat(filepath.Dir(path)); !os.IsNotExist(err) {
+		t.Error("nothing may be created for a URL that cannot be cloned")
 	}
 }
 

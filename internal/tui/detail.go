@@ -298,10 +298,17 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 		}
 		b.WriteString(th.PathMissing.Render(clipTo("Directory is not on "+where, w)))
 		b.WriteString("\n")
-		// What Enter does about it.
-		if v.Project.GitURL != "" {
+		// What Enter does about it. After a clone that failed, why it failed
+		// is said in full, for the same reason as a file that did not load.
+		why, failed := m.lastClone(v.Project)
+		switch {
+		case failed:
+			b.WriteString(hang("", "Clone failed: "+why, w, th.PathMissing))
+			b.WriteString("\n")
+			b.WriteString(th.Meta.Render(clipTo("Enter: clone again", w)))
+		case v.Project.GitURL != "":
 			b.WriteString(th.Meta.Render(clipTo(clone, w)))
-		} else {
+		default:
 			b.WriteString(th.PathMissing.Render(clipTo("No git_url recorded to clone it from", w)))
 		}
 		b.WriteString("\n")

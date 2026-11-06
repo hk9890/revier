@@ -191,6 +191,7 @@ type Model struct {
 	polling      []string                         // the linked hosts that are being asked
 	rounds       map[string]time.Time             // when each linked host was last asked; one not in it is asked at the next survey
 	failed       map[string]int                   // the rounds in a row each linked host gave no answer to
+	cloneFailed  map[revier.ProjectName]cloneFail // the last clone of each project that failed, until one succeeds
 	onTop        bool                             // the cursor is on the top row by nobody's choice, and stays on it until every linked host has answered
 	seen         session.Session                  // what the surface last wrote as what it saw (seen.go)
 	shrink       session.Session                  // a survey that holds less than seen, written when the next survey agrees
@@ -822,12 +823,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // loggedAlready reports a message whose error the operation behind it has
-// logged: a press, a bind, a focus, an action or a clone. Every other error set
-// on m.err - a form refused, a file that did not load - is logged by Update. A
-// failed survey is shown from m.surveyErr and logged by core.SurveyLocal.
+// logged: a press, a bind, a focus, an action, a clone, or a close that found
+// nothing to close. Every other error set on m.err - a form refused, a file
+// that did not load - is logged by Update. A failed survey is shown from
+// m.surveyErr and logged by core.SurveyLocal.
 func loggedAlready(msg tea.Msg) bool {
 	switch msg.(type) {
-	case actedMsg, restoredMsg, savedMsg, shutdownMsg, clonedMsg:
+	case actedMsg, restoredMsg, savedMsg, shutdownMsg, clonedMsg, closePlannedMsg:
 		return true
 	}
 	return false
@@ -1120,11 +1122,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case runtimeMsg:
 		return m.runtimeSwitched(msg)
 	case clonedMsg:
-		if msg.err != nil {
-			m.err = fail("clone", msg.project.Name, msg.err)
-			return m, nil
-		}
-		return m, m.goTarget(msg.project, msg.home)
+		return m.cloned(msg)
 	case keyPress:
 		m.errands++
 		return m.keyIn(msg)

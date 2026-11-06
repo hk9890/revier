@@ -129,10 +129,13 @@ func (m Model) closePlanned(msg closePlannedMsg) (tea.Model, tea.Cmd) {
 		for i, p := range msg.shared {
 			holders[i] = string(p)
 		}
+		// A normal outcome, said in the footer and not logged as a failure.
+		slog.Info("close: held open", "project", msg.project, "by", holders)
 		m.err = fmt.Errorf("%s: what is open of it stays open for %s", msg.label, strings.Join(holders, ", "))
 		return m, nil
 	}
 	if len(msg.plan) == 0 {
+		slog.Info("close: nothing open", "project", msg.project)
 		m.err = fmt.Errorf("%s: nothing of it is open here", msg.label)
 		if msg.row == (core.CloseRow{}) && m.deletable(msg.project) {
 			m.err = fmt.Errorf("%w; alt+del deletes its project file", m.err)

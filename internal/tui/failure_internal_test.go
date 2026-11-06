@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // A restore whose targets all opened, and whose return to the project it was
@@ -56,5 +57,28 @@ func TestAShutdownThatEndsUnderTheLogsScreenClosesItsWizard(t *testing.T) {
 func TestAFailedCloneIsLoggedOnce(t *testing.T) {
 	if !loggedAlready(clonedMsg{err: errors.New("boom")}) {
 		t.Error("a failed clone is logged by the footer too")
+	}
+}
+
+// A clone failure is for the git_url and the path it was tried with: once
+// the file says otherwise, the pane offers the clone afresh.
+func TestAFailedCloneIsForgottenWhenTheFileChanges(t *testing.T) {
+	p := revier.Project{Name: "alpha", Path: "/p/alpha", GitURL: "https://github.com/o/r/tree/main/x"}
+	next, _ := bare(Model{}).cloned(clonedMsg{project: core.Project{Project: p}, err: errors.New("boom")})
+	m := next.(Model)
+	if why, ok := m.lastClone(p); !ok || why != "boom" {
+		t.Fatalf("lastClone = %q, %v; want the failure", why, ok)
+	}
+	p.GitURL = "https://github.com/o/r"
+	if why, ok := m.lastClone(p); ok {
+		t.Errorf("lastClone = %q after git_url changed, want nothing", why)
+	}
+}
+
+// A close that finds nothing to close is a normal outcome its handler logs
+// at INFO, so the footer writes no ERROR line for it.
+func TestACloseOfNothingIsNotLoggedAsAFailure(t *testing.T) {
+	if !loggedAlready(closePlannedMsg{}) {
+		t.Error("a close with nothing to close is logged as a tui ERROR")
 	}
 }

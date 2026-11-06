@@ -387,6 +387,26 @@ func TestACloneURLWritesTheProjectAndClones(t *testing.T) {
 	}
 }
 
+// A browser's link to a page of a repository is refused in the field, naming
+// the repository to clone, before a folder is chosen or a file written.
+func TestAPageLinkIsRefusedAsACloneURL(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	t.Setenv("HOME", t.TempDir())
+	_, _, c, projects := world(t, 1)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 200, 20)
+
+	m, _ = press(m, "alt+n")
+	m = typeInto(m, "https://github.com/owner/widget/tree/main/widget")
+	m, cmd := press(m, "enter")
+	if f := footer(m); cmd != nil || !strings.Contains(f, "its repository is https://github.com/owner/widget") {
+		t.Errorf("footer = %q, want the page refused, naming the repository", f)
+	}
+	if _, err := os.Stat(filepath.Join(root, "projects", "widget.toml")); !os.IsNotExist(err) {
+		t.Error("a project file was written for a page link")
+	}
+}
+
 // A clone URL whose folder is already there adds that folder, clones
 // nothing, and says the URL, which is not the folder's origin, is ignored.
 func TestACloneURLAddsAnExistingFolder(t *testing.T) {

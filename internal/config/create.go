@@ -84,11 +84,16 @@ func CanCreate(projects []core.Project, name revier.ProjectName, dir string) err
 // it back. An existing file is never overwritten, and a file that does not
 // load is removed again, so Create leaves behind a project revier accepts or
 // nothing at all. gitURL may be empty; a non-empty one must pass
-// ValidateGitURL. When config.toml has shared targets, the file has no
+// ValidateCloneURL. When config.toml has shared targets, the file has no
 // targets of its own: the project has the shared ones. When none of them is
 // home, the file writes the template's home target and its agent tab alone,
 // since a project with no home is refused at load.
 func Create(root string, name revier.ProjectName, dir, gitURL string) (core.Project, error) {
+	if gitURL != "" {
+		if err := ValidateCloneURL(gitURL); err != nil {
+			return core.Project{}, fmt.Errorf("git_url: %w", err)
+		}
+	}
 	inh, err := inherited(root)
 	if err != nil {
 		return core.Project{}, err

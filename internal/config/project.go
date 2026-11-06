@@ -110,6 +110,11 @@ func ReadProject(file string, inh Inherited) (ProjectText, error) {
 // SetProjectValue writes one top-level value of a project file: path or
 // git_url. An empty value removes the key.
 func SetProjectValue(file, key, value string, inh Inherited) (core.Project, error) {
+	if key == "git_url" && value != "" {
+		if err := ValidateCloneURL(value); err != nil {
+			return core.Project{}, fmt.Errorf("not written: git_url: %w", err)
+		}
+	}
 	return editProject(file, inh, func(lines []string, _ projectFile) ([]string, error) {
 		top := tables(lines)[0]
 		if value == "" {

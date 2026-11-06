@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/hk9890/revier/internal/checkout"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -253,6 +254,29 @@ func TestDetailPaneSaysWhatEnterDoesForAMissingDirectory(t *testing.T) {
 	m, _ = press(m, "down")
 	if body := pane(m); !strings.Contains(body, "No git_url") {
 		t.Errorf("pane = %q, want the missing field named", body)
+	}
+}
+
+// After a clone that failed, the pane says why in git's words, in place of
+// the same offer that failed, until a clone succeeds.
+func TestDetailPaneSaysWhyTheLastCloneFailed(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	projects, _ := onDisk(t, []string{"cloneable"}, map[string]string{"cloneable": "/nowhere/a"},
+		map[string]string{"cloneable": "/srv/git/a.git"})
+	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 140, 30)
+
+	m, _ = m.Cloned(projects[0], &checkout.CloneError{Project: "cloneable", URL: "/srv/git/a.git", Reason: "fatal: repository '/srv/git/a.git' does not exist"})
+	body := pane(m)
+	if !strings.Contains(body, "Clone failed: fatal: repository") || !strings.Contains(body, "Enter: clone again") {
+		t.Errorf("pane = %q, want git's reason and the retry", body)
+	}
+	if strings.Contains(body, "Enter: clone and open") || strings.Contains(body, "cannot clone") {
+		t.Errorf("pane = %q, want the reason alone, not the offer that failed or the whole error", body)
+	}
+
+	m, _ = m.Cloned(projects[0], nil)
+	if body := pane(m); strings.Contains(body, "Clone failed") {
+		t.Errorf("pane = %q after a clone that succeeded, want the failure gone", body)
 	}
 }
 

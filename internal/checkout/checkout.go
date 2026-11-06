@@ -31,6 +31,21 @@ import (
 // repository to clone it from. Only the user can fix that, by adding git_url.
 var ErrNoGitURL = errors.New("the project file records no git_url to clone it from")
 
+// CloneError is a clone that git ran and that failed. Reason is why, in git's
+// words, with what to check when they say the repository cannot be had.
+type CloneError struct {
+	Project revier.ProjectName
+	URL     string
+	Reason  string
+	err     error
+}
+
+func (e *CloneError) Error() string {
+	return fmt.Sprintf("project %q: cannot clone %s: %s", e.Project, e.URL, e.Reason)
+}
+
+func (e *CloneError) Unwrap() error { return e.err }
+
 // Origin is the URL of dir's origin remote, or "" when dir has none. A URL
 // config.ValidateGitURL refuses is dropped too: a remote with a token in it
 // must not be copied into a file that is shared between machines.
@@ -62,8 +77,9 @@ func Origin(dir string) string {
 // No deadline: the clone of a large repository outlasts any timeout a keypress
 // command sets for its host calls.
 //
-// Every failure is a clone line of the log, one refused before git ran too:
-// the TUI names a failed clone alone and leaves why to the log.
+// Every failure is a clone line of the log, one refused before git ran too.
+// The TUI's footer names a failed clone alone and leaves why to the log
+// (decisions.md D157); its detail pane says why.
 func Ensure(p revier.Project, out io.Writer) (bool, error) {
 	start := time.Now()
 	cloned, err := ensure(p, out)
@@ -95,6 +111,10 @@ func ensure(p revier.Project, out io.Writer) (bool, error) {
 	case p.GitURL == "":
 		return false, fmt.Errorf("project %q: %s does not exist, and %w", p.Name, p.Path, ErrNoGitURL)
 	}
+	// A file written by hand is not checked as one the surface writes is.
+	if err := config.ValidateCloneURL(p.GitURL); err != nil {
+		return false, fmt.Errorf("project %q: git_url: %w", p.Name, err)
+	}
 	if err := os.MkdirAll(filepath.Dir(p.Path), 0o755); err != nil {
 		return false, err
 	}
@@ -114,18 +134,34 @@ func ensure(p revier.Project, out io.Writer) (bool, error) {
 	both := io.MultiWriter(out, &said)
 	c.Stdout, c.Stderr = both, both
 	if err = c.Run(); err != nil {
-		err = fmt.Errorf("project %q: git clone %s: %w", p.Name, p.GitURL, err)
-		if cause := gitCause(said.String()); cause != "" {
-			err = fmt.Errorf("%w: %s", err, cause)
+		reason := gitCause(said.String())
+		switch {
+		case reason == "":
+			reason = err.Error()
+		case unreachable(said.String()):
+			reason += "; correct git_url in its project file, or check your access to that repository"
 		}
-		return false, err
+		return false, &CloneError{Project: p.Name, URL: p.GitURL, Reason: reason, err: err}
 	}
 	return true, nil
 }
 
-// gitCause is why git says a clone failed: its first "fatal:" line, after the
-// line before it, which is where ssh says what went wrong. git ends with a
-// hint about access rights, so its last line names no cause, and its
+// unreachable reports git saying that the repository is not there or would
+// not let it in, which git_url or the access to it is the cause of. A network
+// or disk failure is not, and gets no hint to change the URL.
+func unreachable(said string) bool {
+	for _, s := range []string{"not found", "does not exist", "Could not read from remote repository", "Authentication failed"} {
+		if strings.Contains(said, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// gitCause is why git says a clone failed: its first "fatal:" line. When that
+// is git's own "Could not read from remote repository.", which names no cause,
+// it is the line before, where ssh or the forge says what went wrong. git ends
+// with a hint about access rights, so its last line names no cause, and its
 // "Cloning into" line names none either. Output with no "fatal:" line gives
 // its last line.
 func gitCause(said string) string {
@@ -139,8 +175,8 @@ func gitCause(said string) string {
 		if !strings.HasPrefix(l, "fatal:") {
 			continue
 		}
-		if i > 0 {
-			return lines[i-1] + "; " + l
+		if i > 0 && l == "fatal: Could not read from remote repository." {
+			return lines[i-1]
 		}
 		return l
 	}

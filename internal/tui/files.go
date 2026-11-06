@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"slices"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/hk9890/revier/internal/app"
+	"github.com/hk9890/revier/internal/checkout"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/pkg/revier"
@@ -435,9 +437,46 @@ func (m Model) clone(p core.Project, home revier.TargetName) tea.Cmd {
 	})
 }
 
+// cloneFail is a clone that failed: the URL and the path it was for, and why.
+type cloneFail struct {
+	url, path string
+	err       error
+}
+
+// cloned is the end of a clone. A failure is named in the footer
+// (decisions.md D157). Its reason is kept for the detail pane, which
+// otherwise keeps offering the same Enter.
+func (m Model) cloned(msg clonedMsg) (tea.Model, tea.Cmd) {
+	m.cloneFailed = maps.Clone(m.cloneFailed)
+	if msg.err != nil {
+		if m.cloneFailed == nil {
+			m.cloneFailed = map[revier.ProjectName]cloneFail{}
+		}
+		m.cloneFailed[msg.project.Name] = cloneFail{url: msg.project.GitURL, path: msg.project.Path, err: msg.err}
+		m.err = fail("clone", msg.project.Name, msg.err)
+		return m, nil
+	}
+	delete(m.cloneFailed, msg.project.Name)
+	return m, m.goTarget(msg.project, msg.home)
+}
+
+// lastClone is why the last clone of p failed, when it was for the git_url
+// and the path p has now: a corrected file is cloned afresh.
+func (m Model) lastClone(p revier.Project) (string, bool) {
+	f, ok := m.cloneFailed[p.Name]
+	if !ok || f.url != p.GitURL || f.path != p.Path {
+		return "", false
+	}
+	var ce *checkout.CloneError
+	if errors.As(f.err, &ce) {
+		return ce.Reason, true
+	}
+	return f.err.Error(), true
+}
+
 // cloneCmd is app.Clone as something bubbletea can hand the terminal to. The
-// screen returns to the list the moment git exits; the footer shows the
-// reason the error of a failed clone carries.
+// screen returns to the list the moment git exits; the footer names the
+// failed clone, and the detail pane says why.
 type cloneCmd struct {
 	ledger  core.Ledger
 	project revier.Project

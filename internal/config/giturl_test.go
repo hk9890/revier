@@ -55,6 +55,68 @@ func TestUnsafeGitURLIsRejectedAtLoad(t *testing.T) {
 	}
 }
 
+// A browser's link to a page of a repository is not a clone URL. It is
+// refused where a git_url is recorded, naming the repository it is of; a
+// repository URL, a GitLab subgroup and a host that is not a forge pass.
+func TestACloneURLIsNotAPageLink(t *testing.T) {
+	for page, repo := range map[string]string{
+		"https://github.com/o/r/tree/main/sub":             "https://github.com/o/r",
+		"https://github.com/o/r/blob/main/README.md":       "https://github.com/o/r",
+		"https://codeberg.org/o/r/src/branch/main":         "https://codeberg.org/o/r",
+		"https://gitlab.com/group/sub/r/-/tree/main":       "https://gitlab.com/group/sub/r",
+		"http://GitHub.com/o/r/pull/1":                     "http://GitHub.com/o/r",
+		"https://bitbucket.org/team/r/src/main/README.md/": "https://bitbucket.org/team/r",
+	} {
+		err := config.ValidateCloneURL(page)
+		if err == nil || !strings.Contains(err.Error(), "its repository is "+repo) {
+			t.Errorf("%s: err = %v, want a refusal naming %s", page, err, repo)
+		}
+	}
+	for _, u := range []string{
+		"https://github.com/o/r",
+		"https://github.com/o/r.git",
+		"https://github.com/o/r/",
+		"https://gitlab.com/group/sub/r.git",
+		"https://git.example.com/a/b/c/d.git",
+		"git@github.com:o/r.git",
+	} {
+		if err := config.ValidateCloneURL(u); err != nil {
+			t.Errorf("%s: err = %v, want it accepted", u, err)
+		}
+	}
+}
+
+// A project whose git_url is a page link still loads: the URL is read only to
+// clone, and a checkout that is there works whatever it says.
+func TestAPageLinkLoads(t *testing.T) {
+	u := "https://github.com/o/r/tree/main/sub"
+	body := strings.Replace(valid, "[vars]", "git_url = \""+u+"\"\n\n[vars]", 1)
+	p := config.LoadProject(write(t, t.TempDir(), "revier.toml", body), config.Inherited{})
+	if p.GitURL != u || p.Invalid != nil {
+		t.Errorf("project = %q, invalid %v; want it loaded as written", p.GitURL, p.Invalid)
+	}
+}
+
+// Every place a git_url is recorded refuses a page link: a new project and
+// an edit of the value.
+func TestAPageLinkIsNotRecorded(t *testing.T) {
+	u := "https://github.com/o/r/tree/main/demo"
+	root := t.TempDir()
+	if _, err := config.Create(root, "demo", t.TempDir(), u); err == nil || !strings.Contains(err.Error(), "git_url") {
+		t.Errorf("Create: err = %v, want the page refused", err)
+	}
+	p, err := config.Create(root, "demo", t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.SetProjectValue(p.File, "git_url", u, config.Inherited{}); err == nil || !strings.Contains(err.Error(), "not written") {
+		t.Errorf("SetProjectValue: err = %v, want the page refused", err)
+	}
+	if b, _ := os.ReadFile(p.File); strings.Contains(string(b), "tree/main") {
+		t.Errorf("file = %s, want the page link not written", b)
+	}
+}
+
 // The credentials rule exists to keep a token out of the file; printing it in
 // the refusal would put it on the terminal instead.
 func TestACredentialURLIsNotEchoed(t *testing.T) {
