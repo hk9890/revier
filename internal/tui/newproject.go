@@ -300,7 +300,7 @@ func (s *createScreen) submitField(sf surface) createResult {
 		}
 		return s.addOrAsk(sf, filepath.Clean(dir))
 	case isCloneURL(typed):
-		if err := config.ValidateGitURL(typed); err != nil {
+		if err := config.ValidateCloneURL(typed); err != nil {
 			return createResult{err: fmt.Errorf("clone URL: %w", err)}
 		}
 	}

@@ -947,6 +947,53 @@ func ValidateGitURL(u string) error {
 	return nil
 }
 
+// ValidateCloneURL is ValidateGitURL for a URL that is about to be recorded
+// or cloned, and refuses a forge's link to a page of a repository too, which is what a
+// browser's address bar holds and git cannot clone. The refusal names the
+// repository the page is of, and not the page again: the footer it is shown
+// in clips a long line, and the user has the page in front of them.
+//
+// Load does not apply it: git_url is read only to clone, so a project whose
+// checkout is there works whatever the URL, and is not refused for it.
+func ValidateCloneURL(u string) error {
+	if err := ValidateGitURL(u); err != nil {
+		return err
+	}
+	if repo, ok := pageRepo(u); ok {
+		return fmt.Errorf("a link to a page of a repository, not a clone URL; its repository is %s", repo)
+	}
+	return nil
+}
+
+// pageRepo is the repository a forge page URL is of. GitLab nests groups, so
+// there only its /-/ marks a page, on any host it runs on. On github.com,
+// codeberg.org and bitbucket.org a repository is owner/name, so a longer path
+// is a page in it: /tree/main/dir, /blob/..., /pull/1. So is the repository's
+// own page with the query or fragment the address bar keeps, as
+// ?tab=readme-ov-file.
+func pageRepo(u string) (string, bool) {
+	scheme, rest, ok := strings.Cut(u, "://")
+	if !ok || (scheme != "https" && scheme != "http") {
+		return "", false
+	}
+	host, path, _ := strings.Cut(rest, "/")
+	if repo, _, page := strings.Cut(path, "/-/"); page {
+		return scheme + "://" + host + "/" + repo, true
+	}
+	query := strings.IndexAny(path, "?#")
+	if query >= 0 {
+		path = path[:query]
+	}
+	switch strings.ToLower(host) {
+	case "github.com", "codeberg.org", "bitbucket.org":
+		parts := strings.Split(strings.Trim(path, "/"), "/")
+		if len(parts) > 2 || (len(parts) == 2 && query >= 0) {
+			return scheme + "://" + host + "/" + parts[0] + "/" + parts[1], true
+		}
+	}
+	return "", false
+}
+
 // validateHost refuses a host ssh would read as something other than a
 // destination. The name is handed to ssh as one argument after "--", so a
 // shell character is harmless; a space or a control character is a name no
