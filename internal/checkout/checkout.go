@@ -32,9 +32,8 @@ import (
 var ErrNoGitURL = errors.New("the project file records no git_url to clone it from")
 
 // CloneError is a clone that was handed to git and failed. Reason is why: in
-// git's words, with what to check when they say the repository cannot be had,
-// or the run's own error first when git said nothing fatal, as when it did not
-// start or was interrupted.
+// git's words with what to check, or the run's own error first when git said
+// nothing fatal, as when it did not start or was interrupted.
 type CloneError struct {
 	Project revier.ProjectName
 	URL     string
@@ -147,33 +146,22 @@ func ensure(p revier.Project, out io.Writer) (bool, error) {
 			reason = err.Error()
 		case !fatal:
 			reason = err.Error() + ": " + cause
-		case unreachable(cause):
-			reason += "; correct git_url in its project file, or check your access to that repository"
+		// What git's words mean is not read: they change with its version and
+		// its language. So the hint is the same for every refusal, and is true
+		// of each.
+		default:
+			reason += "; check git_url in its project file and your access to that repository"
 		}
 		return false, &CloneError{Project: p.Name, URL: p.GitURL, Reason: reason, err: err}
 	}
 	return true, nil
 }
 
-// unreachable reports a cause that says the repository is not there or would
-// not let git in, which git_url or the access to it is the cause of. A network
-// or disk failure is not, and gets no hint to change the URL.
-func unreachable(cause string) bool {
-	for _, s := range []string{"not found", "does not exist", "Authentication failed", "Permission denied"} {
-		if strings.Contains(cause, s) {
-			return true
-		}
-	}
-	return false
-}
-
 // gitCause is why git says a clone failed, and whether git said it in a
 // "fatal:" line. It is the first fatal line, after the line before it, where
-// ssh, the forge or curl says what went wrong; when the fatal line is git's
-// own "Could not read from remote repository.", which names no cause, that
-// line before alone. git ends with a hint about access rights, so its last
-// line names no cause, and its "Cloning into" line names none either. Output
-// with no fatal line gives its last line.
+// ssh, the forge or curl says what went wrong. git ends with a hint about
+// access rights, so its last line names no cause, and its "Cloning into" line
+// names none either. Output with no fatal line gives its last line.
 func gitCause(said string) (string, bool) {
 	var lines []string
 	for _, l := range strings.FieldsFunc(said, func(r rune) bool { return r == '\n' || r == '\r' }) {
@@ -185,8 +173,6 @@ func gitCause(said string) (string, bool) {
 		switch {
 		case !strings.HasPrefix(l, "fatal:"):
 			continue
-		case i > 0 && l == "fatal: Could not read from remote repository.":
-			return lines[i-1], true
 		case i > 0:
 			return lines[i-1] + "; " + l, true
 		}

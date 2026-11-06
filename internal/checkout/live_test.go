@@ -95,7 +95,7 @@ func TestEnsureReportsAFailedClone(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "demo")
 	_, err := checkout.Ensure(revier.Project{Name: "demo", Path: path, GitURL: filepath.Join(t.TempDir(), "absent.git")}, &bytes.Buffer{})
 	var ce *checkout.CloneError
-	if !errors.As(err, &ce) || !strings.Contains(ce.Reason, "fatal:") || !strings.Contains(ce.Reason, "correct git_url") {
+	if !errors.As(err, &ce) || !strings.Contains(ce.Reason, "fatal:") || !strings.Contains(ce.Reason, "check git_url") {
 		t.Fatalf("err = %v, want the clone failure with git's reason and the field to correct", err)
 	}
 	if strings.Contains(err.Error(), "exit status") {

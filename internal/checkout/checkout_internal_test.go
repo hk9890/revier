@@ -3,8 +3,8 @@ package checkout
 import "testing"
 
 // git ends a failed clone with a hint about access rights, so the cause is
-// the "fatal:" line after the line before it, or that line before alone when
-// git's own names no cause.
+// the "fatal:" line, after the line before it, where ssh, the forge or curl
+// says what went wrong.
 func TestGitCauseNamesWhatFailed(t *testing.T) {
 	for _, c := range []struct {
 		name, stderr, want string
@@ -13,12 +13,7 @@ func TestGitCauseNamesWhatFailed(t *testing.T) {
 		{
 			"ssh",
 			"Cloning into '/p'...\nssh: Could not resolve hostname h: Name or service not known\r\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.\n",
-			"ssh: Could not resolve hostname h: Name or service not known", true,
-		},
-		{
-			"forge over ssh",
-			"Cloning into '/p'...\nERROR: Repository not found.\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.\n",
-			"ERROR: Repository not found.", true,
+			"ssh: Could not resolve hostname h: Name or service not known; fatal: Could not read from remote repository.", true,
 		},
 		{
 			"https",
@@ -36,23 +31,6 @@ func TestGitCauseNamesWhatFailed(t *testing.T) {
 	} {
 		if got, fatal := gitCause(c.stderr); got != c.want || fatal != c.fatal {
 			t.Errorf("%s: gitCause = %q, %v; want %q, %v", c.name, got, fatal, c.want, c.fatal)
-		}
-	}
-}
-
-// The hint to correct git_url follows a cause that says the repository is
-// missing or shut, and no other: a network that is down is not the URL's.
-func TestUnreachableIsTheRepositoryNotTheNetwork(t *testing.T) {
-	for cause, want := range map[string]bool{
-		"ERROR: Repository not found.":                                        true,
-		"fatal: repository '/absent.git' does not exist":                      true,
-		"git@github.com: Permission denied (publickey).":                      true,
-		"fatal: Authentication failed for 'https://h/o/r/'":                   true,
-		"ssh: connect to host h port 22: Network is unreachable":              false,
-		"fatal: unable to access 'https://h/o/r/': Could not resolve host: h": false,
-	} {
-		if got := unreachable(cause); got != want {
-			t.Errorf("unreachable(%q) = %v, want %v", cause, got, want)
 		}
 	}
 }
