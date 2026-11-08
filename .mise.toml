@@ -15,6 +15,7 @@ CGO_ENABLED = "0"
 
 # ---- build & run -----------------------------------------------------------
 
+# makefile's build makes the same stamp; change both together.
 [tasks.build]
 description = "Build the revier binary into ./bin"
 run = """
