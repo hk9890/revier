@@ -121,14 +121,10 @@ func TestAChildHoldingStderrDoesNotHoldTheRun(t *testing.T) {
 	if took >= time.Second {
 		t.Errorf("run took %s, want it to end with the command", took)
 	}
-	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(20 * time.Millisecond) {
-		if _, err := os.Stat(wrote); err == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("the child wrote nothing after the run")
-		}
-	}
+	eventually(t, "the child's write after the run", func() bool {
+		_, err := os.Stat(wrote)
+		return err == nil
+	})
 	if err := syscall.Kill(pid, 0); err != nil {
 		t.Errorf("child: %v, want it alive after its write", err)
 	}

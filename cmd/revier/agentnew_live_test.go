@@ -32,16 +32,10 @@ func TestAgentNewOpensATabInTheWorkspace(t *testing.T) {
 	// The declared agent writes its own line whenever it gets to run, before
 	// or after this one, so the new agent is its line among the lines.
 	want := dir + " --resume abc-123"
-	deadline := time.Now().Add(5 * time.Second)
-	var started []string
-	for !slices.Contains(started, want) && time.Now().Before(deadline) {
-		time.Sleep(20 * time.Millisecond)
+	eventually(t, "an agent started as "+want, func() bool {
 		read, _ := os.ReadFile(agent + ".started")
-		started = strings.Split(strings.TrimSpace(string(read)), "\n")
-	}
-	if !slices.Contains(started, want) {
-		t.Errorf("agents started as %q, want one started as %q", started, want)
-	}
+		return slices.Contains(strings.Split(strings.TrimSpace(string(read)), "\n"), want)
+	})
 	windows := strings.Split(strings.TrimSpace(tmuxRun(t, "list-windows", "-t", "work", "-F", "#{window_panes} #{window_active}")), "\n")
 	if len(windows) != 2 || windows[1] != "2 1" {
 		t.Errorf("windows (panes, active) = %q, want the layout and a current second window of agent and shell", windows)
@@ -141,11 +135,10 @@ func TestAgentNewOutsideAWorkspaceRunsTheConfiguredAgent(t *testing.T) {
 	}
 	for _, name := range []string{"first", "second"} {
 		var got []byte
-		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
-			if got, _ = os.ReadFile(filepath.Join(marks, name)); len(got) > 0 {
-				break
-			}
-		}
+		eventually(t, "agent "+name+"'s mark", func() bool {
+			got, _ = os.ReadFile(filepath.Join(marks, name))
+			return len(got) > 0
+		})
 		if dir := strings.TrimSpace(string(got)); dir != loose {
 			t.Errorf("agent %s started in %q, want %q", name, dir, loose)
 		}

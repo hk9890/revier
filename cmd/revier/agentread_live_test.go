@@ -11,21 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 )
-
-// eventually polls until what holds, for what a pane does a moment after a
-// key reached it.
-func eventually(t *testing.T, what string, holds func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for !holds() {
-		if time.Now().After(deadline) {
-			t.Fatalf("%s: not within 5s", what)
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-}
 
 // Keys reach the agent's pane one at a time, the screen read back shows what
 // they typed, and Enter submits the line they made.
