@@ -254,7 +254,7 @@ func outcome(err error) (status int, say bool) {
 	// A window or, for a tab, a directory that belongs to no project is a
 	// normal outcome with its own status, so a script can tell it from a
 	// failure.
-	case errors.Is(err, errNoProject):
+	case errors.Is(err, core.ErrNoProject):
 		return exitNoProject, true
 	// The keys command has already said, key by key, what did not happen. A
 	// line here would repeat the summary it just printed.

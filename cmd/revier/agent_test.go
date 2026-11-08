@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -224,7 +223,7 @@ func focusedOther(t *testing.T) (*app, *hosttest.FakeRuntime, core.Project, revi
 }
 
 // Without -p, an agent or a shell asked for from a directory in no project,
-// by --dir or as the working directory, fails with errNoProject and opens no
+// by --dir or as the working directory, fails with core.ErrNoProject and opens no
 // tab: neither the focused window nor the last project stands in for it. A
 // --dir in no project fails even where the working directory is in one.
 func TestATabFromADirectoryInNoProjectFails(t *testing.T) {
@@ -244,8 +243,8 @@ func TestATabFromADirectoryInNoProjectFails(t *testing.T) {
 		t.Chdir(c.cwd)
 		for what, open := range opens {
 			err := open(c.dir)
-			if !errors.Is(err, errNoProject) {
-				t.Errorf("%s --dir %q in %s: err = %v, want errNoProject", what, c.dir, c.cwd, err)
+			if !errors.Is(err, core.ErrNoProject) {
+				t.Errorf("%s --dir %q in %s: err = %v, want core.ErrNoProject", what, c.dir, c.cwd, err)
 				continue
 			}
 			if msg := err.Error(); !strings.Contains(msg, c.named) || !strings.Contains(msg, "-p <project>") {
@@ -279,52 +278,5 @@ func TestATabOpensInTheProjectOfItsDirectory(t *testing.T) {
 	}
 	if want := []revier.TargetRef{home, home}; !slices.Equal(refs, want) {
 		t.Errorf("tabs in %v, want %v", refs, want)
-	}
-}
-
-// A directory is in the project whose path differs from it only by a
-// symlink, on either side: a shell keeps the path through the link, a tmux
-// window starts in the directory behind it.
-func TestADirectoryIsInAProjectThroughASymlink(t *testing.T) {
-	behind := t.TempDir()
-	sub := filepath.Join(behind, "sub")
-	if err := os.Mkdir(sub, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	link := filepath.Join(t.TempDir(), "link")
-	if err := os.Symlink(behind, link); err != nil {
-		t.Fatal(err)
-	}
-	for _, c := range []struct{ path, dir string }{
-		{path: link, dir: behind},
-		{path: link, dir: sub},
-		{path: behind, dir: link},
-		{path: behind, dir: filepath.Join(link, "sub")},
-	} {
-		a := &app{projects: []core.Project{core.PrepareProject(revier.Project{Name: "demo", Path: c.path})}}
-		if p, ok := a.projectForPath(c.dir); !ok || p.Name != "demo" {
-			t.Errorf("project of %s with path %s = %q, %v, want demo", c.dir, c.path, p.Name, ok)
-		}
-	}
-}
-
-// A project nested in another through a symlink still wins over the outer
-// project that holds the directory as text: the longest match wins.
-func TestANestedProjectReachedThroughASymlinkWins(t *testing.T) {
-	mono := t.TempDir()
-	nested := filepath.Join(mono, "nested")
-	if err := os.Mkdir(nested, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	link := filepath.Join(t.TempDir(), "link")
-	if err := os.Symlink(nested, link); err != nil {
-		t.Fatal(err)
-	}
-	a := &app{projects: []core.Project{
-		core.PrepareProject(revier.Project{Name: "mono", Path: mono}),
-		core.PrepareProject(revier.Project{Name: "nested", Path: link}),
-	}}
-	if p, ok := a.projectForPath(nested); !ok || p.Name != "nested" {
-		t.Errorf("project of %s = %q, %v, want nested", nested, p.Name, ok)
 	}
 }

@@ -302,3 +302,12 @@ type problemsFound struct{ files int }
 func (e problemsFound) Error() string {
 	return core.Count(e.files, "file") + " with problems"
 }
+
+// resolveLinks is path with every symlink resolved, or path cleaned when it
+// cannot be resolved.
+func resolveLinks(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	return filepath.Clean(path)
+}

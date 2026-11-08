@@ -549,14 +549,14 @@ func (a *app) agentTab(ctx context.Context, project, panel, dir string, r core.R
 func (a *app) newTab(ctx context.Context, what string, kind revier.PanelKind, agent, project, panel, dir string, pick func(core.Project) (revier.TargetName, error), here func(core.Workspace, string) error) error {
 	if panel != "" {
 		return a.core.TabAtPanel(ctx, a.projects, revier.PanelID(panel), kind, dir, a.cfg.OutsideKey(agent), func(w core.Workspace, dir string) error {
-			return a.tabHere(what, w, panel, dir, here)
+			return a.tabHere(ctx, what, w, panel, dir, here)
 		})
 	}
 	place, err := a.tabPlace(ctx, project, dir, pick)
 	if err != nil {
 		return err
 	}
-	return a.tabHere(what, place, panel, dir, here)
+	return a.tabHere(ctx, what, place, panel, dir, here)
 }
 
 // tabHere opens the tab through here in the workspace w. --dir is a path on
@@ -564,12 +564,12 @@ func (a *app) newTab(ctx context.Context, what string, kind revier.PanelKind, ag
 //
 // A directory outside the project that holds --panel is dropped, and the tab
 // opens where the project's own tab would: a panel's shell can sit anywhere.
-func (a *app) tabHere(what string, w core.Workspace, panel, dir string, here func(core.Workspace, string) error) error {
+func (a *app) tabHere(ctx context.Context, what string, w core.Workspace, panel, dir string, here func(core.Workspace, string) error) error {
 	if w.Project.Remote != nil {
 		dir = ""
 	}
 	if panel != "" && dir != "" {
-		if p, ok := a.projectForPath(dir); !ok || p.Name != w.Project.Name {
+		if p, err := a.core.ProjectFor(ctx, a.projects, core.Ask{Dir: dir}); err != nil || p.Name != w.Project.Name {
 			slog.Warn(what, "err", "the directory is outside the project of --panel; the tab opens in the project", "project", w.Project.Name, "dir", dir)
 			dir = ""
 		}
@@ -589,7 +589,7 @@ func (a *app) tabPlace(ctx context.Context, project, dir string, pick func(core.
 	if name != "" {
 		p, err = a.resolveProject(ctx, name)
 	} else {
-		p, err = a.dirProject(dir)
+		p, err = a.dirProject(ctx, dir)
 	}
 	if err != nil {
 		return core.Workspace{}, err
@@ -598,10 +598,9 @@ func (a *app) tabPlace(ctx context.Context, project, dir string, pick func(core.
 }
 
 // dirProject is the project --dir is in, or without --dir the one the working
-// directory is in. A tab is opened from a terminal or a script, which has a
-// directory: one in no project fails, and never opens the tab in the project
-// of the focused window or the last one (decisions.md D160).
-func (a *app) dirProject(dir string) (core.Project, error) {
+// directory is in, and never the focused window's or the last one: a tab is
+// opened from a terminal or a script, which has a directory.
+func (a *app) dirProject(ctx context.Context, dir string) (core.Project, error) {
 	if dir == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
@@ -609,24 +608,8 @@ func (a *app) dirProject(dir string) (core.Project, error) {
 		}
 		dir = cwd
 	}
-	p, ok := a.projectForPath(dir)
-	if !ok {
-		return core.Project{}, dirInNoProject(dir)
-	}
-	slog.Info("resolve", "project", p.Name, "by", "directory", "dir", dir)
-	return p, nil
+	return a.core.ProjectFor(ctx, a.projects, core.Ask{Dir: dir})
 }
-
-// dirInNoProject is a directory a tab was asked for that no project holds. It
-// is errNoProject, so it exits with that status, but says which directory
-// and what to give instead.
-type dirInNoProject string
-
-func (d dirInNoProject) Error() string {
-	return string(d) + " is in no project; name one with -p <project>"
-}
-
-func (d dirInNoProject) Unwrap() error { return errNoProject }
 
 // agent finds the agent an address names: <project>, <project>:<target> or
 // <project>:<target>:<panel>.
