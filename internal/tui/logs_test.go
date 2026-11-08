@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -32,12 +31,10 @@ func logLine(t *testing.T, at time.Time, level, msg string, pid int, attrs map[s
 // writeLog writes the day file of the log that holds day.
 func writeLog(t *testing.T, root string, day time.Time, lines ...string) {
 	t.Helper()
-	dir := logging.Dir(root)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(logging.Dir(root), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(dir, "revier-"+day.Format("2006-01-02")+".log")
-	if err := os.WriteFile(path, []byte(strings.Join(lines, "")), 0o644); err != nil {
+	if err := os.WriteFile(logging.File(root, day), []byte(strings.Join(lines, "")), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

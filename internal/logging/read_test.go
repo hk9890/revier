@@ -10,14 +10,13 @@ import (
 	"github.com/hk9890/revier/internal/logging"
 )
 
-// writeLog writes one day file of the log under root.
-func writeLog(t *testing.T, root, day, text string) {
+// writeLog writes the day file of the log that holds day under root.
+func writeLog(t *testing.T, root string, day time.Time, text string) {
 	t.Helper()
-	dir := logging.Dir(root)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(logging.Dir(root), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "revier-"+day+".log"), []byte(text), 0o644); err != nil {
+	if err := os.WriteFile(logging.File(root, day), []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -36,10 +35,10 @@ var readNow = time.Date(2026, 10, 30, 12, 0, 0, 0, time.Local)
 // INFO lines of every operation that went right are not on it.
 func TestReadIsTheWarningsAndErrorsNewestFirst(t *testing.T) {
 	root := t.TempDir()
-	writeLog(t, root, "2026-10-29",
+	writeLog(t, root, readNow.AddDate(0, 0, -1),
 		`{"time":"2026-10-29T09:00:00+01:00","level":"ERROR","msg":"first","pid":7,"cmd":"tui","err":"boom"}`+"\n"+
 			`{"time":"2026-10-29T10:00:00+01:00","level":"WARN","msg":"second","pid":7,"cmd":"tui","project":"alpha"}`+"\n")
-	writeLog(t, root, "2026-10-30",
+	writeLog(t, root, readNow,
 		`{"time":"2026-10-30T09:00:00+01:00","level":"INFO","msg":"went fine","pid":8,"cmd":"go"}`+"\n"+
 			`{"time":"2026-10-30T10:00:00+01:00","level":"ERROR","msg":"third","pid":8,"cmd":"go","err":"no window"}`+"\n")
 	lines, skipped, err := logging.Read(root, readNow)
@@ -62,7 +61,7 @@ func TestReadIsTheWarningsAndErrorsNewestFirst(t *testing.T) {
 // process is still appending - is counted, and the rest are read.
 func TestReadCountsTheLinesItCannotDecode(t *testing.T) {
 	root := t.TempDir()
-	writeLog(t, root, "2026-10-30",
+	writeLog(t, root, readNow,
 		`{"time":"2026-10-30T09:00:00Z","level":"ERROR","msg":"kept","pid":1}`+"\n"+
 			"not json\n"+
 			`{"time":"2026-10-30T10:00:00Z","level":"ERR`)
@@ -82,8 +81,8 @@ func TestReadKeepsToTheDayFiles(t *testing.T) {
 	line := func(msg string) string {
 		return `{"time":"2026-10-01T09:00:00Z","level":"ERROR","msg":"` + msg + `"}` + "\n"
 	}
-	writeLog(t, root, "2026-10-17", line("kept"))
-	writeLog(t, root, "2026-10-16", line("too old"))
+	writeLog(t, root, readNow.AddDate(0, 0, -13), line("kept"))
+	writeLog(t, root, readNow.AddDate(0, 0, -14), line("too old"))
 	if err := os.WriteFile(filepath.Join(logging.Dir(root), "notes.log"), []byte(line("not ours")), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +105,7 @@ func TestReadWithNoLogIsNothing(t *testing.T) {
 // Every field comes back in the order it was written, an object as its JSON.
 func TestFieldsKeepTheFileOrder(t *testing.T) {
 	root := t.TempDir()
-	writeLog(t, root, "2026-10-30",
+	writeLog(t, root, readNow,
 		`{"time":"2026-10-30T09:00:00Z","level":"ERROR","msg":"bind","pid":3,"ref":{"host":"tmux","id":"%1"},"duration_ms":12,"err":"a\nb"}`+"\n")
 	lines, _, err := logging.Read(root, readNow)
 	if err != nil || len(lines) != 1 {

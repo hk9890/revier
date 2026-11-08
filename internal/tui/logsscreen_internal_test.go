@@ -2,7 +2,6 @@ package tui
 
 import (
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -24,13 +23,12 @@ func TestTheLogsScreenReadsALineWithNoRootModel(t *testing.T) {
 	line := func(at time.Time, msg, pid, extra string) string {
 		return `{"time":"` + at.Format(time.RFC3339Nano) + `","level":"ERROR","msg":"` + msg + `","pid":` + pid + extra + "}\n"
 	}
-	dir := logging.Dir(root)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(logging.Dir(root), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	text := line(now.Add(-time.Minute), "go", me, `,"err":"kitty said \u001b[31mred\u001b[0m"`) +
 		line(now.Add(time.Minute), "later", me, "")
-	if err := os.WriteFile(filepath.Join(dir, "revier-2026-10-30.log"), []byte(text), 0o644); err != nil {
+	if err := os.WriteFile(logging.File(root, now), []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
