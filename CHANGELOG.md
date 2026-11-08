@@ -13,8 +13,11 @@ Each section is also the text of its release on the
   `https://github.com/<owner>/<repo>/tree/main/<dir>`, or a repository page
   with `?tab=...`, was accepted. The clone then failed with git's
   `repository not found`, which did not say that the URL was the problem,
-  and the footer said only `clone failed`. Set `git_url` to the repository
-  itself, such as `https://github.com/<owner>/<repo>`.
+  and the pane kept offering the same clone. revier now refuses such a link
+  when you set `git_url` in the TUI or for a new project, and before it
+  clones a project file that holds one; a GitLab link with `/-/` is refused
+  on any host. A project file that holds one still loads. Set `git_url` to
+  the repository itself, such as `https://github.com/<owner>/<repo>`.
 - **A failed clone says why in the detail pane.** The pane shows git's
   reason until a clone succeeds or you change `git_url` or `path`, and it
   offers Enter to clone again only when git ran.
@@ -23,12 +26,13 @@ Each section is also the text of its release on the
   popup dialog with ctrl+v. ctrl+c copies a shift+drag selection and then
   clears it; with no selection, it quits or cancels as before.
 - **A tab whose command ends just as you press its key opens again.**
-  Before, the press failed with `can't find pane`.
+  Before, the press failed, in tmux with `can't find pane`. When the command
+  ends at once again, revier says that it exited.
 - **The agent list, the logs screen and the status bar show no escape
   sequences.** An agent's or a status command's output could show the text
   of terminal graphics and other control sequences in the row.
-- **A rename that revier refuses is listed in `revier state`.** In the TUI,
-  a rename is also refused before the first survey, as `revier rename` is.
+- **`revier state` lists a rename that revier refused** among what was done
+  since the last survey.
 - **del on a row with nothing open, or whose open panels another project
   holds, is no longer logged as an error.** The logs screen showed an ERROR
   line for it.
