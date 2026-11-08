@@ -1,5 +1,5 @@
 // Package fsutil holds the file-system idioms the stores share: the atomic
-// write, and the write through a link.
+// write, the write through a link, and the path behind every link.
 package fsutil
 
 import (
@@ -114,4 +114,13 @@ func DanglingLink(path string) (string, error) {
 		}
 		return "", nil
 	}
+}
+
+// RealPath is path with every symlink resolved, or path cleaned when it
+// cannot be resolved.
+func RealPath(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	return filepath.Clean(path)
 }

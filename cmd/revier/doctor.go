@@ -11,6 +11,7 @@ import (
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/fsutil"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -153,7 +154,7 @@ func duplicates(projects []core.Project) []duplicate {
 		case p.Remote != nil:
 			add(key{link: *p.Remote}, fmt.Sprintf("one project, %s on %s", p.Remote.Project, p.Remote.Host), p.File)
 		case filepath.IsAbs(p.Path):
-			dir := resolveLinks(p.Path)
+			dir := fsutil.RealPath(p.Path)
 			add(key{dir: dir}, "one directory, "+dir, p.File)
 		}
 	}
@@ -301,13 +302,4 @@ type problemsFound struct{ files int }
 
 func (e problemsFound) Error() string {
 	return core.Count(e.files, "file") + " with problems"
-}
-
-// resolveLinks is path with every symlink resolved, or path cleaned when it
-// cannot be resolved.
-func resolveLinks(path string) string {
-	if resolved, err := filepath.EvalSymlinks(path); err == nil {
-		return resolved
-	}
-	return filepath.Clean(path)
 }

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/hk9890/revier/internal/fsutil"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -98,7 +99,7 @@ func (d noProjectAt) Unwrap() error { return ErrNoProject }
 // window starts in the one behind it. Where that finds none, it compares them
 // as text, which still places a directory that does not exist yet.
 func projectAt(projects []Project, dir string) (Project, bool) {
-	if p, ok := projectContaining(projects, realPath(dir), realPath); ok {
+	if p, ok := projectContaining(projects, fsutil.RealPath(dir), fsutil.RealPath); ok {
 		return p, true
 	}
 	return projectContaining(projects, filepath.Clean(dir), filepath.Clean)
@@ -121,13 +122,4 @@ func projectContaining(projects []Project, dir string, form func(string) string)
 		}
 	}
 	return best, bestLen >= 0
-}
-
-// realPath is path with every symlink resolved, or path cleaned when it
-// cannot be resolved.
-func realPath(path string) string {
-	if resolved, err := filepath.EvalSymlinks(path); err == nil {
-		return resolved
-	}
-	return filepath.Clean(path)
 }
