@@ -21,9 +21,7 @@ type surface struct {
 	core      *core.Core
 	stateRoot string
 	views     []revier.ProjectView // the last survey's
-	surveyed  bool                 // whether a survey has answered
-	attached  map[revier.ProjectName][]revier.TargetRef
-	settled   core.Settled // what runs here beside the views, as a project change reads it
+	settled   core.Settled         // whether a survey has answered, and what runs here beside the views
 	projects  []core.Project
 	actions   []config.Action
 	shared    []map[string]any                 // every [[target]] of config.toml, as the config screen edits them
@@ -40,7 +38,7 @@ type surface struct {
 func (m Model) surface() surface {
 	return surface{
 		theme: *m.theme, spun: m.spun(), keys: m.keys, core: m.core, stateRoot: m.stateRoot,
-		views: m.views, surveyed: m.surveyed, attached: m.attached, settled: m.settled(), projects: m.projects, targets: m.targets, usable: m.usable,
+		views: m.views, settled: m.settled(), projects: m.projects, targets: m.targets, usable: m.usable,
 		actions: m.actions, shared: m.shared, tkeys: m.tkeys, err: m.err, errands: m.errands,
 		list: m.listWidth(), pane: m.paneCols() - paneChrome, page: m.listPage(),
 	}

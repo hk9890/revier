@@ -525,7 +525,7 @@ func (sc *sessionsScreen) nameScreen(sf surface) string {
 	}
 	running := 0
 	for _, v := range sf.views {
-		if heldHere(sf.attached, v) {
+		if heldHere(sf.settled.Attached, v) {
 			running++
 		}
 	}
@@ -581,7 +581,7 @@ func (sc *sessionsScreen) detail(sf surface) string {
 		b.WriteString(heading(th, "Restoring", w))
 		restoreSteps(sf, &b, sc.walk.restored, w, false)
 		say(th.Meta, "\n"+sc.walk.line())
-	case !sf.surveyed:
+	case !sf.settled.Surveyed:
 		b.WriteString(heading(th, "Restore plan", w))
 		say(th.Meta, "surveying")
 	default:
