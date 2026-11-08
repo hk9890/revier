@@ -44,10 +44,10 @@ func linkFiled(t *testing.T, name string) {
 	t.Helper()
 	root := t.TempDir()
 	t.Setenv("REVIER_CONFIG_HOME", root)
-	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+	if err := os.MkdirAll(config.ProjectsDir(root), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "projects", name+".toml"), []byte(remoteFile), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(config.ProjectsDir(root), name+".toml"), []byte(remoteFile), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -104,7 +104,7 @@ func TestALinkSaysSurveyingUntilItsHostAnswers(t *testing.T) {
 // takes the change as the rows do.
 func TestAHostsAnswerKeepsAProjectAsItWasJustWritten(t *testing.T) {
 	root := configRoot(t, sharedTargets)
-	dir := filepath.Join(root, "projects")
+	dir := config.ProjectsDir(root)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +141,7 @@ func TestAHostsAnswerKeepsAProjectAsItWasJustWritten(t *testing.T) {
 // the pane does not go back to waiting for the host.
 func TestARenamedLinkKeepsWhatItsHostSaid(t *testing.T) {
 	root := configRoot(t, sharedTargets)
-	dir := filepath.Join(root, "projects")
+	dir := config.ProjectsDir(root)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}

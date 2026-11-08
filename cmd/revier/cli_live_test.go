@@ -18,6 +18,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 )
 
@@ -224,7 +225,7 @@ func TestPopupRefusesArguments(t *testing.T) {
 // at the end proves the stub would have seen a probe.
 func TestAHelpRequestProbesNoHost(t *testing.T) {
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte("[hosts]\nruntime = [\"tmux\"]\nwindow = [\"none\"]\n"), 0o644); err != nil {
+	if err := os.WriteFile(config.File(root), []byte("[hosts]\nruntime = [\"tmux\"]\nwindow = [\"none\"]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("REVIER_CONFIG_HOME", root)

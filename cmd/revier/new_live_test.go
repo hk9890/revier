@@ -124,7 +124,7 @@ func TestOpenClonesAMissingDirectory(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "checkouts", "gone")
 	body := strings.ReplaceAll(projectTOML, "%PATH%", path)
 	body = "git_url = \"" + bareRepo(t) + "\"\n" + body
-	if err := os.WriteFile(filepath.Join(root, "projects", "gone.toml"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(config.ProjectsDir(root), "gone.toml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	chdir(t, workdir)
@@ -143,7 +143,7 @@ func TestOpenClonesAMissingDirectory(t *testing.T) {
 func TestOpenAMissingDirectoryWithoutGitURLNamesTheField(t *testing.T) {
 	root, _ := fileScratch(t)
 	body := strings.ReplaceAll(projectTOML, "%PATH%", filepath.Join(t.TempDir(), "gone"))
-	if err := os.WriteFile(filepath.Join(root, "projects", "gone.toml"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(config.ProjectsDir(root), "gone.toml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	err := run(io.Discard, []string{"open", "gone"})

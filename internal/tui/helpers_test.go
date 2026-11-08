@@ -712,7 +712,7 @@ func projectSurface(t *testing.T, body string, rt *hosttest.FakeRuntime) (tui.Mo
 func projectSurfaceOver(t *testing.T, shared, body string, rt *hosttest.FakeRuntime) (tui.Model, string, string) {
 	t.Helper()
 	root := configRoot(t, shared)
-	dir := filepath.Join(root, "projects")
+	dir := config.ProjectsDir(root)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}

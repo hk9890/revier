@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -113,7 +114,7 @@ func TestAgentNewOutsideAWorkspaceRunsTheConfiguredAgent(t *testing.T) {
 	scratch(t)
 	root := os.Getenv("REVIER_CONFIG_HOME")
 	marks := t.TempDir()
-	cfg, err := os.OpenFile(filepath.Join(root, "config.toml"), os.O_APPEND|os.O_WRONLY, 0)
+	cfg, err := os.OpenFile(config.File(root), os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

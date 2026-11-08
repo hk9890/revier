@@ -92,7 +92,7 @@ func remoteProject(t *testing.T) core.Project {
 func configRoot(t *testing.T, cfg string, files map[string]string) string {
 	t.Helper()
 	root := t.TempDir()
-	dir := filepath.Join(root, "projects")
+	dir := config.ProjectsDir(root)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func configRoot(t *testing.T, cfg string, files map[string]string) string {
 		}
 	}
 	if cfg != "" {
-		write(filepath.Join(root, "config.toml"), cfg)
+		write(config.File(root), cfg)
 	}
 	for name, body := range files {
 		write(filepath.Join(dir, name), body)
@@ -286,7 +286,7 @@ func demoDesktop(t *testing.T, st *state.State, open ...string) (*app, *hosttest
 func termApp(t *testing.T, text, kittyConf string) (*app, string) {
 	t.Helper()
 	root := t.TempDir()
-	path := filepath.Join(root, "config.toml")
+	path := config.File(root)
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}

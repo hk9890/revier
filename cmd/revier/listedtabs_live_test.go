@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/hk9890/revier/internal/config"
 )
 
 const listedTabsTOML = `
@@ -50,7 +52,7 @@ func lead(t *testing.T) {
 	t.Helper()
 	workdir := scratch(t)
 	body := strings.ReplaceAll(listedTabsTOML, "%PATH%", workdir)
-	if err := os.WriteFile(filepath.Join(os.Getenv("REVIER_CONFIG_HOME"), "projects", "lead.toml"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(config.ProjectsDir(os.Getenv("REVIER_CONFIG_HOME")), "lead.toml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

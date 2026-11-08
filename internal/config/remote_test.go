@@ -3,7 +3,6 @@ package config_test
 import (
 	"errors"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -261,11 +260,11 @@ name = "tickets"
   inside = "home"
   launch = ["tickets"]
 `)
-	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+	if err := os.MkdirAll(config.ProjectsDir(root), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	write(t, filepath.Join(root, "projects"), "far.toml", "path = \"/srv/far\"\n"+link)
-	write(t, filepath.Join(root, "projects"), "near.toml", "path = \"/srv/near\"\n")
+	write(t, config.ProjectsDir(root), "far.toml", "path = \"/srv/far\"\n"+link)
+	write(t, config.ProjectsDir(root), "near.toml", "path = \"/srv/near\"\n")
 	_, loaded, err := config.Load(root)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -357,10 +356,10 @@ name = "shell"
   launch = ["ssh", "buildbox"]
   match = { title = "^far$" }
 `)
-	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+	if err := os.MkdirAll(config.ProjectsDir(root), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	write(t, filepath.Join(root, "projects"), "near.toml", `
+	write(t, config.ProjectsDir(root), "near.toml", `
 path = "/srv/near"
 [[target]]
 name = "home"

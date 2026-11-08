@@ -53,7 +53,7 @@ func CanAddress(name revier.ProjectName) error {
 
 // ProjectFile is where the project called name lives under a config root.
 func ProjectFile(root string, name revier.ProjectName) string {
-	return filepath.Join(root, "projects", string(name)+".toml")
+	return filepath.Join(ProjectsDir(root), string(name)+".toml")
 }
 
 // CanCreate is why a project named name cannot be made for dir, or nil. Two

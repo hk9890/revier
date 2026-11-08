@@ -4,7 +4,6 @@ import (
 	"errors"
 	"maps"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -148,10 +147,10 @@ func TestLoadRefusesABrokenSharedTarget(t *testing.T) {
 	} {
 		root := t.TempDir()
 		write(t, root, "config.toml", body+sharedConfig)
-		if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+		if err := os.MkdirAll(config.ProjectsDir(root), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		write(t, filepath.Join(root, "projects"), "app.toml", "path = \"/tmp/app\"\n")
+		write(t, config.ProjectsDir(root), "app.toml", "path = \"/tmp/app\"\n")
 		cfg, projects, err := config.Load(root)
 		if err != nil {
 			t.Errorf("Load(%q) = %v, want the target refused alone", body, err)
@@ -174,10 +173,10 @@ func TestLoadRefusesABrokenSharedTarget(t *testing.T) {
 func TestAProjectIncompleteAfterTheMergeIsRefused(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "config.toml", "[[target]]\nname = \"editor\"\n  [target.window]\n  launch = [\"idea\"]\n")
-	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+	if err := os.MkdirAll(config.ProjectsDir(root), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	file := write(t, filepath.Join(root, "projects"), "demo.toml", "path = \"/tmp/demo\"\n")
+	file := write(t, config.ProjectsDir(root), "demo.toml", "path = \"/tmp/demo\"\n")
 	_, projects, err := config.Load(root)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -196,10 +195,10 @@ func TestAProjectIncompleteAfterTheMergeIsRefused(t *testing.T) {
 func TestAWrongTypeInTheProjectFileIsReportedAtItsLine(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "config.toml", sharedConfig)
-	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+	if err := os.MkdirAll(config.ProjectsDir(root), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	write(t, filepath.Join(root, "projects"), "demo.toml", "path = \"/tmp/demo\"\n\n[[target]]\nname = \"home\"\nhome = \"yes\"\n")
+	write(t, config.ProjectsDir(root), "demo.toml", "path = \"/tmp/demo\"\n\n[[target]]\nname = \"home\"\nhome = \"yes\"\n")
 	_, projects, err := config.Load(root)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -278,10 +277,10 @@ name = "tickets"
   launch = ["taskmgr-ui"]
   match = { title = "^tickets:{{.Name}}$" }
 `)
-	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+	if err := os.MkdirAll(config.ProjectsDir(root), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	write(t, filepath.Join(root, "projects"), "revier.toml", `
+	write(t, config.ProjectsDir(root), "revier.toml", `
 path = "/p"
 [[target]]
 name = "tickets"

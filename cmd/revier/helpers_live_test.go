@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/hk9890/revier/internal/config"
 )
 
 // onPath puts an executable named name first on PATH that runs body.
@@ -75,7 +77,7 @@ func scratch(t *testing.T) string {
 		_ = os.RemoveAll(sockets)
 	})
 	root := t.TempDir()
-	projects := filepath.Join(root, "projects")
+	projects := config.ProjectsDir(root)
 	if err := os.MkdirAll(projects, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +93,7 @@ func scratch(t *testing.T) string {
 	cfg := "[hosts]\nruntime = [\"tmux\"]\nwindow = [\"none\"]\n" +
 		"[[action]]\nkey = \"ctrl-y\"\nname = \"say\"\nrun = [\"sh\", \"-c\", \"echo action:$0:$1\", \"{{.Name}}\", \"{{.Path}}\"]\n" +
 		"[[action]]\nkey = \"ctrl-x\"\nname = \"fail\"\nrun = [\"sh\", \"-c\", \"exit 3\"]\n"
-	if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte(cfg), 0o644); err != nil {
+	if err := os.WriteFile(config.File(root), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// A second project, so a command acting on the wrong one is detectable.
@@ -139,10 +141,10 @@ func agents(t *testing.T) string {
 		t.Fatal(err)
 	}
 	body := strings.NewReplacer("%PATH%", workdir, "%AGENT%", agent).Replace(agentsTOML)
-	if err := os.WriteFile(filepath.Join(root, "projects", "agents.toml"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(config.ProjectsDir(root), "agents.toml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := os.OpenFile(filepath.Join(root, "config.toml"), os.O_APPEND|os.O_WRONLY, 0)
+	cfg, err := os.OpenFile(config.File(root), os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +174,7 @@ func work(t *testing.T) string {
 		t.Fatal(err)
 	}
 	body := strings.NewReplacer("%PATH%", workdir, "%AGENT%", agent).Replace(sessionTOML)
-	if err := os.WriteFile(filepath.Join(root, "projects", "work.toml"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(config.ProjectsDir(root), "work.toml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	capture(t, "open", "work")

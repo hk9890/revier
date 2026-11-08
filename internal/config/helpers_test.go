@@ -107,7 +107,7 @@ func projectsRoot(t *testing.T, cfg string, files map[string]string) string {
 	if cfg != "" {
 		write(t, root, "config.toml", cfg)
 	}
-	dir := filepath.Join(root, "projects")
+	dir := config.ProjectsDir(root)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}

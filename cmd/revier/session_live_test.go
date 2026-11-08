@@ -16,6 +16,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/hk9890/revier/internal/config"
 )
 
 // markConversation makes the fake claude list the agent's pane as holding a
@@ -241,7 +243,7 @@ func TestSessionRestoreStepsOverWhatIsGone(t *testing.T) {
 
 	// Drop the notes target from the project, as an edit between the save and
 	// the restore would.
-	path := filepath.Join(os.Getenv("REVIER_CONFIG_HOME"), "projects", "work.toml")
+	path := filepath.Join(config.ProjectsDir(os.Getenv("REVIER_CONFIG_HOME")), "work.toml")
 	body, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)

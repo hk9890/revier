@@ -1254,10 +1254,10 @@ func TestEscHidesThePopupAndTheRaiseSurveysAgain(t *testing.T) {
 		t.Error("a survey answered while hidden scheduled the next one")
 	}
 	m = next.(tui.Model)
-	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+	if err := os.MkdirAll(config.ProjectsDir(root), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "projects", "written-while-hidden.toml"), []byte("path = \"/p/written\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(config.ProjectsDir(root), "written-while-hidden.toml"), []byte("path = \"/p/written\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if next, cmd = m.Update(tea.FocusMsg{}); cmd == nil {
