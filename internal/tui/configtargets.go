@@ -24,8 +24,8 @@ import (
 // and its window realization, each launch, match and place, the target the
 // runtime's is a tab of, the tabs it opens with and the active one, and the
 // panels of a tab as a list with a form of their own, and last the command
-// a target runs in place of both (decisions.md D166). alt+d deletes a
-// target after a y. A change is written as it is saved
+// a target runs in place of both (D166). alt+d deletes a target after a y.
+// A change is written as it is saved
 // (config.AddTarget, ReplaceTarget, RemoveTarget), and the projects are
 // loaded again with it, so the surface has the new targets at once. The
 // project screen opens the same form on a project's targets
