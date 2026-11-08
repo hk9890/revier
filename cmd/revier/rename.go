@@ -16,8 +16,8 @@ const renameUsage = "usage: revier rename <old> <new>"
 
 // cmdRename gives a project a new name: its file, its state and the saved
 // sessions move with it, as the project screen's rename moves them. It is
-// refused while anything of the project runs here, by the guard the TUI asks
-// too, since its windows are found by titles the name is part of
+// refused while anything of the project runs here, by the guard
+// app.RenameProject asks, since its windows are found by titles the name is part of
 // (decisions.md D80).
 func cmdRename(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("rename", flag.ContinueOnError)
@@ -47,10 +47,7 @@ func cmdRename(ctx context.Context, a *app, args []string) error {
 	// are gone, which the guard would otherwise read as running.
 	st := a.core.Settle(report, a.projects, time.Now())
 	settled := core.Settled{Surveyed: true, Bound: st.Bound, Attached: st.Attached, Launch: st.Launch}
-	if err := a.core.RefuseChange(report.Views[0], settled, "renaming"); err != nil {
-		return err
-	}
-	renamed, err := usecase.RenameProject(a.cfgRoot, a.stateRoot, a.core.Ledger, from, to, a.cfg.Inherited())
+	renamed, err := usecase.RenameProject(a.core, a.cfgRoot, a.stateRoot, report.Views[0], settled, to, a.cfg.Inherited())
 	if err != nil {
 		return err
 	}

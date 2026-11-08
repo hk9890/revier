@@ -92,12 +92,7 @@ func (m Model) openProject() (tea.Model, tea.Cmd) {
 // surface: the project as its file now loads.
 func (m Model) projectKey(msg keyPress) (tea.Model, tea.Cmd) {
 	was := m.proj.name
-	// Only Enter on a typed field can rename.
-	var locked error
-	if m.proj.edit.Focused() {
-		locked = m.renameRefusal(was)
-	}
-	res, cmd := m.proj.key(m.surface(), locked, msg)
+	res, cmd := m.proj.key(m.surface(), msg)
 	m.err = res.err
 	if p := res.written; p != nil {
 		if p.Name != was {
@@ -115,19 +110,6 @@ func (m Model) projectKey(msg keyPress) (tea.Model, tea.Cmd) {
 		m.layout()
 	}
 	return m, cmd
-}
-
-// renameRefusal is why the project cannot be renamed now, or nil. A running
-// project is refused: its instances are found by titles its name is part of.
-func (m Model) renameRefusal(name revier.ProjectName) error {
-	for _, v := range m.views {
-		if v.Project.Name == name {
-			if err := m.refuseRunning(v, "renaming"); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 // open reads the project's file for a new visit.
@@ -174,12 +156,11 @@ func (ps *projectScreen) value(f projectField) string {
 	return string(ps.name)
 }
 
-// key is every press on the project screen. locked is why the project cannot
-// be renamed now, nil when it can.
-func (ps *projectScreen) key(sf surface, locked error, msg keyPress) (projectResult, tea.Cmd) {
+// key is every press on the project screen.
+func (ps *projectScreen) key(sf surface, msg keyPress) (projectResult, tea.Cmd) {
 	switch {
 	case ps.edit.Focused():
-		return ps.editKey(sf, locked, msg)
+		return ps.editKey(sf, msg)
 	case ps.tform.open:
 		form, cmd := ps.tform.key(sf, msg)
 		if form.save != nil {
@@ -226,7 +207,7 @@ func (ps *projectScreen) key(sf surface, locked error, msg keyPress) (projectRes
 
 // editKey is a press while a field is typed. Enter writes it, Esc leaves it
 // as it was.
-func (ps *projectScreen) editKey(sf surface, locked error, msg keyPress) (projectResult, tea.Cmd) {
+func (ps *projectScreen) editKey(sf surface, msg keyPress) (projectResult, tea.Cmd) {
 	res := projectResult{err: sf.err}
 	switch {
 	case key.Matches(msg, sf.keys.Quit):
@@ -236,7 +217,7 @@ func (ps *projectScreen) editKey(sf surface, locked error, msg keyPress) (projec
 		ps.edit.Blur()
 		return res, nil
 	case key.Matches(msg, sf.keys.Enter):
-		res = ps.saveField(sf, locked, ps.fields()[ps.row], strings.TrimSpace(ps.edit.Value()))
+		res = ps.saveField(sf, ps.fields()[ps.row], strings.TrimSpace(ps.edit.Value()))
 		if res.err == nil {
 			ps.edit.Blur()
 		}
@@ -251,9 +232,9 @@ func (ps *projectScreen) editKey(sf surface, locked error, msg keyPress) (projec
 
 // saveField writes a field's value to the project file. The name is the
 // file's own, so a new one moves the file.
-func (ps *projectScreen) saveField(sf surface, locked error, f projectField, value string) projectResult {
+func (ps *projectScreen) saveField(sf surface, f projectField, value string) projectResult {
 	if f == projName {
-		return ps.rename(sf, locked, revier.ProjectName(value))
+		return ps.rename(sf, revier.ProjectName(value))
 	}
 	if value == ps.value(f) {
 		return projectResult{}
@@ -267,18 +248,23 @@ func (ps *projectScreen) saveField(sf surface, locked error, f projectField, val
 }
 
 // rename moves the project file, and what state and the saved sessions hold
-// under the old name with it.
-func (ps *projectScreen) rename(sf surface, locked error, to revier.ProjectName) projectResult {
+// under the old name with it. app.RenameProject refuses it while the project
+// runs here, by the last survey's view of it and what the surface settled.
+func (ps *projectScreen) rename(sf surface, to revier.ProjectName) projectResult {
 	from := ps.name
 	if to == from {
 		return projectResult{}
 	}
-	if locked != nil {
-		return projectResult{err: locked}
+	p, _ := projectNamed(sf.projects, from)
+	v := revier.ProjectView{Project: p.Project}
+	for _, sv := range sf.views {
+		if sv.Project.Name == from {
+			v = sv
+		}
 	}
 	var written core.Project
 	err := withConfigRoot(func(root string) (err error) {
-		written, err = app.RenameProject(root, sf.stateRoot, sf.core.Ledger, from, to, sf.usable)
+		written, err = app.RenameProject(sf.core, root, sf.stateRoot, v, sf.settled, to, sf.usable)
 		return err
 	})
 	if err != nil {

@@ -309,7 +309,12 @@ func (m *Model) removeTarget(name revier.ProjectName, target revier.TargetName) 
 // refuseRunning refuses deleting or renaming a project while anything of it
 // runs here, as core.RefuseChange says.
 func (m Model) refuseRunning(v revier.ProjectView, doing string) error {
-	return m.core.RefuseChange(v, core.Settled{Surveyed: m.surveyed, Bound: m.bound, Attached: m.attached, Launch: m.pending}, doing)
+	return m.core.RefuseChange(v, m.settled(), doing)
+}
+
+// settled is what the surface knows of what runs here beside its views.
+func (m Model) settled() core.Settled {
+	return core.Settled{Surveyed: m.surveyed, Bound: m.bound, Attached: m.attached, Launch: m.pending}
 }
 
 // refuseUnsettled refuses the change while what of the project runs is not
