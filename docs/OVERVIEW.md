@@ -6,7 +6,7 @@ A findability map: where things live, and how to search for them.
 
 | Path | Holds |
 |---|---|
-| `pkg/revier/` | The ports and every type that crosses them. Public, because out-of-tree adapters import it. |
+| `pkg/revier/` | The ports and every type that crosses them, the project model included. Public, because out-of-tree adapters import it. |
 | `internal/core/` | All policy: resolution, matching, run-or-raise, toggle-back, survey. |
 | `internal/app/` | The use cases that cross stores, written once for both surfaces: create, link and rename a project, run an action, save a session. |
 | `internal/adapter/<tool>/` | One tool each. No policy. `kitty`, `tmux` and `herdr` (runtime; `kitty` also the terminal keys, `herdr` also a probe), `gnome` (window and key binder), `proc` (what a link on another machine started here, and a process's parent on this machine), `claude` (probe, and the assistant launcher), `opencode` and `execprobe` (probes), `ssh` (remote). |
