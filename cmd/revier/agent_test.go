@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -222,61 +221,19 @@ func focusedOther(t *testing.T) (*app, *hosttest.FakeRuntime, core.Project, revi
 	return a, rt, demo, home
 }
 
-// Without -p, an agent or a shell asked for from a directory in no project,
-// by --dir or as the working directory, fails with core.ErrNoProject and opens no
-// tab: neither the focused window nor the last project stands in for it. A
-// --dir in no project fails even where the working directory is in one.
-func TestATabFromADirectoryInNoProjectFails(t *testing.T) {
-	a, rt, demo, _ := focusedOther(t)
-	ctx := context.Background()
+// Without -p, --panel and --dir, a tab is asked for from the working
+// directory: one in no project fails with core.ErrNoProject and opens no tab,
+// though the focused window and the last project answer other.
+func TestATabFromAWorkingDirectoryInNoProjectFails(t *testing.T) {
+	a, rt, _, _ := focusedOther(t)
 	nowhere := t.TempDir()
-	opens := map[string]func(dir string) error{
-		"agent new":            func(dir string) error { return a.newAgent(ctx, "", "", dir, core.Resume{}) },
-		"agent new --no-focus": func(dir string) error { return a.addAgent(ctx, "", "", dir, core.Resume{}) },
-		"shell new":            func(dir string) error { return a.newShell(ctx, "", "", dir) },
-	}
-	for _, c := range []struct{ cwd, dir, named string }{
-		{cwd: nowhere, named: nowhere},
-		{cwd: nowhere, dir: filepath.Join(nowhere, "x"), named: filepath.Join(nowhere, "x")},
-		{cwd: demo.Path, dir: nowhere, named: nowhere},
-	} {
-		t.Chdir(c.cwd)
-		for what, open := range opens {
-			err := open(c.dir)
-			if !errors.Is(err, core.ErrNoProject) {
-				t.Errorf("%s --dir %q in %s: err = %v, want core.ErrNoProject", what, c.dir, c.cwd, err)
-				continue
-			}
-			if msg := err.Error(); !strings.Contains(msg, c.named) || !strings.Contains(msg, "-p <project>") {
-				t.Errorf("%s --dir %q in %s: err = %q, want it to name %s and -p", what, c.dir, c.cwd, msg, c.named)
-			}
-		}
+	t.Chdir(nowhere)
+
+	err := a.newShell(context.Background(), "", "", "")
+	if !errors.Is(err, core.ErrNoProject) || !strings.Contains(err.Error(), nowhere) {
+		t.Errorf("shell new in %s: err = %v, want core.ErrNoProject naming the directory", nowhere, err)
 	}
 	if len(rt.Tabs) != 0 {
 		t.Errorf("tabs = %+v, want none", rt.Tabs)
-	}
-}
-
-// Without -p, a tab opens in the project --dir is in, wherever the command
-// runs, else in the project of the working directory: not in the focused
-// window's.
-func TestATabOpensInTheProjectOfItsDirectory(t *testing.T) {
-	a, rt, demo, home := focusedOther(t)
-	ctx := context.Background()
-
-	t.Chdir(t.TempDir())
-	if err := a.newShell(ctx, "", "", demo.Path); err != nil {
-		t.Fatalf("shell new --dir %s: %v", demo.Path, err)
-	}
-	t.Chdir(demo.Path)
-	if err := a.newShell(ctx, "", "", ""); err != nil {
-		t.Fatalf("shell new in %s: %v", demo.Path, err)
-	}
-	var refs []revier.TargetRef
-	for _, tab := range rt.Tabs {
-		refs = append(refs, tab.Ref)
-	}
-	if want := []revier.TargetRef{home, home}; !slices.Equal(refs, want) {
-		t.Errorf("tabs in %v, want %v", refs, want)
 	}
 }

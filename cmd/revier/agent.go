@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
@@ -491,124 +490,55 @@ func cmdAgentNew(out io.Writer, args []string) error {
 	return a.newAgent(ctx, *project, *panel, *dir, r)
 }
 
-// newAgent opens the agent tab where newTab puts it, and goes to it.
+// newAgent opens the agent tab where the core places it, and goes to it.
 func (a *app) newAgent(ctx context.Context, project, panel, dir string, r core.Resume) error {
-	return a.agentTab(ctx, project, panel, dir, r, func(w core.Workspace, r core.Resume) (core.AgentOutcome, error) {
-		return a.core.NewAgent(ctx, w, r)
-	})
+	return a.agentTab(ctx, project, panel, dir, r, false)
 }
 
-// addAgent opens the agent tab where newTab puts it, leaves the focus where
-// it is, and prints the address the new agent answers to: the caller is a
-// script, which has nothing else to find it by (decisions.md D118).
+// addAgent opens the agent tab where the core places it, leaves the focus
+// where it is, and prints the address the new agent answers to: the caller is
+// a script, which has nothing else to find it by (decisions.md D118).
 func (a *app) addAgent(ctx context.Context, project, panel, dir string, r core.Resume) error {
-	return a.agentTab(ctx, project, panel, dir, r, func(w core.Workspace, r core.Resume) (core.AgentOutcome, error) {
-		added, outcome, err := a.core.AddAgent(ctx, w, r)
-		if added != "" {
-			_, _ = fmt.Fprintln(a.out, a.core.AddressIn(w, added))
-		}
-		return outcome, err
-	})
+	return a.agentTab(ctx, project, panel, dir, r, true)
 }
 
-// agentTab opens an agent tab, started as r says, through open in the
-// workspace newTab places it in. A --panel no workspace holds resumes
-// nothing, and says so as a workspace's tab does.
-func (a *app) agentTab(ctx context.Context, project, panel, dir string, r core.Resume, open func(core.Workspace, core.Resume) (core.AgentOutcome, error)) error {
-	inWorkspace := false
-	here := func(w core.Workspace, dir string) error {
-		inWorkspace = true
-		start := time.Now()
-		r.Dir = dir
-		outcome, err := open(w, r)
-		logging.Op("agent new", start, err, "project", w.Project.Name, "target", w.Target, "ref", w.Ref, "agent", r.Agent, "session", r.Session, "dir", dir, "outcome", outcome.String())
-		if err != nil {
-			return err
-		}
-		if outcome != core.AgentResumed && r.Session != "" {
-			fmt.Fprintf(os.Stderr, "revier: warning: %s was not resumed (%s); the agent started empty\n", r.Session, outcome)
-		}
-		return nil
-	}
-	err := a.newTab(ctx, "agent new", revier.PanelAgent, r.Agent, project, panel, dir, a.core.AgentTarget, here)
-	if err == nil && !inWorkspace && r.Session != "" {
-		fmt.Fprintf(os.Stderr, "revier: warning: %s was not resumed (no workspace holds panel %s)\n", r.Session, panel)
-	}
-	return err
-}
-
-// newTab opens a tab through here in the open workspace the core places it in.
-// The place is the owner of --panel; or the project -p names, else the one
-// --dir is in, or without --dir the one the working directory is in, with the
-// target after -p's colon or the one pick chooses. A --panel that no project's
-// workspace holds gets what [terminal] outside says, with agent the named
-// agent an agent tab asks for, and here is not called. With --panel and no
-// --dir, a shell tab's directory is the panel's own (decisions.md D153), and
-// an agent tab's is the project's (D158). Outside a workspace, with outside =
-// "agent", an agent tab starts in the panel's directory (D164).
-func (a *app) newTab(ctx context.Context, what string, kind revier.PanelKind, agent, project, panel, dir string, pick func(core.Project) (revier.TargetName, error), here func(core.Workspace, string) error) error {
-	if panel != "" {
-		return a.core.TabAtPanel(ctx, a.projects, revier.PanelID(panel), kind, dir, a.cfg.OutsideKey(agent), func(w core.Workspace, dir string) error {
-			return a.tabHere(ctx, what, w, panel, dir, here)
-		})
-	}
-	place, err := a.tabPlace(ctx, project, dir, pick)
+// agentTab opens an agent tab, started as r says, where the core places it.
+// A --panel no workspace holds resumes nothing, and says so as a workspace's
+// tab does.
+func (a *app) agentTab(ctx context.Context, project, panel, dir string, r core.Resume, noFocus bool) error {
+	req, err := tabRequest(revier.PanelAgent, project, panel, dir)
 	if err != nil {
 		return err
 	}
-	return a.tabHere(ctx, what, place, panel, dir, here)
+	req.Resume, req.NoFocus, req.Outside = r, noFocus, a.cfg.OutsideKey(r.Agent)
+	placed, err := a.core.PlaceTab(ctx, a.projects, req)
+	if placed.Address != "" {
+		_, _ = fmt.Fprintln(a.out, placed.Address)
+	}
+	if err != nil || r.Session == "" {
+		return err
+	}
+	if placed.Outside {
+		fmt.Fprintf(os.Stderr, "revier: warning: %s was not resumed (no workspace holds panel %s)\n", r.Session, panel)
+	} else if placed.Outcome != core.AgentResumed {
+		fmt.Fprintf(os.Stderr, "revier: warning: %s was not resumed (%s); the agent started empty\n", r.Session, placed.Outcome)
+	}
+	return nil
 }
 
-// tabHere opens the tab through here in the workspace w. --dir is a path on
-// this machine, so a link, whose tab starts on its host, drops it.
-//
-// A directory outside the project that holds --panel is dropped, and the tab
-// opens where the project's own tab would: a panel's shell can sit anywhere.
-func (a *app) tabHere(ctx context.Context, what string, w core.Workspace, panel, dir string, here func(core.Workspace, string) error) error {
-	if w.Project.Remote != nil {
-		dir = ""
-	}
-	if panel != "" && dir != "" {
-		if p, err := a.core.ProjectFor(ctx, a.projects, core.Ask{Dir: dir}); err != nil || p.Name != w.Project.Name {
-			slog.Warn(what, "err", "the directory is outside the project of --panel; the tab opens in the project", "project", w.Project.Name, "dir", dir)
-			dir = ""
-		}
-	}
-	if dir != "" {
-		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
-			return fmt.Errorf("--dir %s: not a directory", dir)
-		}
-	}
-	return here(w, dir)
-}
-
-func (a *app) tabPlace(ctx context.Context, project, dir string, pick func(core.Project) (revier.TargetName, error)) (core.Workspace, error) {
-	name, sel, _ := strings.Cut(project, ":")
-	var p core.Project
-	var err error
-	if name != "" {
-		p, err = a.resolveProject(ctx, name)
-	} else {
-		p, err = a.dirProject(ctx, dir)
-	}
-	if err != nil {
-		return core.Workspace{}, err
-	}
-	return a.core.TabIn(ctx, p, revier.TargetName(sel), pick)
-}
-
-// dirProject is the project --dir is in, or without --dir the one the working
-// directory is in, and never the focused window's or the last one: a tab is
-// opened from a terminal or a script, which has a directory.
-func (a *app) dirProject(ctx context.Context, dir string) (core.Project, error) {
-	if dir == "" {
+// tabRequest is the tab of kind that -p, --panel and --dir ask for. Without
+// any of them, the tab's project is the one of the working directory.
+func tabRequest(kind revier.PanelKind, project, panel, dir string) (core.TabRequest, error) {
+	name, target, _ := strings.Cut(project, ":")
+	req := core.TabRequest{Kind: kind, Project: revier.ProjectName(name), Target: revier.TargetName(target), Panel: revier.PanelID(panel), Dir: dir}
+	if project == "" && panel == "" && dir == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
-			return core.Project{}, fmt.Errorf("working directory: %w", err)
+			return core.TabRequest{}, fmt.Errorf("working directory: %w", err)
 		}
-		dir = cwd
+		req.Cwd = cwd
 	}
-	return a.core.ProjectFor(ctx, a.projects, core.Ask{Dir: dir})
+	return req, nil
 }
 
 // agent finds the agent an address names: <project>, <project>:<target> or
