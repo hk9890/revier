@@ -1,7 +1,6 @@
 package core_test
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -37,7 +36,7 @@ func resolving(t *testing.T) (*core.Core, *hosttest.Fake, []core.Project) {
 // window nor the last project stands in for a name that is no project's.
 func TestProjectForTakesTheNamedProjectAlone(t *testing.T) {
 	c, _, projects := resolving(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	demo := projects[0]
 
 	p, err := c.ProjectFor(ctx, projects, core.Ask{Name: "demo", Dir: projects[1].Path, Away: true})
@@ -54,7 +53,7 @@ func TestProjectForTakesTheNamedProjectAlone(t *testing.T) {
 // front of the user does.
 func TestProjectForTakesTheDirectoryBeforeTheFocusedWindow(t *testing.T) {
 	c, _, projects := resolving(t)
-	p, err := c.ProjectFor(context.Background(), projects, core.Ask{Dir: filepath.Join(projects[0].Path, "sub"), Away: true})
+	p, err := c.ProjectFor(t.Context(), projects, core.Ask{Dir: filepath.Join(projects[0].Path, "sub"), Away: true})
 	if err != nil || p.Name != "demo" {
 		t.Errorf("ProjectFor = %q, %v; want demo, the project of the directory", p.Name, err)
 	}
@@ -65,7 +64,7 @@ func TestProjectForTakesTheDirectoryBeforeTheFocusedWindow(t *testing.T) {
 func TestProjectForAwayTakesTheFocusedWindowBeforeTheLastProject(t *testing.T) {
 	c, wm, projects := resolving(t)
 	wm.SetFocus(wm.Add("README.md", "code-demo"))
-	p, err := c.ProjectFor(context.Background(), projects, core.Ask{Dir: t.TempDir(), Away: true})
+	p, err := c.ProjectFor(t.Context(), projects, core.Ask{Dir: t.TempDir(), Away: true})
 	if err != nil || p.Name != "demo" {
 		t.Errorf("ProjectFor = %q, %v; want demo, the project of the focused window", p.Name, err)
 	}
@@ -75,7 +74,7 @@ func TestProjectForAwayTakesTheFocusedWindowBeforeTheLastProject(t *testing.T) {
 // last project that no longer names a configured one leaves nothing.
 func TestProjectForAwayFallsBackToTheLastProject(t *testing.T) {
 	c, wm, projects := resolving(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	wm.SetFocus(wm.Add("Mozilla Firefox", "firefox"))
 
 	p, err := c.ProjectFor(ctx, projects, core.Ask{Away: true})
@@ -92,7 +91,7 @@ func TestProjectForAwayFallsBackToTheLastProject(t *testing.T) {
 func TestProjectForAwayGoesOnWhenFocusedFails(t *testing.T) {
 	c, wm, projects := resolving(t)
 	wm.FocusedErr = errors.New("no compositor")
-	p, err := c.ProjectFor(context.Background(), projects, core.Ask{Away: true})
+	p, err := c.ProjectFor(t.Context(), projects, core.Ask{Away: true})
 	if err != nil || p.Name != "other" {
 		t.Errorf("ProjectFor = %q, %v; want other, the last project", p.Name, err)
 	}
@@ -104,7 +103,7 @@ func TestProjectForAwayGoesOnWhenFocusedFails(t *testing.T) {
 func TestProjectForADirectoryInNoProjectFailsWithoutAway(t *testing.T) {
 	c, _, projects := resolving(t)
 	nowhere := t.TempDir()
-	_, err := c.ProjectFor(context.Background(), projects, core.Ask{Dir: nowhere})
+	_, err := c.ProjectFor(t.Context(), projects, core.Ask{Dir: nowhere})
 	if !errors.Is(err, core.ErrNoProject) {
 		t.Fatalf("ProjectFor(%s) err = %v; want core.ErrNoProject", nowhere, err)
 	}
@@ -134,7 +133,7 @@ func TestProjectForADirectoryIsInAProjectThroughASymlink(t *testing.T) {
 		{path: behind, dir: filepath.Join(link, "sub")},
 	} {
 		projects := []core.Project{placed("demo", d.path)}
-		if p, err := c.ProjectFor(context.Background(), projects, core.Ask{Dir: d.dir}); err != nil || p.Name != "demo" {
+		if p, err := c.ProjectFor(t.Context(), projects, core.Ask{Dir: d.dir}); err != nil || p.Name != "demo" {
 			t.Errorf("project of %s with path %s = %q, %v; want demo", d.dir, d.path, p.Name, err)
 		}
 	}
@@ -153,7 +152,7 @@ func TestProjectForANestedProjectReachedThroughASymlinkWins(t *testing.T) {
 		t.Fatal(err)
 	}
 	projects := []core.Project{placed("mono", mono), placed("nested", link)}
-	if p, err := (&core.Core{}).ProjectFor(context.Background(), projects, core.Ask{Dir: nested}); err != nil || p.Name != "nested" {
+	if p, err := (&core.Core{}).ProjectFor(t.Context(), projects, core.Ask{Dir: nested}); err != nil || p.Name != "nested" {
 		t.Errorf("project of %s = %q, %v; want nested", nested, p.Name, err)
 	}
 }
@@ -164,7 +163,7 @@ func TestProjectForSkipsALinksPath(t *testing.T) {
 	dir := t.TempDir()
 	linked := placed("linked", dir)
 	linked.Remote = &revier.Link{Host: "box", Project: "linked"}
-	_, err := (&core.Core{}).ProjectFor(context.Background(), []core.Project{linked}, core.Ask{Dir: dir})
+	_, err := (&core.Core{}).ProjectFor(t.Context(), []core.Project{linked}, core.Ask{Dir: dir})
 	if !errors.Is(err, core.ErrNoProject) {
 		t.Errorf("ProjectFor(%s) err = %v; want core.ErrNoProject, not the link", dir, err)
 	}
@@ -174,7 +173,7 @@ func TestProjectForSkipsALinksPath(t *testing.T) {
 func TestProjectForPlacesADirectoryThatDoesNotExistYet(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "not-yet")
 	projects := []core.Project{placed("demo", root)}
-	p, err := (&core.Core{}).ProjectFor(context.Background(), projects, core.Ask{Dir: filepath.Join(root, "sub")})
+	p, err := (&core.Core{}).ProjectFor(t.Context(), projects, core.Ask{Dir: filepath.Join(root, "sub")})
 	if err != nil || p.Name != "demo" {
 		t.Errorf("ProjectFor = %q, %v; want demo", p.Name, err)
 	}

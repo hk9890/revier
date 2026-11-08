@@ -19,7 +19,7 @@ func TestCommandContextEndsTheWholeGroupWithTheContext(t *testing.T) {
 	if _, err := exec.LookPath("sh"); err != nil {
 		t.Skip("no sh on PATH")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 	var out bytes.Buffer
 	c := procgroup.CommandContext(ctx, "sh", "-c", "sleep 10 & sleep 10")

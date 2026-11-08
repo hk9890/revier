@@ -65,7 +65,7 @@ func TestACloseSavesWithTheReasonOfItsScope(t *testing.T) {
 		root := t.TempDir()
 		req := fullShutdown(c, root, c.ShutdownPlan(report, only, core.ShutdownAll), projects)
 		req.Project = only
-		if _, err := app.Close(context.Background(), req); err != nil {
+		if _, err := app.Close(t.Context(), req); err != nil {
 			t.Fatalf("%q: Close: %v", only, err)
 		}
 		all, err := session.List(root)
@@ -142,7 +142,7 @@ func TestACloseThatIsNotFullLeavesItsRecordUnwritten(t *testing.T) {
 	record := app.NewShutdownRecord(c, root)
 	req := app.CloseRequest{Core: c, StateRoot: root, Plan: c.ShutdownPlan(report, "demo", core.ShutdownAll), Projects: projects, Project: "demo", Record: record}
 
-	if _, err := app.Close(context.Background(), req); err != nil {
+	if _, err := app.Close(t.Context(), req); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 	record.Abandon()
@@ -163,7 +163,7 @@ func TestAnAgentCloseSavesNothingAndRecordsNothing(t *testing.T) {
 	}
 	ag := report.Views[0].Agents[0]
 	plan := c.ClosePlan(report, "demo", core.CloseRow{Agent: ag.Ref, Panel: ag.Panel})
-	res, err := app.Close(context.Background(), app.CloseRequest{Core: c, StateRoot: root, Plan: plan, Projects: projects, Project: "demo"})
+	res, err := app.Close(t.Context(), app.CloseRequest{Core: c, StateRoot: root, Plan: plan, Projects: projects, Project: "demo"})
 	if err != nil {
 		t.Fatalf("Close: %v", err)
 	}

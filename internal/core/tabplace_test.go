@@ -3,7 +3,6 @@
 package core_test
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -51,7 +50,7 @@ func tabDirs(rt *hosttest.FakeRuntime) []string {
 // placeTab runs PlaceTab and fails the test on an error.
 func placeTab(t *testing.T, c *core.Core, projects []core.Project, req core.TabRequest) core.PlacedTab {
 	t.Helper()
-	placed, err := c.PlaceTab(context.Background(), projects, req)
+	placed, err := c.PlaceTab(t.Context(), projects, req)
 	if err != nil {
 		t.Fatalf("PlaceTab(%+v): %v", req, err)
 	}
@@ -90,7 +89,7 @@ func TestPlaceTabFromADirectoryInNoProjectFails(t *testing.T) {
 	} {
 		for what, req := range kinds {
 			req.Cwd, req.Dir = tc.cwd, tc.dir
-			_, err := c.PlaceTab(context.Background(), projects, req)
+			_, err := c.PlaceTab(t.Context(), projects, req)
 			if !errors.Is(err, core.ErrNoProject) {
 				t.Errorf("%s --dir %q in %s: err = %v, want core.ErrNoProject", what, tc.dir, tc.cwd, err)
 				continue
@@ -163,12 +162,12 @@ func TestPlaceTabShellRefusesAProjectWithNoHome(t *testing.T) {
 	c := &core.Core{Runtime: rt}
 	req := core.TabRequest{Kind: revier.PanelShell, Project: "homeless"}
 
-	if _, err := c.PlaceTab(context.Background(), []core.Project{homeless}, req); err == nil || !strings.Contains(err.Error(), "has no home target") {
+	if _, err := c.PlaceTab(t.Context(), []core.Project{homeless}, req); err == nil || !strings.Contains(err.Error(), "has no home target") {
 		t.Errorf("no reason: err = %v, want the missing home named", err)
 	}
 	invalid := errors.New("two targets are home")
 	homeless.Invalid = invalid
-	if _, err := c.PlaceTab(context.Background(), []core.Project{homeless}, req); !errors.Is(err, invalid) {
+	if _, err := c.PlaceTab(t.Context(), []core.Project{homeless}, req); !errors.Is(err, invalid) {
 		t.Errorf("invalid: err = %v, want the project's reason", err)
 	}
 	if len(rt.Tabs) != 0 {
@@ -318,7 +317,7 @@ func TestPlaceTabRefusesADirThatIsNotADirectory(t *testing.T) {
 	c := &core.Core{Runtime: rt}
 	projects := []core.Project{demo}
 
-	_, err := c.PlaceTab(context.Background(), projects, core.TabRequest{Kind: revier.PanelShell, Project: "demo", Dir: gone})
+	_, err := c.PlaceTab(t.Context(), projects, core.TabRequest{Kind: revier.PanelShell, Project: "demo", Dir: gone})
 	if want := "--dir " + gone + ": not a directory"; err == nil || err.Error() != want || len(rt.Tabs) != 0 {
 		t.Fatalf("-p demo --dir %s: err = %v, tabs %+v, want %q and no tab", gone, err, rt.Tabs, want)
 	}

@@ -232,7 +232,7 @@ func TestATabFromAWorkingDirectoryInNoProjectFails(t *testing.T) {
 	nowhere := t.TempDir()
 	t.Chdir(nowhere)
 
-	err := a.newShell(context.Background(), "", "", "")
+	err := a.newShell(t.Context(), "", "", "")
 	if !errors.Is(err, core.ErrNoProject) || !strings.Contains(err.Error(), nowhere) {
 		t.Errorf("shell new in %s: err = %v, want core.ErrNoProject naming the directory", nowhere, err)
 	}
