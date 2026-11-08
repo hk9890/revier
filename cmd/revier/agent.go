@@ -62,9 +62,10 @@ new opens a tab in an open workspace: the project's agent panel and its
 shell, the tab a restore adds for an agent opened beside the workspace. With
 <name> the tab's agent panel runs that named agent, and an address of the
 project alone still names the default agent among them.
-Without -p or --panel the project is the one --dir is in, or without --dir
-the one this directory is in; a directory in no project is an error, which
-exits 3. It goes to the new agent and raises its window; with --no-focus it
+Without a project in -p and without --panel the project is the one --dir is
+in, or without --dir the one this directory is in; a directory in no project
+is an error, which exits 3. It goes to the new agent and raises its window;
+with --no-focus it
 does neither, and prints the address a script reaches the agent by, which
 names an agent once the harness in the tab has started.
 With --panel in a window that is no project's open workspace, it opens what
@@ -514,11 +515,12 @@ func (a *app) agentTab(ctx context.Context, project, panel, dir string, r core.R
 }
 
 // tabRequest is the tab of kind that -p, --panel and --dir ask for. Without
-// any of them, the tab's project is the one of the working directory.
+// a project before -p's colon, a --panel or a --dir, the tab's project is the
+// one of the working directory.
 func tabRequest(kind revier.PanelKind, project, panel, dir string) (core.TabRequest, error) {
 	name, target, _ := strings.Cut(project, ":")
 	req := core.TabRequest{Kind: kind, Project: revier.ProjectName(name), Target: revier.TargetName(target), Panel: revier.PanelID(panel), Dir: dir}
-	if project == "" && panel == "" && dir == "" {
+	if name == "" && panel == "" && dir == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
 			return core.TabRequest{}, fmt.Errorf("working directory: %w", err)

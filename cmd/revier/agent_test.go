@@ -155,7 +155,7 @@ func TestAgentWaitWaitsForTheHarnessToStart(t *testing.T) {
 	go func() {
 		time.Sleep(2 * testPoll)
 		rt.Replace(revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "agent busy", Command: []string{"agent"}})
-		time.Sleep(5 * testPoll)
+		time.Sleep(25 * testPoll)
 		rt.Retitle("1", "agent idle")
 	}()
 	var out bytes.Buffer
@@ -238,6 +238,35 @@ func TestATabFromAWorkingDirectoryInNoProjectFails(t *testing.T) {
 	}
 	if len(rt.Tabs) != 0 {
 		t.Errorf("tabs = %+v, want none", rt.Tabs)
+	}
+}
+
+// Without -p, --panel and --dir, a tab opens in the project of the working
+// directory, not in the focused window's or the last one.
+func TestATabOpensInTheProjectOfItsWorkingDirectory(t *testing.T) {
+	a, rt, demo, home := focusedOther(t)
+	t.Chdir(demo.Path)
+
+	if err := a.newShell(t.Context(), "", "", ""); err != nil {
+		t.Fatalf("shell new in %s: %v", demo.Path, err)
+	}
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Ref != home {
+		t.Errorf("tabs = %+v, want one in %v", rt.Tabs, home)
+	}
+}
+
+// -p :<target> names a target and no project: the tab opens in that target
+// of the working directory's project.
+func TestATabForATargetAloneOpensInTheProjectOfItsWorkingDirectory(t *testing.T) {
+	a, rt, demo, _ := focusedOther(t)
+	diff := rt.Add("diff", "")
+	t.Chdir(demo.Path)
+
+	if err := a.newShell(t.Context(), ":diff", "", ""); err != nil {
+		t.Fatalf("shell new -p :diff in %s: %v", demo.Path, err)
+	}
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Ref != diff {
+		t.Errorf("tabs = %+v, want one in %v", rt.Tabs, diff)
 	}
 }
 
