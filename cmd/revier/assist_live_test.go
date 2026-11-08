@@ -61,6 +61,7 @@ mkdir -p "$filed" && echo '{"type":"user"}' > "$filed/abc.jsonl"`)
 func TestAssistMakesTheConfigurationRootOfANewInstallation(t *testing.T) {
 	t.Setenv("REVIER_CONFIG_HOME", filepath.Join(t.TempDir(), "revier"))
 	t.Setenv("REVIER_STATE_HOME", t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	onPath(t, "claude", `test -d "$REVIER_CONFIG_HOME"`)
 
 	if err := run(&strings.Builder{}, []string{"assist"}); err != nil {
