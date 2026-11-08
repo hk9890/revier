@@ -526,8 +526,10 @@ func panelOf(w window, parent func(pid int) (int, bool)) revier.Panel {
 }
 
 // dirOf is the directory of the panel's process, as --cwd=current takes it
-// from the foreground: the window's own cwd is its first process's, which a
-// `kitten run-shell` wrapper keeps where the panel started.
+// from the foreground. The window's own cwd is not always that process's:
+// up to kitty 0.49 it is the window's first process's, which a `kitten
+// run-shell` wrapper keeps where the panel started. From kitty 0.50 it is the
+// directory of the program the wrapper runs (verified on kitty 0.50.0).
 func dirOf(w window, pid int) string {
 	for _, p := range w.Foreground {
 		if p.PID == pid && p.CWD != "" {
@@ -545,6 +547,13 @@ func dirOf(w window, pid int) string {
 // no harness is named here - a probe declared in config is for one this
 // adapter was not written with. With nothing but wrappers and shells, the
 // panel is a shell.
+//
+// Up to kitty 0.49 the wrapper is root (verified on kitty 0.48). From kitty
+// 0.50 `ls` reports the program the wrapper runs as the window's process, so
+// that program is root, and the wrapper, its parent, is outside root's tree
+// and dropped as any detached process is (verified on kitty 0.50.0). Once
+// that program ends, the wrapper becomes the held shell in place, which is
+// root under both.
 //
 // Nearness is by parent, not by kitty's order. kitty lists the group by pid,
 // and a pid says nothing about who started whom once pids wrap. A process
@@ -587,8 +596,8 @@ const (
 )
 
 // rank is how many parents up from pid the window's root is, unknown when a
-// parent cannot be read, and detached when the chain ends without reaching
-// root - at init or a subreaper.
+// parent cannot be read, and detached when the chain reaches init without
+// passing root.
 func rank(pid, root int, parent func(int) (int, bool)) int {
 	for depth := 0; depth < 64; depth++ {
 		if pid == root {
@@ -607,9 +616,9 @@ func rank(pid, root int, parent func(int) (int, bool)) int {
 }
 
 // parents is parentOf remembered for one listing. Every foreground process of
-// every window is walked up to its window's root, and the shells and
-// wrappers those walks share would otherwise be read from /proc again for
-// each one.
+// every window is walked up to its window's root, or to init when it is not
+// in root's tree, and the shells, wrappers and kitty itself those walks share
+// would otherwise be read from /proc again for each one.
 func (h *Host) parents() func(pid int) (int, bool) {
 	type answer struct {
 		ppid int
