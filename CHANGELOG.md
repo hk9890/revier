@@ -6,6 +6,31 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## v0.26.0
+
+- **A `git_url` that is a page of the forge is refused, and revier names the
+  repository to clone.** A link to a folder, such as
+  `https://github.com/<owner>/<repo>/tree/main/<dir>`, or a repository page
+  with `?tab=...`, was accepted, and the clone then failed with only
+  `clone failed`. Set `git_url` to the repository itself, such as
+  `https://github.com/<owner>/<repo>`.
+- **A failed clone says why in the detail pane.** The pane shows git's
+  reason until a clone succeeds or you change `git_url` or `path`, and it
+  offers Enter to clone again only when git ran.
+- **ctrl+v pastes and ctrl+c copies in the popup.** Before, only
+  ctrl+shift+v and ctrl+shift+c worked, so a URL could not be pasted into a
+  popup dialog with ctrl+v. ctrl+c copies a shift+drag selection and then
+  clears it; with no selection, it quits or cancels as before.
+- **A tab whose command ends just as you press its key opens again.**
+  Before, the press failed with `can't find pane`.
+- **The agent list, the logs screen and the status bar show no escape
+  sequences.** An agent's or a status command's output could show the text
+  of terminal graphics and other control sequences in the row.
+- **A rename that revier refuses is listed in `revier state`.** In the TUI,
+  a rename is also refused before the first survey, as `revier rename` is.
+- **del on a project with nothing open is no longer logged as an error.**
+  The logs screen showed an ERROR line for it.
+
 ## v0.25.0
 
 - **Action required: revier refuses a project file with a relative `path`,
