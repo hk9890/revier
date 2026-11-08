@@ -37,3 +37,7 @@ func (l *ledger) Note(n record.Line) {
 	}
 	l.notes = append(l.notes, n)
 }
+
+func (l *ledger) MarkPopupHidden() error { return nil }
+
+func (l *ledger) TakePopupHidden() bool { return false }
