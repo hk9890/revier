@@ -255,7 +255,10 @@ func (ps *projectScreen) rename(sf surface, to revier.ProjectName) projectResult
 	if to == from {
 		return projectResult{}
 	}
-	p, _ := projectNamed(sf.projects, from)
+	p, ok := projectNamed(sf.projects, from)
+	if !ok {
+		return projectResult{err: fmt.Errorf("no project named %q to rename", from)}
+	}
 	v := revier.ProjectView{Project: p.Project}
 	for _, sv := range sf.views {
 		if sv.Project.Name == from {

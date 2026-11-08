@@ -2,6 +2,7 @@ package tui
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -59,5 +60,30 @@ func TestTheProjectScreenWritesAFieldWithNoRootModel(t *testing.T) {
 
 	if res, _ := ps.key(sf, pressedKey(tea.KeyPressMsg{Code: tea.KeyEscape})); !res.closed {
 		t.Errorf("result = %+v, want Esc on the rows to close the screen", res)
+	}
+}
+
+// A rename of a project that left the surface since the screen opened is
+// refused, naming it, and moves no file.
+func TestTheProjectScreenRefusesToRenameAProjectThatIsGone(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("REVIER_CONFIG_HOME", root)
+	p, err := config.Create(root, "widget", "/p/widget", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	th := theme.Default()
+	sf := surface{theme: th, spun: th, keys: newKeyMap(nil), core: &core.Core{Ledger: ledger.File{Root: t.TempDir()}}, settled: core.Settled{Surveyed: true}, list: 80}
+	ps := newProjectScreen(th)
+	if err := ps.open(p, config.Inherited{}); err != nil {
+		t.Fatal(err)
+	}
+
+	if res := ps.rename(sf, "gadget"); res.err == nil || !strings.Contains(res.err.Error(), `"widget"`) || res.written != nil {
+		t.Fatalf("result = %+v, want the rename refused, naming widget", res)
+	}
+	if _, err := os.Stat(p.File); err != nil {
+		t.Errorf("project file after the refused rename: %v, want it kept", err)
 	}
 }
