@@ -154,6 +154,31 @@ func TestACloseThatIsNotFullLeavesItsRecordUnwritten(t *testing.T) {
 	}
 }
 
+// Abandoning the record of a close that is not full does not touch the
+// ledger: the surface quits on its second ctrl+c without the state's lock.
+func TestAbandoningARecordNoShutdownStartedTakesNoLock(t *testing.T) {
+	c, _, report, projects := desktop(t)
+	root := t.TempDir()
+	record := app.NewShutdownRecord(c.WithLedger(untouchedLedger{c.Ledger, t}), root)
+	req := app.CloseRequest{Core: c, StateRoot: root, Plan: c.ShutdownPlan(report, "demo", core.ShutdownAll), Projects: projects, Project: "demo", Record: record}
+
+	if _, err := app.Close(t.Context(), req); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	record.Abandon()
+}
+
+// untouchedLedger fails the test on an update: one takes the state's lock.
+type untouchedLedger struct {
+	core.Ledger
+	t *testing.T
+}
+
+func (l untouchedLedger) Update(func(*state.State) bool) *state.State {
+	l.t.Error("the ledger was updated")
+	return l.State()
+}
+
 // The close of one agent saves nothing and records nothing.
 func TestAnAgentCloseSavesNothingAndRecordsNothing(t *testing.T) {
 	c, _, report, projects := desktop(t)

@@ -136,8 +136,9 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	}
 	// ctrl+c stops the close between two steps, and ends the wait after
 	// them. A second ctrl+c ends the command before the shutdown returns, so
-	// it abandons the record of a full shutdown, which takes it back or keeps
-	// it. app.Close decides whether the record is written at all.
+	// it abandons the record, which takes it back or keeps it. app.Close
+	// decides whether the record is written at all, and the record of a close
+	// that is not full has nothing to take back.
 	req.Record = usecase.NewShutdownRecord(a.core, a.stateRoot)
 	walk, stop := interruptible(ctx, req.Record.Abandon)
 	defer stop()

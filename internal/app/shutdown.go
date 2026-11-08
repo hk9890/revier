@@ -157,6 +157,7 @@ type ShutdownRecord struct {
 	root    string // the state root, whose record of what was last seen the shutdown ends
 	mu      sync.Mutex
 	at      time.Time // when this shutdown wrote its record, which the state may not hold; zero when it holds none
+	started bool      // Close runs a full shutdown on this record
 	steps   int
 	reached int
 }
@@ -171,7 +172,20 @@ func NewShutdownRecord(c *core.Core, stateRoot string) *ShutdownRecord {
 // walk returns, on the second ctrl+c: the record is taken back as the walk
 // would have taken it back on its cancel. The first ctrl+c cancelled the
 // walk, so the walk writes no record after this.
-func (r *ShutdownRecord) Abandon() { r.takeBack() }
+//
+// A surface holds a record for every close it runs, and Close starts only a
+// full shutdown's. A record no shutdown started returns at once, without the
+// state's lock, which another process can hold: the surface that quits has
+// nothing to take back. One that started can still be on its write, so it
+// waits for the lock.
+func (r *ShutdownRecord) Abandon() {
+	r.mu.Lock()
+	started := r.started
+	r.mu.Unlock()
+	if started {
+		r.takeBack()
+	}
+}
 
 // Recorded reports whether the shutdown is on record: written by it, not
 // taken back, and held by the state now. The ledger does not report a write
@@ -192,7 +206,7 @@ func (r *ShutdownRecord) Recorded() bool {
 func (r *ShutdownRecord) start(steps int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.steps = steps
+	r.started, r.steps = true, steps
 }
 
 func (r *ShutdownRecord) reach() {

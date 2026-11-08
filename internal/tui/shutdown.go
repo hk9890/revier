@@ -70,7 +70,7 @@ type shutdown struct {
 	plan     []core.CloseStep
 	running  bool
 	walk     walk                // what the close that runs has reported, and its cancel
-	record   *app.ShutdownRecord // the record of a whole shutdown that runs
+	record   *app.ShutdownRecord // the record of the close that runs, which app.Close writes only for a whole shutdown
 	saved    string              // what the save before the close came to
 	closed   core.Closed
 	quitting bool   // a full shutdown is done: the surface quits on the next key or the wait
