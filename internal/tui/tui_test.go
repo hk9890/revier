@@ -168,7 +168,9 @@ func TestTheRuleKeepsTheTotalsItHasRoomFor(t *testing.T) {
 // that sets neither.
 func TestASurfaceWaitsTheCloseWaitAndTheMirrorInterval(t *testing.T) {
 	_, _, c, projects := world(t, 1)
-	m := tui.New(c, projects, t.TempDir(), &config.Config{}, time.Second, theme.Default(), "")
+	root := t.TempDir()
+	c.Ledger = ledger.File{Root: root}
+	m := tui.New(c, projects, root, &config.Config{}, time.Second, theme.Default(), "")
 	if got := m.CloseWait(); got != core.CloseWait {
 		t.Errorf("close wait = %v, want core.CloseWait (%v)", got, core.CloseWait)
 	}

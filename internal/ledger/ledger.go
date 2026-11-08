@@ -33,9 +33,6 @@ import (
 // each cause, a discarded file as a failure to load.
 type File struct {
 	Root string
-	// Written, when set, is told of every write, so a surface can take the
-	// state into itself before its next survey does.
-	Written chan<- struct{}
 	// Failed, when set, is told why a write did not reach the file.
 	Failed func(error)
 }
@@ -124,14 +121,6 @@ func (f File) Update(apply func(*state.State) bool) *state.State {
 		f.keep(st)
 		logShutDown(before, st.ShutDown)
 		record.Write(changes(was, st)...)
-	}
-	if f.Written != nil {
-		// A write still waiting to be read already stands for this one: the
-		// reader takes the whole state again.
-		select {
-		case f.Written <- struct{}{}:
-		default:
-		}
 	}
 	return st
 }

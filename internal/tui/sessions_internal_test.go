@@ -19,7 +19,7 @@ func TestARestoresLaunchReachesTheSurfaceAtOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	written := make(chan struct{}, 1)
-	restoring := ledger.File{Root: root, Written: written}
+	restoring := toldLedger{Ledger: ledger.File{Root: root}, written: written}
 	m := bare(Model{stateRoot: root, core: &core.Core{Ledger: ledger.File{Root: root}}})
 
 	restoring.Update(func(st *state.State) bool {
@@ -51,5 +51,21 @@ func TestARestoresLaunchReachesTheSurfaceAtOnce(t *testing.T) {
 	}
 	if msg = waitLedger(written)().(ledgerMsg); msg.ok {
 		t.Error("the wait did not end with the restore")
+	}
+}
+
+// A write while the surface has not yet read the last one's signal does not
+// wait for it: the one signal stands for both.
+func TestAToldLedgerDoesNotBlockOnAnUnreadWrite(t *testing.T) {
+	written := make(chan struct{}, 1)
+	l := toldLedger{Ledger: ledger.File{Root: t.TempDir()}, written: written}
+	for range 2 {
+		l.Update(func(st *state.State) bool {
+			st.Launched("work", "home", time.Now())
+			return true
+		})
+	}
+	if len(written) != 1 {
+		t.Errorf("signals = %d, want 1", len(written))
 	}
 }

@@ -47,7 +47,6 @@ import (
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/events"
-	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
@@ -239,13 +238,10 @@ type Model struct {
 	agents   *agentList      // the agent list, the surface's second list (agentlist.go)
 }
 
-// New builds the surface over prepared projects. stateRoot is where revier's
-// state lives: the saved sessions are under it, and a core handed in with no
-// ledger keeps its state there.
+// New builds the surface over prepared projects. c carries the ledger the
+// surface reads and writes state through. stateRoot is where revier's state
+// lives: the saved sessions are under it.
 func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Config, refresh time.Duration, th theme.Theme, start revier.ProjectName) Model {
-	if c.Ledger == nil {
-		c.Ledger = ledger.File{Root: stateRoot}
-	}
 	actions := cfg.Actions
 	keys := newKeyMap(actions)
 	m := Model{
