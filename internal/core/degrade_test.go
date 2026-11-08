@@ -15,24 +15,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// degraded is a runtime holding home, a window host holding the editor, and
-// a served host, with the named one failing to list.
-func degraded(t *testing.T, failing string) (*core.Core, []core.Project) {
-	t.Helper()
-	rt := hosttest.NewRuntime("rt")
-	rt.Add("session:revier", "kitty")
-	wm := hosttest.New("wm")
-	wm.Add("Visual Studio Code", "code")
-	served := hosttest.New("served")
-	fail := errors.New("went away")
-	for _, h := range []*hosttest.Fake{rt.Fake, wm, served} {
-		if h.Name() == failing {
-			h.InstancesErr = fail
-		}
-	}
-	return &core.Core{Runtime: rt, Window: wm, Served: served}, []core.Project{prepared(t, project())}
-}
-
 // A survey over a host that cannot list still stands: the other host's
 // targets are as they are, the failed host's are unknown with the reason,
 // and the failed host is not among the hosts that answered, so nothing bound

@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/hk9890/revier/internal/theme"
-	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -34,18 +33,6 @@ func TestAProjectHeldOnlyByAnAttachedWindowReadsAsOpen(t *testing.T) {
 	if got := pane(m); !strings.Contains(got, "Status") || !strings.Contains(got, "running") {
 		t.Errorf("the pane says:\n%s\nwant a running status", got)
 	}
-}
-
-// rowOf is the index of the row naming the project.
-func rowOf(t *testing.T, m tui.Model, name string) int {
-	t.Helper()
-	for i, r := range rows(m) {
-		if strings.Contains(r, name+" ") {
-			return i
-		}
-	}
-	t.Fatalf("no row names %s:\n%s", name, strings.Join(rows(m), "\n"))
-	return -1
 }
 
 // alt+t is offered where it does something. A project with no target row has

@@ -462,17 +462,6 @@ func TestAToggleBackNamesHomeAsWhereItLanded(t *testing.T) {
 	}
 }
 
-// osWindowProject is a workspace and a runtime-only diff target, as a kitty
-// user has them: both are OS windows a window host also lists.
-func osWindowProject() revier.Project {
-	return revier.Project{Name: "revier", Path: "/p", Targets: []revier.Target{
-		{Name: "home", Home: true, Runtime: &revier.Realization{
-			Name: "session:revier", Launch: []string{"x"}, Match: revier.Match{Title: "^session:revier$"}}},
-		{Name: "diff", Key: "ctrl-shift-d", Runtime: &revier.Realization{
-			Name: "diff:revier", Launch: []string{"x"}, Match: revier.Match{Title: "^diff:revier$"}}},
-	}}
-}
-
 // A terminal on Wayland cannot raise its own OS window, so focusing a runtime
 // target also raises that window through the window host.
 func TestGoRaisesTheOSWindowOfARuntimeTarget(t *testing.T) {

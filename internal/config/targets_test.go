@@ -10,15 +10,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-func sharedTyped(t *testing.T, shared []map[string]any) []revier.Target {
-	t.Helper()
-	typed, err := config.DecodeTargets(shared)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return typed
-}
-
 // A changed value is written in place; everything else, comments included,
 // stays as it was.
 func TestReplaceTargetWritesOnlyWhatChanged(t *testing.T) {

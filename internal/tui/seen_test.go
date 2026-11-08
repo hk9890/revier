@@ -16,15 +16,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// forget removes what the surface wrote, so a test sees whether it writes
-// again.
-func forget(t *testing.T, root string) {
-	t.Helper()
-	if err := os.Remove(session.SeenPath(root)); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // A check that cannot read what the end before left writes nothing over it:
 // what that end left is the one copy of what it had open.
 func TestAFailedCheckLeavesWhatTheEndBeforeLeft(t *testing.T) {

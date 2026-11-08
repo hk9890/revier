@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
 	"github.com/hk9890/revier/internal/build"
@@ -572,12 +571,6 @@ func TestTheHelpScreenScrolls(t *testing.T) {
 	if drawn(m) == top {
 		t.Error("the help screen is unchanged after down on a short terminal")
 	}
-}
-
-// motion is the pointer moving over a terminal cell, pressing nothing.
-func motion(m tui.Model, x, y int) tui.Model {
-	next, _ := m.Update(tea.MouseMotionMsg{X: x, Y: y})
-	return next.(tui.Model)
 }
 
 // The pointer lights a row of the list and a target in the pane, and the

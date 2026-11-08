@@ -271,3 +271,12 @@ func targetsRoot(t *testing.T, text string) (string, []map[string]any) {
 	}
 	return root, cfg.Targets
 }
+
+func sharedTyped(t *testing.T, shared []map[string]any) []revier.Target {
+	t.Helper()
+	typed, err := config.DecodeTargets(shared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return typed
+}

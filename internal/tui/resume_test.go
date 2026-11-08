@@ -15,23 +15,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// shutDownWorld is world with a full shutdown on record, naming a session of
-// project-00's home and its agent, and the surface built over that state.
-func shutDownWorld(t *testing.T) (m tui.Model, rt *hosttest.FakeRuntime, root string, s session.Session) {
-	t.Helper()
-	rt, _, c, projects := world(t, 2)
-	root = t.TempDir()
-	s = saved(t, root, "", 10, session.Project{Name: "project-00", Targets: []session.Target{
-		{Name: "home", Agents: []session.Agent{{Harness: "claude"}}},
-	}})
-	st := &state.State{}
-	st.MarkShutDown(time.Date(2026, 9, 15, 18, 30, 0, 0, time.Local), s.ID)
-	if err := st.Save(root); err != nil {
-		t.Fatal(err)
-	}
-	return resize(refreshed(t, c, projects, root, nil), 150, 30), rt, root, s
-}
-
 // opened reports a realization of that name opened on the runtime.
 func opened(rt *hosttest.FakeRuntime, name string) bool {
 	return slices.ContainsFunc(rt.Opened, func(r revier.Realization) bool { return r.Name == name })

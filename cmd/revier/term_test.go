@@ -10,33 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 )
-
-// termApp is an app over a config.toml of text, its kitty directory a fresh
-// one that holds kittyConf.
-func termApp(t *testing.T, text, kittyConf string) (*app, string) {
-	t.Helper()
-	root := t.TempDir()
-	path := filepath.Join(root, "config.toml")
-	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := config.Read(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	dir := filepath.Join(root, "kitty")
-	t.Setenv("KITTY_CONFIG_DIRECTORY", dir)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "kitty.conf"), []byte(kittyConf), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return &app{cfg: cfg, core: &core.Core{}, out: &bytes.Buffer{}}, dir
-}
 
 func runTerm(t *testing.T, a *app, args ...string) (string, error) {
 	t.Helper()

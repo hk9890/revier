@@ -10,26 +10,6 @@ import (
 	"github.com/hk9890/revier/internal/tui"
 )
 
-const syncConfig = `# my actions
-[[action]]
-key = "ctrl+g" # g for git
-name = "sync"
-run = ["git", "pull"]
-`
-
-var syncAction = config.Action{Key: "ctrl+g", Name: "sync", Run: []string{"git", "pull"}}
-
-// onActionRow opens the config screen with the cursor on the i-th action row,
-// or on the add row past the last. The model has no shared targets, so the
-// targets section is its add row alone.
-func onActionRow(m tui.Model, i int) tui.Model {
-	m, _ = press(m, "alt+c")
-	for range 5 + i {
-		m, _ = press(m, "down")
-	}
-	return m
-}
-
 // An action added on the screen is written to config.toml and bound at once:
 // its key runs it on the surface, with no restart.
 func TestTheConfigScreenAddsAnAction(t *testing.T) {

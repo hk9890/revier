@@ -903,3 +903,82 @@ func onTargetRow(m tui.Model, i int) tui.Model {
 	}
 	return m
 }
+
+// forget removes what the surface wrote, so a test sees whether it writes
+// again.
+func forget(t *testing.T, root string) {
+	t.Helper()
+	if err := os.Remove(session.SeenPath(root)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// homeOf is a recorded project with its home target open.
+func homeOf(name string) session.Project {
+	return session.Project{Name: revier.ProjectName(name), Targets: []session.Target{{Name: "home"}}}
+}
+
+// motion is the pointer moving over a terminal cell, pressing nothing.
+func motion(m tui.Model, x, y int) tui.Model {
+	next, _ := m.Update(tea.MouseMotionMsg{X: x, Y: y})
+	return next.(tui.Model)
+}
+
+const syncConfig = `# my actions
+[[action]]
+key = "ctrl+g" # g for git
+name = "sync"
+run = ["git", "pull"]
+`
+
+var syncAction = config.Action{Key: "ctrl+g", Name: "sync", Run: []string{"git", "pull"}}
+
+// onActionRow opens the config screen with the cursor on the i-th action row,
+// or on the add row past the last. The model has no shared targets, so the
+// targets section is its add row alone.
+func onActionRow(m tui.Model, i int) tui.Model {
+	m, _ = press(m, "alt+c")
+	for range 5 + i {
+		m, _ = press(m, "down")
+	}
+	return m
+}
+
+// rowOf is the index of the row naming the project.
+func rowOf(t *testing.T, m tui.Model, name string) int {
+	t.Helper()
+	for i, r := range rows(m) {
+		if strings.Contains(r, name+" ") {
+			return i
+		}
+	}
+	t.Fatalf("no row names %s:\n%s", name, strings.Join(rows(m), "\n"))
+	return -1
+}
+
+// shutDownWorld is world with a full shutdown on record, naming a session of
+// project-00's home and its agent, and the surface built over that state.
+func shutDownWorld(t *testing.T) (m tui.Model, rt *hosttest.FakeRuntime, root string, s session.Session) {
+	t.Helper()
+	rt, _, c, projects := world(t, 2)
+	root = t.TempDir()
+	s = saved(t, root, "", 10, session.Project{Name: "project-00", Targets: []session.Target{
+		{Name: "home", Agents: []session.Agent{{Harness: "claude"}}},
+	}})
+	st := &state.State{}
+	st.MarkShutDown(time.Date(2026, 9, 15, 18, 30, 0, 0, time.Local), s.ID)
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+	return resize(refreshed(t, c, projects, root, nil), 150, 30), rt, root, s
+}
+
+// step presses a key and delivers the command it returns, when it returns
+// one.
+func step(m tui.Model, key string) tui.Model {
+	m, cmd := press(m, key)
+	if cmd == nil {
+		return m
+	}
+	return run(m, cmd)
+}
