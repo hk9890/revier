@@ -379,7 +379,7 @@ func cmdAgentFocus(out io.Writer, args []string) error {
 }
 
 // cmdAgentClose ends one agent by closing its panel, as del on its row in the
-// TUI does: through the core's close path, without a session save, and
+// TUI does: through app.Close, without a session save, and
 // refused while the agent works or waits for an answer unless forced.
 func cmdAgentClose(out io.Writer, args []string) error {
 	fs := flag.NewFlagSet("agent close", flag.ContinueOnError)
@@ -427,15 +427,16 @@ func (a *app) closeAgent(ctx context.Context, address string, force bool) error 
 	if busy := core.Busy(plan); len(busy) > 0 && !force {
 		return busyAgent(address, busy)
 	}
-	closed, err := a.core.Shutdown(ctx, plan, closeWait, core.ShutdownOpts{Force: force, Projects: projects})
-	var refused *core.BusyRefusal
+	res, err := usecase.Close(ctx, usecase.CloseRequest{
+		Core: a.core, Plan: plan, Projects: projects, Project: p.Name, Force: force, Wait: closeWait,
+	})
 	switch {
-	case errors.As(err, &refused):
-		return busyAgent(address, core.Busy(refused.Plan))
+	case res.Refused != nil:
+		return busyAgent(address, core.Busy(res.Refused))
 	case err != nil:
 		return fmt.Errorf("%s: %w; nothing closed", address, err)
 	}
-	if r := closed[0]; r.Action.Leaves() || r.Err != nil || r.Open {
+	if r := res.Closed[0]; r.Action.Leaves() || r.Err != nil || r.Open {
 		return fmt.Errorf("%s: %s", address, r.Note())
 	}
 	if core.ClosesTab(report.Instances, plan[0]) {

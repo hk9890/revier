@@ -10,61 +10,133 @@ import (
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
-// Shutdown closes the plan as core.Shutdown does, for both surfaces. save,
-// when set, is opts.Before: it saves the session the shutdown ends and returns
-// the session that holds what is open, which is zero when it recorded
-// nothing. record is set for a full shutdown, of every project, all of each:
-// it records in the state that revier was shut down, and the session save
-// returned, so the next surface offers to restore what it closed
-// (decisions.md D141).
+// CloseRequest is a close of what a plan names, as either surface asks for
+// it: a shutdown of every project or of one, or the close of one agent.
+type CloseRequest struct {
+	Core      *core.Core
+	StateRoot string
+	Plan      []core.CloseStep
+	// Projects are what the recheck surveys, as core.ShutdownOpts says.
+	Projects []core.Project
+	// Project is the one project the plan closes, and empty for every
+	// project.
+	Project revier.ProjectName
+	Scope   core.ShutdownScope
+	// Force closes a step whose agent is busy (decisions.md D78).
+	Force bool
+	// Save saves the session the close ends, when it changed.
+	Save bool
+	Wait time.Duration
+	// Progress, when set, is told of each phase and step, as
+	// core.ShutdownOpts says.
+	Progress func(core.Progress)
+	// Saved, when set, is told what the save came to once it is made and
+	// before the first close.
+	Saved func(Saved)
+	// Record is the caller's handle on the record of a full shutdown, which
+	// it abandons when it quits before Close returns. Close alone decides
+	// whether it is written, and makes its own when the caller holds none.
+	Record *ShutdownRecord
+}
+
+// Saved is what the save before a close came to: the session that holds what
+// is open, zero when nothing was, whether this save wrote it, and what the
+// save could not record.
+type Saved struct {
+	Session session.Session
+	New     bool
+	Gaps    core.SessionGaps
+}
+
+// CloseResult is what a close came to. Refused is the plan as the recheck
+// read it when an agent turned busy since the plan was made; nothing closed
+// then. Save is nil when no save ran. Recorded is a full shutdown the state
+// now holds, as ShutdownRecord.Recorded says.
+type CloseResult struct {
+	Closed   core.Closed
+	Refused  []core.CloseStep
+	Save     *Saved
+	Recorded bool
+}
+
+// Close closes the plan as core.Shutdown does, for both surfaces. A close of
+// every project saves as a shutdown, and one of a single project as that
+// project's close. The save runs after the busy guard, so a close the guard
+// refuses saves nothing either (decisions.md D78). A refusal is returned as
+// core.ErrAgentBusy, with the rechecked plan in Refused.
 //
-// The record is written once the save is made and before the first close,
-// because the close may end the caller's own terminal last. A close the busy
-// guard refuses, or whose save fails, records nothing, and neither does one
-// cancelled before the record is written: the cancel stops it before its
-// first step. A record whose write did not reach the state does not stop the
-// close; the shutdown is then not on record. A close cancelled on its walk
-// takes the record back as ShutdownRecord says.
-func Shutdown(ctx context.Context, c *core.Core, plan []core.CloseStep, wait time.Duration, opts core.ShutdownOpts,
-	save func(context.Context, core.Report) (session.Session, error), record *ShutdownRecord,
-) (core.Closed, error) {
+// A full shutdown, of every project, all of each, is recorded in the state
+// with the session it saved, so the next surface offers to restore what it
+// closed (D141). The record is written once the save is made and before the
+// first close, because the close may end the caller's own terminal last. A
+// close the busy guard refuses, or whose save fails, records nothing, and
+// neither does one cancelled before the record is written: the cancel stops
+// it before its first step. A record whose write did not reach the state does
+// not stop the close; the shutdown is then not on record. A close cancelled
+// on its walk takes the record back as ShutdownRecord says.
+func Close(ctx context.Context, req CloseRequest) (CloseResult, error) {
+	c := req.Core
+	var res CloseResult
+	record := req.Record
+	switch {
+	case req.Project != "" || req.Scope != core.ShutdownAll:
+		record = nil
+	case record == nil:
+		record = NewShutdownRecord(c, req.StateRoot)
+	}
+	reason := session.ReasonShutdown
+	if req.Project != "" {
+		reason = session.ReasonProjectClosed
+	}
+	opts := core.ShutdownOpts{Force: req.Force, Projects: req.Projects, Progress: req.Progress}
 	if record != nil {
-		record.start(len(plan))
-		progress := opts.Progress
+		record.start(len(req.Plan))
 		opts.Progress = func(p core.Progress) {
 			if p.Phase == core.PhaseClose && !p.Done {
 				record.reach()
 			}
-			if progress != nil {
-				progress(p)
+			if req.Progress != nil {
+				req.Progress(p)
 			}
 		}
 	}
-	if save != nil || record != nil {
+	if req.Save || record != nil {
 		opts.Before = func(saving context.Context, now core.Report) error {
-			var stored session.Session
-			if save != nil {
-				var err error
-				if stored, err = save(saving, now); err != nil {
+			var id string
+			if req.Save {
+				stored, saved, gaps, err := SaveChanged(saving, c, req.StateRoot, now, reason, time.Now())
+				if err != nil {
 					return err
 				}
+				res.Save = &Saved{Session: stored, New: saved, Gaps: gaps}
+				if req.Saved != nil {
+					req.Saved(*res.Save)
+				}
+				id = stored.ID
 			}
 			// A cancel that came during the save leaves the save made and
 			// writes no record. The walk reads the cancel before its first
 			// step, so nothing closes.
 			if record != nil {
-				record.write(ctx, stored.ID)
+				record.write(ctx, id)
 			}
 			return nil
 		}
 	}
-	closed, err := c.Shutdown(ctx, plan, wait, opts)
+	closed, err := c.Shutdown(ctx, req.Plan, req.Wait, opts)
 	if record != nil && errors.Is(ctx.Err(), context.Canceled) {
 		record.takeBack()
 	}
-	return closed, err
+	res.Closed = closed
+	var refused *core.BusyRefusal
+	if errors.As(err, &refused) {
+		res.Refused = refused.Plan
+	}
+	res.Recorded = record != nil && record.Recorded()
+	return res, err
 }
 
 // ShutdownRecord is one full shutdown's entry in the state: whether this
