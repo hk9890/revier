@@ -97,7 +97,7 @@ func scrubbed(env []string) []string {
 }
 
 func ctx(t *testing.T) context.Context {
-	c, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	c, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	t.Cleanup(cancel)
 	return c
 }

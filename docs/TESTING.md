@@ -75,6 +75,9 @@ that did not focus after `Open` passed L2 and failed L4.
     code reaches `kitty.ConfigDir` the `TestMain` above.
 - Call `testenv.NoTools(t)` in a test that must start no tool, such as git or
   mise, rather than setting PATH inline.
+- Give a new test the context `t.Context()` returns, not
+  `context.Background()`. Give a `t.Cleanup` function its own context:
+  `t.Context()` is cancelled before cleanups run.
 - In `internal/tui`, feed a command that a key press or an `Update` returned
   back to the model with a helper from `internal/tui/helpers_test.go`, not with
   an inline `m.Update(cmd())`: `deliver` returns the commands the model answers
