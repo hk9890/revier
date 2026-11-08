@@ -526,8 +526,10 @@ func panelOf(w window, parent func(pid int) (int, bool)) revier.Panel {
 }
 
 // dirOf is the directory of the panel's process, as --cwd=current takes it
-// from the foreground: the window's own cwd is its first process's, which a
-// `kitten run-shell` wrapper keeps where the panel started.
+// from the foreground. The window's own cwd is not always that process's:
+// up to kitty 0.49 it is the window's first process's, which a `kitten
+// run-shell` wrapper keeps where the panel started. From kitty 0.50 it is the
+// directory of the program the wrapper runs.
 func dirOf(w window, pid int) string {
 	for _, p := range w.Foreground {
 		if p.PID == pid && p.CWD != "" {
@@ -545,6 +547,11 @@ func dirOf(w window, pid int) string {
 // no harness is named here - a probe declared in config is for one this
 // adapter was not written with. With nothing but wrappers and shells, the
 // panel is a shell.
+//
+// Up to kitty 0.49 the wrapper is root. From kitty 0.50 `ls` reports the
+// program the wrapper runs as the window's process, so that program is root,
+// and the wrapper, its parent, is outside root's tree and dropped as any
+// detached process is.
 //
 // Nearness is by parent, not by kitty's order. kitty lists the group by pid,
 // and a pid says nothing about who started whom once pids wrap. A process
