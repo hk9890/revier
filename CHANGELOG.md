@@ -11,9 +11,10 @@ Each section is also the text of its release on the
 - **A `git_url` that is a page of the forge is refused, and revier names the
   repository to clone.** A link to a folder, such as
   `https://github.com/<owner>/<repo>/tree/main/<dir>`, or a repository page
-  with `?tab=...`, was accepted, and the clone then failed with only
-  `clone failed`. Set `git_url` to the repository itself, such as
-  `https://github.com/<owner>/<repo>`.
+  with `?tab=...`, was accepted. The clone then failed with git's
+  `repository not found`, which did not say that the URL was the problem,
+  and the footer said only `clone failed`. Set `git_url` to the repository
+  itself, such as `https://github.com/<owner>/<repo>`.
 - **A failed clone says why in the detail pane.** The pane shows git's
   reason until a clone succeeds or you change `git_url` or `path`, and it
   offers Enter to clone again only when git ran.
@@ -28,8 +29,9 @@ Each section is also the text of its release on the
   of terminal graphics and other control sequences in the row.
 - **A rename that revier refuses is listed in `revier state`.** In the TUI,
   a rename is also refused before the first survey, as `revier rename` is.
-- **del on a project with nothing open is no longer logged as an error.**
-  The logs screen showed an ERROR line for it.
+- **del on a row with nothing open, or whose open panels another project
+  holds, is no longer logged as an error.** The logs screen showed an ERROR
+  line for it.
 
 ## v0.25.0
 
