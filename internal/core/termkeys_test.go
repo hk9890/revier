@@ -108,7 +108,7 @@ func TestAMapAfterTheIncludeShadowsRevierAndOneBeforeMakesItLate(t *testing.T) {
 	}
 	r := termReportOf(t, revier.TermKeyState{ConfigExists: true, Maps: maps}, termKeys)
 	want := []core.TermShadow{{Line: 37}, {Line: 57, Condition: "when var:in_tmux"}}
-	if got := termRow(t, r, "ctrl+shift+t").Shadowed; !reflect.DeepEqual(got, want) {
+	if got := termRow(t, r, "ctrl+shift+t").Shadowed; !slices.Equal(got, want) {
 		t.Errorf("shadowed = %+v, want %+v", got, want)
 	}
 	if got := termRow(t, r, "ctrl+shift+z").Shadowed; len(got) != 0 {
@@ -119,7 +119,7 @@ func TestAMapAfterTheIncludeShadowsRevierAndOneBeforeMakesItLate(t *testing.T) {
 	if late.Include != core.TermIncludeLate {
 		t.Errorf("include = %q, want late: the map on line 37 is of a key revier writes", late.Include)
 	}
-	if got := termRow(t, late, "ctrl+shift+t").Shadowed; !reflect.DeepEqual(got, want[1:]) {
+	if got := termRow(t, late, "ctrl+shift+t").Shadowed; !slices.Equal(got, want[1:]) {
 		t.Errorf("shadowed = %+v, want only the map after the include", got)
 	}
 }

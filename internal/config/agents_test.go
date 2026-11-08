@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -81,7 +82,7 @@ func TestAProjectInheritsTheNamedAgents(t *testing.T) {
 		t.Errorf("Agents = %+v, want %+v", p.Agents, want)
 	}
 	panel := target(t, p, "agent").Runtime.Panels[0]
-	if !reflect.DeepEqual(panel.Command, []string{"claude", "--name", "demo"}) || panel.Title != "claude" {
+	if !slices.Equal(panel.Command, []string{"claude", "--name", "demo"}) || panel.Title != "claude" {
 		t.Errorf("panel = %+v, want the claude agent's command under its name", panel)
 	}
 }
@@ -112,14 +113,14 @@ name = "agent"
 	if problems := config.Problems(p); len(problems) > 0 {
 		t.Fatalf("project problems = %v", problems)
 	}
-	if got := agentNames(p); !reflect.DeepEqual(got, []string{"claude", "dtop", "reviewer"}) {
+	if got := agentNames(p); !slices.Equal(got, []string{"claude", "dtop", "reviewer"}) {
 		t.Errorf("agents = %v, want claude, dtop, reviewer", got)
 	}
-	if got := p.Agents[1].Command; !reflect.DeepEqual(got, []string{"dtop", "--fast"}) {
+	if got := p.Agents[1].Command; !slices.Equal(got, []string{"dtop", "--fast"}) {
 		t.Errorf("dtop = %v, want the project's command", got)
 	}
 	panel := target(t, p, "agent").Runtime.Panels[0]
-	if panel.Title != "review" || !reflect.DeepEqual(panel.Command, []string{"claude", "--agent", "review"}) {
+	if panel.Title != "review" || !slices.Equal(panel.Command, []string{"claude", "--agent", "review"}) {
 		t.Errorf("panel = %+v, want reviewer's command under its own title", panel)
 	}
 }
@@ -135,7 +136,7 @@ key = "ctrl+shift+d"
 	if len(p.AgentRefused) != 1 || !strings.Contains(p.AgentRefused[0].Error(), "config.toml alone") {
 		t.Errorf("AgentRefused = %v, want the key refused", p.AgentRefused)
 	}
-	if got := agentNames(p); !reflect.DeepEqual(got, []string{"claude", "dtop"}) {
+	if got := agentNames(p); !slices.Equal(got, []string{"claude", "dtop"}) {
 		t.Errorf("agents = %v, want both kept", got)
 	}
 }
@@ -199,7 +200,7 @@ name = "idle"
 		got = append(got, err.Error())
 	}
 	want := []string{`agent 1: has no name`, `agent "dtop": declared twice`, `agent "idle": has no command`}
-	if !reflect.DeepEqual(got, want) {
+	if !slices.Equal(got, want) {
 		t.Errorf("Problems = %q, want %q", got, want)
 	}
 	if !reflect.DeepEqual(p.Agents, []core.NamedAgent{{Name: "dtop", Command: []string{"dtop"}}}) {
@@ -234,7 +235,7 @@ command = ["dtop"]
 	}
 	rule := ": a name is letters, digits, '-', '_' and '.', and does not start with '-'"
 	want := []string{`agent "-p"` + rule, `agent "two words"` + rule, `agent "it's"` + rule}
-	if !reflect.DeepEqual(got, want) {
+	if !slices.Equal(got, want) {
 		t.Errorf("Problems = %q, want %q", got, want)
 	}
 	if len(p.Agents) != 1 || p.Agents[0].Name != "dtop-2_b.v" {
@@ -268,7 +269,7 @@ command = ["c", "{{.Vars.missing}}"]
 		what, _, _ := strings.Cut(err.Error(), ":")
 		got = append(got, what)
 	}
-	if want := []string{`agent "a"`, `agent "b"`, `agent "c"`}; !reflect.DeepEqual(got, want) {
+	if want := []string{`agent "a"`, `agent "b"`, `agent "c"`}; !slices.Equal(got, want) {
 		t.Errorf("AgentRefused = %v, want %q", p.AgentRefused, want)
 	}
 	if !reflect.DeepEqual(p.Agents, []core.NamedAgent{{Name: "a", Command: []string{"a"}}}) {
@@ -383,7 +384,7 @@ func TestSaveProjectTargetWritesAPanelsAgent(t *testing.T) {
 	if !strings.Contains(read(t, file), `agent = "dtop"`) {
 		t.Errorf("demo.toml =\n%s\nwant the panel's agent", read(t, file))
 	}
-	if got := target(t, p, "agent").Runtime.Panels[0].Command; !reflect.DeepEqual(got, []string{"dtop"}) {
+	if got := target(t, p, "agent").Runtime.Panels[0].Command; !slices.Equal(got, []string{"dtop"}) {
 		t.Errorf("panel command = %v, want dtop's", got)
 	}
 	if err := refusalOf(p, "agent"); err != nil {

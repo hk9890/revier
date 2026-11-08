@@ -6,7 +6,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -493,7 +492,7 @@ func TestTheUsersLayoutKeepsItsMapsBelowTheInclude(t *testing.T) {
 		{Chord: "ctrl+shift+z", Line: 8, Condition: "when var:in_tmux"},
 		{Chord: "ctrl+alt+d", Line: 9},
 	}
-	if !reflect.DeepEqual(s.Maps, want) {
+	if !slices.Equal(s.Maps, want) {
 		t.Errorf("maps =\n%+v\nwant\n%+v", s.Maps, want)
 	}
 }
