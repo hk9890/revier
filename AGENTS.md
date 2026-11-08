@@ -30,8 +30,9 @@ owns a decision is not guessable from the tree.
 ### Coding and file changes
 
 **MUST read [docs/CODING.md](docs/CODING.md) before creating or editing ANY file
-under `cmd/`, `pkg/`, `internal/`, or `scripts/`.** Two invariants there are not
-visible from the code — what a host must never do, and what `Open` owes `Match`.
+under `cmd/`, `pkg/`, `internal/`, or `scripts/`, or `docs/user-guide/embed.go`.**
+Two invariants there are not visible from the code — what a host must never
+do, and what `Open` owes `Match`.
 
 ### Design intent, and any change to the model
 

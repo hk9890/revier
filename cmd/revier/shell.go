@@ -8,10 +8,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/hk9890/revier/internal/core"
-	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -31,11 +29,12 @@ usage:
 
 new opens a tab in an open workspace: the target's shell panel, or the
 runtime's shell where it declares none. The target is the home target unless
--p names one. Without -p or --panel the project is the one --dir is in, or
-without --dir the one this directory is in; a directory in no project is an
-error, which exits 3. For a project on another machine the tab is a shell
-there, and --dir, a path on this machine, is dropped. With --panel in a
-window that is no project's open workspace, it opens what [terminal] outside
+-p names one. Without a project in -p and without --panel the project is the
+one --dir is in, or without --dir the one this directory is in; a directory
+in no project is an error, which exits 3. For a project on another machine
+the tab is a shell there, and --dir, a path on this machine, is dropped. With
+--panel in a window that is no project's open workspace, it opens what
+[terminal] outside
 says: a plain shell tab beside the window, or nothing.
 
 exec becomes the project's shell in this terminal. It is what the shell panel
@@ -90,29 +89,15 @@ func cmdShellNew(out io.Writer, args []string) error {
 	return a.newShell(ctx, *project, *panel, *dir)
 }
 
-// newShell opens the shell tab where newTab puts it.
+// newShell opens the shell tab where the core places it.
 func (a *app) newShell(ctx context.Context, project, panel, dir string) error {
-	here := func(w core.Workspace, dir string) error {
-		start := time.Now()
-		err := a.core.NewShell(ctx, w, dir)
-		logging.Op("shell new", start, err, "project", w.Project.Name, "target", w.Target, "ref", w.Ref, "dir", dir)
+	req, err := tabRequest(revier.PanelShell, project, panel, dir)
+	if err != nil {
 		return err
 	}
-	return a.newTab(ctx, "shell new", revier.PanelShell, "", project, panel, dir, homeTarget, here)
-}
-
-// homeTarget is the target `revier shell new -p <project>` opens its tab in.
-// A project without one is loaded and listed all the same (decisions.md D85),
-// and is refused here with its reason.
-func homeTarget(p core.Project) (revier.TargetName, error) {
-	home, ok := p.Home()
-	if !ok || home.Name == "" {
-		if p.Invalid != nil {
-			return "", p.Invalid
-		}
-		return "", fmt.Errorf("project %q has no home target", p.Name)
-	}
-	return home.Name, nil
+	req.Outside = a.cfg.OutsideKey("")
+	_, err = a.core.PlaceTab(ctx, a.projects, req)
+	return err
 }
 
 // cmdShellExec becomes the project's shell, as cmdAgentExec becomes its agent.

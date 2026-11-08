@@ -26,7 +26,7 @@ func TestALinkToThisMachineIsNotLoaded(t *testing.T) {
 	}
 	t.Setenv("REVIER_SSH_CONFIG", sshConfig)
 	root := t.TempDir()
-	dir := filepath.Join(root, "projects")
+	dir := config.ProjectsDir(root)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestAWrittenTargetGivesNoLinkToThisMachine(t *testing.T) {
 	}
 	t.Setenv("REVIER_SSH_CONFIG", filepath.Join(t.TempDir(), "none"))
 	root := t.TempDir()
-	dir := filepath.Join(root, "projects")
+	dir := config.ProjectsDir(root)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}

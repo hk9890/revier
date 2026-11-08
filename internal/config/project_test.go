@@ -2,7 +2,6 @@ package config_test
 
 import (
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -294,7 +293,7 @@ name = "remote-editor"
   launch = ["code", "--remote", "ssh-remote+{{.Remote.Host}}", "{{.Path}}"]
   match = { class = "^Code$" }
 `)
-	dir := filepath.Join(root, "projects")
+	dir := config.ProjectsDir(root)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}

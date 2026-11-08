@@ -133,9 +133,10 @@ func (m Model) walking() bool {
 // quits, and every other press does nothing.
 //
 // The surface quits before the walk returns, so the hung step's command is
-// ended here, and a full shutdown's record is abandoned here, and the record
-// decides whether it is taken back (decisions.md D141). The command is ended
-// first: the abandon can wait on the state's lock.
+// ended here, and the close's record is abandoned here, and the record
+// decides whether it is taken back (decisions.md D141). The record of a close
+// that is not full returns at once. The command is ended first: the abandon
+// of a full shutdown's record can wait on the state's lock.
 func (m Model) lockedKey(msg keyPress) (tea.Model, tea.Cmd) {
 	if !key.Matches(msg, m.keys.Quit) {
 		return m, nil

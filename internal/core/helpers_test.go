@@ -3,6 +3,7 @@ package core_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"sync"
@@ -662,7 +663,7 @@ func listedTabsProject(active revier.TargetName) revier.Project {
 func keysOf(t *testing.T, binder revier.KeyBinder, projects ...core.Project) core.KeyReport {
 	t.Helper()
 	c := &core.Core{KeyBinder: binder}
-	report, err := c.Keys(context.Background(), projects, "alt+space")
+	report, err := c.KeyReport(context.Background(), projects, "alt+space")
 	if err != nil {
 		t.Fatalf("Keys: %v", err)
 	}
@@ -678,4 +679,44 @@ func row(t *testing.T, report core.KeyReport, chord core.Chord) core.KeyRow {
 	}
 	t.Fatalf("no row for %q in %+v", chord, report.Rows)
 	return core.KeyRow{}
+}
+
+// degraded is a runtime holding home, a window host holding the editor, and
+// a served host, with the named one failing to list.
+func degraded(t *testing.T, failing string) (*core.Core, []core.Project) {
+	t.Helper()
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:revier", "kitty")
+	wm := hosttest.New("wm")
+	wm.Add("Visual Studio Code", "code")
+	served := hosttest.New("served")
+	fail := errors.New("went away")
+	for _, h := range []*hosttest.Fake{rt.Fake, wm, served} {
+		if h.Name() == failing {
+			h.InstancesErr = fail
+		}
+	}
+	return &core.Core{Runtime: rt, Window: wm, Served: served}, []core.Project{prepared(t, project())}
+}
+
+// osWindowProject is a workspace and a runtime-only diff target, as a kitty
+// user has them: both are OS windows a window host also lists.
+func osWindowProject() revier.Project {
+	return revier.Project{Name: "revier", Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:revier", Launch: []string{"x"}, Match: revier.Match{Title: "^session:revier$"}}},
+		{Name: "diff", Key: "ctrl-shift-d", Runtime: &revier.Realization{
+			Name: "diff:revier", Launch: []string{"x"}, Match: revier.Match{Title: "^diff:revier$"}}},
+	}}
+}
+
+// marked is the panel in a tab of the instance, under the mark of the tab
+// target it was opened for.
+func marked(panel revier.Panel, tab string, target revier.TargetName) revier.Panel {
+	panel.Tab = tab
+	if panel.Vars == nil {
+		panel.Vars = map[string]string{}
+	}
+	panel.Vars[core.PanelTargetVar] = string(target)
+	return panel
 }

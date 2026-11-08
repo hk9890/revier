@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/hk9890/revier/internal/adapter/ssh"
+	"github.com/hk9890/revier/internal/shell"
 )
 
 // fishWords splits a line into words as fish reads them, by the rules of
@@ -108,7 +109,7 @@ func TestAnAwkwardNameReachesTheHostAsOneWordUnderFish(t *testing.T) {
 	args := append([]string{"revier", "list", "--json"}, names...)
 	words := make([]string, len(args))
 	for i, a := range args {
-		words[i] = ssh.Quote(a)
+		words[i] = shell.Quote(a)
 	}
 	first, err := fishWords(ssh.Login(strings.Join(words, " ")), "fish")
 	if err != nil {

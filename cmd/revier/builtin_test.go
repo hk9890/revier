@@ -64,6 +64,7 @@ func TestAListOfTheAssistantAloneSaysWhereToAddOne(t *testing.T) {
 func TestAssistExecWithNoAgentFailsAtOnce(t *testing.T) {
 	configRoot(t, "", nil)
 	t.Setenv("REVIER_STATE_HOME", t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	testenv.NoTools(t)
 
 	if err := run(&strings.Builder{}, []string{"assist", "--exec"}); !errors.Is(err, errNoAssistant) {

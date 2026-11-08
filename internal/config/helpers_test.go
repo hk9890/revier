@@ -107,7 +107,7 @@ func projectsRoot(t *testing.T, cfg string, files map[string]string) string {
 	if cfg != "" {
 		write(t, root, "config.toml", cfg)
 	}
-	dir := filepath.Join(root, "projects")
+	dir := config.ProjectsDir(root)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -270,4 +270,13 @@ func targetsRoot(t *testing.T, text string) (string, []map[string]any) {
 		t.Fatalf("Load: %v", err)
 	}
 	return root, cfg.Targets
+}
+
+func sharedTyped(t *testing.T, shared []map[string]any) []revier.Target {
+	t.Helper()
+	typed, err := config.DecodeTargets(shared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return typed
 }

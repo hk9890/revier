@@ -127,7 +127,7 @@ func cmdAssist(out io.Writer, args []string) (err error) {
 	if err != nil {
 		return err
 	}
-	brief := fmt.Sprintf(assistBrief, self, config.File(cfgRoot), filepath.Join(cfgRoot, "projects"), logging.Dir(stateRoot))
+	brief := fmt.Sprintf(assistBrief, self, config.File(cfgRoot), config.ProjectsDir(cfgRoot), logging.Dir(stateRoot))
 	if !*beside {
 		brief += assistReturn
 	}

@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -441,7 +440,7 @@ func (m Model) noProjects() string {
 	}
 	where := "projects/<name>.toml under the configuration directory"
 	if root, err := config.Root(); err == nil {
-		where = config.ContractHome(filepath.Join(root, "projects")) + "/<name>.toml"
+		where = config.ContractHome(config.ProjectsDir(root)) + "/<name>.toml"
 	}
 	return say(th.NameDim, "No projects configured. Add one as") + "\n" + say(th.Path, where)
 }

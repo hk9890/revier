@@ -19,11 +19,6 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// homeOf is a recorded project with its home target open.
-func homeOf(name string) session.Project {
-	return session.Project{Name: revier.ProjectName(name), Targets: []session.Target{{Name: "home"}}}
-}
-
 // The sessions button is on the bar with its key, and the screen it opens
 // lists the saved sessions newest first, each with its name and counts. An
 // agent with no conversation is still one of the agents counted.

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -169,115 +168,26 @@ func (a *app) project(name revier.ProjectName) (core.Project, bool) {
 	return core.Project{}, false
 }
 
-// resolveProject decides which project a command acts on, in the order a user
-// would expect to be obeyed:
-//
-//  1. an explicit --project,
-//  2. the project owning the working directory, which is what makes a command
-//     typed in a terminal mean the obvious thing,
-//  3. the project revier focused last.
-//
-// Step 3 is why state exists. A keybinding pressed while the editor is focused
-// has no working directory and no focused workspace to read, so without a
-// remembered project "go back to the terminal" could not be answered.
-// errNoProject is the normal outcome of a keypress on a window that belongs
-// to no project, and of a tab asked for from a directory in no project. It
-// has its own exit status, and `go --picker` opens the popup instead.
-var errNoProject = errors.New("no project for this directory, for the focused window, and none remembered")
-
+// resolveProject is the project a command acts on: the one -p names, else
+// the one of the working directory, else the one of the focused window, else
+// the last one (core.Core.ProjectFor).
 func (a *app) resolveProject(ctx context.Context, explicit string) (core.Project, error) {
-	if explicit != "" {
-		p, ok := a.project(revier.ProjectName(explicit))
-		if !ok {
-			return core.Project{}, fmt.Errorf("no project named %q", explicit)
-		}
-		slog.Info("resolve", "project", p.Name, "by", "flag")
-		return p, nil
+	ask := core.Ask{Name: revier.ProjectName(explicit), Away: true}
+	if explicit == "" {
+		ask.Dir = workingDir()
 	}
-	if p, ok := a.resolveHere(); ok {
-		return p, nil
-	}
-	if p, ok := a.resolveAway(ctx); ok {
-		return p, nil
-	}
-	return core.Project{}, errNoProject
+	return a.core.ProjectFor(ctx, a.projects, ask)
 }
 
-// resolveHere is step 2: the project owning the working directory, read from
-// the files alone.
-func (a *app) resolveHere() (core.Project, bool) {
+// workingDir is the directory the command runs in, or "" when it cannot be
+// read: the step that needs it is skipped.
+func workingDir() string {
 	cwd, err := os.Getwd()
 	if err != nil {
 		slog.Warn("resolve: working directory", "err", err)
-		return core.Project{}, false
+		return ""
 	}
-	p, ok := a.projectForPath(cwd)
-	if ok {
-		slog.Info("resolve", "project", p.Name, "by", "directory", "dir", cwd)
-	}
-	return p, ok
-}
-
-// resolveAway is step 3 for a command run away from every project
-// directory: the focused window, before the remembered project, because a
-// desktop binding has no useful working directory, and the project the user
-// is looking at beats the one revier last acted on. It lists every host,
-// which is why the TUI runs it after its first frame.
-func (a *app) resolveAway(ctx context.Context) (core.Project, bool) {
-	p, ok, err := a.core.ProjectOfFocused(ctx, a.projects)
-	if err != nil {
-		slog.Warn("resolve: focused window", "err", err)
-	} else if ok {
-		slog.Info("resolve", "project", p.Name, "by", "focused window")
-		return p, true
-	}
-	if current := a.core.Ledger.State().Current; current != "" {
-		if p, ok := a.project(current); ok {
-			slog.Info("resolve", "project", p.Name, "by", "last project")
-			return p, true
-		}
-	}
-	return core.Project{}, false
-}
-
-// projectForPath returns the project whose path contains dir, preferring the
-// longest match so a project nested inside another wins. It compares the paths
-// with every symlink resolved: a shell keeps the path through a link, a tmux
-// window starts in the one behind it. Where that finds none, it compares them
-// as text, which still places a directory that does not exist yet.
-func (a *app) projectForPath(dir string) (core.Project, bool) {
-	if p, ok := a.projectContaining(resolveLinks(dir), resolveLinks); ok {
-		return p, true
-	}
-	return a.projectContaining(filepath.Clean(dir), filepath.Clean)
-}
-
-// projectContaining is projectForPath with every project's path in one form.
-func (a *app) projectContaining(dir string, form func(string) string) (core.Project, bool) {
-	best, bestLen := core.Project{}, -1
-	for _, p := range a.projects {
-		// A remote project's path is on its host; a directory here of the
-		// same name is some other checkout.
-		if p.Remote != nil {
-			continue
-		}
-		root := form(p.Path)
-		if dir == root || strings.HasPrefix(dir, root+string(filepath.Separator)) {
-			if len(root) > bestLen {
-				best, bestLen = p, len(root)
-			}
-		}
-	}
-	return best, bestLen >= 0
-}
-
-// resolveLinks is path with every symlink resolved, or path cleaned when it
-// cannot be resolved.
-func resolveLinks(path string) string {
-	if resolved, err := filepath.EvalSymlinks(path); err == nil {
-		return resolved
-	}
-	return filepath.Clean(path)
+	return cwd
 }
 
 // commit records the project a command acted on, so the next keybinding

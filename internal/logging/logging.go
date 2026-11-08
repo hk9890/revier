@@ -38,6 +38,13 @@ const (
 // Dir is where the files are.
 func Dir(stateRoot string) string { return filepath.Join(stateRoot, "logs") }
 
+// File is the log file of day under a state root.
+func File(stateRoot string, day time.Time) string {
+	return filepath.Join(Dir(stateRoot), fileName(day.Format(layout)))
+}
+
+func fileName(day string) string { return prefix + day + suffix }
+
 // Setup makes the daily file the default slog logger for this process, writing
 // records at level and above. A log that cannot be opened is not a reason to
 // fail a keypress: the caller reports the error and carries on.
@@ -187,7 +194,7 @@ func (d *daily) openLocked() (bool, error) {
 	if err := os.MkdirAll(d.dir, 0o755); err != nil {
 		return false, err
 	}
-	path := filepath.Join(d.dir, prefix+day+suffix)
+	path := filepath.Join(d.dir, fileName(day))
 	_, statErr := os.Stat(path)
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {

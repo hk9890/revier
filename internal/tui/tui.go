@@ -47,7 +47,6 @@ import (
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/events"
-	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
@@ -175,7 +174,6 @@ type Model struct {
 	consoleF     bool                             // the Linux console's start of F1 to F5 came, so the next press is the key's letter
 	start        revier.ProjectName               // the project to open on, from the working directory
 	placing      bool                             // the cursor was put on the starting project; the next body sync places the list around it
-	lookup       StartLookup                      // the project to open on when start is none, asked once the surface shows
 	popup        bool                             // the surface is the popup: Esc or the desktop hides it, and the next press raises it
 	endHung      func()                           // ends the host command of a step that hangs, as the second ctrl+c quits; nil to leave it
 	hidden       bool                             // the popup is off the screen; nothing surveys until it is raised, unless a launch is coming up
@@ -240,13 +238,10 @@ type Model struct {
 	agents   *agentList      // the agent list, the surface's second list (agentlist.go)
 }
 
-// New builds the surface over prepared projects. stateRoot is where revier's
-// state lives: the saved sessions are under it, and a core handed in with no
-// ledger keeps its state there.
+// New builds the surface over prepared projects. c carries the ledger the
+// surface reads and writes state through. stateRoot is where revier's state
+// lives: the saved sessions are under it.
 func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Config, refresh time.Duration, th theme.Theme, start revier.ProjectName) Model {
-	if c.Ledger == nil {
-		c.Ledger = ledger.File{Root: stateRoot}
-	}
 	actions := cfg.Actions
 	keys := newKeyMap(actions)
 	m := Model{
@@ -301,19 +296,6 @@ func (m Model) WithAssistant(p core.Project) Model {
 	m.assistant = p
 	m.setFiles(m.shared, m.named, m.projects)
 	m.reloadViews()
-	return m
-}
-
-// StartLookup finds the project to open on when the working directory is in
-// none: the one of the focused window, else the one remembered. It lists
-// every host, so it runs after the first frame, not before it.
-type StartLookup func(ctx context.Context) (revier.ProjectName, bool)
-
-// WithStart sets the lookup Init runs. Its answer moves the cursor only
-// while the user has not: a cursor that jumps under a keystroke is worse
-// than one that starts on the top row.
-func (m Model) WithStart(lookup StartLookup) Model {
-	m.lookup = lookup
 	return m
 }
 
@@ -472,18 +454,23 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(m.Survey(), m.input.Focus(), m.lookupStart(), m.firstBeat())
 }
 
-// lookupStart asks the lookup where to open, when the working directory did
-// not say. Nil without a lookup, or with a start already.
+// lookupStart asks the core where to open, when the working directory did
+// not say: the project of the focused window, else the one remembered. It
+// lists every host, so it runs after the first frame, not before it. Its
+// answer moves the cursor only while the user has not: a cursor that jumps
+// under a keystroke is worse than one that starts on the top row. Nil with a
+// start already, and in the popup, whose focused window is the popup itself,
+// so the project the popup was raised for stands.
 func (m Model) lookupStart() tea.Cmd {
-	lookup := m.lookup
-	if lookup == nil || m.start != "" {
+	if m.popup || m.start != "" {
 		return nil
 	}
+	c, projects := m.core, m.projects
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		name, ok := lookup(ctx)
-		return startMsg{name: name, ok: ok}
+		p, err := c.ProjectFor(ctx, projects, core.Ask{Away: true})
+		return startMsg{name: p.Name, ok: err == nil}
 	}
 }
 

@@ -31,9 +31,10 @@ type Ledger interface {
 	// failed or not, or what a save saw. A line with no By is one an
 	// operation did (decisions.md D151).
 	Note(l record.Line)
+	PopupMarks
 }
 
-// PopupMarks is a ledger that keeps the mark of a press that raised the
+// PopupMarks is the part of a ledger that keeps the mark of a press that raised the
 // popup from minimized, until the popup's surface takes it at the focus the
 // raise gives it (decisions.md D169). The mark is on the raise's path, so it
 // is kept apart from the state, whose save is made to last.

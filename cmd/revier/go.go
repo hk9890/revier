@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -21,7 +22,7 @@ func cmdGo(ctx context.Context, a *app, args []string) error {
 		return fmt.Errorf("usage: revier go <target> [-p project] [--picker]")
 	}
 	p, err := a.resolveProject(ctx, *project)
-	if errors.Is(err, errNoProject) && *picker {
+	if errors.Is(err, core.ErrNoProject) && *picker {
 		return cmdPopup(ctx, a)
 	}
 	if err != nil {

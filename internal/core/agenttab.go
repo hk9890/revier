@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"slices"
 	"strings"
 
@@ -251,18 +250,6 @@ func (c *Core) AddressIn(w Workspace, panel revier.PanelID) string {
 	return Address(w.Project.Name, pl.of(w.Ref, panel), panel)
 }
 
-// TabIn is the open workspace a tab for a project's target opens in. An empty
-// target is the one pick chooses.
-func (c *Core) TabIn(ctx context.Context, p Project, target revier.TargetName, pick func(Project) (revier.TargetName, error)) (Workspace, error) {
-	if target == "" {
-		var err error
-		if target, err = pick(p); err != nil {
-			return Workspace{}, err
-		}
-	}
-	return c.AgentWorkspace(ctx, p, target)
-}
-
 // AgentWorkspace is the open instance of a project's target, for `revier
 // agent new -p`. A listed tab that holds panels names the workspace it is
 // inside: the tab is a part of that workspace's layout (decisions.md D128).
@@ -308,7 +295,7 @@ func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.Target
 //
 // An instance that holds the panel but backs no project's target is
 // ErrNoWorkspace, and the Workspace that comes with it holds only that
-// instance: where TabAtPanel opens a tab outside a workspace.
+// instance: where PlaceTab opens a tab outside a workspace.
 func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.PanelID) (Workspace, error) {
 	bound := c.state().Bound
 	if c.Runtime == nil {
@@ -385,79 +372,13 @@ const (
 	OutsideAgent Outside = "agent"
 )
 
-// OutsideKey is what TabAtPanel needs for a key pressed outside a workspace:
+// OutsideKey is what PlaceTab needs for a key pressed outside a workspace:
 // what config says, the named agent the key asks for, empty for the default
 // agent, and config.toml's named agents, their commands as written.
 type OutsideKey struct {
 	Outside Outside
 	Agent   string
 	Agents  []NamedAgent
-}
-
-// TabAtPanel opens the tab a terminal key pressed in a panel asks for: in the
-// open workspace PanelOwner finds, through in, with the directory the tab
-// starts in. Where the runtime holds the panel but no project's open
-// workspace does, the key is not refused for that: it does what outside
-// says, a plain tab of the runtime's own shell beside the panel, a tab of the
-// agent an agent key asks for, or nothing. Every other failure is returned,
-// so the key's own fallback runs (decisions.md D148, D164); so is an agent
-// that cannot run there, as agent says.
-//
-// A tab of kind starts in dir, else where in or the runtime starts it; each
-// only while it is a directory. A shell tab, and every tab outside a
-// workspace, start in the panel's own directory before that; an agent tab in
-// a workspace does not, so an agent pressed from a worktree starts in the
-// project, where it can enter any worktree (D158). A key passes the directory
-// its terminal names for the panel, which can be one removed since (D153).
-func (c *Core) TabAtPanel(ctx context.Context, projects []Project, panel revier.PanelID, kind revier.PanelKind, dir string, outside OutsideKey, in func(Workspace, string) error) error {
-	w, err := c.PanelOwner(ctx, projects, panel)
-	if !dirExists(dir) {
-		dir = ""
-	}
-	if !errors.Is(err, ErrNoWorkspace) {
-		if err != nil {
-			return err
-		}
-		if dir == "" && kind != revier.PanelAgent {
-			dir = panelDir(w, panel)
-		}
-		return in(w, dir)
-	}
-	if dir == "" {
-		dir = panelDir(w, panel)
-	}
-	slog.Info("tab outside a workspace", "panel", panel, "ref", w.Ref, "outside", string(outside.Outside), "kind", string(kind), "agent", outside.Agent, "dir", dir)
-	if outside.Outside == OutsideNone {
-		return nil
-	}
-	opener, ok := c.Runtime.(revier.PanelOpener)
-	if !ok {
-		return fmt.Errorf("%s: %w", c.Runtime.Name(), ErrNoTabsToOpen)
-	}
-	spec, what := revier.PanelSpec{Kind: revier.PanelShell, Dir: dir}, "plain tab"
-	if outside.Outside == OutsideAgent && kind == revier.PanelAgent {
-		agent, ok, err := outside.agent()
-		if err != nil {
-			return err
-		}
-		if ok {
-			spec, what = revier.PanelSpec{Kind: revier.PanelAgent, Title: outside.Agent, Command: agent.Command, Dir: dir}, "agent tab"
-		} else {
-			slog.Warn("tab outside a workspace", "err", "config.toml declares no [[agent]] to run; the tab is a plain shell")
-		}
-	}
-	tab := revier.Realization{Dir: dir, Panels: []revier.PanelSpec{spec}}
-	opened, err := opener.OpenTab(ctx, w.Ref, tab, nil)
-	if err != nil {
-		return fmt.Errorf("%s: %s: %w", c.Runtime.Name(), what, err)
-	}
-	if err := opener.FocusPanel(ctx, w.Ref, opened); err != nil {
-		if ended(ctx, c.Runtime, w.Ref, opened, tab.Panels) {
-			return fmt.Errorf("%s: %s: %w", c.Runtime.Name(), what, panelstart.ExitedAtOnce(spec))
-		}
-		return fmt.Errorf("%s: focus the %s: %w", c.Runtime.Name(), what, err)
-	}
-	return nil
 }
 
 // agent is the named agent a key outside a workspace runs: the one the key

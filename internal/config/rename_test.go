@@ -2,7 +2,6 @@ package config_test
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -172,7 +171,7 @@ func TestRenameRefusesALinkedFile(t *testing.T) {
 // A refused rename leaves both files as they were.
 func TestRenameRefusesATakenOrInvalidName(t *testing.T) {
 	root := renameRoot(t, "revier", valid)
-	write(t, filepath.Join(root, "projects"), "taken.toml", "# someone else\n")
+	write(t, config.ProjectsDir(root), "taken.toml", "# someone else\n")
 	for _, to := range []revier.ProjectName{"taken", "a/b", "has space", ""} {
 		if _, err := config.Rename(root, "revier", to, config.Inherited{}); err == nil {
 			t.Errorf("rename to %q: no error", to)

@@ -17,6 +17,7 @@ import (
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/events"
+	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/testenv"
@@ -91,7 +92,7 @@ func remoteProject(t *testing.T) core.Project {
 func configRoot(t *testing.T, cfg string, files map[string]string) string {
 	t.Helper()
 	root := t.TempDir()
-	dir := filepath.Join(root, "projects")
+	dir := config.ProjectsDir(root)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +102,7 @@ func configRoot(t *testing.T, cfg string, files map[string]string) string {
 		}
 	}
 	if cfg != "" {
-		write(filepath.Join(root, "config.toml"), cfg)
+		write(config.File(root), cfg)
 	}
 	for name, body := range files {
 		write(filepath.Join(dir, name), body)
@@ -266,4 +267,40 @@ func dispatched(t *testing.T) []string {
 		t.Fatalf("found only %d commands, %v: the dispatchers moved", len(cmds), cmds)
 	}
 	return cmds
+}
+
+// demoDesktop is the demo project with the targets named open on the
+// runtime, and the app over state st.
+func demoDesktop(t *testing.T, st *state.State, open ...string) (*app, *hosttest.FakeRuntime) {
+	t.Helper()
+	rt := hosttest.NewRuntime("tmux")
+	for _, title := range open {
+		rt.Add(title, "")
+	}
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t)}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt}}, st)
+	return a, rt
+}
+
+// termApp is an app over a config.toml of text, its kitty directory a fresh
+// one that holds kittyConf.
+func termApp(t *testing.T, text, kittyConf string) (*app, string) {
+	t.Helper()
+	root := t.TempDir()
+	path := config.File(root)
+	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Read(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, "kitty")
+	t.Setenv("KITTY_CONFIG_DIRECTORY", dir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "kitty.conf"), []byte(kittyConf), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return &app{cfg: cfg, core: &core.Core{}, out: &bytes.Buffer{}}, dir
 }

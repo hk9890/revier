@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -216,9 +215,7 @@ func cmdSessionList(a *app, args []string) error {
 		return err
 	}
 	if *asJSON {
-		enc := json.NewEncoder(a.out)
-		enc.SetIndent("", "  ")
-		return enc.Encode(all)
+		return a.printJSON(all)
 	}
 	if len(all) == 0 {
 		_, _ = fmt.Fprintf(a.out, "no saved sessions. write one with revier session save\n")

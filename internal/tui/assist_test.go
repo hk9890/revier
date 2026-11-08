@@ -98,10 +98,10 @@ func TestAltAHandsOverWhenAFileTookTheBuiltinsName(t *testing.T) {
 	rt, _, c, projects := world(t, 2)
 	builtin := config.Builtin(t.TempDir(), []string{"/bin/revier", "assist", "--exec"})
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil).WithAssistant(builtin), 160, 20)
-	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+	if err := os.MkdirAll(config.ProjectsDir(root), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	file := filepath.Join(root, "projects", string(config.Assistant)+".toml")
+	file := config.ProjectFile(root, config.Assistant)
 	if err := os.WriteFile(file, []byte("path = \"/p/mine\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -198,10 +198,10 @@ func TestTheSurfaceReadsTheFilesAgainAfterTheAssistant(t *testing.T) {
 	_, _, c, projects := world(t, 2)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 
-	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+	if err := os.MkdirAll(config.ProjectsDir(root), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "projects", "written-by-the-assistant.toml"), []byte("path = \"/p/written\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(config.ProjectsDir(root), "written-by-the-assistant.toml"), []byte("path = \"/p/written\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	m, cmd := m.Assisted(nil)
@@ -222,7 +222,7 @@ func TestAConfigurationTheAssistantBrokeIsSaid(t *testing.T) {
 	_, _, c, projects := world(t, 2)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 200, 20)
 
-	if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte("this is not = = toml"), 0o644); err != nil {
+	if err := os.WriteFile(config.File(root), []byte("this is not = = toml"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	m, cmd := m.Assisted(nil)

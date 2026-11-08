@@ -82,17 +82,16 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 		slog.Info("popup: raise", "ref", w.Ref, "minimized", w.Minimized)
 		// The surface reads it at the focus the raise gives it, so it is on
 		// record first (decisions.md D169).
-		marks, ok := c.Ledger.(PopupMarks)
-		marked := ok && w.Minimized
+		marked := c.Ledger != nil && w.Minimized
 		if marked {
-			if err := marks.MarkPopupHidden(); err != nil {
+			if err := c.Ledger.MarkPopupHidden(); err != nil {
 				slog.Warn("popup: mark the raise", "err", err)
 			}
 		}
 		err := c.Window.Focus(ctx, w.Ref)
 		if err != nil && marked {
 			// No focus comes to take it, and a later one must not.
-			marks.TakePopupHidden()
+			c.Ledger.TakePopupHidden()
 		}
 		return w.Ref, err
 	}
@@ -282,8 +281,7 @@ func (c *Core) raisePopup(ctx context.Context, snap snapshot, failed hostErrs) e
 // minimized, and takes it off the record: the surface asks at each focus, so
 // the next focus, with no press, finds none (decisions.md D169).
 func (c *Core) TakePopupHidden() bool {
-	marks, ok := c.Ledger.(PopupMarks)
-	return ok && marks.TakePopupHidden()
+	return c.Ledger != nil && c.Ledger.TakePopupHidden()
 }
 
 // PopupMinimized reports whether the survey listed the popup's window

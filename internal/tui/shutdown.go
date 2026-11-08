@@ -20,7 +20,7 @@ import (
 
 // The shutdown wizard: a full shutdown or one project's, for a project what of
 // it, then the plan to confirm. The run saves the session when it changed and
-// closes what the plan names, through the core paths `revier shutdown` uses
+// closes what the plan names, through app.Close, as `revier shutdown` does
 // (decisions.md D78). It belongs to the sessions screen, whose bar has its
 // button; its key opens it from the surface too. A project's shutdown leaves
 // the surface up to say what came of it. A full one says it briefly and
@@ -70,7 +70,7 @@ type shutdown struct {
 	plan     []core.CloseStep
 	running  bool
 	walk     walk                // what the close that runs has reported, and its cancel
-	record   *app.ShutdownRecord // the record of a whole shutdown that runs
+	record   *app.ShutdownRecord // the record of the close that runs, which app.Close writes only for a whole shutdown
 	saved    string              // what the save before the close came to
 	closed   core.Closed
 	quitting bool   // a full shutdown is done: the surface quits on the next key or the wait
@@ -322,67 +322,41 @@ func (m Model) planned(msg plannedMsg) (tea.Model, tea.Cmd) {
 
 // shutRun saves the session when it changed and closes what the plan names.
 // Confirming a plan that already names a busy agent is the TUI's --force
-// (decisions.md D78); every other close is refused by core.Shutdown when one
-// of the plan's agents turned busy since the plan was drawn, and the wizard
+// (decisions.md D78); every other close is refused by app.Close when one of
+// the plan's agents turned busy since the plan was drawn, and the wizard
 // shows the plan again with the agents that refused it.
 //
 // Only the plan the wizard drew goes in. Every close, the forced one too,
-// reads the agents again inside core.Shutdown, and the order and the session
+// reads the agents again inside app.Close, and the order and the session
 // it saves come off that reading rather than off the listing the plan was
 // drawn from.
 func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	s.running = true
-	c, root, projects, plan, saves, full, wait := m.core, m.stateRoot, s.projects, s.plan, s.saves(), s.whole, m.closeWait
-	reason := session.ReasonProjectClosed
-	if s.whole {
-		reason = session.ReasonShutdown
-	}
-	force := confirmed && len(core.Busy(plan)) > 0
+	plan := s.plan
 	// The recheck, the save, a report before and after each step, and the
 	// wait.
 	w, progress, cancelled := startWalk(core.PhaseRecheck, 3+2*len(plan))
 	s.walk = w
-	s.record = nil
-	if full {
-		s.record = app.NewShutdownRecord(c, root)
+	// The wizard holds the record to abandon it on the second ctrl+c;
+	// app.Close decides whether it is written.
+	s.record = app.NewShutdownRecord(m.core, m.stateRoot)
+	req := app.CloseRequest{
+		Core: m.core, StateRoot: m.stateRoot, Plan: plan, Projects: s.projects,
+		Project: s.project, Scope: s.scope, Force: confirmed && len(core.Busy(plan)) > 0,
+		Save: s.saves(), Wait: m.closeWait, Record: s.record,
+		Progress: func(p core.Progress) { progress <- p },
 	}
-	record := s.record
 	closing := func() tea.Msg {
 		defer close(progress)
 		defer w.cancel()
-		opts := core.ShutdownOpts{Force: force, Projects: projects, Progress: func(p core.Progress) { progress <- p }}
-		note := ""
-		var save func(context.Context, core.Report) (session.Session, error)
-		if saves {
-			// The save is skipped when the recheck left nothing to close, so
-			// the result says why rather than showing a blank line.
-			note = "nothing closed, so nothing was saved"
-			// The save runs after the busy guard, so a close it refuses
-			// leaves no session file behind either, and it records the survey
-			// the close works from: a window closed by hand while the confirm
-			// was on screen is not saved and reopened by a later restore.
-			save = func(saving context.Context, now core.Report) (session.Session, error) {
-				stored, saved, _, err := app.SaveChanged(saving, c, root, now, reason, time.Now())
-				if err != nil {
-					return session.Session{}, err
-				}
-				note = "nothing open to save"
-				switch {
-				case saved:
-					note = "saved as session " + stored.ID
-				case stored.ID != "":
-					note = "session " + stored.ID + " already holds what was open"
-				}
-				return stored, nil
-			}
-		}
 		// No deadline over the close: each phase bounds its own, and once a
 		// deadline laid over the cancel passed, a ctrl+c would no longer
 		// reach the walk.
-		answer := closeAnswer(app.Shutdown(cancelled, c, plan, wait, opts, save, record))
-		if answer.err == nil && answer.recheck == nil {
-			answer.saved, answer.recorded = note, record != nil && record.Recorded()
+		res, err := app.Close(cancelled, req)
+		answer := closeAnswer(res, err)
+		if answer.err == nil && answer.recheck == nil && req.Save {
+			answer.saved = savedNote(res.Save)
 		}
 		return answer
 	}
@@ -394,15 +368,29 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 // closeAnswer is what a close came to, as the wizard reads it: the refusal
 // carries the rechecked plan, so the surface shows it rather than an error
 // alone.
-func closeAnswer(closed core.Closed, err error) shutdownMsg {
-	var refused *core.BusyRefusal
+func closeAnswer(res app.CloseResult, err error) shutdownMsg {
 	switch {
-	case errors.As(err, &refused):
-		return shutdownMsg{recheck: refused.Plan}
+	case res.Refused != nil:
+		return shutdownMsg{recheck: res.Refused}
 	case err != nil:
 		return shutdownMsg{err: fmt.Errorf("%w; nothing closed", err)}
 	}
-	return shutdownMsg{closed: closed}
+	return shutdownMsg{closed: res.Closed, recorded: res.Recorded}
+}
+
+// savedNote is what the save before a close came to, as the result says it.
+// The save is skipped when the recheck left nothing to close, so the result
+// says why rather than showing a blank line.
+func savedNote(s *app.Saved) string {
+	switch {
+	case s == nil:
+		return "nothing closed, so nothing was saved"
+	case s.New:
+		return "saved as session " + s.Session.ID
+	case s.Session.ID != "":
+		return "session " + s.Session.ID + " already holds what was open"
+	}
+	return "nothing open to save"
 }
 
 // shutDown takes a shutdown's answer: the result is the pane's and the

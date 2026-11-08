@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"maps"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -391,121 +390,38 @@ func TestPanelOwnerTakesTheInstanceTheRuntimeFinds(t *testing.T) {
 	}
 }
 
-// tabAtPanel runs TabAtPanel and reports the workspace it handed to in, or
-// the zero one where in was not called.
-func tabAtPanel(t *testing.T, c *core.Core, projects []core.Project, panel revier.PanelID, dir string, outside core.Outside) (core.Workspace, error) {
-	t.Helper()
-	var got core.Workspace
-	err := c.TabAtPanel(context.Background(), projects, panel, revier.PanelShell, dir, core.OutsideKey{Outside: outside}, func(w core.Workspace, _ string) error {
-		got = w
-		return nil
-	})
-	return got, err
+// tabAtPanel places a shell tab at panel, with dir, as outside says.
+func tabAtPanel(c *core.Core, projects []core.Project, panel revier.PanelID, dir string, outside core.Outside) (core.PlacedTab, error) {
+	return c.PlaceTab(context.Background(), projects, core.TabRequest{Kind: revier.PanelShell, Panel: panel, Dir: dir, Outside: core.OutsideKey{Outside: outside}})
 }
 
-// A shell tab starts in the directory given, else in the panel's own
-// directory, each while it is one: a worktree removed under the panel's
-// shell, given by a key or reported by kitty, leaves the tab where in starts
-// it. Outside a workspace the plain tab starts there too.
-func TestTabAtPanelStartsInThePanelsDirectory(t *testing.T) {
-	here, gone, given := t.TempDir(), filepath.Join(t.TempDir(), "removed"), t.TempDir()
-	c, rt, projects, _, _ := twoWorkspaces(t, []revier.Panel{{ID: "1", Dir: here}, {ID: "2", Dir: gone}}, nil)
-	rt.Add("a kitty window of no project", "", revier.Panel{ID: "9", Dir: here})
-
-	for _, tc := range []struct {
-		panel     revier.PanelID
-		dir, want string
-	}{
-		{"1", "", here},
-		{"1", given, given},
-		{"2", "", ""},
-		{"1", gone, here},
-		{"2", gone, ""},
-	} {
-		got := "unset"
-		err := c.TabAtPanel(context.Background(), projects, tc.panel, revier.PanelShell, tc.dir, core.OutsideKey{Outside: core.OutsideTab}, func(_ core.Workspace, dir string) error {
-			got = dir
-			return nil
-		})
-		if err != nil || got != tc.want {
-			t.Errorf("panel %s, dir %q: in got %q, %v, want %q", tc.panel, tc.dir, got, err, tc.want)
-		}
-	}
-
-	if _, err := tabAtPanel(t, c, projects, "9", "", core.OutsideTab); err != nil {
-		t.Fatalf("TabAtPanel outside: %v", err)
-	}
-	if len(rt.Tabs) != 1 || rt.Tabs[0].Real.Dir != here || rt.Tabs[0].Real.Panels[0].Dir != here {
-		t.Errorf("tabs = %+v, want one plain tab in %s", rt.Tabs, here)
-	}
-}
-
-// An agent tab starts in the directory given, else where in starts it, never
-// in the panel's own directory: an agent pressed from a worktree starts in
-// the project, where it can enter any worktree. Outside a workspace the key
-// opens a plain shell tab, which starts in the panel's directory.
-func TestTabAtPanelStartsAnAgentOutsideThePanelsDirectory(t *testing.T) {
-	worktree, gone, given := t.TempDir(), filepath.Join(t.TempDir(), "removed"), t.TempDir()
-	c, rt, projects, _, _ := twoWorkspaces(t, []revier.Panel{{ID: "1", Dir: worktree}}, nil)
-	rt.Add("a kitty window of no project", "", revier.Panel{ID: "9", Dir: worktree})
-
-	for _, tc := range []struct {
-		dir, want string
-	}{
-		{"", ""},
-		{given, given},
-		{gone, ""},
-	} {
-		got := "unset"
-		err := c.TabAtPanel(context.Background(), projects, "1", revier.PanelAgent, tc.dir, core.OutsideKey{Outside: core.OutsideTab}, func(_ core.Workspace, dir string) error {
-			got = dir
-			return nil
-		})
-		if err != nil || got != tc.want {
-			t.Errorf("dir %q: in got %q, %v, want %q", tc.dir, got, err, tc.want)
-		}
-	}
-
-	err := c.TabAtPanel(context.Background(), projects, "9", revier.PanelAgent, "", core.OutsideKey{Outside: core.OutsideTab}, func(core.Workspace, string) error {
-		t.Fatal("in ran for a window of no project")
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("TabAtPanel outside: %v", err)
-	}
-	if len(rt.Tabs) != 1 || rt.Tabs[0].Real.Dir != worktree {
-		t.Errorf("tabs = %+v, want one plain tab in %s", rt.Tabs, worktree)
-	}
-}
-
-// A key pressed in a workspace opens its tab there, through in, and nothing
-// beside it.
-func TestTabAtPanelInAWorkspaceOpensThere(t *testing.T) {
+// A key pressed in a workspace opens its tab there, and nothing beside it.
+func TestPlaceTabAtAPanelInAWorkspaceOpensThere(t *testing.T) {
 	c, rt, projects, _, other := twoWorkspaces(t, []revier.Panel{{ID: "1"}}, []revier.Panel{{ID: "7"}})
 
-	w, err := tabAtPanel(t, c, projects, "7", "", core.OutsideTab)
-	if err != nil || w.Project.Name != "other" || w.Ref != other {
-		t.Errorf("TabAtPanel = %s %+v, %v, want other %+v", w.Project.Name, w.Ref, err, other)
+	placed, err := tabAtPanel(c, projects, "7", "", core.OutsideTab)
+	if err != nil || placed.Outside {
+		t.Errorf("PlaceTab = %+v, %v, want the tab in the workspace", placed, err)
 	}
-	if len(rt.Tabs) != 0 {
-		t.Errorf("tabs = %+v, want none beside the workspace", rt.Tabs)
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Ref != other {
+		t.Errorf("tabs = %+v, want one in %+v", rt.Tabs, other)
 	}
 }
 
 // A key pressed in a terminal window that is no project's workspace is not
 // refused: with outside "tab" it opens a plain tab of the runtime's own shell
-// beside the window, in --dir, and goes to it. No project's in runs.
-func TestTabAtPanelOutsideAWorkspaceOpensAPlainTab(t *testing.T) {
+// beside the window, in --dir, and goes to it.
+func TestPlaceTabOutsideAWorkspaceOpensAPlainTab(t *testing.T) {
 	c, rt, projects, _, _ := twoWorkspaces(t, []revier.Panel{{ID: "1"}}, nil)
 	loose := rt.Add("a kitty window of no project", "", revier.Panel{ID: "9"})
 
 	notes := t.TempDir()
-	w, err := tabAtPanel(t, c, projects, "9", notes, core.OutsideTab)
+	placed, err := tabAtPanel(c, projects, "9", notes, core.OutsideTab)
 	if err != nil {
-		t.Fatalf("TabAtPanel: %v", err)
+		t.Fatalf("PlaceTab: %v", err)
 	}
-	if !w.Ref.IsZero() {
-		t.Errorf("in ran with %+v, want it not called", w.Ref)
+	if !placed.Outside {
+		t.Errorf("PlaceTab = %+v, want it outside a workspace", placed)
 	}
 	if len(rt.Tabs) != 1 || rt.Tabs[0].Ref != loose {
 		t.Fatalf("tabs = %+v, want one in %v", rt.Tabs, loose)
@@ -523,12 +439,12 @@ func TestTabAtPanelOutsideAWorkspaceOpensAPlainTab(t *testing.T) {
 }
 
 // With outside "none" the key does nothing there, and that is no failure.
-func TestTabAtPanelOutsideAWorkspaceWithNoneDoesNothing(t *testing.T) {
+func TestPlaceTabOutsideAWorkspaceWithNoneDoesNothing(t *testing.T) {
 	c, rt, projects, _, _ := twoWorkspaces(t, []revier.Panel{{ID: "1"}}, nil)
 	rt.Add("a kitty window of no project", "", revier.Panel{ID: "9"})
 
-	if w, err := tabAtPanel(t, c, projects, "9", "", core.OutsideNone); err != nil || !w.Ref.IsZero() {
-		t.Errorf("TabAtPanel = %+v, %v, want nothing done and no error", w.Ref, err)
+	if placed, err := tabAtPanel(c, projects, "9", "", core.OutsideNone); err != nil || !placed.Outside {
+		t.Errorf("PlaceTab = %+v, %v, want nothing done outside a workspace and no error", placed, err)
 	}
 	if len(rt.Tabs) != 0 || len(rt.PanelFocuses) != 0 {
 		t.Errorf("tabs = %+v, focuses = %v, want none", rt.Tabs, rt.PanelFocuses)
@@ -549,10 +465,10 @@ func keyOutside(t *testing.T, kind revier.PanelKind, agent string, agents []core
 	c, rt, projects, _, _ := twoWorkspaces(t, []revier.Panel{{ID: "1"}}, nil)
 	loose := rt.Add("a kitty window of no project", "", revier.Panel{ID: "9"})
 	dir := t.TempDir()
-	err := c.TabAtPanel(context.Background(), projects, "9", kind, dir, core.OutsideKey{Outside: core.OutsideAgent, Agent: agent, Agents: agents}, func(core.Workspace, string) error {
-		t.Fatal("in ran for a window of no project")
-		return nil
-	})
+	placed, err := c.PlaceTab(context.Background(), projects, core.TabRequest{Kind: kind, Panel: "9", Dir: dir, Outside: core.OutsideKey{Outside: core.OutsideAgent, Agent: agent, Agents: agents}})
+	if !placed.Outside {
+		t.Errorf("PlaceTab = %+v, want it outside a workspace", placed)
+	}
 	if err != nil {
 		if len(rt.Tabs) != 0 {
 			t.Errorf("tabs = %+v, want none beside a refusal", rt.Tabs)
@@ -572,7 +488,7 @@ func keyOutside(t *testing.T, kind revier.PanelKind, agent string, agents []core
 // With outside "agent" the agent key opens a tab that runs config.toml's
 // first named agent, a named agent's key that agent, and the shell key the
 // plain tab outside "tab" opens.
-func TestTabAtPanelOutsideAWorkspaceWithAgentRunsTheAgent(t *testing.T) {
+func TestPlaceTabOutsideAWorkspaceWithAgentRunsTheAgent(t *testing.T) {
 	for _, tc := range []struct {
 		kind  revier.PanelKind
 		agent string
@@ -591,7 +507,7 @@ func TestTabAtPanelOutsideAWorkspaceWithAgentRunsTheAgent(t *testing.T) {
 
 // With outside "agent" and no [[agent]] in config.toml the agent key has no
 // agent to run, and opens the plain tab.
-func TestTabAtPanelOutsideAWorkspaceWithAgentAndNoneDeclaredOpensAPlainTab(t *testing.T) {
+func TestPlaceTabOutsideAWorkspaceWithAgentAndNoneDeclaredOpensAPlainTab(t *testing.T) {
 	got, err := keyOutside(t, revier.PanelAgent, "", nil)
 	if err != nil || got.Kind != revier.PanelShell || len(got.Command) != 0 {
 		t.Errorf("panel %+v, %v, want the plain shell", got, err)
@@ -601,7 +517,7 @@ func TestTabAtPanelOutsideAWorkspaceWithAgentAndNoneDeclaredOpensAPlainTab(t *te
 // With outside "agent" a command that reads a project template, and a name
 // config.toml does not declare, are refused and open no tab: no project holds
 // the window to render the template against.
-func TestTabAtPanelOutsideAWorkspaceWithAgentRefusesATemplate(t *testing.T) {
+func TestPlaceTabOutsideAWorkspaceWithAgentRefusesATemplate(t *testing.T) {
 	templated := []core.NamedAgent{{Name: "dtop", Command: []string{"dtop", "{{.Path}}"}}}
 	if _, err := keyOutside(t, revier.PanelAgent, "", templated); err == nil || !strings.Contains(err.Error(), "reads a project template") || !strings.Contains(err.Error(), "dtop") {
 		t.Errorf("template: err = %v, want the agent named and the template refused", err)
@@ -644,19 +560,19 @@ func TestOutsideKeyRefusalIsTheRefusalOfThePress(t *testing.T) {
 // Every failure other than a window outside a workspace is returned, so the
 // key's own fallback runs: a panel the runtime does not hold, a plain tab
 // that does not open, and no runtime at all.
-func TestTabAtPanelReturnsEveryOtherFailure(t *testing.T) {
+func TestPlaceTabAtAPanelReturnsEveryOtherFailure(t *testing.T) {
 	c, rt, projects, _, _ := twoWorkspaces(t, []revier.Panel{{ID: "1"}}, nil)
-	if _, err := tabAtPanel(t, c, projects, "42", "", core.OutsideTab); !errors.Is(err, core.ErrNoPanel) {
+	if _, err := tabAtPanel(c, projects, "42", "", core.OutsideTab); !errors.Is(err, core.ErrNoPanel) {
 		t.Errorf("unknown panel: err = %v, want ErrNoPanel", err)
 	}
 
 	rt.Add("a kitty window of no project", "", revier.Panel{ID: "9"})
 	rt.OpenTabErr = errors.New("kitty is gone")
-	if _, err := tabAtPanel(t, c, projects, "9", "", core.OutsideTab); err == nil || !strings.Contains(err.Error(), "kitty is gone") {
+	if _, err := tabAtPanel(c, projects, "9", "", core.OutsideTab); err == nil || !strings.Contains(err.Error(), "kitty is gone") {
 		t.Errorf("tab fails: err = %v, want it returned", err)
 	}
 
-	if _, err := tabAtPanel(t, &core.Core{}, projects, "9", "", core.OutsideTab); !errors.Is(err, core.ErrNoHost) {
+	if _, err := tabAtPanel(&core.Core{}, projects, "9", "", core.OutsideTab); !errors.Is(err, core.ErrNoHost) {
 		t.Errorf("no runtime: err = %v, want ErrNoHost", err)
 	}
 	if len(rt.Tabs) != 0 {

@@ -129,7 +129,7 @@ func TestCreateLinkRenameDeleteAreRecorded(t *testing.T) {
 	if _, err := app.LinkProject(root, l, "far", "buildbox", revier.Project{Name: "far", Path: "/srv/far"}); err != nil {
 		t.Fatal(err)
 	}
-	renamed, err := app.RenameProject(root, t.TempDir(), l, "demo", "dm", config.Inherited{})
+	renamed, err := renameIdle(l, root, t.TempDir(), "demo", "dm")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +165,7 @@ func TestRenameProjectMovesTheNameInAllThreeStores(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p, err := app.RenameProject(root, stateRoot, l, "revier", "rv", config.Inherited{})
+	p, err := renameIdle(l, root, stateRoot, "revier", "rv")
 	if err != nil {
 		t.Fatalf("RenameProject: %v", err)
 	}
@@ -194,7 +194,7 @@ func TestRenameProjectIsDoneWhenTheSessionStoreFails(t *testing.T) {
 	}
 	l := &ledger{st: state.State{Current: "revier"}}
 
-	p, err := app.RenameProject(root, stateRoot, l, "revier", "rv", config.Inherited{})
+	p, err := renameIdle(l, root, stateRoot, "revier", "rv")
 	if err != nil {
 		t.Fatalf("RenameProject: %v", err)
 	}
@@ -217,12 +217,62 @@ func TestRenameProjectChangesNothingWhenTheFileIsRefused(t *testing.T) {
 	root, _ := created(t, "revier")
 	l := &ledger{st: state.State{Current: "revier"}}
 
-	if _, err := app.RenameProject(root, t.TempDir(), l, "revier", "a b", config.Inherited{}); err == nil {
+	if _, err := renameIdle(l, root, t.TempDir(), "revier", "a b"); err == nil {
 		t.Fatal("a name with a space was not refused")
 	}
 	if l.st.Current != "revier" {
 		t.Errorf("current = %q, want the state left as it was", l.st.Current)
 	}
+}
+
+// A rename is refused while the project runs here, or before a survey says
+// what of it runs: the file stays, no store changes, and the state record has
+// the refusal.
+func TestRenameProjectIsRefusedWhileTheProjectRuns(t *testing.T) {
+	idle := revier.ProjectView{Project: revier.Project{Name: "revier"}}
+	held := idle
+	held.Targets = []revier.TargetView{{Name: "home", Ref: revier.TargetRef{Host: "tmux", ID: "1"}}}
+	bound := map[revier.ProjectName]map[revier.TargetName]revier.TargetRef{"revier": {"home": {Host: "tmux", ID: "1"}}}
+	for name, tc := range map[string]struct {
+		view    revier.ProjectView
+		settled core.Settled
+	}{
+		"a target held":         {held, core.Settled{Surveyed: true}},
+		"a binding on its host": {idle, core.Settled{Surveyed: true, Bound: bound}},
+		"no survey yet":         {idle, core.Settled{}},
+	} {
+		root, _ := created(t, "revier")
+		stateRoot := t.TempDir()
+		saved := session.Session{Name: "before", At: time.Date(2026, 9, 12, 14, 0, 0, 0, time.UTC), Current: "revier", Projects: []session.Project{{Name: "revier"}}}
+		if _, _, err := session.Save(stateRoot, saved); err != nil {
+			t.Fatal(err)
+		}
+		l := &ledger{st: state.State{Current: "revier"}}
+		c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Ledger: l}
+
+		if _, err := app.RenameProject(c, root, stateRoot, tc.view, tc.settled, "rv", config.Inherited{}); err == nil {
+			t.Errorf("%s: the rename was not refused", name)
+		}
+		if _, err := os.Stat(config.ProjectFile(root, "revier")); err != nil {
+			t.Errorf("%s: old file: %v, want it kept", name, err)
+		}
+		if got, err := session.Load(stateRoot, "before"); err != nil || got.Current != "revier" {
+			t.Errorf("%s: session = %+v, %v; want it under revier", name, got, err)
+		}
+		if l.st.Current != "revier" {
+			t.Errorf("%s: current = %q, want the state left as it was", name, l.st.Current)
+		}
+		if n := len(l.notes); n != 1 || l.notes[0].Kind != record.KindProjectRenamed || l.notes[0].Err == "" {
+			t.Errorf("%s: lines = %+v, want one failed project rename", name, l.notes)
+		}
+	}
+}
+
+// renameIdle renames a project nothing of which runs, through a core over l
+// with no host of its own.
+func renameIdle(l *ledger, cfgRoot, stateRoot string, from, to revier.ProjectName) (core.Project, error) {
+	v := revier.ProjectView{Project: revier.Project{Name: from}}
+	return app.RenameProject(&core.Core{Ledger: l}, cfgRoot, stateRoot, v, core.Settled{Surveyed: true}, to, config.Inherited{})
 }
 
 // An action of a project on this machine is one launch, written before the

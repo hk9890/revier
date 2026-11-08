@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"reflect"
 	"slices"
 	"sort"
@@ -164,7 +163,7 @@ func editTargets(root string, was []map[string]any, change func(lines []string, 
 	// between them must read as the change this write did not make, not as a
 	// breakage it did. The projects are the ones Load gives, without the
 	// links to this machine (decisions.md D131).
-	dir := filepath.Join(root, "projects")
+	dir := ProjectsDir(root)
 	before, err := LoadProjects(dir, cfg.Inherited())
 	if err != nil {
 		return TargetsWritten{}, err

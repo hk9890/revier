@@ -8,11 +8,9 @@ import (
 	"io"
 	"strings"
 	"text/tabwriter"
-	"time"
 
 	usecase "github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/core"
-	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -92,34 +90,21 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 		return errShutdownBusy
 	}
 
-	opts := core.ShutdownOpts{Force: *force, Projects: a.projects}
-	var save func(context.Context, core.Report) (session.Session, error)
-	if !*noSave {
-		// The save runs after the busy guard, so a shutdown the guard
-		// refuses leaves no session file behind either, and it records the
-		// survey the close works from rather than the one the plan was made
-		// from: a window closed by hand since is not saved and restored. It
-		// runs on the budget the shutdown hands it, not on what the two
-		// surveys left of this command's.
-		reason := session.ReasonShutdown
-		if only != "" {
-			reason = session.ReasonProjectClosed
-		}
-		save = func(saving context.Context, now core.Report) (session.Session, error) {
-			stored, saved, gaps, err := usecase.SaveChanged(saving, a.core, a.stateRoot, now, reason, time.Now())
-			switch {
-			case err != nil:
-				return session.Session{}, err
-			case saved:
-				_, _ = fmt.Fprintf(a.out, "session %s saved: %s, %s\n", stored.ID,
-					core.Count(len(stored.Projects), "project"), core.Count(stored.Targets(), "target"))
-				for _, note := range gaps.Notes() {
-					_, _ = fmt.Fprintf(a.out, "  %s\n", note)
-				}
-			case stored.ID != "":
-				_, _ = fmt.Fprintf(a.out, "session %s already holds what is open\n", stored.ID)
+	req := usecase.CloseRequest{
+		Core: a.core, StateRoot: a.stateRoot, Plan: plan, Projects: a.projects,
+		Project: only, Scope: scope, Force: *force, Save: !*noSave, Wait: closeWait,
+	}
+	// The save is said before the first close, as app.Close makes it.
+	req.Saved = func(s usecase.Saved) {
+		switch {
+		case s.New:
+			_, _ = fmt.Fprintf(a.out, "session %s saved: %s, %s\n", s.Session.ID,
+				core.Count(len(s.Session.Projects), "project"), core.Count(s.Session.Targets(), "target"))
+			for _, note := range s.Gaps.Notes() {
+				_, _ = fmt.Fprintf(a.out, "  %s\n", note)
 			}
-			return stored, nil
+		case s.Session.ID != "":
+			_, _ = fmt.Fprintf(a.out, "session %s already holds what is open\n", s.Session.ID)
 		}
 	}
 
@@ -131,7 +116,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	}
 	var said []string      // what each step's line said, in the order it closed
 	var walked core.Closed // the steps closed, before the wait says which went
-	opts.Progress = func(p core.Progress) {
+	req.Progress = func(p core.Progress) {
 		switch {
 		case p.Phase == core.PhaseWait:
 			// The wait is for each step asked to close that did not fail.
@@ -151,22 +136,18 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	}
 	// ctrl+c stops the close between two steps, and ends the wait after
 	// them. A second ctrl+c ends the command before the shutdown returns, so
-	// it abandons the record of a full shutdown, which takes it back or keeps
-	// it.
-	var record *usecase.ShutdownRecord
-	var abandon func()
-	if only == "" && scope == core.ShutdownAll {
-		record = usecase.NewShutdownRecord(a.core, a.stateRoot)
-		abandon = record.Abandon
-	}
-	walk, stop := interruptible(ctx, abandon)
+	// it abandons the record, which takes it back or keeps it. app.Close
+	// decides whether the record is written at all, and the record of a close
+	// that is not full has nothing to take back.
+	req.Record = usecase.NewShutdownRecord(a.core, a.stateRoot)
+	walk, stop := interruptible(ctx, req.Record.Abandon)
 	defer stop()
-	closed, err := usecase.Shutdown(walk, a.core, plan, closeWait, opts, save, record)
+	res, err := usecase.Close(walk, req)
+	closed := res.Closed
 	cancelled := errors.Is(walk.Err(), context.Canceled)
-	var refused *core.BusyRefusal
 	switch {
-	case errors.As(err, &refused):
-		if err := printClosePlan(a.out, core.Busy(refused.Plan)); err != nil {
+	case res.Refused != nil:
+		if err := printClosePlan(a.out, core.Busy(res.Refused)); err != nil {
 			return err
 		}
 		return errShutdownTurnedBusy

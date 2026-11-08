@@ -528,10 +528,10 @@ key = "ctrl-y"
 name = "copy path"
 run = ["wl-copy", "{{.Path}}"]
 `)
-	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+	if err := os.MkdirAll(config.ProjectsDir(root), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	write(t, filepath.Join(root, "projects"), "revier.toml", valid)
+	write(t, config.ProjectsDir(root), "revier.toml", valid)
 
 	cfg, projects, err := config.Load(root)
 	if err != nil {
@@ -983,10 +983,10 @@ func TestLoadRefusesAnActionThatRunsNothing(t *testing.T) {
 func TestABrokenActionCostsOnlyItself(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "config.toml", "[[action]]\nkey = \"y\"\nname = \"bad\"\nrun = [\"true\"]\n\n[[action]]\nkey = \"ctrl-y\"\nname = \"sync\"\nrun = [\"true\"]\n")
-	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+	if err := os.MkdirAll(config.ProjectsDir(root), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	write(t, filepath.Join(root, "projects"), "revier.toml", valid)
+	write(t, config.ProjectsDir(root), "revier.toml", valid)
 	cfg, projects, err := config.Load(root)
 	if err != nil {
 		t.Fatalf("Load: %v", err)

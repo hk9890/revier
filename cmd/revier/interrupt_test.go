@@ -10,9 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
-	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
@@ -70,18 +68,6 @@ func interruptedBy(t *testing.T) (cancel, abandon func()) {
 		}
 	}
 	return cancel, abandon
-}
-
-// demoDesktop is the demo project with the targets named open on the
-// runtime, and the app over state st.
-func demoDesktop(t *testing.T, st *state.State, open ...string) (*app, *hosttest.FakeRuntime) {
-	t.Helper()
-	rt := hosttest.NewRuntime("tmux")
-	for _, title := range open {
-		rt.Add(title, "")
-	}
-	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t)}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt}}, st)
-	return a, rt
 }
 
 // shutDownState is a state that records a full shutdown.

@@ -303,7 +303,7 @@ func TestAChordRevierHoldsAndNoLongerWantsIsAnOrphan(t *testing.T) {
 // A machine with no desktop is a normal outcome, not a failure.
 func TestNoKeyBinderIsASentinel(t *testing.T) {
 	c := &core.Core{}
-	_, err := c.Keys(context.Background(), nil, "alt+space")
+	_, err := c.KeyReport(context.Background(), nil, "alt+space")
 	if !errors.Is(err, core.ErrNoKeyBinder) {
 		t.Fatalf("err = %v, want ErrNoKeyBinder", err)
 	}
@@ -313,7 +313,7 @@ func TestAFailedReadIsReported(t *testing.T) {
 	binder := hosttest.NewKeys("gnome")
 	binder.ListErr = errors.New("gsettings is not answering")
 	c := &core.Core{KeyBinder: binder}
-	if _, err := c.Keys(context.Background(), nil, "alt+space"); err == nil {
+	if _, err := c.KeyReport(context.Background(), nil, "alt+space"); err == nil {
 		t.Fatal("want the read failure to reach the caller")
 	}
 }

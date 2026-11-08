@@ -6,7 +6,7 @@ A findability map: where things live, and how to search for them.
 
 | Path | Holds |
 |---|---|
-| `pkg/revier/` | The ports and every type that crosses them. Public, because out-of-tree adapters import it. |
+| `pkg/revier/` | The ports and every type that crosses them, the project model included. Public, because out-of-tree adapters import it. |
 | `internal/core/` | All policy: resolution, matching, run-or-raise, toggle-back, survey. |
 | `internal/app/` | The use cases that cross stores, written once for both surfaces: create, link and rename a project, run an action, save a session. |
 | `internal/adapter/<tool>/` | One tool each. No policy. `kitty`, `tmux` and `herdr` (runtime; `kitty` also the terminal keys, `herdr` also a probe), `gnome` (window and key binder), `proc` (what a link on another machine started here, and a process's parent on this machine), `claude` (probe, and the assistant launcher), `opencode` and `execprobe` (probes), `ssh` (remote). |
@@ -16,8 +16,10 @@ A findability map: where things live, and how to search for them.
 | `internal/ledger/` | The state file and the event file as the core reads and writes them, and the state record's line for each change a state write made: the one caller of the state lock. |
 | `internal/session/` | The saved sets of open projects `revier session` writes and reads, under the state root, and `seen.toml`, what a surface last saw, which an end with no shutdown saves. |
 | `internal/checkout/` | git and mise on a project's directory: the origin a new project records, the clone of a missing one. |
-| `internal/procgroup/` | The process group each host command runs in, and the end of every group still running when a second ctrl+c ends revier. |
-| `internal/fsutil/` | The atomic file write every store uses, and the write through a link that config.toml and the terminal's configuration use. |
+| `internal/procgroup/` | The process group each host command runs in, the end of the whole group when a command's context ends, and the end of every group still running when a second ctrl+c ends revier. |
+| `internal/plain/` | The text an agent, a tool or a status command wrote, with every escape sequence and control character taken off, for the TUI and the command line. |
+| `internal/shell/` | The quoting that keeps a word one word for a POSIX shell and for fish: the line `ssh` runs on a host, the command `revier each` lists, the assistant's status line. |
+| `internal/fsutil/` | The atomic file write every store uses, the write through a link that config.toml and the terminal's configuration use, and `RealPath`, the path behind every link, which the core and `revier doctor` compare a directory with a project's path by. |
 | `internal/logging/` | The daily log file every process appends to, the helpers that time an operation, and the reader the TUI's logs screen lists. |
 | `internal/events/` | The event file `revier events` prints: what revier did in each project, never pruned. |
 | `internal/record/` | The state record `revier state` replays: what each operation did, failed or not, and what each surface's survey saw, never pruned. |
@@ -32,7 +34,7 @@ A findability map: where things live, and how to search for them.
 | `scripts/release-notes` | One version's `CHANGELOG.md` section, the text of its GitHub release. |
 | `scripts/demo/` | The README's clips, `.github/assets/*.webp`: the recording scripts run here, `guest/` on a VM's GNOME desktop. |
 | `docs/user-guide/` | The [user guide](user-guide/README.md). The package carries its reference pages (`configuration.md`, `extending/`) into the binary, which `revier assist --reference` prints. |
-| `cmd/revier/` | CLI entry point. Constructs every port's adapter, also calls the `claude` and `ssh` adapters directly, and reads `proc`'s variable names. |
+| `cmd/revier/` | CLI entry point. Constructs every port's adapter, also calls the `claude` adapter directly, and reads `proc`'s variable names. |
 
 ## The ports
 

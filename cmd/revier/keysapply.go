@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -62,9 +61,7 @@ func cmdKeysApply(ctx context.Context, a *app, sub string, args []string) error 
 	}
 
 	if *asJSON {
-		enc := json.NewEncoder(a.out)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(plan); err != nil {
+		if err := a.printJSON(plan); err != nil {
 			return err
 		}
 	} else {

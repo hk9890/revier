@@ -88,18 +88,25 @@ func LinkProject(cfgRoot string, ledger core.Ledger, name revier.ProjectName, ho
 
 // RenameProject moves a project to a new name in the three stores that hold
 // it by name: the project file, the state, and the saved sessions
-// (decisions.md D80). The file is first, and a file that cannot be moved
-// changes nothing. The saved sessions are last and cannot fail the rename:
-// one that keeps the old name no longer opens the project, which the log
-// says, and the project itself is renamed. The state record has the rename,
-// failed or not.
-func RenameProject(cfgRoot, stateRoot string, ledger core.Ledger, from, to revier.ProjectName, inh config.Inherited) (core.Project, error) {
-	p, err := config.Rename(cfgRoot, from, to, inh)
-	ledger.Note(record.Line{Kind: record.KindProjectRenamed, Project: to, From: string(from)}.Failed(err))
+// (decisions.md D80). It is refused, before the file moves, while the project
+// runs here or what of it runs is not known, as core.RefuseChange says of v,
+// the project's view, and s. The file is first, and a file that cannot be
+// moved changes nothing. The saved sessions are last and cannot fail the
+// rename: one that keeps the old name no longer opens the project, which the
+// log says, and the project itself is renamed. The state record has the
+// rename, refused, failed or not.
+func RenameProject(c *core.Core, cfgRoot, stateRoot string, v revier.ProjectView, s core.Settled, to revier.ProjectName, inh config.Inherited) (core.Project, error) {
+	from := v.Project.Name
+	var p core.Project
+	err := c.RefuseChange(v, s, "renaming")
+	if err == nil {
+		p, err = config.Rename(cfgRoot, from, to, inh)
+	}
+	c.Ledger.Note(record.Line{Kind: record.KindProjectRenamed, Project: to, From: string(from)}.Failed(err))
 	if err != nil {
 		return core.Project{}, err
 	}
-	ledger.Update(func(st *state.State) bool {
+	c.Ledger.Update(func(st *state.State) bool {
 		st.Rename(from, to)
 		return true
 	})

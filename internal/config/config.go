@@ -153,7 +153,7 @@ func Load(root string) (*Config, []core.Project, error) {
 		return nil, nil, err
 	}
 
-	projects, err := LoadProjects(filepath.Join(root, "projects"), cfg.Inherited())
+	projects, err := LoadProjects(ProjectsDir(root), cfg.Inherited())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -238,6 +238,11 @@ func problemsAdded(before, after *Config) error {
 // File is config.toml under a configuration root.
 func File(root string) string {
 	return filepath.Join(root, "config.toml")
+}
+
+// ProjectsDir is the directory of project files under a configuration root.
+func ProjectsDir(root string) string {
+	return filepath.Join(root, "projects")
 }
 
 // parse decodes and validates the text of config.toml. Only text that does

@@ -10,33 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 )
-
-// termApp is an app over a config.toml of text, its kitty directory a fresh
-// one that holds kittyConf.
-func termApp(t *testing.T, text, kittyConf string) (*app, string) {
-	t.Helper()
-	root := t.TempDir()
-	path := filepath.Join(root, "config.toml")
-	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := config.Read(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	dir := filepath.Join(root, "kitty")
-	t.Setenv("KITTY_CONFIG_DIRECTORY", dir)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "kitty.conf"), []byte(kittyConf), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return &app{cfg: cfg, core: &core.Core{}, out: &bytes.Buffer{}}, dir
-}
 
 func runTerm(t *testing.T, a *app, args ...string) (string, error) {
 	t.Helper()
@@ -88,8 +63,8 @@ func TestTermInstallDryRunThenRunThenStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var plan struct{ File, Include core.TermAction }
-	if err := json.Unmarshal([]byte(out), &plan); err != nil || plan.File != core.TermRemove || plan.Include != core.TermRemove {
+	var plan struct{ File, Include core.TermKeyAction }
+	if err := json.Unmarshal([]byte(out), &plan); err != nil || plan.File != core.TermKeyRemove || plan.Include != core.TermKeyRemove {
 		t.Errorf("uninstall plan = %+v, %v:\n%s", plan, err, out)
 	}
 	if b, _ := os.ReadFile(filepath.Join(dir, "kitty.conf")); string(b) != "map ctrl+shift+t new_tab\n" {
@@ -167,9 +142,9 @@ func TestTermInstallOnALinkToNothingWritesNothing(t *testing.T) {
 // A run that failed half way says the step that ran did what it did, and
 // the step that did not run is not done.
 func TestTermPlanOfAHalfRunSaysWhatDidNotRun(t *testing.T) {
-	report := core.TermReport{File: "k/revier.conf", Config: "k/kitty.conf", Rows: []core.TermRow{{Chord: "ctrl+shift+t", Opens: "shell", Status: core.TermWritten}}}
-	before := core.TermPlan{Report: core.TermReport{Rows: []core.TermRow{{Status: core.TermMissing}}}}
-	plan := core.TermPlan{Report: report, File: core.TermCreate, Include: core.TermCreate, FileDone: true, Err: "permission denied"}
+	report := core.TermKeyReport{File: "k/revier.conf", Config: "k/kitty.conf", Rows: []core.TermKeyRow{{Chord: "ctrl+shift+t", Opens: "shell", Status: core.TermKeyWritten}}}
+	before := core.TermKeyPlan{Report: core.TermKeyReport{Rows: []core.TermKeyRow{{Status: core.TermKeyMissing}}}}
+	plan := core.TermKeyPlan{Report: report, File: core.TermKeyCreate, Include: core.TermKeyCreate, FileDone: true, Err: "permission denied"}
 	var b bytes.Buffer
 	printTermPlan(&b, before, plan, "install", false)
 	out := b.String()

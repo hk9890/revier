@@ -207,6 +207,27 @@ func TestStartedAgentEndsOnItsContextWithTheRefusal(t *testing.T) {
 	}
 }
 
+// A core with Poll set looks a shell panel up again at that interval, not at
+// AgentPoll.
+func TestStartedAgentLooksAPanelUpAgainAtTheCoresPoll(t *testing.T) {
+	c, rt := agentCore(shellPanel("1"))
+	c.Poll = time.Millisecond
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		rt.Replace(agentPanel("1", "agent idle"))
+	}()
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	if _, err := c.StartedAgent(ctx, prepared(t, project()), "home:1"); err != nil {
+		t.Fatalf("StartedAgent: %v", err)
+	}
+	if time.Since(start) >= core.AgentPoll {
+		t.Error("StartedAgent looked the panel up again at AgentPoll, not at the core's Poll")
+	}
+}
+
 // Only a panel that is not an agent's is looked up again: an address with no
 // agent in it fails at once.
 func TestStartedAgentFailsAtOnceWhereNoPanelIsNamed(t *testing.T) {

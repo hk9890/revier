@@ -15,6 +15,7 @@ CGO_ENABLED = "0"
 
 # ---- build & run -----------------------------------------------------------
 
+# makefile's build makes the same stamp; change both together.
 [tasks.build]
 description = "Build the revier binary into ./bin"
 run = """
@@ -33,13 +34,13 @@ run = 'cd "$MISE_PROJECT_ROOT" && go build -o bin/revier ./cmd/revier && cd "${M
 
 [tasks.fmt]
 description = "Format Go source (goimports)"
-run = "goimports -local github.com/hk9890/revier -w cmd internal pkg scripts"
+run = "goimports -local github.com/hk9890/revier -w cmd internal pkg scripts docs/user-guide"
 
 [tasks."fmt:check"]
 description = "Fail if any file is not formatted"
 run = """
 # 2>&1 folds goimports' own diagnostics into $OUT so a broken run cannot pass.
-OUT=$(goimports -local github.com/hk9890/revier -l cmd internal pkg scripts 2>&1) || { echo "goimports failed:"; echo "$OUT"; exit 1; }
+OUT=$(goimports -local github.com/hk9890/revier -l cmd internal pkg scripts docs/user-guide 2>&1) || { echo "goimports failed:"; echo "$OUT"; exit 1; }
 if [ -n "$OUT" ]; then echo "unformatted:"; echo "$OUT"; exit 1; fi
 """
 

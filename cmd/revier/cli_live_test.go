@@ -17,6 +17,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
 )
 
 func TestListWithNoProjectsRunning(t *testing.T) {
@@ -183,7 +186,7 @@ func TestNoProjectAnywhereHasItsOwnOutcome(t *testing.T) {
 	if err == nil {
 		t.Fatal("go with no project resolved: want an error")
 	}
-	if !errors.Is(err, errNoProject) {
+	if !errors.Is(err, core.ErrNoProject) {
 		t.Fatalf("error = %v, want the no-project outcome so the binding can fall back", err)
 	}
 	if exitNoProject == 1 {
@@ -200,7 +203,7 @@ func TestNoProjectWithPickerOpensThePopup(t *testing.T) {
 	onPath(t, "kitty", "exit 1")
 
 	err := run(io.Discard, []string{"go", "home", "--picker"})
-	if err == nil || errors.Is(err, errNoProject) {
+	if err == nil || errors.Is(err, core.ErrNoProject) {
 		t.Fatalf("err = %v, want the popup's refusal and not the no-project outcome", err)
 	}
 	if !strings.Contains(err.Error(), "popup:") || strings.Contains(err.Error(), "kitty is not on PATH") {
@@ -222,7 +225,7 @@ func TestPopupRefusesArguments(t *testing.T) {
 // at the end proves the stub would have seen a probe.
 func TestAHelpRequestProbesNoHost(t *testing.T) {
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte("[hosts]\nruntime = [\"tmux\"]\nwindow = [\"none\"]\n"), 0o644); err != nil {
+	if err := os.WriteFile(config.File(root), []byte("[hosts]\nruntime = [\"tmux\"]\nwindow = [\"none\"]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("REVIER_CONFIG_HOME", root)

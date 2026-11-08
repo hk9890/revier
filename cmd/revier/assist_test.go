@@ -120,6 +120,7 @@ func TestTheReferenceIsTheConfigurationFormat(t *testing.T) {
 func TestAssistWithNoAgentInstalledSaysSo(t *testing.T) {
 	configRoot(t, "", nil)
 	t.Setenv("REVIER_STATE_HOME", t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	testenv.NoTools(t)
 
 	err := run(&strings.Builder{}, []string{"assist"})

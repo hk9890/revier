@@ -26,7 +26,7 @@ var written = []revier.TermBinding{
 	{Chord: "ctrl+shift+d", Args: []string{"agent", "new", "dtop"}},
 }
 
-func termRow(t *testing.T, r core.TermReport, chord core.Chord) core.TermRow {
+func termRow(t *testing.T, r core.TermKeyReport, chord core.Chord) core.TermKeyRow {
 	t.Helper()
 	for _, row := range r.Rows {
 		if row.Chord == chord {
@@ -34,10 +34,10 @@ func termRow(t *testing.T, r core.TermReport, chord core.Chord) core.TermRow {
 		}
 	}
 	t.Fatalf("no row for %q in %+v", chord, r.Rows)
-	return core.TermRow{}
+	return core.TermKeyRow{}
 }
 
-func termReportOf(t *testing.T, state revier.TermKeyState, keys []core.TermKey, projects ...core.Project) core.TermReport {
+func termReportOf(t *testing.T, state revier.TermKeyState, keys []core.TermKey, projects ...core.Project) core.TermKeyReport {
 	t.Helper()
 	c := &core.Core{TermKeys: hosttest.NewTermKeys(state)}
 	r, err := c.TermKeyReport(context.Background(), keys, projects, "alt+space")
@@ -56,11 +56,11 @@ func TestATermKeyRunsTheCommandOfWhatItOpens(t *testing.T) {
 			t.Errorf("row %d args = %v, want %v", i, got, want.Args)
 		}
 	}
-	if r.FileState != core.TermFileAbsent || r.Include != core.TermIncludeAbsent {
+	if r.FileState != core.TermKeyFileAbsent || r.Include != core.TermKeyIncludeAbsent {
 		t.Errorf("file %q, include %q; want both absent", r.FileState, r.Include)
 	}
 	for _, row := range r.Rows {
-		if row.Status != core.TermMissing {
+		if row.Status != core.TermKeyMissing {
 			t.Errorf("%s: status %q, want missing", row.Chord, row.Status)
 		}
 	}
@@ -77,11 +77,11 @@ func TestATermKeyADesktopKeyHoldsIsRefusedAlone(t *testing.T) {
 		"ctrl+shift+u": `the desktop key of target "home" in revier`,
 	} {
 		row := termRow(t, r, chord)
-		if row.Status != core.TermRefused || row.Refused != want {
+		if row.Status != core.TermKeyRefused || row.Refused != want {
 			t.Errorf("%s: %q %q, want refused by %q", chord, row.Status, row.Refused, want)
 		}
 	}
-	if row := termRow(t, r, "ctrl+shift+t"); row.Status != core.TermMissing {
+	if row := termRow(t, r, "ctrl+shift+t"); row.Status != core.TermKeyMissing {
 		t.Errorf("shell key: %q, want missing", row.Status)
 	}
 }
@@ -92,7 +92,7 @@ func TestARefusedTargetsKeyRefusesNoTermKey(t *testing.T) {
 	p := keyProject(t, "revier")
 	p.Refuse(0, errors.New("broken"))
 	r := termReportOf(t, revier.TermKeyState{}, []core.TermKey{{Chord: "ctrl+shift+u", Shell: true}}, p)
-	if row := r.Rows[0]; row.Status == core.TermRefused {
+	if row := r.Rows[0]; row.Status == core.TermKeyRefused {
 		t.Errorf("row refused by %q, want it kept: the target that holds the chord is refused", row.Refused)
 	}
 }
@@ -107,8 +107,8 @@ func TestAMapAfterTheIncludeShadowsRevierAndOneBeforeMakesItLate(t *testing.T) {
 		{Chord: "ctrl+c", Line: 16},
 	}
 	r := termReportOf(t, revier.TermKeyState{ConfigExists: true, Maps: maps}, termKeys)
-	want := []core.TermShadow{{Line: 37}, {Line: 57, Condition: "when var:in_tmux"}}
-	if got := termRow(t, r, "ctrl+shift+t").Shadowed; !reflect.DeepEqual(got, want) {
+	want := []core.TermKeyShadow{{Line: 37}, {Line: 57, Condition: "when var:in_tmux"}}
+	if got := termRow(t, r, "ctrl+shift+t").Shadowed; !slices.Equal(got, want) {
 		t.Errorf("shadowed = %+v, want %+v", got, want)
 	}
 	if got := termRow(t, r, "ctrl+shift+z").Shadowed; len(got) != 0 {
@@ -116,10 +116,10 @@ func TestAMapAfterTheIncludeShadowsRevierAndOneBeforeMakesItLate(t *testing.T) {
 	}
 
 	late := termReportOf(t, revier.TermKeyState{ConfigExists: true, Include: 40, Maps: maps}, termKeys)
-	if late.Include != core.TermIncludeLate {
+	if late.Include != core.TermKeyIncludeLate {
 		t.Errorf("include = %q, want late: the map on line 37 is of a key revier writes", late.Include)
 	}
-	if got := termRow(t, late, "ctrl+shift+t").Shadowed; !reflect.DeepEqual(got, want[1:]) {
+	if got := termRow(t, late, "ctrl+shift+t").Shadowed; !slices.Equal(got, want[1:]) {
 		t.Errorf("shadowed = %+v, want only the map after the include", got)
 	}
 }
@@ -127,15 +127,15 @@ func TestAMapAfterTheIncludeShadowsRevierAndOneBeforeMakesItLate(t *testing.T) {
 // The file is current only when it holds exactly the keys config.toml wants.
 func TestRevierFileIsStaleWhenItHoldsOtherKeys(t *testing.T) {
 	state := revier.TermKeyState{FileExists: true, Bindings: written}
-	if r := termReportOf(t, state, termKeys); r.FileState != core.TermFileCurrent {
+	if r := termReportOf(t, state, termKeys); r.FileState != core.TermKeyFileCurrent {
 		t.Errorf("file = %q, want current", r.FileState)
 	}
 	r := termReportOf(t, state, termKeys[:2])
-	if r.FileState != core.TermFileStale {
+	if r.FileState != core.TermKeyFileStale {
 		t.Errorf("file = %q, want stale: it holds dtop's key, which config.toml no longer declares", r.FileState)
 	}
 	for _, row := range r.Rows {
-		if row.Status != core.TermWritten {
+		if row.Status != core.TermKeyWritten {
 			t.Errorf("%s: %q, want written", row.Chord, row.Status)
 		}
 	}
@@ -154,7 +154,7 @@ func TestInstallWritesOnceAndASecondInstallWritesNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.File != core.TermCreate || plan.Include != core.TermAdd {
+	if plan.File != core.TermKeyCreate || plan.Include != core.TermKeyAdd {
 		t.Errorf("plan: file %q, include %q; want create and add", plan.File, plan.Include)
 	}
 	plan = c.ApplyTermKeys(context.Background(), plan)
@@ -164,7 +164,7 @@ func TestInstallWritesOnceAndASecondInstallWritesNothing(t *testing.T) {
 	if !reflect.DeepEqual(w.State.Bindings, written) {
 		t.Errorf("written %+v, want %+v: the refused key left out", w.State.Bindings, written)
 	}
-	if plan.Report.FileState != core.TermFileCurrent || plan.Report.Include != core.TermIncludeTop {
+	if plan.Report.FileState != core.TermKeyFileCurrent || plan.Report.Include != core.TermKeyIncludeTop {
 		t.Errorf("after: file %q, include %q; want current, top", plan.Report.FileState, plan.Report.Include)
 	}
 	if got := termRow(t, plan.Report, "ctrl+shift+t").Shadowed; len(got) != 1 || got[0].Line != 39 {
@@ -192,7 +192,7 @@ func TestInstallWithNoMainConfigurationCreatesIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if plan.Include != core.TermCreate {
+	if plan.Include != core.TermKeyCreate {
 		t.Errorf("include = %q, want create", plan.Include)
 	}
 }
@@ -201,15 +201,15 @@ func TestInstallWithNoMainConfigurationCreatesIt(t *testing.T) {
 func TestUninstallKeepsAUsersInclude(t *testing.T) {
 	for _, tc := range []struct {
 		owned bool
-		want  core.TermAction
-	}{{true, core.TermRemove}, {false, core.TermKept}} {
+		want  core.TermKeyAction
+	}{{true, core.TermKeyRemove}, {false, core.TermKeyKept}} {
 		w := hosttest.NewTermWriter(revier.TermKeyState{FileExists: true, Bindings: written, ConfigExists: true, Include: 3, IncludeOwned: tc.owned})
 		c := &core.Core{TermKeys: w}
 		plan, err := c.PlanUninstallTermKeys(context.Background(), termKeys, nil, "alt+space")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if plan.File != core.TermRemove || plan.Include != tc.want {
+		if plan.File != core.TermKeyRemove || plan.Include != tc.want {
 			t.Errorf("owned %v: file %q, include %q; want remove, %q", tc.owned, plan.File, plan.Include, tc.want)
 		}
 		plan = c.ApplyTermKeys(context.Background(), plan)
@@ -277,7 +277,7 @@ func TestALinkToNothingRefusesTheRunAndWritesNeitherFile(t *testing.T) {
 		state := tc.state
 		w := hosttest.NewTermWriter(state)
 		c := &core.Core{TermKeys: w}
-		for _, planFor := range []func(context.Context, []core.TermKey, []core.Project, core.Chord) (core.TermPlan, error){
+		for _, planFor := range []func(context.Context, []core.TermKey, []core.Project, core.Chord) (core.TermKeyPlan, error){
 			c.PlanInstallTermKeys, c.PlanUninstallTermKeys,
 		} {
 			plan, err := planFor(context.Background(), termKeys, nil, "alt+space")

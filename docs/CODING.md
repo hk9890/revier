@@ -23,8 +23,13 @@ Before a change to a port or to a decision the core makes, search
 [decisions.md](design/decisions.md) for the concept: an entry in force may
 already settle it, or name the alternative it rejected.
 
-Adding a public type to `pkg/revier` widens the surface an out-of-tree adapter
-depends on. Put it in `internal/` unless an adapter must name it.
+Keep the project model in `pkg/revier`: `Project`, `Target`, and the types of
+their fields, such as `Command`, `Link` and `HostKind`. It crosses a port: the
+`Remote` port's `Survey` and `Conversations` return `ProjectView`, which
+carries `Project`.
+
+Put every other new type in `internal/` unless an adapter must name it: a
+public type widens the surface an out-of-tree adapter depends on.
 
 Give each new path that revier reads or writes under the user's home a
 `REVIER_*` override, as `REVIER_SSH_CONFIG` for `~/.ssh/config`, unless its

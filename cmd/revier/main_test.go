@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -38,7 +39,7 @@ func TestAnExtraArgumentIsRefused(t *testing.T) {
 	root := t.TempDir()
 	// No host is probed: the scratch config names none, so nothing here can
 	// reach the desktop this runs on.
-	if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte("[hosts]\nruntime = [\"none\"]\nwindow = [\"none\"]\n"), 0o644); err != nil {
+	if err := os.WriteFile(config.File(root), []byte("[hosts]\nruntime = [\"none\"]\nwindow = [\"none\"]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("REVIER_CONFIG_HOME", root)

@@ -13,10 +13,10 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/hk9890/revier/internal/adapter/ssh"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/runlog"
+	"github.com/hk9890/revier/internal/shell"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -377,11 +377,11 @@ func cmdEachLog(w io.Writer, args []string) error {
 func runCommand(r runlog.Run) string {
 	words := make([]string, len(r.Argv))
 	for i, w := range r.Argv {
-		words[i] = ssh.Quote(w)
+		words[i] = shell.Quote(w)
 	}
 	s := strings.Join(words, " ")
 	if r.Filter != "" {
-		s = "--filter " + ssh.Quote(r.Filter) + " -- " + s
+		s = "--filter " + shell.Quote(r.Filter) + " -- " + s
 	}
 	if r.Finished.IsZero() {
 		s += "  (unfinished)"

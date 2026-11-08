@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/hk9890/revier/internal/procgroup"
+	"github.com/hk9890/revier/internal/shell"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -88,11 +89,11 @@ func flags() []string {
 // then found no `claude`, and every agent read as unknown. sshd always sets
 // SHELL, and it is $SHELL and not ${SHELL:-sh} because the line is parsed by
 // that login shell, and fish rejects the braces. The line is one word,
-// quoted by Quote, which a POSIX shell and fish read alike: the line passes
-// through the login shell and then through $SHELL -lc, and a user's login
-// shell can be either.
+// quoted by shell.Quote, which a POSIX shell and fish read alike: the line
+// passes through the login shell and then through $SHELL -lc, and a user's
+// login shell can be either.
 func login(line string) string {
-	return `exec "$SHELL" -lc ` + Quote(line)
+	return `exec "$SHELL" -lc ` + shell.Quote(line)
 }
 
 // quiet is login for a command whose output is read: what the profile writes
@@ -111,7 +112,7 @@ func quiet(line string) string {
 func (r *Remote) exec(ctx context.Context, args ...string) ([]byte, []byte, error) {
 	words := make([]string, len(args))
 	for i, a := range args {
-		words[i] = Quote(a)
+		words[i] = shell.Quote(a)
 	}
 	full := append(flags(), "--", r.host, quiet(strings.Join(words, " ")))
 	var out, errb bytes.Buffer
@@ -131,19 +132,6 @@ func (r *Remote) exec(ctx context.Context, args ...string) ([]byte, []byte, erro
 // waitDelay is how long a call whose context ended waits for its output to
 // close.
 const waitDelay = time.Second
-
-// Quote wraps s for a POSIX shell and for fish alike: single quotes, with
-// each single quote and each backslash in s put outside them, escaped. Inside
-// single quotes a POSIX shell reads a backslash as itself and fish reads `\'`
-// and `\\` as escapes; outside them, both read `\'` and `\\` as the quote and
-// the backslash.
-func Quote(s string) string {
-	// A leading = is zsh's EQUALS expansion: =echo becomes echo's path.
-	if s != "" && !strings.HasPrefix(s, "=") && !strings.ContainsAny(s, " \t\n'\"\\$`!#&|;<>(){}[]*?~^%") {
-		return s
-	}
-	return "'" + strings.NewReplacer(`'`, `'\''`, `\`, `'\\'`).Replace(s) + "'"
-}
 
 // PanelCommand is the command of a link's panel here: `revier <kind> exec`
 // on the host, in the login shell there, with this terminal.
@@ -173,16 +161,16 @@ func (r *Remote) PanelCommand(project revier.ProjectName, kind revier.PanelKind,
 // PanelCommand is Remote.PanelCommand for a host, the form the tests pin.
 func PanelCommand(host string, project revier.ProjectName, kind, agent string) []string {
 	const tag = "\x00"
-	there := "revier " + kind + " exec -p " + Quote(string(project))
+	there := "revier " + kind + " exec -p " + shell.Quote(string(project))
 	if agent != "" {
-		there += " --agent " + Quote(agent)
+		there += " --agent " + shell.Quote(agent)
 	}
 	there += " --tag " + tag
 	words := []string{"exec", "ssh", "-t"}
 	for _, f := range connection() {
-		words = append(words, Quote(f))
+		words = append(words, shell.Quote(f))
 	}
-	script := strings.Join(words, " ") + " -- " + Quote(host) + ` "` + doubleQuoted(login(there)) + `"`
+	script := strings.Join(words, " ") + " -- " + shell.Quote(host) + ` "` + doubleQuoted(login(there)) + `"`
 	return []string{"sh", "-c", strings.ReplaceAll(script, tag, `$(uname -n).$$ $*`), "sh"}
 }
 
@@ -195,7 +183,7 @@ func doubleQuoted(s string) string {
 // terminal: -t asks for a tty there, so an action that prompts or draws
 // works as it would in a shell on the host.
 func (r *Remote) RunCommand(project revier.ProjectName, action string) []string {
-	remote := strings.Join([]string{"revier", "run", Quote(action), "-p", Quote(string(project))}, " ")
+	remote := strings.Join([]string{"revier", "run", shell.Quote(action), "-p", shell.Quote(string(project))}, " ")
 	return append(append([]string{"ssh", "-t"}, flags()...), "--", r.host, login(remote))
 }
 

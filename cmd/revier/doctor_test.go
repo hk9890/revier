@@ -144,7 +144,7 @@ func TestDoctorNamesTheLinksToAMachineNotOnTheList(t *testing.T) {
 func TestDoctorReportsConfigProblemsUnderTheirFile(t *testing.T) {
 	doctorRoot(t, map[string]string{"sound.toml": sound})
 	root := os.Getenv("REVIER_CONFIG_HOME")
-	if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte("[[action]]\nkey = \"y\"\nname = \"sync\"\nrun = [\"true\"]\n"), 0o644); err != nil {
+	if err := os.WriteFile(config.File(root), []byte("[[action]]\nkey = \"y\"\nname = \"sync\"\nrun = [\"true\"]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -177,7 +177,7 @@ every = "10s"
 	})
 	root := os.Getenv("REVIER_CONFIG_HOME")
 	twoTables := "[[status]]\nat = \"rule-right\"\nrun = [\"date\"]\n\n[[status]]\nat = \"rule-right\"\nrun = [\"uptime\"]\n"
-	if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte(twoTables), 0o644); err != nil {
+	if err := os.WriteFile(config.File(root), []byte(twoTables), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -260,7 +260,7 @@ key = "ctrl+shift+y"
 	root := os.Getenv("REVIER_CONFIG_HOME")
 	write := func(outside string) {
 		t.Helper()
-		if err := os.WriteFile(filepath.Join(root, "config.toml"), []byte("[terminal]\noutside = \""+outside+"\"\n"+agents), 0o644); err != nil {
+		if err := os.WriteFile(config.File(root), []byte("[terminal]\noutside = \""+outside+"\"\n"+agents), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

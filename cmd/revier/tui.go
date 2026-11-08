@@ -45,11 +45,6 @@ func cmdTUI(ctx context.Context, a *app) error {
 	// alternate screen, and pointer and focus reports (tui.Model.View).
 	if popup {
 		m = m.WithPopup()
-	} else {
-		m = m.WithStart(func(ctx context.Context) (revier.ProjectName, bool) {
-			p, ok := a.resolveAway(ctx)
-			return p.Name, ok
-		})
 	}
 	return runSurface(m, colourOf(os.Getenv)...)
 }
@@ -132,7 +127,7 @@ func tuiStart(a *app) (start revier.ProjectName, popup bool) {
 		if p, ok := a.project(revier.ProjectName(mark)); ok {
 			start = p.Name
 		}
-	} else if p, ok := a.resolveHere(); ok {
+	} else if p, err := a.core.ProjectFor(context.Background(), a.projects, core.Ask{Dir: workingDir()}); err == nil {
 		start = p.Name
 	}
 	leaveStartDir()

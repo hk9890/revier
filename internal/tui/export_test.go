@@ -8,6 +8,7 @@ import (
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -16,8 +17,12 @@ import (
 // every test builds: a shutdown whose host keeps a closed instance listed
 // does not wait out core.CloseWait, and the mirror's tick fires at once.
 // TestASurfaceWaitsTheCloseWaitAndTheMirrorInterval builds with New, so the
-// real ones stay pinned.
+// real ones stay pinned. A core with no ledger keeps its state under
+// stateRoot.
 func NewWithoutWaits(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Config, refresh time.Duration, th theme.Theme, start revier.ProjectName) Model {
+	if c.Ledger == nil {
+		c.Ledger = ledger.File{Root: stateRoot}
+	}
 	m := New(c, projects, stateRoot, cfg, refresh, th, start)
 	m.closeWait = 0
 	m.mirrorGap = 0

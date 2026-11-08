@@ -16,7 +16,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
+
+	"github.com/hk9890/revier/internal/config"
 )
 
 // markConversation makes the fake claude list the agent's pane as holding a
@@ -111,12 +112,11 @@ func TestSessionRestoreOnTmuxBringsBackEveryAgent(t *testing.T) {
 	for _, dir := range []string{other, other} {
 		tmuxRun(t, "split-window", "-t", "work", "-c", dir, "bash", "-c", `exec -a claude bash "$0" "$@"`, agent)
 	}
-	deadline := time.Now().Add(5 * time.Second)
-	pids := agentPanes(t)
-	for len(pids) < 3 && time.Now().Before(deadline) {
-		time.Sleep(20 * time.Millisecond)
+	var pids []string
+	eventually(t, "three agent panes", func() bool {
 		pids = agentPanes(t)
-	}
+		return len(pids) >= 3
+	})
 	if len(pids) != 3 {
 		t.Fatalf("agent panes = %v, want 3", pids)
 	}
@@ -136,13 +136,12 @@ func TestSessionRestoreOnTmuxBringsBackEveryAgent(t *testing.T) {
 	if !strings.Contains(restore, "opened, 3 agents resumed") {
 		t.Errorf("restore printed %q, want all three agents resumed", restore)
 	}
-	deadline = time.Now().Add(5 * time.Second)
 	var started []string
-	for len(started) < 3 && time.Now().Before(deadline) {
-		time.Sleep(20 * time.Millisecond)
+	eventually(t, "three agents started", func() bool {
 		read, _ := os.ReadFile(agent + ".started")
 		started = strings.Fields(strings.ReplaceAll(strings.TrimSpace(string(read)), " --resume ", "="))
-	}
+		return len(started) >= 3
+	})
 	slices.Sort(started)
 	want := []string{other + "=by-hand-1", other + "=by-hand-2", worktree + "=declared"}
 	slices.Sort(want)
@@ -244,7 +243,7 @@ func TestSessionRestoreStepsOverWhatIsGone(t *testing.T) {
 
 	// Drop the notes target from the project, as an edit between the save and
 	// the restore would.
-	path := filepath.Join(os.Getenv("REVIER_CONFIG_HOME"), "projects", "work.toml")
+	path := filepath.Join(config.ProjectsDir(os.Getenv("REVIER_CONFIG_HOME")), "work.toml")
 	body, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)

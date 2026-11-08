@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -544,6 +545,11 @@ func isRule(s string) bool {
 	}
 	return false
 }
+
+// escapeSeq is an escape sequence in the text an agent wrote or its terminal
+// shows: a CSI with its parameters, an OSC up to its terminator, or a
+// two-character escape.
+var escapeSeq = regexp.MustCompile("\x1b(?:\\[[0-?]*[ -/]*[@-~]|\\][^\x07\x1b]*(?:\x07|\x1b\\\\)?|[@-Z\\\\-_])")
 
 // escapeAt is the escape sequence a text starts with, and its length: a CSI
 // with its parameters, an OSC up to its terminator, or a two-character

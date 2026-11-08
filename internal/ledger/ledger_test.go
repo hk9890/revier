@@ -19,11 +19,10 @@ import (
 )
 
 // The ledger reads and writes the state on disk: a launch written through it
-// is pending to the next read, a landing is bound, and every write is told.
+// is pending to the next read, and a landing is bound.
 func TestFileReadsAndWritesTheStateFile(t *testing.T) {
 	root := t.TempDir()
-	written := make(chan struct{}, 1)
-	l := ledger.File{Root: root, Written: written}
+	l := ledger.File{Root: root}
 
 	if st := l.State(); st.Pending("work", "home", time.Now()) || len(st.Bound) != 0 {
 		t.Fatal("a fresh root has nothing pending and nothing bound")
@@ -34,11 +33,6 @@ func TestFileReadsAndWritesTheStateFile(t *testing.T) {
 	})
 	if !after.Pending("work", "home", time.Now()) || !l.State().Pending("work", "home", time.Now()) {
 		t.Error("the launch just written is not pending, in what Update returned or on disk")
-	}
-	select {
-	case <-written:
-	default:
-		t.Error("the write was not told")
 	}
 	ref := revier.TargetRef{Host: "rt", ID: "1"}
 	l.Update(func(st *state.State) bool {

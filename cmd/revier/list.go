@@ -13,6 +13,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -96,7 +97,7 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 		// its row.
 		if err == nil && !slices.ContainsFunc(a.projects, func(p core.Project) bool { return p.File != "" }) {
 			root, _ := configRootForMessage()
-			_, _ = fmt.Fprintf(a.out, "no projects. add one under %s/projects/<name>.toml\n", root)
+			_, _ = fmt.Fprintf(a.out, "no projects. add one under %s/<name>.toml\n", config.ProjectsDir(root))
 		}
 	}
 	if err != nil {

@@ -19,8 +19,8 @@ import (
 	"github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
-	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/session"
+	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -403,8 +403,8 @@ func (sc *sessionsScreen) restore(sf surface) (tea.Cmd, error) {
 	app.ClearShutDown(sf.core)
 	projects, s := sf.projects, it.session
 	written := make(chan struct{}, 1)
-	// The restore's own ledger, on the same state: it says when it wrote.
-	c := sf.core.WithLedger(ledger.File{Root: sf.stateRoot, Written: written})
+	// The surface's ledger, told of each write the restore makes.
+	c := sf.core.WithLedger(toldLedger{Ledger: sf.core.Ledger, written: written})
 	// A report before and after each step, and the return home. The survey
 	// before the walk is the restore's first phase until the walk reports.
 	w, progress, cancelled := startWalk(core.PhaseSurvey, 1+2*s.Targets())
@@ -468,6 +468,24 @@ func (sc *sessionsScreen) subtitle(sf surface) string {
 	return " " + sf.theme.Meta.Render("saved in "+config.ContractHome(session.Dir(sf.stateRoot))+", newest first")
 }
 
+// toldLedger is a ledger that tells written of each write, so the surface
+// takes a restore's state into itself before its next survey does.
+type toldLedger struct {
+	core.Ledger
+	written chan<- struct{}
+}
+
+func (l toldLedger) Update(apply func(*state.State) bool) *state.State {
+	st := l.Ledger.Update(apply)
+	// A write still waiting to be read already stands for this one: the
+	// reader takes the whole state again.
+	select {
+	case l.written <- struct{}{}:
+	default:
+	}
+	return st
+}
+
 // ledgerMsg says a restore wrote a launch or a landing to state, on the
 // channel it came on, so the next wait reads the same restore's writes. ok is
 // false once the restore has ended.
@@ -507,7 +525,7 @@ func (sc *sessionsScreen) nameScreen(sf surface) string {
 	}
 	running := 0
 	for _, v := range sf.views {
-		if heldHere(sf.attached, v) {
+		if heldHere(sf.settled.Attached, v) {
 			running++
 		}
 	}
@@ -563,7 +581,7 @@ func (sc *sessionsScreen) detail(sf surface) string {
 		b.WriteString(heading(th, "Restoring", w))
 		restoreSteps(sf, &b, sc.walk.restored, w, false)
 		say(th.Meta, "\n"+sc.walk.line())
-	case !sf.surveyed:
+	case !sf.settled.Surveyed:
 		b.WriteString(heading(th, "Restore plan", w))
 		say(th.Meta, "surveying")
 	default:

@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
@@ -30,7 +31,7 @@ func problemTexts(cfg *config.Config) []string {
 func TestTheTerminalKeysHaveDefaults(t *testing.T) {
 	cfg := termConfig(t, "")
 	want := []core.TermKey{{Chord: "ctrl+shift+t", Shell: true, Label: "terminal.shell_key"}, {Chord: "ctrl+shift+z", Label: "terminal.agent_key"}}
-	if got := cfg.TermKeys(); !reflect.DeepEqual(got, want) {
+	if got := cfg.TermKeys(); !slices.Equal(got, want) {
 		t.Errorf("TermKeys = %+v, want %+v", got, want)
 	}
 	if got := cfg.Outside(); got != core.OutsideTab {
@@ -60,7 +61,7 @@ command = ["plain"]
 		t.Fatalf("Problems = %v", cfg.Problems)
 	}
 	want := []core.TermKey{{Chord: "ctrl+alt+a", Label: "terminal.agent_key"}, {Chord: "ctrl+shift+d", Agent: "dtop", Label: `agent "dtop" key`}}
-	if got := cfg.TermKeys(); !reflect.DeepEqual(got, want) {
+	if got := cfg.TermKeys(); !slices.Equal(got, want) {
 		t.Errorf("TermKeys = %+v, want %+v", got, want)
 	}
 	if got := cfg.Outside(); got != core.OutsideNone {
@@ -96,11 +97,11 @@ key = "ctrl+shift+o"
 		`terminal.agent_key: key "ctrl+shift+t" is held by terminal.shell_key already`,
 		`agent "dtop" key: key "hyperish+d": unknown modifier "hyperish"`,
 	}
-	if got := problemTexts(cfg); !reflect.DeepEqual(got, want) {
+	if got := problemTexts(cfg); !slices.Equal(got, want) {
 		t.Errorf("Problems =\n%q\nwant\n%q", got, want)
 	}
 	wantKeys := []core.TermKey{{Chord: "ctrl+shift+t", Shell: true, Label: "terminal.shell_key"}, {Chord: "ctrl+shift+o", Agent: "ok", Label: `agent "ok" key`}}
-	if got := cfg.TermKeys(); !reflect.DeepEqual(got, wantKeys) {
+	if got := cfg.TermKeys(); !slices.Equal(got, wantKeys) {
 		t.Errorf("TermKeys = %+v, want %+v", got, wantKeys)
 	}
 	if got := cfg.Outside(); got != core.OutsideTab {

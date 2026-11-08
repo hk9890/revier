@@ -806,17 +806,6 @@ func TestTheDryRunReportsNoAgentForATargetTheRuntimeCannotOpen(t *testing.T) {
 	}
 }
 
-// marked is the panel in a tab of the instance, under the mark of the tab
-// target it was opened for.
-func marked(panel revier.Panel, tab string, target revier.TargetName) revier.Panel {
-	panel.Tab = tab
-	if panel.Vars == nil {
-		panel.Vars = map[string]string{}
-	}
-	panel.Vars[core.PanelTargetVar] = string(target)
-	return panel
-}
-
 // savedWith is the session a save records for the project with the panels in
 // its one workspace.
 func savedWith(t *testing.T, project revier.Project, panels ...revier.Panel) (session.Session, core.SessionGaps) {

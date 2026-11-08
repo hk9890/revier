@@ -18,6 +18,7 @@ import (
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/internal/tui"
@@ -167,7 +168,9 @@ func TestTheRuleKeepsTheTotalsItHasRoomFor(t *testing.T) {
 // that sets neither.
 func TestASurfaceWaitsTheCloseWaitAndTheMirrorInterval(t *testing.T) {
 	_, _, c, projects := world(t, 1)
-	m := tui.New(c, projects, t.TempDir(), &config.Config{}, time.Second, theme.Default(), "")
+	root := t.TempDir()
+	c.Ledger = ledger.File{Root: root}
+	m := tui.New(c, projects, root, &config.Config{}, time.Second, theme.Default(), "")
 	if got := m.CloseWait(); got != core.CloseWait {
 		t.Errorf("close wait = %v, want core.CloseWait (%v)", got, core.CloseWait)
 	}
@@ -1176,9 +1179,9 @@ func TestTheStartingProjectDoesNotRecaptureTheCursor(t *testing.T) {
 // focused window's project, which lists every host - answers after the first
 // frame, and its answer places the cursor.
 func TestTheLookedUpStartPlacesTheCursor(t *testing.T) {
-	_, _, c, projects := world(t, 6)
-	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").
-		WithStart(func(context.Context) (revier.ProjectName, bool) { return "project-04", true })
+	_, wm, c, projects := world(t, 6)
+	wm.SetFocus(wm.Add("README.md", "code-project-04"))
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "")
 
 	m = run(m, m.LookupStart())
 	if row := selectedRow(t, m); !strings.Contains(row, "project-04") {
@@ -1193,9 +1196,9 @@ func TestTheLookedUpStartPlacesTheCursor(t *testing.T) {
 // A user who moved before the lookup answered is somewhere already, and the
 // answer leaves them there.
 func TestTheLookedUpStartDoesNotMoveACursorTheUserMoved(t *testing.T) {
-	_, _, c, projects := world(t, 6)
-	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").
-		WithStart(func(context.Context) (revier.ProjectName, bool) { return "project-04", true })
+	_, wm, c, projects := world(t, 6)
+	wm.SetFocus(wm.Add("README.md", "code-project-04"))
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "")
 	m, _ = press(m, "down")
 	moved := selectedRow(t, m)
 
@@ -1208,10 +1211,19 @@ func TestTheLookedUpStartDoesNotMoveACursorTheUserMoved(t *testing.T) {
 // A starting project from the working directory needs no lookup.
 func TestAStartFromTheDirectoryRunsNoLookup(t *testing.T) {
 	_, _, c, projects := world(t, 6)
-	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "project-02").
-		WithStart(func(context.Context) (revier.ProjectName, bool) { t.Error("looked up"); return "", false })
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "project-02")
 	if m.LookupStart() != nil {
 		t.Error("a start from the directory still runs the lookup")
+	}
+}
+
+// In the popup the focused window is the popup itself, so the project the
+// popup was raised for stands and nothing is looked up.
+func TestThePopupRunsNoLookup(t *testing.T) {
+	_, _, c, projects := world(t, 6)
+	m := tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").WithPopup()
+	if m.LookupStart() != nil {
+		t.Error("the popup runs the lookup")
 	}
 }
 
@@ -1242,10 +1254,10 @@ func TestEscHidesThePopupAndTheRaiseSurveysAgain(t *testing.T) {
 		t.Error("a survey answered while hidden scheduled the next one")
 	}
 	m = next.(tui.Model)
-	if err := os.MkdirAll(filepath.Join(root, "projects"), 0o755); err != nil {
+	if err := os.MkdirAll(config.ProjectsDir(root), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "projects", "written-while-hidden.toml"), []byte("path = \"/p/written\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(config.ProjectsDir(root), "written-while-hidden.toml"), []byte("path = \"/p/written\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if next, cmd = m.Update(tea.FocusMsg{}); cmd == nil {
@@ -1755,11 +1767,16 @@ func TestTheStartingProjectOpensWithTheRowsAboveItInView(t *testing.T) {
 }
 
 // The lookup's answer, which arrives after the first frame, is placed the
-// same way: it is the same start, found later.
+// same way: it is the same start, found later. Here it is the last project,
+// as no window is focused.
 func TestTheLookedUpStartOpensWithTheRowsAboveItInView(t *testing.T) {
 	_, _, c, projects := world(t, 60)
-	m := resize(tui.NewWithoutWaits(c, projects, stateWith(t, nil), &config.Config{}, time.Second, theme.Default(), "").
-		WithStart(func(context.Context) (revier.ProjectName, bool) { return "project-40", true }), 120, 60)
+	root := t.TempDir()
+	if err := (&state.State{Current: "project-40"}).Save(root); err != nil {
+		t.Fatal(err)
+	}
+	c.Ledger = ledger.File{Root: root}
+	m := resize(tui.NewWithoutWaits(c, projects, root, &config.Config{}, time.Second, theme.Default(), ""), 120, 60)
 	m = survey(m)
 
 	m = run(m, m.LookupStart())

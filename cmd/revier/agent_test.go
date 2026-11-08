@@ -5,8 +5,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -130,14 +128,17 @@ func TestAgentCloseRefusesAPanelThatRunsNoAgent(t *testing.T) {
 	}
 }
 
+// testPoll is how often the core of shellTab reads an agent again.
+const testPoll = 10 * time.Millisecond
+
 // shellTab is demo's home workspace on a fake runtime, holding panel 1, a
 // shell, as the agent panel of a new tab is until its harness has started.
-// open makes the app on it, for agentWait.
+// open makes the app on it, for agentWait. Its core reads every testPoll.
 func shellTab(t *testing.T) (*hosttest.FakeRuntime, func(context.Context, io.Writer) (*app, error)) {
 	t.Helper()
 	rt := hosttest.NewRuntime("tmux")
 	rt.Add("home", "", revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "zsh", Command: []string{"zsh"}})
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}, Poll: testPoll}
 	a := withState(t, &app{cfg: &config.Config{}, cfgRoot: t.TempDir(), stateRoot: t.TempDir(), core: c, projects: []core.Project{demoProject(t)}}, &state.State{})
 	return rt, func(_ context.Context, out io.Writer) (*app, error) {
 		a.out = out
@@ -152,9 +153,9 @@ func shellTab(t *testing.T) (*hosttest.FakeRuntime, func(context.Context, io.Wri
 func TestAgentWaitWaitsForTheHarnessToStart(t *testing.T) {
 	rt, open := shellTab(t)
 	go func() {
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(2 * testPoll)
 		rt.Replace(revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "agent busy", Command: []string{"agent"}})
-		time.Sleep(core.AgentPoll + 250*time.Millisecond)
+		time.Sleep(25 * testPoll)
 		rt.Retitle("1", "agent idle")
 	}()
 	var out bytes.Buffer
@@ -223,108 +224,63 @@ func focusedOther(t *testing.T) (*app, *hosttest.FakeRuntime, core.Project, revi
 	return a, rt, demo, home
 }
 
-// Without -p, an agent or a shell asked for from a directory in no project,
-// by --dir or as the working directory, fails with errNoProject and opens no
-// tab: neither the focused window nor the last project stands in for it. A
-// --dir in no project fails even where the working directory is in one.
-func TestATabFromADirectoryInNoProjectFails(t *testing.T) {
-	a, rt, demo, _ := focusedOther(t)
-	ctx := context.Background()
+// Without -p, --panel and --dir, a tab is asked for from the working
+// directory: one in no project fails with core.ErrNoProject and opens no tab,
+// though the focused window and the last project answer other.
+func TestATabFromAWorkingDirectoryInNoProjectFails(t *testing.T) {
+	a, rt, _, _ := focusedOther(t)
 	nowhere := t.TempDir()
-	opens := map[string]func(dir string) error{
-		"agent new":            func(dir string) error { return a.newAgent(ctx, "", "", dir, core.Resume{}) },
-		"agent new --no-focus": func(dir string) error { return a.addAgent(ctx, "", "", dir, core.Resume{}) },
-		"shell new":            func(dir string) error { return a.newShell(ctx, "", "", dir) },
-	}
-	for _, c := range []struct{ cwd, dir, named string }{
-		{cwd: nowhere, named: nowhere},
-		{cwd: nowhere, dir: filepath.Join(nowhere, "x"), named: filepath.Join(nowhere, "x")},
-		{cwd: demo.Path, dir: nowhere, named: nowhere},
-	} {
-		t.Chdir(c.cwd)
-		for what, open := range opens {
-			err := open(c.dir)
-			if !errors.Is(err, errNoProject) {
-				t.Errorf("%s --dir %q in %s: err = %v, want errNoProject", what, c.dir, c.cwd, err)
-				continue
-			}
-			if msg := err.Error(); !strings.Contains(msg, c.named) || !strings.Contains(msg, "-p <project>") {
-				t.Errorf("%s --dir %q in %s: err = %q, want it to name %s and -p", what, c.dir, c.cwd, msg, c.named)
-			}
-		}
+	t.Chdir(nowhere)
+
+	err := a.newShell(t.Context(), "", "", "")
+	if !errors.Is(err, core.ErrNoProject) || !strings.Contains(err.Error(), nowhere) {
+		t.Errorf("shell new in %s: err = %v, want core.ErrNoProject naming the directory", nowhere, err)
 	}
 	if len(rt.Tabs) != 0 {
 		t.Errorf("tabs = %+v, want none", rt.Tabs)
 	}
 }
 
-// Without -p, a tab opens in the project --dir is in, wherever the command
-// runs, else in the project of the working directory: not in the focused
-// window's.
-func TestATabOpensInTheProjectOfItsDirectory(t *testing.T) {
+// Without -p, --panel and --dir, a tab opens in the project of the working
+// directory, not in the focused window's or the last one.
+func TestATabOpensInTheProjectOfItsWorkingDirectory(t *testing.T) {
 	a, rt, demo, home := focusedOther(t)
-	ctx := context.Background()
-
-	t.Chdir(t.TempDir())
-	if err := a.newShell(ctx, "", "", demo.Path); err != nil {
-		t.Fatalf("shell new --dir %s: %v", demo.Path, err)
-	}
 	t.Chdir(demo.Path)
-	if err := a.newShell(ctx, "", "", ""); err != nil {
+
+	if err := a.newShell(t.Context(), "", "", ""); err != nil {
 		t.Fatalf("shell new in %s: %v", demo.Path, err)
 	}
-	var refs []revier.TargetRef
-	for _, tab := range rt.Tabs {
-		refs = append(refs, tab.Ref)
-	}
-	if want := []revier.TargetRef{home, home}; !slices.Equal(refs, want) {
-		t.Errorf("tabs in %v, want %v", refs, want)
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Ref != home {
+		t.Errorf("tabs = %+v, want one in %v", rt.Tabs, home)
 	}
 }
 
-// A directory is in the project whose path differs from it only by a
-// symlink, on either side: a shell keeps the path through the link, a tmux
-// window starts in the directory behind it.
-func TestADirectoryIsInAProjectThroughASymlink(t *testing.T) {
-	behind := t.TempDir()
-	sub := filepath.Join(behind, "sub")
-	if err := os.Mkdir(sub, 0o755); err != nil {
-		t.Fatal(err)
+// -p :<target> names a target and no project: the tab opens in that target
+// of the working directory's project.
+func TestATabForATargetAloneOpensInTheProjectOfItsWorkingDirectory(t *testing.T) {
+	a, rt, demo, _ := focusedOther(t)
+	diff := rt.Add("diff", "")
+	t.Chdir(demo.Path)
+
+	if err := a.newShell(t.Context(), ":diff", "", ""); err != nil {
+		t.Fatalf("shell new -p :diff in %s: %v", demo.Path, err)
 	}
-	link := filepath.Join(t.TempDir(), "link")
-	if err := os.Symlink(behind, link); err != nil {
-		t.Fatal(err)
-	}
-	for _, c := range []struct{ path, dir string }{
-		{path: link, dir: behind},
-		{path: link, dir: sub},
-		{path: behind, dir: link},
-		{path: behind, dir: filepath.Join(link, "sub")},
-	} {
-		a := &app{projects: []core.Project{core.PrepareProject(revier.Project{Name: "demo", Path: c.path})}}
-		if p, ok := a.projectForPath(c.dir); !ok || p.Name != "demo" {
-			t.Errorf("project of %s with path %s = %q, %v, want demo", c.dir, c.path, p.Name, ok)
-		}
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Ref != diff {
+		t.Errorf("tabs = %+v, want one in %v", rt.Tabs, diff)
 	}
 }
 
-// A project nested in another through a symlink still wins over the outer
-// project that holds the directory as text: the longest match wins.
-func TestANestedProjectReachedThroughASymlinkWins(t *testing.T) {
-	mono := t.TempDir()
-	nested := filepath.Join(mono, "nested")
-	if err := os.Mkdir(nested, 0o755); err != nil {
-		t.Fatal(err)
+// Without -p and --panel, a tab asked for with --dir opens in the project
+// --dir is in, not in the one of the working directory or the focused
+// window's.
+func TestATabFromADirOpensInItsProject(t *testing.T) {
+	a, rt, demo, home := focusedOther(t)
+	t.Chdir(t.TempDir())
+
+	if err := a.newShell(t.Context(), "", "", demo.Path); err != nil {
+		t.Fatalf("shell new --dir %s: %v", demo.Path, err)
 	}
-	link := filepath.Join(t.TempDir(), "link")
-	if err := os.Symlink(nested, link); err != nil {
-		t.Fatal(err)
-	}
-	a := &app{projects: []core.Project{
-		core.PrepareProject(revier.Project{Name: "mono", Path: mono}),
-		core.PrepareProject(revier.Project{Name: "nested", Path: link}),
-	}}
-	if p, ok := a.projectForPath(nested); !ok || p.Name != "nested" {
-		t.Errorf("project of %s = %q, %v, want nested", nested, p.Name, ok)
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Ref != home {
+		t.Errorf("tabs = %+v, want one in %v", rt.Tabs, home)
 	}
 }
