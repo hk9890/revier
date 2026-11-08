@@ -213,7 +213,7 @@ func waitFor(ctx context.Context, out io.Writer, open func(context.Context, io.W
 	if err != nil {
 		return revier.AgentState{}, err
 	}
-	state, err := a.core.Wait(ctx, ag, until, ag.Poll())
+	state, err := a.core.Wait(ctx, ag, until, a.core.PollOf(ag))
 	if err != nil {
 		return state, fmt.Errorf("%s: %w", address, err)
 	}
@@ -239,7 +239,7 @@ func cmdAgentPrompt(out io.Writer, args []string) error {
 	if err != nil {
 		return err
 	}
-	state, err := a.core.Prompt(ctx, ag, pos[1], ag.Poll())
+	state, err := a.core.Prompt(ctx, ag, pos[1], a.core.PollOf(ag))
 	if err != nil {
 		return fmt.Errorf("%s: %w", pos[0], err)
 	}

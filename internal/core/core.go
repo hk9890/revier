@@ -106,6 +106,11 @@ type Core struct {
 	// store, beside the desktop's (decisions.md D147). Nil leaves `revier
 	// term` with no terminal.
 	TermKeys revier.TermKeys
+
+	// Poll is how often an agent of this machine is read again: the
+	// interval PollOf gives Wait and Prompt, and StartedAgent's. Zero is
+	// AgentPoll. A link's agent is read every LinkPoll whatever Poll is.
+	Poll time.Duration
 }
 
 // WithRuntime is the same core over another runtime host. It is a new core
@@ -149,6 +154,7 @@ func (c *Core) clone() *Core {
 		Ledger:        c.Ledger,
 		KeyBinder:     c.KeyBinder,
 		TermKeys:      c.TermKeys,
+		Poll:          c.Poll,
 	}
 }
 

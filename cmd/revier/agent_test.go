@@ -128,14 +128,17 @@ func TestAgentCloseRefusesAPanelThatRunsNoAgent(t *testing.T) {
 	}
 }
 
+// testPoll is how often the core of shellTab reads an agent again.
+const testPoll = 10 * time.Millisecond
+
 // shellTab is demo's home workspace on a fake runtime, holding panel 1, a
 // shell, as the agent panel of a new tab is until its harness has started.
-// open makes the app on it, for agentWait.
+// open makes the app on it, for agentWait. Its core reads every testPoll.
 func shellTab(t *testing.T) (*hosttest.FakeRuntime, func(context.Context, io.Writer) (*app, error)) {
 	t.Helper()
 	rt := hosttest.NewRuntime("tmux")
 	rt.Add("home", "", revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "zsh", Command: []string{"zsh"}})
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}, Poll: testPoll}
 	a := withState(t, &app{cfg: &config.Config{}, cfgRoot: t.TempDir(), stateRoot: t.TempDir(), core: c, projects: []core.Project{demoProject(t)}}, &state.State{})
 	return rt, func(_ context.Context, out io.Writer) (*app, error) {
 		a.out = out
@@ -150,9 +153,9 @@ func shellTab(t *testing.T) (*hosttest.FakeRuntime, func(context.Context, io.Wri
 func TestAgentWaitWaitsForTheHarnessToStart(t *testing.T) {
 	rt, open := shellTab(t)
 	go func() {
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(2 * testPoll)
 		rt.Replace(revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "agent busy", Command: []string{"agent"}})
-		time.Sleep(core.AgentPoll + 250*time.Millisecond)
+		time.Sleep(5 * testPoll)
 		rt.Retitle("1", "agent idle")
 	}()
 	var out bytes.Buffer

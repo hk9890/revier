@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -28,6 +29,7 @@ func configured(t *testing.T) *core.Core {
 		Ledger:    &ledger{},
 		KeyBinder: hosttest.NewKeys("gnome"),
 		TermKeys:  hosttest.NewTermKeys(revier.TermKeyState{}),
+		Poll:      time.Millisecond,
 	}
 	v := reflect.ValueOf(c).Elem()
 	for i := range v.NumField() {

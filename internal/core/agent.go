@@ -50,9 +50,9 @@ var (
 	ErrNoMessage = errors.New("the agent's last message cannot be read")
 )
 
-// AgentPoll is how often Wait and Prompt read an agent again, and how often
-// StartedAgent looks a new agent up until its harness starts. LinkPoll is
-// the same for a link's agent, whose every read is an ssh to its host.
+// AgentPoll is how often a core whose Poll is zero reads an agent again
+// (Core.Poll). LinkPoll is how often a link's agent is read again, whose
+// every read is an ssh to its host.
 const (
 	AgentPoll = 500 * time.Millisecond
 	LinkPoll  = 2 * time.Second
@@ -82,13 +82,16 @@ type Agent struct {
 	link *Project
 }
 
-// Poll is how often the agent is read again: over ssh for a link's.
-func (a Agent) Poll() time.Duration { return pollOf(a.link != nil) }
+// PollOf is how often the agent is read again: over ssh for a link's.
+func (c *Core) PollOf(a Agent) time.Duration { return c.pollOf(a.link != nil) }
 
 // pollOf is how often an agent is read again, a link's or another.
-func pollOf(link bool) time.Duration {
-	if link {
+func (c *Core) pollOf(link bool) time.Duration {
+	switch {
+	case link:
 		return LinkPoll
+	case c.Poll > 0:
+		return c.Poll
 	}
 	return AgentPoll
 }
@@ -456,7 +459,7 @@ func (c *Core) StartedAgent(ctx context.Context, p Project, addr string) (Agent,
 		select {
 		case <-ctx.Done():
 			return Agent{}, notAgent
-		case <-time.After(pollOf(p.Remote != nil)):
+		case <-time.After(c.pollOf(p.Remote != nil)):
 		}
 	}
 }
