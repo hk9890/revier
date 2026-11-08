@@ -34,7 +34,7 @@ A findability map: where things live, and how to search for them.
 | `scripts/release-notes` | One version's `CHANGELOG.md` section, the text of its GitHub release. |
 | `scripts/demo/` | The README's clips, `.github/assets/*.webp`: the recording scripts run here, `guest/` on a VM's GNOME desktop. |
 | `docs/user-guide/` | The [user guide](user-guide/README.md). The package carries its reference pages (`configuration.md`, `extending/`) into the binary, which `revier assist --reference` prints. |
-| `cmd/revier/` | CLI entry point. Constructs every port's adapter, also calls the `claude` and `ssh` adapters directly, and reads `proc`'s variable names. |
+| `cmd/revier/` | CLI entry point. Constructs every port's adapter, also calls the `claude` adapter directly, and reads `proc`'s variable names. |
 
 ## The ports
 

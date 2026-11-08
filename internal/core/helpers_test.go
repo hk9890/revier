@@ -709,3 +709,14 @@ func osWindowProject() revier.Project {
 			Name: "diff:revier", Launch: []string{"x"}, Match: revier.Match{Title: "^diff:revier$"}}},
 	}}
 }
+
+// marked is the panel in a tab of the instance, under the mark of the tab
+// target it was opened for.
+func marked(panel revier.Panel, tab string, target revier.TargetName) revier.Panel {
+	panel.Tab = tab
+	if panel.Vars == nil {
+		panel.Vars = map[string]string{}
+	}
+	panel.Vars[core.PanelTargetVar] = string(target)
+	return panel
+}
