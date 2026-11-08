@@ -240,3 +240,18 @@ func TestATabFromAWorkingDirectoryInNoProjectFails(t *testing.T) {
 		t.Errorf("tabs = %+v, want none", rt.Tabs)
 	}
 }
+
+// Without -p and --panel, a tab asked for with --dir opens in the project
+// --dir is in, not in the one of the working directory or the focused
+// window's.
+func TestATabFromADirOpensInItsProject(t *testing.T) {
+	a, rt, demo, home := focusedOther(t)
+	t.Chdir(t.TempDir())
+
+	if err := a.newShell(t.Context(), "", "", demo.Path); err != nil {
+		t.Fatalf("shell new --dir %s: %v", demo.Path, err)
+	}
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Ref != home {
+		t.Errorf("tabs = %+v, want one in %v", rt.Tabs, home)
+	}
+}
