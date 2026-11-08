@@ -17,6 +17,7 @@ A findability map: where things live, and how to search for them.
 | `internal/session/` | The saved sets of open projects `revier session` writes and reads, under the state root, and `seen.toml`, what a surface last saw, which an end with no shutdown saves. |
 | `internal/checkout/` | git and mise on a project's directory: the origin a new project records, the clone of a missing one. |
 | `internal/procgroup/` | The process group each host command runs in, and the end of every group still running when a second ctrl+c ends revier. |
+| `internal/plain/` | The text an agent, a tool or a status command wrote, with every escape sequence and control character taken off, for the TUI and the command line. |
 | `internal/fsutil/` | The atomic file write every store uses, and the write through a link that config.toml and the terminal's configuration use. |
 | `internal/logging/` | The daily log file every process appends to, the helpers that time an operation, and the reader the TUI's logs screen lists. |
 | `internal/events/` | The event file `revier events` prints: what revier did in each project, never pruned. |

@@ -1,15 +1,10 @@
 package tui
 
 import (
-	"regexp"
 	"strings"
-	"unicode"
-)
 
-// escapeSeq is an escape sequence in the text an agent wrote or its terminal
-// shows: a CSI with its parameters, an OSC up to its terminator, or a
-// two-character escape.
-var escapeSeq = regexp.MustCompile("\x1b(?:\\[[0-?]*[ -/]*[@-~]|\\][^\x07\x1b]*(?:\x07|\x1b\\\\)?|[@-Z\\\\-_])")
+	"github.com/hk9890/revier/internal/plain"
+)
 
 // tabWidth is the columns a tab takes: what lipgloss draws one as.
 const tabWidth = 4
@@ -22,13 +17,5 @@ const tabWidth = 4
 // first line styles it itself, so nothing the message carries is styling
 // (decisions.md D108).
 func plainText(s string) string {
-	s = escapeSeq.ReplaceAllString(s, "")
-	s = strings.ReplaceAll(s, "\r\n", "\n")
-	s = strings.ReplaceAll(s, "\t", strings.Repeat(" ", tabWidth))
-	return strings.Map(func(r rune) rune {
-		if r == '\n' || !unicode.IsControl(r) {
-			return r
-		}
-		return -1
-	}, s)
+	return strings.ReplaceAll(plain.Text(s), "\t", strings.Repeat(" ", tabWidth))
 }

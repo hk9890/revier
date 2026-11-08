@@ -88,6 +88,7 @@ func TestStatusParsesWhatACommandPrints(t *testing.T) {
 		{"plain text", "first\n\n  \nsecond\n", []segment{{Text: "first"}, {Text: "second"}}},
 		{"escapes stripped", "\x1b[31mred\x1b[0m\x07 text\r\n", []segment{{Text: "red text"}}},
 		{"a tab is a space", "branch\tmain\n", []segment{{Text: "branch main"}}},
+		{"a C1 introducer stripped", "a\u009b31mb", []segment{{Text: "a31mb"}}},
 		{"empty text dropped", `[{"text":""},{"text":"kept"},{"text":"\u001b[1m\u001b[0m"}]`, []segment{{Text: "kept"}}},
 		{"nothing", "", nil},
 	} {

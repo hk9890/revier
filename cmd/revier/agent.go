@@ -11,14 +11,12 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unicode"
-
-	"github.com/charmbracelet/x/ansi"
 
 	usecase "github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/logging"
+	"github.com/hk9890/revier/internal/plain"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -282,7 +280,7 @@ func cmdAgentRead(out io.Writer, args []string) error {
 		if err != nil {
 			return fmt.Errorf("%s: %w", pos[0], err)
 		}
-		_, _ = fmt.Fprintln(out, strings.TrimRight(plainText(said.Message), "\n"))
+		_, _ = fmt.Fprintln(out, strings.TrimRight(plain.Text(said.Message), "\n"))
 		return nil
 	}
 	text, err := a.core.Screen(ctx, revier.AgentView{Ref: ag.Ref, Panel: ag.Panel.ID}, *lines > 0)
@@ -295,23 +293,11 @@ func cmdAgentRead(out io.Writer, args []string) error {
 	return nil
 }
 
-// plainText is s with every escape sequence and every control character but
-// the newline and the tab taken off.
-func plainText(s string) string {
-	s = strings.ReplaceAll(ansi.Strip(s), "\r\n", "\n")
-	return strings.Map(func(r rune) rune {
-		if r == '\n' || r == '\t' || !unicode.IsControl(r) {
-			return r
-		}
-		return -1
-	}, s)
-}
-
 // screenLines is a panel's text as lines of plain text, without the space a
 // terminal pads a row with and without the empty rows under the last line:
 // all of them, or the last n.
 func screenLines(text string, n int) []string {
-	lines := strings.Split(plainText(text), "\n")
+	lines := strings.Split(plain.Text(text), "\n")
 	for i, line := range lines {
 		lines[i] = strings.TrimRight(line, " \t")
 	}

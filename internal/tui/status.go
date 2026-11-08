@@ -14,10 +14,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/logging"
+	"github.com/hk9890/revier/internal/plain"
 	"github.com/hk9890/revier/internal/procgroup"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
@@ -365,17 +365,17 @@ func (r statusResult) style(th theme.Theme, level string) lipgloss.Style {
 	return th.Help
 }
 
-// printable drops escape sequences and control characters: the command's
-// colours are not the theme's, and a byte the width cannot measure breaks the
-// frame.
+// printable is plain.Text on one line: a tab is a space, and a newline goes.
+// The command's colours are not the theme's, and a byte the width cannot
+// measure breaks the frame.
 func printable(s string) string {
 	return strings.Map(func(r rune) rune {
-		switch {
-		case r == '\t':
+		switch r {
+		case '\t':
 			return ' '
-		case r < ' ' || r == 0x7f:
+		case '\n':
 			return -1
 		}
 		return r
-	}, ansi.Strip(s))
+	}, plain.Text(s))
 }
