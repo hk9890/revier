@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -73,9 +72,7 @@ func cmdTermStatus(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 	if *asJSON {
-		enc := json.NewEncoder(a.out)
-		enc.SetIndent("", "  ")
-		return enc.Encode(report)
+		return a.printJSON(report)
 	}
 	printTermReport(a.out, report)
 	return nil
@@ -198,9 +195,7 @@ func cmdTermApply(ctx context.Context, a *app, sub string, args []string) error 
 	}
 
 	if *asJSON {
-		enc := json.NewEncoder(a.out)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(plan); err != nil {
+		if err := a.printJSON(plan); err != nil {
 			return err
 		}
 	} else {

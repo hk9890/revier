@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -106,9 +105,7 @@ func cmdKeysStatus(ctx context.Context, a *app, args []string) error {
 	}
 
 	if *asJSON {
-		enc := json.NewEncoder(a.out)
-		enc.SetIndent("", "  ")
-		return enc.Encode(report)
+		return a.printJSON(report)
 	}
 	printKeys(a.out, report)
 	return nil
