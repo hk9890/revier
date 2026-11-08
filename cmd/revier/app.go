@@ -172,7 +172,11 @@ func (a *app) project(name revier.ProjectName) (core.Project, bool) {
 // the one of the working directory, else the one of the focused window, else
 // the last one (core.Core.ProjectFor).
 func (a *app) resolveProject(ctx context.Context, explicit string) (core.Project, error) {
-	return a.core.ProjectFor(ctx, a.projects, core.Ask{Name: revier.ProjectName(explicit), Dir: workingDir(), Away: true})
+	ask := core.Ask{Name: revier.ProjectName(explicit), Away: true}
+	if explicit == "" {
+		ask.Dir = workingDir()
+	}
+	return a.core.ProjectFor(ctx, a.projects, ask)
 }
 
 // workingDir is the directory the command runs in, or "" when it cannot be
