@@ -6,10 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"slices"
 	"strings"
-	"syscall"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -235,11 +233,9 @@ func runStatus(key statusKey, s core.Status, env []string) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), statusTimeout)
 		defer cancel()
 		var out, errb bytes.Buffer
-		c := exec.CommandContext(ctx, s.Run[0], s.Run[1:]...)
+		c := procgroup.CommandContext(ctx, s.Run[0], s.Run[1:]...)
 		c.Env = append(os.Environ(), env...)
 		c.Stdout, c.Stderr = &out, &errb
-		c.Cancel = func() error { return syscall.Kill(-c.Process.Pid, syscall.SIGKILL) }
-		c.WaitDelay = 50 * time.Millisecond
 		err := procgroup.Run(c)
 		switch {
 		case err == nil:

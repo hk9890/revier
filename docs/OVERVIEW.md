@@ -16,7 +16,7 @@ A findability map: where things live, and how to search for them.
 | `internal/ledger/` | The state file and the event file as the core reads and writes them, and the state record's line for each change a state write made: the one caller of the state lock. |
 | `internal/session/` | The saved sets of open projects `revier session` writes and reads, under the state root, and `seen.toml`, what a surface last saw, which an end with no shutdown saves. |
 | `internal/checkout/` | git and mise on a project's directory: the origin a new project records, the clone of a missing one. |
-| `internal/procgroup/` | The process group each host command runs in, and the end of every group still running when a second ctrl+c ends revier. |
+| `internal/procgroup/` | The process group each host command runs in, the end of the whole group when a command's context ends, and the end of every group still running when a second ctrl+c ends revier. |
 | `internal/plain/` | The text an agent, a tool or a status command wrote, with every escape sequence and control character taken off, for the TUI and the command line. |
 | `internal/shell/` | The quoting that keeps a word one word for a POSIX shell and for fish: the line `ssh` runs on a host, the command `revier each` lists, the assistant's status line. |
 | `internal/fsutil/` | The atomic file write every store uses, and the write through a link that config.toml and the terminal's configuration use. |

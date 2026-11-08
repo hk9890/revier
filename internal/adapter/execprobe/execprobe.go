@@ -12,9 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/hk9890/revier/internal/procgroup"
@@ -64,15 +62,8 @@ func (p *Probe) Inspect(ctx context.Context, panel revier.Panel) (revier.AgentSt
 
 	in, _ := json.Marshal(panel) // strings, ints, and a map: cannot fail
 	var out, errb bytes.Buffer
-	c := exec.CommandContext(bounded, p.exec)
+	c := procgroup.CommandContext(bounded, p.exec)
 	c.Stdin, c.Stdout, c.Stderr = bytes.NewReader(in), &out, &errb
-	// The timeout must end the whole process tree, not only the script: a
-	// child it started holds the output pipe open, and Run would otherwise
-	// wait on that pipe for as long as the child lives. So the probe runs in
-	// its own process group, the group is killed on timeout, and the pipes are
-	// abandoned shortly after.
-	c.Cancel = func() error { return syscall.Kill(-c.Process.Pid, syscall.SIGKILL) }
-	c.WaitDelay = 50 * time.Millisecond
 	if err := procgroup.Run(c); err != nil {
 		if ctx.Err() != nil {
 			return revier.AgentState{}, fmt.Errorf("probe %s: %w", p.name, ctx.Err())
