@@ -78,7 +78,7 @@ func cmdTermStatus(ctx context.Context, a *app, args []string) error {
 	return nil
 }
 
-func printTermReport(w io.Writer, r core.TermReport) {
+func printTermReport(w io.Writer, r core.TermKeyReport) {
 	_, _ = fmt.Fprintf(w, "terminal: %s\n", r.Terminal)
 	_, _ = fmt.Fprintf(w, "%s: %s\n", r.File, termFileNote(r))
 	_, _ = fmt.Fprintf(w, "%s: %s\n\n", r.Config, termIncludeNote(r))
@@ -96,7 +96,7 @@ func printTermReport(w io.Writer, r core.TermReport) {
 // revier's in every window: the hand-written map of an older setup is the
 // one to expect. A conditional one is left to the user: it wins only where
 // they asked it to.
-func printShadowHint(w io.Writer, r core.TermReport) {
+func printShadowHint(w io.Writer, r core.TermKeyReport) {
 	for _, row := range r.Rows {
 		for _, s := range row.Shadowed {
 			if s.Condition == "" {
@@ -107,28 +107,28 @@ func printShadowHint(w io.Writer, r core.TermReport) {
 	}
 }
 
-func termFileNote(r core.TermReport) string {
+func termFileNote(r core.TermKeyReport) string {
 	if r.FileDangling != "" {
 		return linkToNothing(r.File, r.FileDangling)
 	}
 	switch r.FileState {
-	case core.TermFileCurrent:
+	case core.TermKeyFileCurrent:
 		return "current"
-	case core.TermFileStale:
+	case core.TermKeyFileStale:
 		return "stale: it holds other keys than config.toml declares; `revier term install` rewrites it"
 	}
 	return "absent"
 }
 
-func termIncludeNote(r core.TermReport) string {
+func termIncludeNote(r core.TermKeyReport) string {
 	switch {
 	case r.ConfigDangling != "":
 		return linkToNothing(r.Config, r.ConfigDangling)
 	case !r.ConfigExists:
 		return "absent"
-	case r.Include == core.TermIncludeAbsent:
+	case r.Include == core.TermKeyIncludeAbsent:
 		return "does not include revier.conf, so the terminal reads none of these keys"
-	case r.Include == core.TermIncludeLate:
+	case r.Include == core.TermKeyIncludeLate:
 		return fmt.Sprintf("includes revier.conf at line %d, after a map of yours on one of these keys: revier's map wins over it, a conditional one too. Move the include to the top", r.IncludeLine)
 	case r.IncludeOwned:
 		return fmt.Sprintf("includes revier.conf at line %d", r.IncludeLine)
@@ -138,8 +138,8 @@ func termIncludeNote(r core.TermReport) string {
 
 // termRowNote is why a key is not what it looks like: a desktop key on it,
 // or a map of the user's that wins over revier's.
-func termRowNote(r core.TermReport, row core.TermRow) string {
-	if row.Status == core.TermRefused {
+func termRowNote(r core.TermKeyReport, row core.TermKeyRow) string {
+	if row.Status == core.TermKeyRefused {
 		return "refused: " + row.Refused + " is on it, and the desktop takes the press first"
 	}
 	if len(row.Shadowed) == 0 {
@@ -207,7 +207,7 @@ func cmdTermApply(ctx context.Context, a *app, sub string, args []string) error 
 	}
 	if sub == "install" {
 		for _, row := range plan.Report.Rows {
-			if row.Status == core.TermRefused {
+			if row.Status == core.TermKeyRefused {
 				return errKeysIncomplete
 			}
 		}
@@ -217,14 +217,14 @@ func cmdTermApply(ctx context.Context, a *app, sub string, args []string) error 
 
 // printTermPlan prints the plan, or what became of it. before is the plan as
 // it was built: its rows say which keys the run had to write.
-func printTermPlan(w io.Writer, before, plan core.TermPlan, sub string, dryRun bool) {
+func printTermPlan(w io.Writer, before, plan core.TermKeyPlan, sub string, dryRun bool) {
 	_, _ = fmt.Fprintf(w, "=== revier term %s ===\n\n", sub)
 	if dryRun {
 		_, _ = fmt.Fprint(w, "  dry run: nothing is changed\n\n")
 	}
 	r := plan.Report
 	file := termStep{action: plan.File, done: plan.FileDone, dangling: r.FileDangling}
-	include := termStep{action: plan.Include, done: plan.IncludeDone, dangling: r.ConfigDangling, late: r.Include == core.TermIncludeLate}
+	include := termStep{action: plan.Include, done: plan.IncludeDone, dangling: r.ConfigDangling, late: r.Include == core.TermKeyIncludeLate}
 	_, _ = fmt.Fprintf(w, "  %s %s: %s\n", file.mark(plan, dryRun), r.File, file.fileAction(r.File, plan, dryRun))
 	_, _ = fmt.Fprintf(w, "  %s %s: %s\n", include.mark(plan, dryRun), r.Config, include.includeAction(plan, dryRun))
 	switch {
@@ -252,7 +252,7 @@ func printTermPlan(w io.Writer, before, plan core.TermPlan, sub string, dryRun b
 
 	switch {
 	case plan.Err != "" || plan.Refused != "" || !plan.Writes():
-	case plan.Include == core.TermCreate:
+	case plan.Include == core.TermKeyCreate:
 		_, _ = fmt.Fprintf(w, "\n  %s is new: restart kitty, which watches only a configuration that was there when it started.\n", filepath.Base(r.Config))
 	default:
 		_, _ = fmt.Fprintln(w, "\n  kitty reads the change by itself; revier sends it no signal.")
@@ -262,11 +262,11 @@ func printTermPlan(w io.Writer, before, plan core.TermPlan, sub string, dryRun b
 // termKeyLine is the mark and the note of one key, as revier keys marks
 // its keys: + for one that was already written, > for one this run writes,
 // ! for one refused or not written. before is the row as the plan found it.
-func termKeyLine(before core.TermRow, plan core.TermPlan, dryRun bool) (mark, note string) {
+func termKeyLine(before core.TermKeyRow, plan core.TermKeyPlan, dryRun bool) (mark, note string) {
 	switch {
-	case before.Status == core.TermRefused:
+	case before.Status == core.TermKeyRefused:
 		return "!", "refused"
-	case before.Status == core.TermWritten:
+	case before.Status == core.TermKeyWritten:
 		return "+", "ok"
 	case plan.Refused != "" && dryRun:
 		return "!", "would not be written"
@@ -281,7 +281,7 @@ func termKeyLine(before core.TermRow, plan core.TermPlan, dryRun bool) (mark, no
 // termStep is one of the two files' actions, and what became of it: done,
 // or held back by a link to nothing on the way to the file.
 type termStep struct {
-	action   core.TermAction
+	action   core.TermKeyAction
 	done     bool
 	dangling string
 	// late is an include that is there, after a map of the user's.
@@ -290,7 +290,7 @@ type termStep struct {
 
 // runs reports whether the step changes its file on this run, or would on a
 // dry run.
-func (s termStep) runs(plan core.TermPlan, dryRun bool) bool {
+func (s termStep) runs(plan core.TermKeyPlan, dryRun bool) bool {
 	if dryRun {
 		return plan.Refused == "" && s.action.Writes()
 	}
@@ -300,7 +300,7 @@ func (s termStep) runs(plan core.TermPlan, dryRun bool) bool {
 // mark is the glyph in front of a file's line: > for a change, - for
 // none, ! for a change that did not happen and for an include placed after
 // a map of the user's.
-func (s termStep) mark(plan core.TermPlan, dryRun bool) string {
+func (s termStep) mark(plan core.TermKeyPlan, dryRun bool) string {
 	switch {
 	case s.dangling != "":
 		return "!"
@@ -316,7 +316,7 @@ func (s termStep) mark(plan core.TermPlan, dryRun bool) string {
 
 // outcome is what a step that writes says: what it does, what it would do,
 // or that it did not.
-func (s termStep) outcome(verb string, plan core.TermPlan, dryRun bool) string {
+func (s termStep) outcome(verb string, plan core.TermKeyPlan, dryRun bool) string {
 	switch {
 	case s.runs(plan, dryRun):
 		return wouldBe(verb, dryRun)
@@ -335,43 +335,43 @@ func linkToNothing(path, link string) string {
 	return "in " + link + ", a link to nothing"
 }
 
-func (s termStep) fileAction(path string, plan core.TermPlan, dryRun bool) string {
+func (s termStep) fileAction(path string, plan core.TermKeyPlan, dryRun bool) string {
 	if s.dangling != "" {
 		return linkToNothing(path, s.dangling)
 	}
 	switch s.action {
-	case core.TermOK:
+	case core.TermKeyOK:
 		return "ok"
-	case core.TermAbsent:
+	case core.TermKeyAbsent:
 		return "not there"
-	case core.TermCreate:
+	case core.TermKeyCreate:
 		return s.outcome("created", plan, dryRun)
-	case core.TermUpdate:
+	case core.TermKeyUpdate:
 		return s.outcome("rewritten", plan, dryRun)
 	}
 	return s.outcome("removed", plan, dryRun)
 }
 
-func (s termStep) includeAction(plan core.TermPlan, dryRun bool) string {
+func (s termStep) includeAction(plan core.TermKeyPlan, dryRun bool) string {
 	if s.dangling != "" {
 		return linkToNothing(plan.Report.Config, s.dangling)
 	}
 	switch s.action {
-	case core.TermOK:
+	case core.TermKeyOK:
 		if s.late {
 			return termIncludeNote(plan.Report)
 		}
 		return "includes revier.conf already"
-	case core.TermAbsent:
+	case core.TermKeyAbsent:
 		return "includes no revier.conf"
-	case core.TermKept:
+	case core.TermKeyKept:
 		return fmt.Sprintf("the include at line %d is yours: it stays", plan.Report.IncludeLine)
-	case core.TermCreate:
+	case core.TermKeyCreate:
 		if s.runs(plan, dryRun) {
 			return wouldBe("created, with the include", dryRun)
 		}
 		return s.outcome("created", plan, dryRun)
-	case core.TermAdd:
+	case core.TermKeyAdd:
 		return "include " + s.outcome("added at the top", plan, dryRun)
 	}
 	return "revier's include " + s.outcome("removed", plan, dryRun)

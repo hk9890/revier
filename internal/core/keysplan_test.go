@@ -408,7 +408,7 @@ func TestAPlanRefusesAConfigurationDisagreement(t *testing.T) {
 		t.Errorf("error = %q, want it to name the target", err)
 	}
 	// The same state is a report, not a refusal.
-	if _, err := c.Keys(context.Background(), []core.Project{keyProject(t, "revier"), other}, "alt+space"); err != nil {
+	if _, err := c.KeyReport(context.Background(), []core.Project{keyProject(t, "revier"), other}, "alt+space"); err != nil {
 		t.Errorf("Keys refused a state it is supposed to report: %v", err)
 	}
 }
@@ -704,7 +704,7 @@ func TestATriggerKeyUnderTheOldNameIsRevierOwnAndRenamed(t *testing.T) {
 	w := hosttest.NewWriter("gnome", legacyPopupKey())
 	c := &core.Core{KeyBinder: w}
 
-	report, err := c.Keys(context.Background(), nil, "alt+space")
+	report, err := c.KeyReport(context.Background(), nil, "alt+space")
 	if err != nil {
 		t.Fatalf("Keys: %v", err)
 	}

@@ -57,75 +57,77 @@ func (k TermKey) Opens() string {
 	return "agent"
 }
 
-// TermStatus is what the terminal does with one key revier wants.
-type TermStatus string
+// TermKeyStatus is what the terminal does with one key revier wants.
+type TermKeyStatus string
 
 const (
-	// TermWritten: revier's key file holds the key as config.toml wants it.
-	TermWritten TermStatus = "written"
-	// TermMissing: revier's key file does not hold it, or runs another
+	// TermKeyWritten: revier's key file holds the key as config.toml wants it.
+	TermKeyWritten TermKeyStatus = "written"
+	// TermKeyMissing: revier's key file does not hold it, or runs another
 	// command on it. `revier term install` writes it.
-	TermMissing TermStatus = "missing"
-	// TermRefused: a desktop key revier wants is on the same chord, and the
+	TermKeyMissing TermKeyStatus = "missing"
+	// TermKeyRefused: a desktop key revier wants is on the same chord, and the
 	// desktop takes a press before the terminal does (decisions.md D110), so
 	// revier writes no map of it.
-	TermRefused TermStatus = "refused"
+	TermKeyRefused TermKeyStatus = "refused"
 )
 
-// TermFileState is what revier's key file is, against what config.toml wants.
-type TermFileState string
+// TermKeyFileState is what revier's key file is, against what config.toml
+// wants.
+type TermKeyFileState string
 
 const (
-	TermFileCurrent TermFileState = "current"
-	TermFileStale   TermFileState = "stale"
-	TermFileAbsent  TermFileState = "absent"
+	TermKeyFileCurrent TermKeyFileState = "current"
+	TermKeyFileStale   TermKeyFileState = "stale"
+	TermKeyFileAbsent  TermKeyFileState = "absent"
 )
 
-// TermInclude is where the terminal's main configuration includes revier's
+// TermKeyInclude is where the terminal's main configuration includes revier's
 // key file.
-type TermInclude string
+type TermKeyInclude string
 
 const (
-	// TermIncludeAbsent: no line includes it, so the terminal reads none of
+	// TermKeyIncludeAbsent: no line includes it, so the terminal reads none of
 	// revier's keys.
-	TermIncludeAbsent TermInclude = "absent"
-	// TermIncludeTop: it is included before every map of a key revier
+	TermKeyIncludeAbsent TermKeyInclude = "absent"
+	// TermKeyIncludeTop: it is included before every map of a key revier
 	// writes, so the user's own maps of those keys win.
-	TermIncludeTop TermInclude = "top"
-	// TermIncludeLate: it is included after a map of a key revier writes, so
+	TermKeyIncludeTop TermKeyInclude = "top"
+	// TermKeyIncludeLate: it is included after a map of a key revier writes, so
 	// revier's map wins over the user's, a conditional one too.
-	TermIncludeLate TermInclude = "late"
+	TermKeyIncludeLate TermKeyInclude = "late"
 )
 
-// TermShadow is a map in the terminal's main configuration that wins over
+// TermKeyShadow is a map in the terminal's main configuration that wins over
 // revier's on the same key: it comes after the include.
-type TermShadow struct {
+type TermKeyShadow struct {
 	Line int `json:"line"`
 	// Condition limits the map to some windows; empty, it holds everywhere
 	// and revier's map never runs.
 	Condition string `json:"condition,omitempty"`
 }
 
-// TermRow is one key revier wants in the terminal.
-type TermRow struct {
-	Chord  Chord      `json:"chord"`
-	Opens  string     `json:"opens"`
-	Args   []string   `json:"args"`
-	Status TermStatus `json:"status"`
+// TermKeyRow is one key revier wants in the terminal.
+type TermKeyRow struct {
+	Chord  Chord         `json:"chord"`
+	Opens  string        `json:"opens"`
+	Args   []string      `json:"args"`
+	Status TermKeyStatus `json:"status"`
 	// Refused names the desktop key on the chord, when Status is refused.
 	Refused string `json:"refused,omitempty"`
 	// Shadowed is every map of the main configuration that wins over
 	// revier's on this chord, with the include where it is or, while there
 	// is none, where install puts it.
-	Shadowed []TermShadow `json:"shadowed,omitempty"`
+	Shadowed []TermKeyShadow `json:"shadowed,omitempty"`
 }
 
-// TermReport is the answer to "which keys does the terminal hold for revier".
-type TermReport struct {
+// TermKeyReport is the answer to "which keys does the terminal hold for
+// revier".
+type TermKeyReport struct {
 	Terminal string `json:"terminal"`
 	// File is revier's key file, and FileState what it holds.
-	File      string        `json:"file"`
-	FileState TermFileState `json:"file_state"`
+	File      string           `json:"file"`
+	FileState TermKeyFileState `json:"file_state"`
 	// Config is the terminal's main configuration.
 	Config       string `json:"config"`
 	ConfigExists bool   `json:"config_exists"`
@@ -136,10 +138,10 @@ type TermReport struct {
 	ConfigDangling string `json:"config_dangling,omitempty"`
 	// Include is where Config includes File, IncludeLine the line, and
 	// IncludeOwned whether the line is revier's or the user's.
-	Include      TermInclude `json:"include"`
-	IncludeLine  int         `json:"include_line,omitempty"`
-	IncludeOwned bool        `json:"include_owned,omitempty"`
-	Rows         []TermRow   `json:"rows"`
+	Include      TermKeyInclude `json:"include"`
+	IncludeLine  int            `json:"include_line,omitempty"`
+	IncludeOwned bool           `json:"include_owned,omitempty"`
+	Rows         []TermKeyRow   `json:"rows"`
 }
 
 // TermKeyReport reads the terminal and reports every key in keys: the ones
@@ -147,13 +149,13 @@ type TermReport struct {
 // wants, which a terminal key on the same chord loses to.
 //
 // It reads. Nothing here changes the terminal's configuration.
-func (c *Core) TermKeyReport(ctx context.Context, keys []TermKey, projects []Project, trigger Chord) (TermReport, error) {
+func (c *Core) TermKeyReport(ctx context.Context, keys []TermKey, projects []Project, trigger Chord) (TermKeyReport, error) {
 	if c.TermKeys == nil {
-		return TermReport{}, ErrNoTermKeys
+		return TermKeyReport{}, ErrNoTermKeys
 	}
 	state, err := c.TermKeys.Read(ctx)
 	if err != nil {
-		return TermReport{}, err
+		return TermKeyReport{}, err
 	}
 	return termReport(c.TermKeys.Name(), state, wantedTermRows(keys, projects, trigger)), nil
 }
@@ -161,7 +163,7 @@ func (c *Core) TermKeyReport(ctx context.Context, keys []TermKey, projects []Pro
 // wantedTermRows is one row per key, in config.toml's order, with the ones a
 // desktop key is on refused. The rest have no status yet: that is what the
 // terminal holds.
-func wantedTermRows(keys []TermKey, projects []Project, trigger Chord) []TermRow {
+func wantedTermRows(keys []TermKey, projects []Project, trigger Chord) []TermKeyRow {
 	desktop := map[Chord]string{}
 	for _, r := range wantedChords(projects, trigger) {
 		if _, ok := desktop[r.Chord]; ok {
@@ -177,11 +179,11 @@ func wantedTermRows(keys []TermKey, projects []Project, trigger Chord) []TermRow
 		}
 		desktop[r.Chord] = fmt.Sprintf("the desktop key of target %q in %s", r.Target, strings.Join(names, ", "))
 	}
-	rows := make([]TermRow, 0, len(keys))
+	rows := make([]TermKeyRow, 0, len(keys))
 	for _, k := range keys {
-		row := TermRow{Chord: k.Chord, Opens: k.Opens(), Args: k.Args()}
+		row := TermKeyRow{Chord: k.Chord, Opens: k.Opens(), Args: k.Args()}
 		if held, ok := desktop[k.Chord]; ok {
-			row.Status, row.Refused = TermRefused, held
+			row.Status, row.Refused = TermKeyRefused, held
 		}
 		rows = append(rows, row)
 	}
@@ -194,7 +196,7 @@ func InstalledTermKeys(keys []TermKey, projects []Project, trigger Chord) []Term
 	rows := wantedTermRows(keys, projects, trigger)
 	var out []TermKey
 	for i, k := range keys {
-		if rows[i].Status != TermRefused {
+		if rows[i].Status != TermKeyRefused {
 			out = append(out, k)
 		}
 	}
@@ -203,15 +205,15 @@ func InstalledTermKeys(keys []TermKey, projects []Project, trigger Chord) []Term
 
 // termReport is the whole of the classification, over a state already read
 // and the rows wantedTermRows made.
-func termReport(name string, state revier.TermKeyState, wanted []TermRow) TermReport {
-	report := TermReport{
+func termReport(name string, state revier.TermKeyState, wanted []TermKeyRow) TermKeyReport {
+	report := TermKeyReport{
 		Terminal:       name,
 		File:           state.File,
 		Config:         state.Config,
 		ConfigExists:   state.ConfigExists,
 		FileDangling:   state.FileDangling,
 		ConfigDangling: state.ConfigDangling,
-		Include:        TermIncludeAbsent,
+		Include:        TermKeyIncludeAbsent,
 		IncludeLine:    state.Include,
 		IncludeOwned:   state.IncludeOwned,
 	}
@@ -237,30 +239,30 @@ func termReport(name string, state revier.TermKeyState, wanted []TermRow) TermRe
 	}
 
 	write := termBindings(wanted)
-	report.FileState = TermFileStale
+	report.FileState = TermKeyFileStale
 	switch {
 	case !state.FileExists:
-		report.FileState = TermFileAbsent
+		report.FileState = TermKeyFileAbsent
 	case slices.EqualFunc(have, write, func(a, b revier.TermBinding) bool {
 		return a.Chord == b.Chord && slices.Equal(a.Args, b.Args)
 	}):
-		report.FileState = TermFileCurrent
+		report.FileState = TermKeyFileCurrent
 	}
 
 	if state.Include > 0 {
-		report.Include = TermIncludeTop
+		report.Include = TermKeyIncludeTop
 	}
 	for _, row := range wanted {
-		if row.Status != TermRefused {
-			row.Status = TermMissing
+		if row.Status != TermKeyRefused {
+			row.Status = TermKeyMissing
 			if args, ok := held[row.Chord]; ok && slices.Equal(args, row.Args) {
-				row.Status = TermWritten
+				row.Status = TermKeyWritten
 			}
 			for _, m := range maps[row.Chord] {
 				if m.Line > state.Include {
-					row.Shadowed = append(row.Shadowed, TermShadow{Line: m.Line, Condition: m.Condition})
+					row.Shadowed = append(row.Shadowed, TermKeyShadow{Line: m.Line, Condition: m.Condition})
 				} else if state.Include > 0 {
-					report.Include = TermIncludeLate
+					report.Include = TermKeyIncludeLate
 				}
 			}
 		}
@@ -271,50 +273,50 @@ func termReport(name string, state revier.TermKeyState, wanted []TermRow) TermRe
 
 // termBindings is what revier's key file holds for the rows: every key the
 // desktop does not take, in order.
-func termBindings(rows []TermRow) []revier.TermBinding {
+func termBindings(rows []TermKeyRow) []revier.TermBinding {
 	out := []revier.TermBinding{}
 	for _, r := range rows {
-		if r.Status != TermRefused {
+		if r.Status != TermKeyRefused {
 			out = append(out, revier.TermBinding{Chord: string(r.Chord), Args: r.Args})
 		}
 	}
 	return out
 }
 
-// TermAction is what installing or removing does to one of the two files.
-type TermAction string
+// TermKeyAction is what installing or removing does to one of the two files.
+type TermKeyAction string
 
 const (
-	// TermOK: the file is what install would make it.
-	TermOK TermAction = "ok"
-	// TermCreate: the file is not there, and install writes it. For the
+	// TermKeyOK: the file is what install would make it.
+	TermKeyOK TermKeyAction = "ok"
+	// TermKeyCreate: the file is not there, and install writes it. For the
 	// main configuration, the terminal must be restarted to watch it.
-	TermCreate TermAction = "create"
-	// TermUpdate: revier's key file is there and holds other keys.
-	TermUpdate TermAction = "update"
-	// TermAdd: the main configuration is there, and install adds the
+	TermKeyCreate TermKeyAction = "create"
+	// TermKeyUpdate: revier's key file is there and holds other keys.
+	TermKeyUpdate TermKeyAction = "update"
+	// TermKeyAdd: the main configuration is there, and install adds the
 	// include at its top.
-	TermAdd TermAction = "add"
-	// TermRemove: uninstalling, and revier's file or include is there.
-	TermRemove TermAction = "remove"
-	// TermAbsent: uninstalling, and there is nothing of revier's to remove.
-	TermAbsent TermAction = "absent"
-	// TermKept: uninstalling, and the include is the user's: it stays.
-	TermKept TermAction = "kept"
+	TermKeyAdd TermKeyAction = "add"
+	// TermKeyRemove: uninstalling, and revier's file or include is there.
+	TermKeyRemove TermKeyAction = "remove"
+	// TermKeyAbsent: uninstalling, and there is nothing of revier's to remove.
+	TermKeyAbsent TermKeyAction = "absent"
+	// TermKeyKept: uninstalling, and the include is the user's: it stays.
+	TermKeyKept TermKeyAction = "kept"
 )
 
 // Writes reports whether the action changes the file.
-func (a TermAction) Writes() bool { return a != TermOK && a != TermAbsent && a != TermKept }
+func (a TermKeyAction) Writes() bool { return a != TermKeyOK && a != TermKeyAbsent && a != TermKeyKept }
 
-// TermPlan is what a run of `revier term install` or `uninstall` does, before
-// it does it. The same value is what the command prints afterwards, with
-// Done or Err filled and the report read again.
-type TermPlan struct {
-	Report TermReport `json:"report"`
+// TermKeyPlan is what a run of `revier term install` or `uninstall` does,
+// before it does it. The same value is what the command prints afterwards,
+// with Done or Err filled and the report read again.
+type TermKeyPlan struct {
+	Report TermKeyReport `json:"report"`
 	// File is the action on revier's key file, Include on the include line
 	// in the main configuration.
-	File    TermAction `json:"file"`
-	Include TermAction `json:"include"`
+	File    TermKeyAction `json:"file"`
+	Include TermKeyAction `json:"include"`
 	// Refused is why the plan writes nothing at all: a link to nothing on
 	// the way to one of the files. Writing the other one alone would leave
 	// half an install.
@@ -326,16 +328,16 @@ type TermPlan struct {
 	Done        bool   `json:"done,omitempty"`
 	Err         string `json:"error,omitempty"`
 
-	wanted    []TermRow
+	wanted    []TermKeyRow
 	uninstall bool
 }
 
 // Writes reports whether the plan changes a file.
-func (p TermPlan) Writes() bool { return p.File.Writes() || p.Include.Writes() }
+func (p TermKeyPlan) Writes() bool { return p.File.Writes() || p.Include.Writes() }
 
 // refusal is why no install or uninstall runs: every link to nothing on the
 // way to the two files. Empty when there is none.
-func refusal(r TermReport) string {
+func refusal(r TermKeyReport) string {
 	var links []string
 	for _, l := range []string{r.FileDangling, r.ConfigDangling} {
 		if l != "" && !slices.Contains(links, l) {
@@ -354,59 +356,59 @@ func refusal(r TermReport) string {
 // PlanInstallTermKeys works out what writing the terminal keys would do, and
 // changes nothing. A key the desktop takes is left out of the file; the rest
 // are written.
-func (c *Core) PlanInstallTermKeys(ctx context.Context, keys []TermKey, projects []Project, trigger Chord) (TermPlan, error) {
+func (c *Core) PlanInstallTermKeys(ctx context.Context, keys []TermKey, projects []Project, trigger Chord) (TermKeyPlan, error) {
 	report, wanted, err := c.termState(ctx, keys, projects, trigger)
 	if err != nil {
-		return TermPlan{}, err
+		return TermKeyPlan{}, err
 	}
-	plan := TermPlan{Report: report, wanted: wanted, Refused: refusal(report)}
+	plan := TermKeyPlan{Report: report, wanted: wanted, Refused: refusal(report)}
 	switch report.FileState {
-	case TermFileCurrent:
-		plan.File = TermOK
-	case TermFileStale:
-		plan.File = TermUpdate
+	case TermKeyFileCurrent:
+		plan.File = TermKeyOK
+	case TermKeyFileStale:
+		plan.File = TermKeyUpdate
 	default:
-		plan.File = TermCreate
+		plan.File = TermKeyCreate
 	}
 	switch {
-	case report.Include != TermIncludeAbsent:
-		plan.Include = TermOK
+	case report.Include != TermKeyIncludeAbsent:
+		plan.Include = TermKeyOK
 	case report.ConfigExists:
-		plan.Include = TermAdd
+		plan.Include = TermKeyAdd
 	default:
-		plan.Include = TermCreate
+		plan.Include = TermKeyCreate
 	}
 	return plan, nil
 }
 
 // PlanUninstallTermKeys works out what removing the terminal keys would do.
 // Only what revier wrote goes: an include the user wrote stays.
-func (c *Core) PlanUninstallTermKeys(ctx context.Context, keys []TermKey, projects []Project, trigger Chord) (TermPlan, error) {
+func (c *Core) PlanUninstallTermKeys(ctx context.Context, keys []TermKey, projects []Project, trigger Chord) (TermKeyPlan, error) {
 	report, wanted, err := c.termState(ctx, keys, projects, trigger)
 	if err != nil {
-		return TermPlan{}, err
+		return TermKeyPlan{}, err
 	}
-	plan := TermPlan{Report: report, wanted: wanted, uninstall: true, File: TermAbsent, Include: TermAbsent, Refused: refusal(report)}
-	if report.FileState != TermFileAbsent {
-		plan.File = TermRemove
+	plan := TermKeyPlan{Report: report, wanted: wanted, uninstall: true, File: TermKeyAbsent, Include: TermKeyAbsent, Refused: refusal(report)}
+	if report.FileState != TermKeyFileAbsent {
+		plan.File = TermKeyRemove
 	}
 	switch {
-	case report.Include == TermIncludeAbsent:
+	case report.Include == TermKeyIncludeAbsent:
 	case report.IncludeOwned:
-		plan.Include = TermRemove
+		plan.Include = TermKeyRemove
 	default:
-		plan.Include = TermKept
+		plan.Include = TermKeyKept
 	}
 	return plan, nil
 }
 
-func (c *Core) termState(ctx context.Context, keys []TermKey, projects []Project, trigger Chord) (TermReport, []TermRow, error) {
+func (c *Core) termState(ctx context.Context, keys []TermKey, projects []Project, trigger Chord) (TermKeyReport, []TermKeyRow, error) {
 	if c.TermKeys == nil {
-		return TermReport{}, nil, ErrNoTermKeys
+		return TermKeyReport{}, nil, ErrNoTermKeys
 	}
 	state, err := c.TermKeys.Read(ctx)
 	if err != nil {
-		return TermReport{}, nil, err
+		return TermKeyReport{}, nil, err
 	}
 	wanted := wantedTermRows(keys, projects, trigger)
 	return termReport(c.TermKeys.Name(), state, wanted), wanted, nil
@@ -416,7 +418,7 @@ func (c *Core) termState(ctx context.Context, keys []TermKey, projects []Project
 // again: what the files hold now, and the shadowing maps at the lines they
 // are on now. A refused plan fails with its refusal and writes nothing; a
 // plan that writes nothing is returned as it is.
-func (c *Core) ApplyTermKeys(ctx context.Context, plan TermPlan) TermPlan {
+func (c *Core) ApplyTermKeys(ctx context.Context, plan TermKeyPlan) TermKeyPlan {
 	if plan.Refused != "" {
 		plan.Err = plan.Refused
 		return plan
@@ -451,11 +453,11 @@ func (c *Core) ApplyTermKeys(ctx context.Context, plan TermPlan) TermPlan {
 	}
 	// The run failed part way: the files read again say which step ran.
 	if plan.uninstall {
-		plan.FileDone = plan.File.Writes() && plan.Report.FileState == TermFileAbsent
-		plan.IncludeDone = plan.Include.Writes() && plan.Report.Include == TermIncludeAbsent
+		plan.FileDone = plan.File.Writes() && plan.Report.FileState == TermKeyFileAbsent
+		plan.IncludeDone = plan.Include.Writes() && plan.Report.Include == TermKeyIncludeAbsent
 	} else {
-		plan.FileDone = plan.File.Writes() && plan.Report.FileState == TermFileCurrent
-		plan.IncludeDone = plan.Include.Writes() && plan.Report.Include != TermIncludeAbsent
+		plan.FileDone = plan.File.Writes() && plan.Report.FileState == TermKeyFileCurrent
+		plan.IncludeDone = plan.Include.Writes() && plan.Report.Include != TermKeyIncludeAbsent
 	}
 	return plan
 }

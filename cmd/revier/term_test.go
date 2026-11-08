@@ -63,8 +63,8 @@ func TestTermInstallDryRunThenRunThenStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var plan struct{ File, Include core.TermAction }
-	if err := json.Unmarshal([]byte(out), &plan); err != nil || plan.File != core.TermRemove || plan.Include != core.TermRemove {
+	var plan struct{ File, Include core.TermKeyAction }
+	if err := json.Unmarshal([]byte(out), &plan); err != nil || plan.File != core.TermKeyRemove || plan.Include != core.TermKeyRemove {
 		t.Errorf("uninstall plan = %+v, %v:\n%s", plan, err, out)
 	}
 	if b, _ := os.ReadFile(filepath.Join(dir, "kitty.conf")); string(b) != "map ctrl+shift+t new_tab\n" {
@@ -142,9 +142,9 @@ func TestTermInstallOnALinkToNothingWritesNothing(t *testing.T) {
 // A run that failed half way says the step that ran did what it did, and
 // the step that did not run is not done.
 func TestTermPlanOfAHalfRunSaysWhatDidNotRun(t *testing.T) {
-	report := core.TermReport{File: "k/revier.conf", Config: "k/kitty.conf", Rows: []core.TermRow{{Chord: "ctrl+shift+t", Opens: "shell", Status: core.TermWritten}}}
-	before := core.TermPlan{Report: core.TermReport{Rows: []core.TermRow{{Status: core.TermMissing}}}}
-	plan := core.TermPlan{Report: report, File: core.TermCreate, Include: core.TermCreate, FileDone: true, Err: "permission denied"}
+	report := core.TermKeyReport{File: "k/revier.conf", Config: "k/kitty.conf", Rows: []core.TermKeyRow{{Chord: "ctrl+shift+t", Opens: "shell", Status: core.TermKeyWritten}}}
+	before := core.TermKeyPlan{Report: core.TermKeyReport{Rows: []core.TermKeyRow{{Status: core.TermKeyMissing}}}}
+	plan := core.TermKeyPlan{Report: report, File: core.TermKeyCreate, Include: core.TermKeyCreate, FileDone: true, Err: "permission denied"}
 	var b bytes.Buffer
 	printTermPlan(&b, before, plan, "install", false)
 	out := b.String()

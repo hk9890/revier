@@ -663,7 +663,7 @@ func listedTabsProject(active revier.TargetName) revier.Project {
 func keysOf(t *testing.T, binder revier.KeyBinder, projects ...core.Project) core.KeyReport {
 	t.Helper()
 	c := &core.Core{KeyBinder: binder}
-	report, err := c.Keys(context.Background(), projects, "alt+space")
+	report, err := c.KeyReport(context.Background(), projects, "alt+space")
 	if err != nil {
 		t.Fatalf("Keys: %v", err)
 	}

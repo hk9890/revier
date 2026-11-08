@@ -90,7 +90,7 @@ func cmdKeysStatus(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	report, err := a.core.Keys(ctx, a.projects, trigger)
+	report, err := a.core.KeyReport(ctx, a.projects, trigger)
 	switch {
 	case errors.Is(err, core.ErrNoKeyBinder):
 		// A machine with no desktop is a normal outcome, not a failure.

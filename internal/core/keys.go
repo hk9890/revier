@@ -145,12 +145,12 @@ func ownedCommand(cmd string) bool {
 	return ok && keyTargetName.MatchString(name)
 }
 
-// Keys reports which desktop chords revier wants and who holds each one.
+// KeyReport reports which desktop chords revier wants and who holds each one.
 //
 // It reads. Nothing here changes a binding: claiming a chord is a separate
 // operation, and a status command that could write is one an agent cannot be
 // allowed to run on the user's live desktop.
-func (c *Core) Keys(ctx context.Context, projects []Project, trigger Chord) (KeyReport, error) {
+func (c *Core) KeyReport(ctx context.Context, projects []Project, trigger Chord) (KeyReport, error) {
 	if c.KeyBinder == nil {
 		return KeyReport{}, ErrNoKeyBinder
 	}
@@ -162,9 +162,9 @@ func (c *Core) Keys(ctx context.Context, projects []Project, trigger Chord) (Key
 }
 
 // report is the whole of the classification, over bindings already read. It is
-// split from Keys because installing starts from the same answer: what is true
-// now decides what to do about it, and two commands working from one report
-// cannot disagree about the desktop.
+// split from KeyReport because installing starts from the same answer: what is
+// true now decides what to do about it, and two commands working from one
+// report cannot disagree about the desktop.
 func (c *Core) report(bindings []revier.Binding, projects []Project, trigger Chord) KeyReport {
 	report := KeyReport{Desktop: c.KeyBinder.Name()}
 	held := index(bindings)
