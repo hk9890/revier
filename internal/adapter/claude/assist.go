@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/hk9890/revier/internal/shell"
 )
 
 // Assist is Claude Code started as revier's assistant.
@@ -66,18 +68,13 @@ func (a Assist) handOverSettings() string {
 	settings, err := json.Marshal(map[string]any{
 		"statusLine": map[string]string{
 			"type":    "command",
-			"command": `printf '\033[7m %s \033[0m' ` + shellQuote(status),
+			"command": `printf '\033[7m %s \033[0m' ` + shell.Quote(status),
 		},
 	})
 	if err != nil {
 		panic(err) // a map of strings always marshals
 	}
 	return string(settings)
-}
-
-// shellQuote is s as one word of a POSIX shell.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // HasConversation reports whether the conversation --continue in dir would

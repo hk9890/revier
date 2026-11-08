@@ -144,7 +144,7 @@ func TestSurveyPassesTheSSHFailureThrough(t *testing.T) {
 // one - the directory Claude Code installs into - is missing. The command
 // line runs in the user's login shell instead, as one word. The shell is
 // $SHELL, which sshd sets, and not ${SHELL:-sh}: the line is parsed by that
-// login shell, and fish rejects the braces. The word is quoted as Quote
+// login shell, and fish rejects the braces. The word is quoted as shell.Quote
 // quotes, which fish and a POSIX shell read alike; fish_test.go and
 // ssh_live_test.go read it through each.
 func TestACommandRunsInTheLoginShell(t *testing.T) {
@@ -173,40 +173,6 @@ func TestRunCommandAsksForATTYAndQuotesItsWords(t *testing.T) {
 	want := append(append([]string{"ssh", "-t"}, ssh.Options()...), "--", "buildbox", ssh.Login("revier run 'pull all' -p far"))
 	if !slices.Equal(argv, want) {
 		t.Errorf("argv = %q, want %q", argv, want)
-	}
-}
-
-// The remote shell joins ssh's words back into a line, so a word with a
-// space, a quote or a shell character has to reach revier there as one
-// argument.
-func TestQuoteKeepsAWordWhole(t *testing.T) {
-	cases := map[string]string{
-		"demo":           "demo",
-		"--json":         "--json",
-		"run the tests":  "'run the tests'",
-		"it's":           `'it'\''s'`,
-		"a;rm -rf /":     "'a;rm -rf /'",
-		"$HOME":          "'$HOME'",
-		"":               "''",
-		"demo:home":      "demo:home",
-		"C#":             "'C#'",
-		"x=y":            "x=y",
-		"=echo":          "'=echo'",
-		"~/dev":          "'~/dev'",
-		"say \"hi\" now": `'say "hi" now'`,
-		"back\\slash":    `'back'\\'slash'`,
-		"trail\\":        `'trail'\\''`,
-		"caret^":         "'caret^'",
-		"user@host":      "user@host",
-		"a\nb":           "'a\nb'",
-		"glob*":          "'glob*'",
-		"bang!":          "'bang!'",
-		"back`tick":      "'back`tick'",
-	}
-	for in, want := range cases {
-		if got := ssh.Quote(in); got != want {
-			t.Errorf("quote(%q) = %s, want %s", in, got, want)
-		}
 	}
 }
 

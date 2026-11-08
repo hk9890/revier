@@ -260,7 +260,9 @@ func renderBinding(tb revier.TermBinding) string {
 var plainWord = regexp.MustCompile(`^[A-Za-z0-9._/@%+=:,-]+$`)
 
 // shellQuote is s as one word for sh, and for kitty, which splits a map's
-// arguments by the same rules.
+// arguments by the same rules. It is not shell.Quote: kitty's parser and then
+// sh read the line, never fish, so every character stays inside the single
+// quotes, and no backslash stands outside them for kitty's parser to read.
 func shellQuote(s string) string {
 	if plainWord.MatchString(s) {
 		return s
