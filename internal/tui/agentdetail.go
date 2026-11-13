@@ -121,12 +121,12 @@ func (m *Model) took(msg detailsMsg) {
 	}
 	m.adetails = said
 	m.reloadAgents()
-	// The agent list opened before this answer, on the first row of an order
-	// that did not know when each agent spoke. The first row of the order
-	// that does is the one it opens on (switchList).
+	// The agent list opened before this answer, on an order that did not
+	// know when each agent spoke. The row it opens on is the one of the order
+	// that does (switchList).
 	if m.agents.shown && m.agents.top {
 		m.agents.top = false
-		m.agents.list.Select(0)
+		m.agents.selectOpenRow()
 	}
 }
 

@@ -205,8 +205,9 @@ func TestTheCursorFollowsItsAgentThroughAReordering(t *testing.T) {
 	m, _, fakes := listedWorld(t, 140, 30,
 		listed{project: "alpha", status: revier.StatusRunning, on: "the worker", screen: "worker screen"},
 		listed{project: "alpha", status: revier.StatusIdle, on: "the rester", at: now.Add(-time.Hour), screen: "rester screen"})
+	m, _ = press(m, "up")
 	if row := selectedRow(t, m); !strings.Contains(row, "the worker") {
-		t.Fatalf("selected = %q, want the first row", row)
+		t.Fatalf("selected = %q after up, want the worker", row)
 	}
 	// The worker ends its turn after the other spoke: it goes under the
 	// rester's group head, to the top of the agents at rest, and the rester
@@ -258,9 +259,31 @@ func TestTheAgentListOpensOnTheAgentThatSpokeLast(t *testing.T) {
 	}
 }
 
-// The agent list opens on its first row every time, the project list keeps
-// its cursor and its query across the switch, and a raise of the popup opens
-// on the projects.
+// The agent list opens on the first agent that asked for the user or is at
+// rest, passing over the working ones above it, and on the first row when
+// every agent works.
+func TestTheAgentListOpensPastTheWorkingAgents(t *testing.T) {
+	now := time.Now()
+	m, _, _ := listedWorld(t, 140, 30,
+		listed{project: "alpha", status: revier.StatusRunning, on: "worker"},
+		listed{project: "beta", status: revier.StatusIdle, on: "rest-old", at: now.Add(-time.Hour)},
+		listed{project: "gamma", status: revier.StatusIdle, on: "rest-new", at: now.Add(-time.Minute)})
+	if row := selectedRow(t, m); !strings.Contains(row, "rest-new") {
+		t.Errorf("selected = %q, want the agent that stopped last", row)
+	}
+
+	m, _, _ = listedWorld(t, 140, 30,
+		listed{project: "alpha", status: revier.StatusRunning, on: "worker-a"},
+		listed{project: "beta", status: revier.StatusRunning, on: "worker-b"},
+		listed{project: "gamma", status: revier.StatusUnknown, on: "unknown"})
+	if row := selectedRow(t, m); !strings.Contains(row, "worker-a") {
+		t.Errorf("selected = %q, want the first row when no agent asks or rests", row)
+	}
+}
+
+// The agent list opens on the first agent that asks or rests every time, the
+// project list keeps its cursor and its query across the switch, and a raise
+// of the popup opens on the projects.
 func TestTheSwitchKeepsTheProjectListAndTheRaiseOpensOnIt(t *testing.T) {
 	now := time.Now()
 	m, _, _ := listedWorld(t, 140, 30,

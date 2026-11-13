@@ -214,7 +214,7 @@ type agentList struct {
 	list   list.Model      // its rows
 	query  textinput.Model // its query, with its own cursor
 	filter string          // that query, held here so a refresh can re-apply it
-	top    bool            // it opened and the user has not acted on it: the cursor is on the first row whatever agent that is
+	top    bool            // it opened and the user has not acted on it: the cursor is on the row it opens on, whatever agent that is
 }
 
 func newAgentScreen(th theme.Theme) agentList {
@@ -455,6 +455,22 @@ func (al *agentList) reload(items []list.Item) {
 	}
 }
 
+// selectOpenRow puts the cursor on the row the list opens on: the first agent
+// that asked for the user or is at rest. The order puts the latest to speak
+// first in each of those states, so that is the agent that asked last, and
+// with none asking, the one that stopped last. A working agent is not one to
+// look at yet, so the cursor passes over it; with only working agents and
+// agents in state unknown, it is on the first row.
+func (al *agentList) selectOpenRow() {
+	for i, item := range al.list.VisibleItems() {
+		if s := item.(agentItem).agent.State.Status; s == revier.StatusAttention || s == revier.StatusIdle {
+			al.list.Select(i)
+			return
+		}
+	}
+	al.list.Select(0)
+}
+
 // selected is the row under the cursor.
 func (al *agentList) selected() (agentItem, bool) {
 	it, ok := al.list.SelectedItem().(agentItem)
@@ -473,12 +489,12 @@ func (al *agentList) selectKey(key listedKey) bool {
 }
 
 // switchList is the switch key and its button: the other list takes the
-// surface. The agent list opens on its first row, the agent that asked for
-// the user last, and with no query; the project list is as it was left.
+// surface. The agent list opens with no query, on the row openRow names; the
+// project list is as it was left.
 //
-// Which row is the first is known once every agent's last word is read, and
-// that answer comes after the list is drawn. The cursor stays on the first
-// row until it has come, unless the user moves it before (took).
+// Which row that is is known once every agent's last word is read, and that
+// answer comes after the list is drawn. The cursor stays on the row it opened
+// on until it has come, unless the user moves it before.
 func (m Model) switchList() (tea.Model, tea.Cmd) {
 	m.err = nil
 	m.toList()
@@ -488,7 +504,7 @@ func (m Model) switchList() (tea.Model, tea.Cmd) {
 	}
 	m.agents.setFilter("")
 	m.reloadAgents()
-	m.agents.list.Select(0)
+	m.agents.selectOpenRow()
 	m.agents.top = true
 	m.body.SetYOffset(0)
 	return m, m.agents.query.Focus()
