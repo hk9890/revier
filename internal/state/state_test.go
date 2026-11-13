@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -91,6 +92,26 @@ func TestAttachIsIdempotent(t *testing.T) {
 // A clone holds all the state holds and shares none of it: the ledger keeps
 // one while its caller changes the other. Every field has a value here, so a
 // field Clone leaves behind is a difference.
+// A launch says which launch of another target, still pending, it replaced:
+// the one launch on record is the only one a window is claimed for. A launch
+// past its window, or of the same target again, replaced nothing to claim.
+func TestALaunchSaysWhichPendingLaunchItReplaced(t *testing.T) {
+	now := time.Now()
+	s := &state.State{}
+	if got := s.Launched("p", "editor", now); got != nil {
+		t.Errorf("first launch replaced %+v, want nothing", got)
+	}
+	if got := s.Launched("p", "editor", now.Add(time.Second)); got != nil {
+		t.Errorf("same target again replaced %+v, want nothing", got)
+	}
+	if got := s.Launched("q", "editor", now.Add(2*time.Second)); got == nil || got.Project != "p" || got.Target != "editor" {
+		t.Errorf("another target replaced %+v, want p's editor", got)
+	}
+	if got := s.Launched("r", "home", now.Add(2*time.Second+state.BindWindow+time.Second)); got != nil {
+		t.Errorf("a launch past its window replaced %+v, want nothing", got)
+	}
+}
+
 func TestCloneHoldsEveryFieldAndSharesNone(t *testing.T) {
 	ref := revier.TargetRef{Host: "gnome", ID: "7"}
 	s := &state.State{}
@@ -165,7 +186,7 @@ func TestPruneDropsDeadRefs(t *testing.T) {
 	s.Attach("p", dead)
 	s.Attach("q", dead)
 
-	s.Prune([]string{"gnome"}, []revier.Instance{{Ref: live}}, s)
+	s.Prune([]string{"gnome"}, []revier.Instance{{Ref: live}}, s, nil)
 
 	if len(s.Attached["p"]) != 1 || s.Attached["p"][0].ID != "7" {
 		t.Errorf("p = %+v, want only the live ref", s.Attached["p"])
@@ -184,7 +205,7 @@ func TestPruneKeepsRefsOnHostsItDidNotAsk(t *testing.T) {
 	s.Attach("p", window)
 	s.Bind("p", "editor", window)
 
-	if s.Prune([]string{"tmux"}, nil, s) {
+	if s.Prune([]string{"tmux"}, nil, s, nil) {
 		t.Error("Prune reported a change for refs on a host it did not ask")
 	}
 	if len(s.Attached["p"]) != 1 || s.Bound["p"]["editor"] != window {
@@ -206,10 +227,16 @@ func TestPruneKeepsRefsWrittenAfterTheSurveyStarted(t *testing.T) {
 	now.Bind("p", "editor", fresh)
 	now.Attach("p", fresh)
 
-	now.Prune([]string{"gnome"}, nil, before)
+	var dropped []string
+	now.Prune([]string{"gnome"}, nil, before, func(p revier.ProjectName, t revier.TargetName, ref revier.TargetRef) {
+		dropped = append(dropped, string(p)+":"+string(t)+"@"+ref.ID)
+	})
 
 	if _, ok := now.Bound["p"]["home"]; ok {
 		t.Error("home's window was there to be listed and was not; want its binding dropped")
+	}
+	if !slices.Equal(dropped, []string{"p:home@7"}) {
+		t.Errorf("told dropped %v, want only home's binding", dropped)
 	}
 	if now.Bound["p"]["editor"] != fresh || len(now.Attached["p"]) != 1 {
 		t.Errorf("state = %+v, want the refs written after the survey started kept", now)

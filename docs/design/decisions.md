@@ -969,3 +969,12 @@ what the agent does needs more. The glyph and its colour still say it there,
 with the sort by state, and the list's pane says it in words. The project
 pane's Agents rows draw the same row, so there the glyph alone says it.
 Rejected: the word for the ascii glyphs alone, two rules for one row.
+
+### D172 — a read of a panel that closed says the panel is gone
+
+A pane's mirror reads the panel under its cursor while a close of its project
+ends it, and kitty answers "No matching windows". That is no failure, yet it
+was a `mirror` WARN after most closes. `PanelReader` now wraps
+`revier.ErrPanelGone` for a panel no longer open, and the mirror logs it as
+it logs `ErrNoScreen`: not at all. Rejected: the TUI dropping the read of a
+panel its own close ended, which misses a panel closed by hand.

@@ -178,7 +178,9 @@ func (mi *mirror) take(msg mirroredMsg) {
 	if msg.key != mi.key || msg.seq <= mi.took {
 		return
 	}
-	if !errors.Is(msg.err, core.ErrNoScreen) {
+	// A panel that closed while it was read is no failure: a close of its
+	// project reads it last as it ends (decisions.md D172).
+	if !errors.Is(msg.err, core.ErrNoScreen) && !errors.Is(msg.err, revier.ErrPanelGone) {
 		// One line per panel that fails: a key for them all would log again
 		// each time the cursor went from a panel that reads to one that does
 		// not.

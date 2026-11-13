@@ -105,8 +105,10 @@ type repeats struct {
 
 // failure is one key's run of errors since its last success.
 type failure struct {
-	last   string          // the error of the latest poll
-	logged map[string]bool // every error the run has logged
+	last     string          // the error of the latest poll
+	lastAt   time.Time       // when the latest poll failed
+	failures int             // how many polls of the run failed
+	logged   map[string]bool // every error the run has logged
 }
 
 func (r *repeats) poll(key, op string, took time.Duration, err error, attrs []any) {
@@ -137,7 +139,8 @@ func (r *repeats) repeat(key, op string, err error, attrs []any) {
 		if !was {
 			f.logged = map[string]bool{}
 		}
-		f.last = err.Error()
+		f.last, f.lastAt = err.Error(), r.now()
+		f.failures++
 		fresh = !f.logged[f.last]
 		f.logged[f.last] = true
 		r.failing[key] = f
@@ -145,7 +148,11 @@ func (r *repeats) repeat(key, op string, err error, attrs []any) {
 	r.mu.Unlock()
 	switch {
 	case err == nil && was:
-		r.log().Info(op+": recovered", append(attrs, "was", f.last)...)
+		// The run's first WARN says when it began; the last failure and the
+		// count say whether it failed all along, which a run that went back
+		// to an error it had logged, or a hidden popup that polled nothing,
+		// leaves silent.
+		r.log().Info(op+": recovered", append(attrs, "was", f.last, "last_failed", f.lastAt, "failures", f.failures)...)
 	case fresh:
 		r.log().Warn(op, append(attrs, "err", err)...)
 	}

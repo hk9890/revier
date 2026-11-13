@@ -254,11 +254,18 @@ func (s *State) Pending(p revier.ProjectName, t revier.TargetName, now time.Time
 // Launched records a launch whose window has not appeared, and makes its
 // project the current one. An action's launch has no target. It is an open,
 // so it ends the shutdown on record.
-func (s *State) Launched(p revier.ProjectName, t revier.TargetName, at time.Time) {
+//
+// There is one launch on record, so it returns the launch of another target
+// still pending at at, which no window can now be claimed for, or nil.
+func (s *State) Launched(p revier.ProjectName, t revier.TargetName, at time.Time) (replaced *Launch) {
+	if l := s.Launch; l.Pending(at) && (l.Project != p || l.Target != t) {
+		replaced = l
+	}
 	s.ClearShutDown()
 	s.Current = p
 	s.LastRun = nil
 	s.Launch = &Launch{Project: p, Target: t, At: at}
+	return replaced
 }
 
 // Landed records the instance a target landed on and makes its project the
@@ -357,7 +364,14 @@ func (s *State) Bind(p revier.ProjectName, t revier.TargetName, ref revier.Targe
 // before is the state the survey started from. A ref it does not hold was
 // written while the survey was listing, for a window that may have opened
 // after the listing was taken, so it is kept for the next survey to judge.
-func (s *State) Prune(hosts []string, instances []revier.Instance, before *State) bool {
+//
+// dropped, when not nil, is told each ref dropped, with its project and the
+// target it was bound to, empty for an attachment: a binding that is gone
+// otherwise explains a later open of its target with no line.
+func (s *State) Prune(hosts []string, instances []revier.Instance, before *State, dropped func(revier.ProjectName, revier.TargetName, revier.TargetRef)) bool {
+	if dropped == nil {
+		dropped = func(revier.ProjectName, revier.TargetName, revier.TargetRef) {}
+	}
 	asked := map[string]bool{}
 	for _, h := range hosts {
 		asked[h] = true
@@ -374,6 +388,7 @@ func (s *State) Prune(hosts []string, instances []revier.Instance, before *State
 		for t, ref := range targets {
 			if gone(ref) {
 				delete(targets, t)
+				dropped(project, t, ref)
 				changed = true
 			}
 		}
@@ -386,7 +401,9 @@ func (s *State) Prune(hosts []string, instances []revier.Instance, before *State
 		for _, ref := range refs {
 			if !gone(ref) {
 				kept = append(kept, ref)
+				continue
 			}
+			dropped(project, "", ref)
 		}
 		if len(kept) != len(refs) {
 			changed = true

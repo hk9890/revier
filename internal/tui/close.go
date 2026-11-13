@@ -115,6 +115,7 @@ func (m Model) closeRow(project revier.ProjectName, row core.CloseRow, label str
 // is no longer the last.
 func (m Model) closePlanned(msg closePlannedMsg) (tea.Model, tea.Cmd) {
 	if msg.raises != m.raises || m.dialog != dialogNone || m.shut.running || m.confirm != "" {
+		slog.Info("close: plan dropped", "project", msg.project)
 		return m, nil
 	}
 	if len(msg.plan) == 0 && msg.drop {

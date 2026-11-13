@@ -1,7 +1,9 @@
 package tui_test
 
 import (
+	"bytes"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -50,6 +52,31 @@ func TestDelClosesAProjectAfterAConfirm(t *testing.T) {
 	}
 	if bar := barLine(m); !strings.Contains(bar, "sessions alt+s") {
 		t.Errorf("bar = %q, want the surface back", bar)
+	}
+}
+
+// A close left at its confirm closes nothing, and writes the line that ends
+// what its survey began.
+func TestDelDeclinedAtItsConfirmClosesNothingAndSaysSo(t *testing.T) {
+	rt, _, c, projects := world(t, 2)
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
+	var logged bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	m, cmd := press(m, "delete")
+	m = run(m, cmd)
+	if sub := lines(m)[2]; !strings.Contains(sub, "Close project-01?") {
+		t.Fatalf("subtitle = %q, want the confirm", sub)
+	}
+	_, _ = press(m, "esc")
+
+	if len(rt.Closed) != 0 {
+		t.Errorf("runtime closed %v, want nothing", rt.Closed)
+	}
+	if !strings.Contains(logged.String(), `"msg":"shutdown declined","project":"project-01"`) {
+		t.Errorf("log = %s, want the close declined for project-01", logged.String())
 	}
 }
 

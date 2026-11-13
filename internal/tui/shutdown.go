@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -213,8 +214,14 @@ func (m Model) shutdownKey(msg keyPress) (tea.Model, tea.Cmd) {
 // shutBack is Esc: one step back, and from the first step or the result back
 // to the screen the wizard was opened from. The sessions screen is read
 // again: the shutdown may have saved one.
+//
+// A close that leaves its confirm unrun writes its closing line: its survey
+// wrote one, and nothing else ends it.
 func (m *Model) shutBack() {
 	s := &m.shut
+	if s.step == shutConfirm && !s.running {
+		slog.Info("shutdown declined", "project", s.project)
+	}
 	if s.one {
 		m.dialog, *s = dialogNone, shutdown{}
 		return

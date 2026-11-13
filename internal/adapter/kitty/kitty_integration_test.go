@@ -963,6 +963,25 @@ func TestReadPanelReadsTheWindowsScreenWithItsColours(t *testing.T) {
 	}
 }
 
+// A window kitten no longer matches has closed: its read says the panel is
+// gone, and any other failure stays a failure (decisions.md D172).
+func TestReadPanelOfAClosedWindowSaysThePanelIsGone(t *testing.T) {
+	h := newHost()
+	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })
+	var fail error
+	h.SetRunner(func(context.Context, string, string, ...string) ([]byte, error) { return nil, fail })
+	ref := revier.TargetRef{Host: "kitty", ID: "@kitty-4000/2"}
+
+	fail = errors.New("exit status 1: Error: No matching windows for expression: id:7")
+	if _, err := h.ReadPanel(t.Context(), ref, "7", false); !errors.Is(err, revier.ErrPanelGone) || !strings.Contains(err.Error(), "id:7") {
+		t.Errorf("ReadPanel of a closed window = %v, want ErrPanelGone with kitten's reason", err)
+	}
+	fail = errors.New("exit status 1: Error: timed out")
+	if _, err := h.ReadPanel(t.Context(), ref, "7", false); err == nil || errors.Is(err, revier.ErrPanelGone) {
+		t.Errorf("ReadPanel that timed out = %v, want a failure that is not ErrPanelGone", err)
+	}
+}
+
 // A tab opens after the OS window's tabs, carries the vars the core gives it
 // as user vars, and runs the launch argv in the directory given.
 func TestOpenTabLaunchesATabWithItsVars(t *testing.T) {

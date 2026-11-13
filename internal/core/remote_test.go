@@ -1,8 +1,11 @@
 package core_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	"slices"
 	"strings"
 	"sync"
@@ -11,6 +14,7 @@ import (
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -189,6 +193,45 @@ func TestSurveyAsksAHostOnceForAllItsProjects(t *testing.T) {
 	if len(remote.Asked) != 1 || !slices.Equal(remote.Asked[0], want) {
 		t.Errorf("asked %v, want one call for %v", remote.Asked, want)
 	}
+}
+
+// lateRemote fails after the time a survey takes to be logged as slow.
+type lateRemote struct{ *hosttest.FakeRemote }
+
+func (r lateRemote) Survey(context.Context, []revier.ProjectName) ([]revier.ProjectView, error) {
+	time.Sleep(logging.SlowPoll)
+	return nil, errors.New("buildbox: no answer before the wait ran out")
+}
+
+// A survey slowed by a linked host says which host it waited for and why it
+// gave no answer: that host's own WARN may be another survey's, logged once.
+func TestASlowSurveyNamesTheLinkedHostItWaitedFor(t *testing.T) {
+	var logged bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	c := &core.Core{Runtime: hosttest.NewRuntime("kitty"), Remotes: map[string]revier.Remote{"buildbox": lateRemote{hosttest.NewRemote("buildbox")}}}
+
+	if _, err := c.Survey(t.Context(), []core.Project{prepared(t, remoteProject("demo"))}); err != nil {
+		t.Fatal(err)
+	}
+	for line := range strings.Lines(logged.String()) {
+		var entry struct {
+			Msg        string   `json:"msg"`
+			Asked      []string `json:"asked"`
+			Unanswered []string `json:"unanswered"`
+		}
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatal(err)
+		}
+		if entry.Msg == "survey" {
+			if !slices.Equal(entry.Asked, []string{"buildbox"}) || len(entry.Unanswered) != 1 || !strings.Contains(entry.Unanswered[0], "no answer") {
+				t.Errorf("survey line = %s, want buildbox asked and its reason", line)
+			}
+			return
+		}
+	}
+	t.Errorf("log = %s, want a survey line", logged.String())
 }
 
 // slowRemote answers only once the local probe has run: a survey that

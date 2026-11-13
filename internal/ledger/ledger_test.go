@@ -202,7 +202,7 @@ func TestAWriteRecordsWhatItChanged(t *testing.T) {
 		return true
 	})
 	l.Update(func(st *state.State) bool {
-		return st.Prune([]string{"rt"}, nil, st.Clone())
+		return st.Prune([]string{"rt"}, nil, st.Clone(), nil)
 	})
 	l.Update(func(st *state.State) bool {
 		st.Current = "other"

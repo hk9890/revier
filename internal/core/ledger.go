@@ -134,10 +134,24 @@ func (c *Core) lastWindows(r Report) ([]revier.Instance, bool) {
 	return prev, surveyed
 }
 
-// settle is one pass of Settle over st. say takes the log line of a claim or
-// of an expiry.
+// LogReplacedLaunch writes the line of a launch still pending that the launch
+// of p's target t, at at, replaced: the one launch on record is the only one
+// a window is claimed for, so the window of the replaced one, if it comes,
+// is bound by no claim.
+func LogReplacedLaunch(replaced *state.Launch, p revier.ProjectName, t revier.TargetName, at time.Time) {
+	if replaced == nil {
+		return
+	}
+	slog.Info("claim: launch replaced", "project", replaced.Project, "target", replaced.Target, "launched_at", replaced.At,
+		"by_project", p, "by_target", t, "age_ms", at.Sub(replaced.At).Milliseconds())
+}
+
+// settle is one pass of Settle over st. say takes the log line of a dropped
+// binding, of a claim or of an expiry.
 func (c *Core) settle(st *state.State, r Report, prev []revier.Instance, surveyed bool, projects []Project, now time.Time, say func(msg string, args ...any)) bool {
-	changed := st.Prune(r.Hosts, r.Instances, r.before)
+	changed := st.Prune(r.Hosts, r.Instances, r.before, func(p revier.ProjectName, t revier.TargetName, ref revier.TargetRef) {
+		say("binding dropped", "project", p, "target", t, "ref", ref)
+	})
 	l := st.Launch
 	if !surveyed || l == nil {
 		return changed
