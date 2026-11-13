@@ -100,10 +100,15 @@ func (m *Model) syncBody() {
 	} else {
 		m.body.SetContent(l.View())
 	}
-	// The placement is the project list's. A dialog's rows standing over it
-	// are neither placed nor allowed to spend it.
-	if m.placing && l == &m.plist {
-		m.placing = false
+	// Each list places itself around a row it chose. A dialog's rows
+	// standing over a list are neither placed nor allowed to spend its
+	// placement.
+	placing := &m.placing
+	if l == &m.agents.list {
+		placing = &m.agents.place
+	}
+	if *placing && (l == &m.plist || l == &m.agents.list) {
+		*placing = false
 		m.place(l.Index()*itemHeight, itemHeight)
 		return
 	}

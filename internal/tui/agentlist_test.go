@@ -1,6 +1,7 @@
 package tui_test
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -205,8 +206,9 @@ func TestTheCursorFollowsItsAgentThroughAReordering(t *testing.T) {
 	m, _, fakes := listedWorld(t, 140, 30,
 		listed{project: "alpha", status: revier.StatusRunning, on: "the worker", screen: "worker screen"},
 		listed{project: "alpha", status: revier.StatusIdle, on: "the rester", at: now.Add(-time.Hour), screen: "rester screen"})
+	m, _ = press(m, "up")
 	if row := selectedRow(t, m); !strings.Contains(row, "the worker") {
-		t.Fatalf("selected = %q, want the first row", row)
+		t.Fatalf("selected = %q after up, want the worker", row)
 	}
 	// The worker ends its turn after the other spoke: it goes under the
 	// rester's group head, to the top of the agents at rest, and the rester
@@ -258,9 +260,75 @@ func TestTheAgentListOpensOnTheAgentThatSpokeLast(t *testing.T) {
 	}
 }
 
-// The agent list opens on its first row every time, the project list keeps
-// its cursor and its query across the switch, and a raise of the popup opens
-// on the projects.
+// The agent list opens on the first agent that asked for the user or is at
+// rest, passing over the working ones above it, and on the first row when
+// every agent works.
+func TestTheAgentListOpensPastTheWorkingAgents(t *testing.T) {
+	now := time.Now()
+	m, _, _ := listedWorld(t, 140, 30,
+		listed{project: "alpha", status: revier.StatusRunning, on: "worker"},
+		listed{project: "beta", status: revier.StatusIdle, on: "rest-old", at: now.Add(-time.Hour)},
+		listed{project: "gamma", status: revier.StatusIdle, on: "rest-new", at: now.Add(-time.Minute)})
+	if row := selectedRow(t, m); !strings.Contains(row, "rest-new") {
+		t.Errorf("selected = %q, want the agent that stopped last", row)
+	}
+
+	m, _, _ = listedWorld(t, 140, 30,
+		listed{project: "alpha", status: revier.StatusRunning, on: "worker-a"},
+		listed{project: "beta", status: revier.StatusRunning, on: "worker-b"},
+		listed{project: "gamma", status: revier.StatusUnknown, on: "unknown"})
+	if row := selectedRow(t, m); !strings.Contains(row, "worker-a") {
+		t.Errorf("selected = %q, want the first row when no agent asks or rests", row)
+	}
+}
+
+// The list chooses its row from the moment it opens, before it knows when
+// each agent spoke, and again on a survey that comes before that answer: an
+// agent it opened on that starts working gives the cursor to one worth a look.
+func TestTheAgentListChoosesItsRowUntilTheAnswer(t *testing.T) {
+	m, _, fakes := listedSurface(t, 140, 30,
+		listed{project: "alpha", status: revier.StatusRunning, on: "worker"},
+		listed{project: "beta", status: revier.StatusIdle, on: "rester"})
+	m = switched(m)
+	if row := selectedRow(t, m); !strings.Contains(row, "rester") {
+		t.Fatalf("selected = %q at the open, want the agent at rest", row)
+	}
+	fakes[0].State.Status = revier.StatusAttention
+	fakes[1].State.Status = revier.StatusRunning
+	m = survey(m)
+	if row := selectedRow(t, m); !strings.Contains(row, "worker") {
+		t.Errorf("selected = %q after a survey before the answer, want the agent that now asks", row)
+	}
+}
+
+// A row the list opens on far down it keeps the rows after it in view as far
+// as the screen allows, rather than standing alone on the last line: the
+// other agents at rest are under it.
+func TestTheAgentListPlacesTheRowItOpensOn(t *testing.T) {
+	now := time.Now()
+	var agents []listed
+	for i := range 25 {
+		agents = append(agents, listed{project: fmt.Sprintf("p%02d", i), status: revier.StatusRunning, on: fmt.Sprintf("worker-%02d", i)})
+	}
+	agents = append(agents,
+		listed{project: "q1", status: revier.StatusIdle, on: "rest-a", at: now.Add(-time.Minute)},
+		listed{project: "q2", status: revier.StatusIdle, on: "rest-b", at: now.Add(-time.Hour)},
+		listed{project: "q3", status: revier.StatusIdle, on: "rest-c", at: now.Add(-2 * time.Hour)})
+	m, _, _ := listedWorld(t, 140, 40, agents...)
+	if row := selectedRow(t, m); !strings.Contains(row, "rest-a") {
+		t.Fatalf("selected = %q, want the agent that stopped last", row)
+	}
+	rows := strings.Join(listedRows(m), "\n")
+	for _, want := range []string{"q2", "q3"} {
+		if !strings.Contains(rows, want) {
+			t.Errorf("rows in view = %q, want %s, the other agents at rest, under the row the list opened on", rows, want)
+		}
+	}
+}
+
+// The agent list opens on the first agent that asks or rests every time, the
+// project list keeps its cursor and its query across the switch, and a raise
+// of the popup opens on the projects.
 func TestTheSwitchKeepsTheProjectListAndTheRaiseOpensOnIt(t *testing.T) {
 	now := time.Now()
 	m, _, _ := listedWorld(t, 140, 30,
@@ -277,7 +345,7 @@ func TestTheSwitchKeepsTheProjectListAndTheRaiseOpensOnIt(t *testing.T) {
 	}
 	m = switched(m)
 	if row := selectedRow(t, m); !strings.Contains(row, "first") {
-		t.Errorf("selected = %q after switching back, want the agent list's first row", row)
+		t.Errorf("selected = %q after switching back, want the agent that asks", row)
 	}
 	m = switched(m)
 	if q := query(m); !strings.Contains(q, "b") || !strings.Contains(selectedRow(t, m), "beta") {
