@@ -69,9 +69,10 @@ type Glyphs struct {
 	Stopped string // it is not
 	Cursor  string // the bar down the left of the selected row
 
-	// What an agent is doing. The pane puts each beside the state in words;
-	// a row puts it in front of a count with no words, so there a glyph is
-	// read on its own.
+	// What an agent is doing. The agent list's pane puts each beside the
+	// state in words; a project's row puts it in front of a count, and an
+	// agent's row in front of what the agent does, so there a glyph is read
+	// on its own.
 	NeedsYou string // it asked for the user and waits
 	Working  string // it is in a turn
 	Idle     string // it is at rest, waiting for the next prompt

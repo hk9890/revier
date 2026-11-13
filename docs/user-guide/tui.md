@@ -127,11 +127,14 @@ you and among the idle ones, the one that spoke last is first.
 Each agent takes two lines:
 
 ```
- idle       Fix the login redirect                          4m
-            shop · login-fix                        62k  ⛁ 56m
+ ◇ Fix the login redirect                                     4m
+   shop · login-fix                                   62k  ⛁ 56m
 ```
 
 - The first line: the agent's state, what it does, and how long ago it spoke.
+  The state is a glyph and its colour, as the
+  [states](concepts.md#agents) table shows. The pane says the state in words.
+  The project pane's Agents rows are the same rows.
 - The second line: the project, then the worktree the agent works in, if it
   works in one. At the right, for a Claude Code agent: how many tokens its
   conversation holds, and the minutes until its prompt cache goes cold. The
