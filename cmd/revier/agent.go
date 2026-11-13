@@ -39,8 +39,8 @@ usage:
   --until    idle, running, attention, or stopped (idle or attention)
   --timeout  give up after this many seconds and exit 2; 0 waits for good
   --json     with wait, print {"status": ..., "session": ...}: the session
-             is the conversation the agent holds, empty when its harness
-             does not say
+             is the id of the conversation the agent holds, empty when its
+             harness does not name it
   --screen   print what the agent's panel shows, not what the agent said
   --lines    with --screen, the last <n> lines of the panel and its
              scrollback
@@ -90,10 +90,10 @@ exec becomes the project's agent in this terminal. It is what the agent panel
 of a link runs on the project's machine over ssh; --tag is that panel's name
 for the agent, which a survey there reports it under.
 
-wait prints the status it ended on, and with --json the agent's session as
-well, which is how a script learns the session of an agent new --no-focus
-started. On a panel that is not an agent's, such
-as the one agent new --no-focus prints before its harness has started, wait
+wait prints the status it ended on, and with --json the id of the
+conversation the agent holds as well: how a script learns it for an agent
+that agent new --no-focus started. On a panel that is not an agent's, such as
+the one agent new --no-focus prints before its harness has started, wait
 waits for the harness to start, within --timeout. prompt types one line and
 submits it, and returns once an idle agent has started on it, so
   revier agent prompt demo "..." && revier agent wait demo --until stopped
@@ -165,7 +165,7 @@ func agentWait(out io.Writer, args []string, open func(context.Context, io.Write
 	fs := flag.NewFlagSet("agent wait", flag.ContinueOnError)
 	until := fs.String("until", "", "idle, running, attention, or stopped")
 	timeout := fs.Float64("timeout", 0, "seconds before giving up; 0 waits for good")
-	asJSON := fs.Bool("json", false, "print the status and the session as JSON")
+	asJSON := fs.Bool("json", false, "print the status and the conversation id as JSON")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err

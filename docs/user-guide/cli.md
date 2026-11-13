@@ -53,7 +53,7 @@ host. You do not run them by hand.
 ## Output
 
 Commands print tables for a person. `revier list`, `revier session list`,
-`revier state`, the `revier keys` and the `revier term` commands take `--json` for a script. `revier events` always
+`revier state`, `revier agent wait`, the `revier keys` and the `revier term` commands take `--json` for a script. `revier events` always
 prints JSON. Warnings and errors go to stderr, so stdout stays clean.
 
 The TARGETS column of `revier list` marks each target: `*` open, `x` no host
