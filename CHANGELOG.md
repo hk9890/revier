@@ -18,9 +18,10 @@ Each section is also the text of its release on the
 - **An agent's row no longer shows the name its harness gives it,** such as
   the name Claude Code's other agents send messages to. The agent list's
   pane still shows it, and the filter no longer matches it.
-- **An agent's row shows its state by its glyph and colour alone.** The word
-  took 11 cells of every row; those cells now show what the agent does. The
-  agent list's pane still says the state in words.
+- **An agent's row in the agent list and the project pane shows its state by
+  its glyph and colour alone.** The word took 11 cells of each such row;
+  those cells now show what the agent does. The agent list's pane and the
+  remote screen still say the state in words.
 - **The agent list opens on the first agent that needs you,** else on the
   first idle one. With neither, it opens on the first row, as it always did
   before, when that row was often a working agent.
