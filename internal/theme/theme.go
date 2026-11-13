@@ -110,6 +110,10 @@ type Glyphs struct {
 	Container  string
 	Branch     string
 	LastBranch string
+
+	// Cache stands in front of the minutes an agent's prompt cache stays
+	// warm.
+	Cache string
 }
 
 // The three glyph sets. Nerd is the default: it says things with icons - a
@@ -132,6 +136,7 @@ var glyphSets = map[string]Glyphs{
 		NeedsYou: "\u25c6", Working: "\u280b", Idle: "\u25c7", Unknown: "?",
 		Start: "\u25b6", Keep: "\u2713", Skip: "\u2715", Linked: "\u21c4",
 		Window: "\u25a1", Container: "\u25a3", Branch: "\u251c", LastBranch: "\u2514",
+		Cache: "\u26c1",
 	},
 	"nerd": {
 		Running:    "\uf111", // nf-fa-circle
@@ -153,12 +158,13 @@ var glyphSets = map[string]Glyphs{
 		Container:  "\uf2d2", // nf-fa-window_restore
 		Branch:     "\u251c", // a box-drawing tee, as in the unicode set
 		LastBranch: "\u2514", // a box-drawing corner
+		Cache:      "\uf472", // nf-oct-database
 	},
 	"ascii": {
 		Running: "*", Stopped: "-", Cursor: ">",
 		NeedsYou: "!", Working: "|", Idle: ".", Unknown: "?",
 		Start: "+", Keep: "=", Skip: "x", Linked: "~",
-		Branch: "|", LastBranch: "`",
+		Branch: "|", LastBranch: "`", Cache: "c",
 	},
 }
 

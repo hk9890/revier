@@ -249,7 +249,8 @@ type Titled interface {
 // assertion. Detail is the last thing the agent in a panel said, for the
 // surface, which orders its agents by when each spoke, and for `revier agent
 // read`, which prints it (decisions.md D116), with the turn the agent is in,
-// which nothing in revier draws (D125). It
+// which nothing in revier draws (D125), and the tokens and the cache of the
+// conversation, which every agent's row draws (D170). It
 // is asked for every agent the surface shows - one project's beside the
 // project list, every project's on the agent list - each time the surface
 // refreshes, and never in a survey: keep it cheap, and read again only what
@@ -271,8 +272,9 @@ type Detailed interface {
 var ErrNoDetail = errors.New("the probe has no detail for this panel")
 
 // AgentDetail is what an agent said last, and when, with the turn it is in:
-// what the user asked, and the tools the agent called since. Any of them is
-// empty when the harness does not say.
+// what the user asked, and the tools the agent called since, and the tokens
+// and the cache of its conversation. Any of them is empty when the harness
+// does not say.
 type AgentDetail struct {
 	Message string    `json:"message,omitempty"`
 	At      time.Time `json:"at,omitzero"`
@@ -282,11 +284,18 @@ type AgentDetail struct {
 	// surface keeps every answer while the agent lives.
 	Prompt string     `json:"prompt,omitempty"`
 	Tools  []ToolCall `json:"tools,omitempty"`
+
+	// Context is how many tokens the conversation holds, as the harness
+	// counted them for the agent's last answer, and CacheUntil when the
+	// harness's prompt cache of the conversation goes cold.
+	Context    int       `json:"context,omitempty"`
+	CacheUntil time.Time `json:"cache_until,omitzero"`
 }
 
 // IsZero reports whether the probe had nothing to say about the agent.
 func (d AgentDetail) IsZero() bool {
-	return d.Message == "" && d.At.IsZero() && d.Prompt == "" && len(d.Tools) == 0
+	return d.Message == "" && d.At.IsZero() && d.Prompt == "" && len(d.Tools) == 0 &&
+		d.Context == 0 && d.CacheUntil.IsZero()
 }
 
 // ToolCall is one tool an agent called: the tool under the harness's own

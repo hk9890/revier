@@ -246,3 +246,147 @@ func TestDetailReadsAPromptAsItWasTyped(t *testing.T) {
 		})
 	}
 }
+
+// The tokens are the input of the agent's last answer that counted any: new,
+// read from the cache and written to it. A subagent's answer is its own, and
+// an answer Claude Code makes up itself counts none. The cache goes cold an
+// hour after that answer.
+func TestDetailCountsTheTokensOfTheLastAnswer(t *testing.T) {
+	p, root := transcripts(t)
+	writeTranscript(t, root, "-demo", "s1",
+		`{"type":"assistant","timestamp":"2026-09-24T10:00:00Z","message":{"role":"assistant","content":"older","usage":{"input_tokens":5,"cache_read_input_tokens":1000,"cache_creation_input_tokens":10}}}`,
+		`{"type":"assistant","timestamp":"2026-09-24T10:06:00Z","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","input":{"command":"go test"}}],"usage":{"input_tokens":2,"cache_read_input_tokens":61000,"cache_creation_input_tokens":1072,"output_tokens":145}}}`,
+		`{"type":"assistant","isSidechain":true,"timestamp":"2026-09-24T10:07:00Z","message":{"role":"assistant","content":"a subagent","usage":{"input_tokens":9,"cache_read_input_tokens":9000,"cache_creation_input_tokens":0}}}`,
+		`{"type":"assistant","timestamp":"2026-09-24T10:08:00Z","message":{"role":"assistant","model":"<synthetic>","content":"No response requested.","usage":{"input_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}`,
+	)
+	d, err := p.Detail(t.Context(), revier.Panel{PID: 101})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Context != 62_074 {
+		t.Errorf("Context = %d, want 62074", d.Context)
+	}
+	if want := time.Date(2026, 9, 24, 11, 6, 0, 0, time.UTC); !d.CacheUntil.Equal(want) {
+		t.Errorf("CacheUntil = %v, want %v", d.CacheUntil, want)
+	}
+}
+
+// An API error after the user's prompt is an answer Claude Code made up, which
+// counts no tokens: the answer before the prompt still says them, and the
+// cache it left.
+func TestDetailCountsTheTokensPastAnAPIError(t *testing.T) {
+	p, root := transcripts(t)
+	writeTranscript(t, root, "-demo", "s1",
+		`{"type":"assistant","timestamp":"2026-09-24T10:00:00Z","message":{"role":"assistant","content":"done","usage":{"input_tokens":2,"cache_read_input_tokens":61000,"cache_creation_input_tokens":1072}}}`,
+		`{"type":"user","timestamp":"2026-09-24T10:02:00Z","message":{"role":"user","content":"and now the docs"}}`,
+		`{"type":"assistant","timestamp":"2026-09-24T10:02:05Z","message":{"role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"API Error: 529 Overloaded"}],"usage":{"input_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}`,
+	)
+	d, err := p.Detail(t.Context(), revier.Panel{PID: 101})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := time.Date(2026, 9, 24, 11, 0, 0, 0, time.UTC); d.Context != 62_074 || !d.CacheUntil.Equal(want) {
+		t.Errorf("Context, CacheUntil = %d, %v; want 62074, %v", d.Context, d.CacheUntil, want)
+	}
+}
+
+// After a compaction the next prompt reads the summary, not the conversation
+// before it: no answer from before counts, until one after it does.
+func TestDetailCountsNoTokensFromBeforeACompaction(t *testing.T) {
+	p, root := transcripts(t)
+	writeTranscript(t, root, "-demo", "s1",
+		`{"type":"assistant","timestamp":"2026-09-24T10:00:00Z","message":{"role":"assistant","content":"done","usage":{"input_tokens":2,"cache_read_input_tokens":180000,"cache_creation_input_tokens":0}}}`,
+		`{"type":"system","subtype":"compact_boundary","timestamp":"2026-09-24T10:01:00Z"}`,
+		`{"type":"user","isCompactSummary":true,"timestamp":"2026-09-24T10:01:00Z","message":{"role":"user","content":"This session is being continued from a previous conversation."}}`,
+	)
+	d, err := p.Detail(t.Context(), revier.Panel{PID: 101})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Context != 0 || !d.CacheUntil.IsZero() {
+		t.Errorf("Context, CacheUntil = %d, %v; want none from before the compaction", d.Context, d.CacheUntil)
+	}
+}
+
+// A usage that does not parse costs the tokens and nothing else: the message
+// is read, and no older answer's count stands in for it.
+func TestDetailReadsTheMessageOfAnAnswerWhoseUsageDoesNotParse(t *testing.T) {
+	p, root := transcripts(t)
+	writeTranscript(t, root, "-demo", "s1",
+		`{"type":"assistant","timestamp":"2026-09-24T09:00:00Z","message":{"role":"assistant","content":"older","usage":{"input_tokens":5000}}}`,
+		`{"type":"assistant","timestamp":"2026-09-24T10:00:00Z","message":{"role":"assistant","content":"spelled otherwise","usage":{"input_tokens":"many"}}}`,
+	)
+	d, err := p.Detail(t.Context(), revier.Panel{PID: 101})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Message != "spelled otherwise" || d.Context != 0 || !d.CacheUntil.IsZero() {
+		t.Errorf("Detail = %+v; want the message, and no tokens and no cache", d)
+	}
+}
+
+// An answer with no time says its tokens and no cache.
+func TestDetailOfAnUntimedAnswerSaysNoCache(t *testing.T) {
+	p, root := transcripts(t)
+	writeTranscript(t, root, "-demo", "s1",
+		`{"type":"assistant","message":{"role":"assistant","content":"untimed","usage":{"input_tokens":5000}}}`)
+	d, err := p.Detail(t.Context(), revier.Panel{PID: 101})
+	if err != nil || d.Context != 5000 || !d.CacheUntil.IsZero() {
+		t.Errorf("Detail = %+v, %v; want 5000 tokens and no cache", d, err)
+	}
+}
+
+// A copy of a request that Claude Code files beside the conversation is no
+// one's word: it is no prompt, and no message.
+func TestDetailPassesOverACopyOfARequest(t *testing.T) {
+	p, root := transcripts(t)
+	writeTranscript(t, root, "-demo", "s1",
+		`{"type":"user","timestamp":"2026-09-24T10:00:00Z","message":{"role":"user","content":"fix the test"}}`,
+		`{"type":"assistant","timestamp":"2026-09-24T10:01:00Z","message":{"role":"assistant","content":"fixed"}}`,
+		`{"type":"api-request-blob","hash":"h","message":{"role":"user","content":"a request's copy of the prompt"}}`,
+		`{"type":"api-request-blob","hash":"i","message":{"role":"assistant","content":"a request's copy of the answer"}}`,
+	)
+	d, err := p.Detail(t.Context(), revier.Panel{PID: 101})
+	if err != nil || d.Prompt != "fix the test" || d.Message != "fixed" {
+		t.Errorf("Detail = %+v, %v; want the conversation's prompt and message", d, err)
+	}
+}
+
+// The cache lives as long as the answer wrote it for: five minutes where it
+// wrote any of it for five minutes, as that is the conversation's end, and an
+// hour where it wrote it for an hour or does not say.
+func TestDetailTakesTheCacheLengthFromTheAnswer(t *testing.T) {
+	for _, c := range []struct {
+		name, creation string
+		want           time.Duration
+	}{
+		{"five minutes", `"cache_creation":{"ephemeral_5m_input_tokens":900,"ephemeral_1h_input_tokens":0}`, 5 * time.Minute},
+		{"an hour", `"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":900}`, time.Hour},
+		{"both", `"cache_creation":{"ephemeral_5m_input_tokens":100,"ephemeral_1h_input_tokens":900}`, 5 * time.Minute},
+		{"nothing written", `"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0}`, time.Hour},
+		{"not said", `"output_tokens":3`, time.Hour},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			p, root := transcripts(t)
+			writeTranscript(t, root, "-demo", "s1",
+				`{"type":"assistant","timestamp":"2026-09-24T10:00:00Z","message":{"role":"assistant","content":"done","usage":{"input_tokens":2,"cache_read_input_tokens":61000,"cache_creation_input_tokens":900,`+c.creation+`}}}`)
+			d, err := p.Detail(t.Context(), revier.Panel{PID: 101})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := time.Date(2026, 9, 24, 10, 0, 0, 0, time.UTC).Add(c.want); !d.CacheUntil.Equal(want) {
+				t.Errorf("CacheUntil = %v, want %v", d.CacheUntil, want)
+			}
+		})
+	}
+}
+
+// A transcript that counts no tokens says nothing of them or of the cache.
+func TestDetailWithoutUsageSaysNoTokens(t *testing.T) {
+	p, root := transcripts(t)
+	writeTranscript(t, root, "-demo", "s1", said("no usage here"))
+	d, err := p.Detail(t.Context(), revier.Panel{PID: 101})
+	if err != nil || d.Context != 0 || !d.CacheUntil.IsZero() {
+		t.Errorf("Detail = %+v, %v; want no tokens and no cache", d, err)
+	}
+}

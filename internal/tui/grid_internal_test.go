@@ -41,22 +41,22 @@ func TestThePaneLinesUpTargetsAndAttachedWindows(t *testing.T) {
 	}
 }
 
-// secondLine is the second line of an agent's row of project p, w cells wide,
-// as plain text.
-func secondLine(a revier.AgentView, p revier.ProjectName, w int) string {
-	row := agentLines(theme.Default(), newAgentItem(a, revier.Project{Name: p}, revier.AgentDetail{}, time.Now()), nil, w, false, false, false, false)
+// secondLine is the second line of the row of an agent of project p that said
+// d, w cells wide at now, as plain text.
+func secondLine(a revier.AgentView, p revier.ProjectName, d revier.AgentDetail, now time.Time, w int) string {
+	row := agentLines(theme.Default(), newAgentItem(a, revier.Project{Name: p}, d, now), nil, w, false, false, false, false)
 	_, second, _ := strings.Cut(ansi.Strip(row), "\n")
 	return second
 }
 
 // A second line short of room cuts the project and the worktree, and keeps
-// the name whole.
-func TestANarrowAgentRowKeepsTheName(t *testing.T) {
-	a := revier.AgentView{State: revier.AgentState{
-		Harness: "claude", Name: "revier-c0", Dir: "/p/revier/.claude/worktrees/agent-key-starts"}}
-	width := func(left string) int {
-		return 2 + listedStateWidth + lipgloss.Width(left) + gridGap + lipgloss.Width("revier-c0 ")
-	}
+// the tokens and the cache whole.
+func TestANarrowAgentRowKeepsTheUsage(t *testing.T) {
+	a := revier.AgentView{State: revier.AgentState{Harness: "claude", Dir: "/p/revier/.claude/worktrees/agent-key-starts"}}
+	now := time.Now()
+	d := revier.AgentDetail{Context: 62_074, CacheUntil: now.Add(40 * time.Minute)}
+	usage := strings.TrimSpace(ansi.Strip(newAgentItem(a, revier.Project{}, d, now).usage(theme.Default(), func(s lipgloss.Style) lipgloss.Style { return s })))
+	width := func(left string) int { return 2 + listedStateWidth + lipgloss.Width(left) + gridGap + usageWidth + 1 }
 	for _, c := range []struct {
 		width int
 		want  string
@@ -64,9 +64,126 @@ func TestANarrowAgentRowKeepsTheName(t *testing.T) {
 		{80, "revier · agent-key-starts"},
 		{width("revier · agent-k…"), "revier · agent-k…"},
 	} {
-		row := strings.TrimSpace(secondLine(a, "revier", c.width))
-		if !strings.HasPrefix(row, c.want+" ") || !strings.HasSuffix(row, " revier-c0") {
-			t.Errorf("w=%d: second line = %q, want %q and the whole name", c.width, row, c.want)
+		row := strings.TrimSpace(secondLine(a, "revier", d, now, c.width))
+		if !strings.HasPrefix(row, c.want+" ") || !strings.HasSuffix(row, " "+usage) {
+			t.Errorf("w=%d: second line = %q, want %q and the whole %q", c.width, row, c.want, usage)
+		}
+	}
+}
+
+// A row too narrow for the usage columns leaves them out rather than cut
+// them.
+func TestARowTooNarrowForTheUsageLeavesItOut(t *testing.T) {
+	a := revier.AgentView{State: revier.AgentState{Harness: "claude"}}
+	now := time.Now()
+	d := revier.AgentDetail{Context: 62_074, CacheUntil: now.Add(40 * time.Minute)}
+	if row := secondLine(a, "revier", d, now, 2+listedStateWidth+usageWidth); strings.Contains(row, "62k") {
+		t.Errorf("second line = %q, want no usage", row)
+	}
+}
+
+// The tokens and the cache stand in columns: whatever their widths, each
+// ends at the same cell on every row, under the age.
+func TestTheUsageColumnsLineUp(t *testing.T) {
+	a := revier.AgentView{State: revier.AgentState{Harness: "claude"}}
+	now := time.Now()
+	ends := map[string]int{}
+	for _, d := range []revier.AgentDetail{
+		{Context: 840, CacheUntil: now.Add(3 * time.Minute)},
+		{Context: 62_074, CacheUntil: now.Add(time.Hour)},
+		{Context: 1_250_000, CacheUntil: now.Add(-time.Minute)},
+		{Context: 75_000},
+	} {
+		row := secondLine(a, "revier", d, now, 80)
+		tokens := shortTokens(d.Context)
+		end := lipgloss.Width(row[:strings.Index(row, tokens)+len(tokens)])
+		if was, ok := ends["tokens"]; ok && was != end {
+			t.Errorf("%q: the tokens end at %d, want %d", row, end, was)
+		}
+		ends["tokens"] = end
+		if minutes, _ := cacheLeft(now, d.CacheUntil); minutes != "" {
+			if end := lipgloss.Width(strings.TrimRight(row, " ")); ends["cache"] != 0 && end != ends["cache"] {
+				t.Errorf("%q: the cache ends at %d, want %d", row, end, ends["cache"])
+			} else {
+				ends["cache"] = end
+			}
+		}
+	}
+}
+
+// In the pane, an agent its harness names keeps its second line before its
+// usage is read, so the row does not grow a line when it comes; one with no
+// name, no worktree and no usage has none.
+func TestAPaneRowKeepsItsHeightUntilItsUsageComes(t *testing.T) {
+	now := time.Now()
+	for _, c := range []struct {
+		name  string
+		lines int
+	}{{"revier-c0", 2}, {"", 1}} {
+		it := newAgentItem(revier.AgentView{State: revier.AgentState{Harness: "claude", Name: c.name}}, revier.Project{Name: "revier"}, revier.AgentDetail{}, now)
+		if got := strings.Count(agentLines(theme.Default(), it, nil, 60, false, false, false, true), "\n") + 1; got != c.lines {
+			t.Errorf("name %q: the pane row has %d lines, want %d", c.name, got, c.lines)
+		}
+	}
+}
+
+// The row leaves the harness's name to the pane: on a row it said the
+// project a second time.
+func TestAnAgentRowLeavesTheNameOut(t *testing.T) {
+	a := revier.AgentView{State: revier.AgentState{Harness: "claude", Name: "revier-c0"}}
+	if row := secondLine(a, "revier", revier.AgentDetail{}, time.Now(), 80); strings.Contains(row, "revier-c0") {
+		t.Errorf("second line = %q, want no name", row)
+	}
+}
+
+// The tokens and the cache are gray; the cache alone takes the warning colour,
+// and only in its last minutes.
+func TestTheCacheIsLitOnlyInItsLastMinutes(t *testing.T) {
+	th := theme.Default()
+	th.Warning = lipgloss.NewStyle().Transform(func(s string) string { return "!" + strings.TrimSpace(s) })
+	a := revier.AgentView{State: revier.AgentState{Harness: "claude"}}
+	now := time.Now()
+	for _, c := range []struct {
+		until time.Duration
+		want  string
+	}{
+		{40 * time.Minute, " 40m"},
+		{3 * time.Minute, "!3m"},
+		{-time.Minute, " --"},
+	} {
+		it := newAgentItem(a, revier.Project{Name: "revier"}, revier.AgentDetail{Context: 62_074, CacheUntil: now.Add(c.until)}, now)
+		row := ansi.Strip(agentLines(th, it, nil, 80, false, false, false, false))
+		if !strings.HasSuffix(strings.TrimRight(row, " "), c.want) || strings.Count(row, "!") != strings.Count(c.want, "!") {
+			t.Errorf("cache %v: row = %q, want it to end in %q and nothing else lit", c.until, row, c.want)
+		}
+	}
+}
+
+// A token count fits its column, and a cache says its minutes rounded up,
+// "--" once it is cold, and nothing where the harness said nothing.
+func TestTheUsageAsTheRowSaysIt(t *testing.T) {
+	for n, want := range map[int]string{0: "", 840: "840", 62_074: "62k", 999_999: "999k", 1_250_000: "1.2M", 1_299_999: "1.2M", 9_960_000: "9.9M", 12_500_000: "12M", 2_000_000_000: "999M"} {
+		if got := shortTokens(n); got != want || lipgloss.Width(got) > tokensWidth {
+			t.Errorf("shortTokens(%d) = %q, want %q in %d cells", n, got, want, tokensWidth)
+		}
+	}
+	now := time.Now()
+	for _, c := range []struct {
+		until   time.Time
+		want    string
+		cooling bool
+	}{
+		{time.Time{}, "", false},
+		{now.Add(time.Hour), "60m", false},
+		{now.Add(3 * time.Hour), "99m", false},
+		{now.Add(59*time.Minute + 30*time.Second), "60m", false},
+		{now.Add(5 * time.Minute), "5m", true},
+		{now.Add(30 * time.Second), "1m", true},
+		{now, "--", false},
+		{now.Add(-time.Hour), "--", false},
+	} {
+		if got, cooling := cacheLeft(now, c.until); got != c.want || cooling != c.cooling || lipgloss.Width(got) > minutesWidth {
+			t.Errorf("cacheLeft(%v) = %q, %v; want %q, %v", c.until.Sub(now), got, cooling, c.want, c.cooling)
 		}
 	}
 }
@@ -124,14 +241,17 @@ func TestTheMatchedLettersAreLitAfterAWideCharacter(t *testing.T) {
 }
 
 // A query that matches the second line lights its letters there: the
-// worktree, and the name, in the list and in the pane, which leaves the
-// project out.
+// worktree, in the list and in the pane, which leaves the project out. The
+// harness's name is not on the row, so no query matches it.
 func TestTheMatchedLettersAreLitOnTheSecondLine(t *testing.T) {
 	m := NewWithoutWaits(&core.Core{Runtime: hosttest.NewRuntime("rt")}, nil, "", &config.Config{}, time.Second, theme.Default(), "")
 	m.theme.Match = lipgloss.NewStyle().Transform(strings.ToUpper)
 	it := newAgentItem(revier.AgentView{State: revier.AgentState{
 		Harness: "claude", Name: "revier-c0", Activity: "one", Dir: "/p/revier/.claude/worktrees/delete-key"}}, revier.Project{Name: "revier"}, revier.AgentDetail{}, time.Now())
-	for query, want := range map[string]string{"delete": "DELETE-key", "c0": "revier-C0"} {
+	if ranks := ranked(ungrouped)("c0", []string{it.filterValue(false)}); len(ranks) != 0 {
+		t.Errorf("the query c0 matched %v, want the name not matched", ranks)
+	}
+	for query, want := range map[string]string{"delete": "DELETE-key"} {
 		for _, inPane := range []bool{false, true} {
 			matches := ranked(ungrouped)(query, []string{it.filterValue(inPane)})[0].MatchedIndexes
 			if got := ansi.Strip(agentLines(m.spun(), it, matches, 80, false, false, false, inPane)); !strings.Contains(got, want) {

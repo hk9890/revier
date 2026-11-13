@@ -469,7 +469,7 @@ func rowTop(m tui.Model) int {
 
 // listed is one agent of listedWorld: the project a panel of which shows it,
 // its state, what it is on, what it said last and when, the directory it
-// works in, and what its panel shows.
+// works in, what its panel shows, and the tokens its conversation holds.
 type listed struct {
 	project string
 	status  revier.Status
@@ -479,6 +479,7 @@ type listed struct {
 	dir     string
 	screen  string
 	name    string // what the harness calls it
+	tokens  int    // the tokens its conversation holds, with a cache warm for an hour after at
 }
 
 // listedWorld is listedSurface with the agent list in view and its asks
@@ -506,7 +507,11 @@ func listedSurface(t *testing.T, width, height int, agents ...listed) (tui.Model
 		id := revier.PanelID(fmt.Sprint(i + 1))
 		p := hosttest.NewDetailedProbe("claude", marker)
 		p.State = revier.AgentState{Harness: "claude", Status: a.status, Activity: a.on, Dir: a.dir, Name: a.name}
-		p.Said[id] = revier.AgentDetail{Message: a.said, At: a.at}
+		said := revier.AgentDetail{Message: a.said, At: a.at}
+		if a.tokens != 0 {
+			said.Context, said.CacheUntil = a.tokens, a.at.Add(time.Hour)
+		}
+		p.Said[id] = said
 		probes, fakes = append(probes, p), append(fakes, p)
 		if !slices.Contains(names, a.project) {
 			names = append(names, a.project)

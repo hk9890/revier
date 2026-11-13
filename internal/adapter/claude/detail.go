@@ -30,6 +30,7 @@ const tailBytes = 512 << 10
 var errNoMessage = fmt.Errorf("%w: no prompt, message or tool call in the transcript's tail", revier.ErrNoDetail)
 
 // Detail is the last thing the agent in the panel said and the turn it is in,
+// with the tokens and the cache of its last answer that counted any,
 // read from the end of its transcript: ~/.claude/projects/<dir>/<session
 // id>.jsonl, the session named for the panel's pid by the listing Inspect
 // keeps.
@@ -224,6 +225,10 @@ func readTail(path string, n int64) ([]byte, error) {
 // entry is the part of a transcript line Detail reads. Everything else a line
 // carries is ignored, so a field Claude Code adds costs nothing.
 type entry struct {
+	// Type is "user" or "assistant" for a line of the conversation. A copy
+	// of a request Claude Code files beside it ("api-request-blob") carries a
+	// role and content too, but no time, and is no one's word.
+	Type             string    `json:"type"`
 	IsSidechain      bool      `json:"isSidechain"`
 	IsMeta           bool      `json:"isMeta"`
 	IsCompactSummary bool      `json:"isCompactSummary"`
@@ -231,7 +236,48 @@ type entry struct {
 	Message          struct {
 		Role    string          `json:"role"`
 		Content json.RawMessage `json:"content"`
+		// Usage is read apart from the line, so a count Claude Code
+		// spells another way costs the tokens and not the message.
+		Usage json.RawMessage `json:"usage"`
 	} `json:"message"`
+}
+
+// usage is the tokens one answer counted, and how long the cache it wrote
+// lives: the tokens written for five minutes and for an hour.
+type usage struct {
+	Input         int `json:"input_tokens"`
+	CacheRead     int `json:"cache_read_input_tokens"`
+	CacheCreate   int `json:"cache_creation_input_tokens"`
+	CacheCreation struct {
+		FiveMinutes int `json:"ephemeral_5m_input_tokens"`
+		OneHour     int `json:"ephemeral_1h_input_tokens"`
+	} `json:"cache_creation"`
+}
+
+// usageOf is one answer's usage, and whether it parsed. An answer with none
+// counts none and parses.
+func usageOf(raw json.RawMessage) (usage, bool) {
+	var u usage
+	if len(raw) == 0 {
+		return u, true
+	}
+	err := json.Unmarshal(raw, &u)
+	return u, err == nil
+}
+
+// context is the input the model read for the answer: the three input counts
+// together, what was new, what the cache served, and what was written to it.
+func (u usage) context() int { return u.Input + u.CacheRead + u.CacheCreate }
+
+// ttl is how long the cache stays warm after the answer: five minutes where
+// the answer wrote any of it for five minutes, as the API puts the shorter
+// life last, on the conversation's end, and an hour otherwise, which is what
+// Claude Code writes where the answer does not say (decisions.md D170).
+func (u usage) ttl() time.Duration {
+	if u.CacheCreation.FiveMinutes > 0 {
+		return 5 * time.Minute
+	}
+	return time.Hour
 }
 
 // block is one part of a message's content: text the agent or the user wrote,
@@ -261,19 +307,42 @@ const briefRunes = 300
 //
 // A call's result is on a line after the call, so walking back meets it
 // first; a call met with no result is still open.
+//
+// The tokens are the last answer's that counted any, which can be older than
+// the turn and the message: an answer Claude Code makes up itself, for an
+// interrupt or an API error, counts none. An answer before a compaction read
+// a conversation the next prompt does not, so the walk counts none past one,
+// and an answer whose usage does not parse ends the count too: an older one's
+// would read as now.
 func lastSaid(tail []byte) (revier.AgentDetail, error) {
 	var d revier.AgentDetail
 	failed := map[string]bool{}
-	inTurn := true
+	inTurn, counting := true, true
 	lines := bytes.Split(tail, []byte("\n"))
-	for i := len(lines) - 1; i >= 0 && (inTurn || d.Message == ""); i-- {
+	for i := len(lines) - 1; i >= 0 && (inTurn || d.Message == "" || counting); i-- {
 		var e entry
-		if json.Unmarshal(lines[i], &e) != nil || e.IsSidechain || e.IsMeta || e.IsCompactSummary {
+		if json.Unmarshal(lines[i], &e) != nil || e.Type != "user" && e.Type != "assistant" || e.IsSidechain || e.IsMeta {
+			continue
+		}
+		if e.IsCompactSummary {
+			counting = false
 			continue
 		}
 		text, blocks := contentOf(e.Message.Content)
 		switch e.Message.Role {
 		case "assistant":
+			if counting {
+				u, ok := usageOf(e.Message.Usage)
+				switch {
+				case !ok:
+					counting = false
+				case u.context() > 0:
+					d.Context, counting = u.context(), false
+					if !e.Timestamp.IsZero() {
+						d.CacheUntil = e.Timestamp.Add(u.ttl())
+					}
+				}
+			}
 			if d.Message == "" && text != "" {
 				d.Message, d.At = text, e.Timestamp
 			}

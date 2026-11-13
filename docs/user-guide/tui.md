@@ -128,18 +128,20 @@ Each agent takes two lines:
 
 ```
  idle       Fix the login redirect                          4m
-            shop · login-fix                           shop-a0
+            shop · login-fix                        62k  ⛁ 56m
 ```
 
 - The first line: the agent's state, what it does, and how long ago it spoke.
 - The second line: the project, then the worktree the agent works in, if it
-  works in one. At the right is the name its harness gives it. Claude Code's
-  other agents send messages to that name.
+  works in one. At the right, for a Claude Code agent: how many tokens its
+  conversation holds, and the minutes until its prompt cache goes cold. The
+  minutes turn yellow in the last 5, and show `--` once the cache is cold:
+  the next prompt to that agent then reads the whole conversation again.
 
-Type to filter by what the agent does, its project, its worktree or its
-name. The pane shows the agent's
-[address](agents.md#drive-an-agent-from-a-script), its harness, its name, and
-its terminal.
+Type to filter by what the agent does, its project or its worktree. The pane
+shows the agent's [address](agents.md#drive-an-agent-from-a-script), its
+harness, the name its harness gives it, and its terminal. Claude Code's other
+agents send messages to that name.
 
 ## The popup
 

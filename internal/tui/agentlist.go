@@ -29,9 +29,9 @@ import (
 // (decisions.md D110).
 //
 // A row is the agent's state, what it is on, and how long ago it spoke, over
-// its project and the directory it works in, and the name its harness gives
-// it. Beside the list the pane names the agent and mirrors its terminal
-// (mirror.go).
+// its project and the directory it works in, and the tokens and the cache of
+// its conversation. Beside the list the pane names the agent, with the name
+// its harness gives it, and mirrors its terminal (mirror.go).
 
 // switchChord is the key that switches between the two lists: alt+space, the
 // default of the desktop key that opens the surface. On a desktop that takes
@@ -57,7 +57,13 @@ type agentItem struct {
 	text    string // what it is on (summary)
 	titled  bool   // whether the agent said so itself
 	age     string // how long ago it spoke, as the row says it
+	tokens  string // how many tokens its conversation holds, as the row says it
+	cache   string // how long until its prompt cache goes cold, as the row says it
+	cooling bool   // the cache is in its last minutes: the row warns of it
 }
+
+// coolingFrom is how long before the cache goes cold the row warns of it.
+const coolingFrom = 5 * time.Minute
 
 // listedKey names one row of the agent list across refreshes. An agent a
 // user attached to two projects is a row under each, so its panel alone does
@@ -90,7 +96,72 @@ func summary(a revier.AgentView, said revier.AgentDetail) (text string, titled b
 // newAgentItem is the row of an agent of project p that said d, at now.
 func newAgentItem(a revier.AgentView, p revier.Project, d revier.AgentDetail, now time.Time) agentItem {
 	text, titled := summary(a, d)
-	return agentItem{agent: a, project: p, detail: d, text: text, titled: titled, age: shortAgo(now, d.At)}
+	it := agentItem{agent: a, project: p, detail: d, text: text, titled: titled, age: shortAgo(now, d.At), tokens: shortTokens(d.Context)}
+	it.cache, it.cooling = cacheLeft(now, d.CacheUntil)
+	return it
+}
+
+// shortTokens is a token count as the row says it, in at most tokensWidth
+// cells: "840", "62k", "1.2M", "12M", and "999M" at most. Every unit cuts its
+// count down, so no count is rounded up into a wider one.
+func shortTokens(n int) string {
+	switch {
+	case n <= 0:
+		return ""
+	case n < 1000:
+		return fmt.Sprint(n)
+	case n < 1_000_000:
+		return fmt.Sprintf("%dk", n/1000)
+	case n < 10_000_000:
+		return fmt.Sprintf("%d.%dM", n/1_000_000, n/100_000%10)
+	default:
+		return fmt.Sprintf("%dM", min(n/1_000_000, 999))
+	}
+}
+
+// cacheLeft is how long after now a prompt cache goes cold, in whole minutes
+// rounded up to "99m" at most, or "--" once it is, and whether it is in its
+// last minutes. A time nothing says is no text. A cache lives an hour at
+// most; the cap holds the column where a clock ahead of this one says more.
+func cacheLeft(now, until time.Time) (text string, cooling bool) {
+	if until.IsZero() {
+		return "", false
+	}
+	left := until.Sub(now)
+	if left <= 0 {
+		return "--", false
+	}
+	return fmt.Sprintf("%dm", min(int((left+time.Minute-1)/time.Minute), 99)), left <= coolingFrom
+}
+
+// The usage columns at the right end of a row's second line: the tokens, and
+// the cache's glyph and its minutes, each right-aligned, so they read down the
+// list.
+const (
+	tokensWidth  = 4 // "1.2M"
+	minutesWidth = 3 // "60m"
+	usageWidth   = tokensWidth + gridGap + 2 + minutesWidth
+)
+
+// usage is the row's usage columns, usageWidth wide: the tokens, and the
+// cache's minutes left, gray but for a cache in its last minutes. No count
+// and no cache is no columns.
+func (i agentItem) usage(th theme.Theme, style func(lipgloss.Style) lipgloss.Style) string {
+	if i.tokens == "" && i.cache == "" {
+		return ""
+	}
+	column := func(s lipgloss.Style, text string, w int) string {
+		return style(s).Width(w).Align(lipgloss.Right).Render(text)
+	}
+	minutes := th.Path
+	if i.cooling {
+		minutes = th.Warning
+	}
+	glyph := ""
+	if i.cache != "" {
+		glyph = th.Glyphs.Cache + " "
+	}
+	return column(th.Path, i.tokens, tokensWidth) + column(th.Path, glyph, gridGap+2) + column(minutes, i.cache, minutesWidth)
 }
 
 // worktree is the directory the agent works in when it is not the project's
@@ -118,8 +189,9 @@ func (i agentItem) where(inPane bool) string {
 	return out
 }
 
-// name ends the row's second line: the name the harness gives the agent,
-// which Claude Code's peer messages address, or nothing.
+// name is the name the harness gives the agent, which Claude Code's peer
+// messages address, or nothing. The pane shows it; the row leaves it out, as
+// it repeats the project (decisions.md D170).
 func (i agentItem) name() string {
 	return printable(i.agent.State.Name)
 }
@@ -128,7 +200,7 @@ func (i agentItem) name() string {
 // then the second line as it reads, left to right. It holds only what the row
 // draws, so every letter a query matches is lit.
 func (i agentItem) filterValue(inPane bool) string {
-	return i.text + " " + i.where(inPane) + " " + i.name()
+	return i.text + " " + i.where(inPane)
 }
 
 // FilterValue is what the agent list's query matches.
@@ -190,7 +262,7 @@ func (d agentDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 
 // agentLines is an agent's row, in the agent list and in the project pane's
 // Agents alike: its state, what it is on and how long ago it spoke, over
-// where it works and the name its harness gives it, under the age. matches
+// where it works and the tokens and the cache, under the age. matches
 // are the byte positions of filterValue the query matched. A selected or
 // pointed-at row is lit on every line; cursor is whether a selected row
 // carries the cursor's bar.
@@ -255,18 +327,22 @@ func agentLines(th theme.Theme, it agentItem, matches []int, width int, sel, ove
 		}
 	}
 
-	// The name stands under the age, the two ending at the same cell, and
+	// The usage stands under the age, the two ending at the same cell, and
 	// where gives way to it when the line is short of room.
 	where, from := it.where(inPane), len(it.text)+1
-	if inPane && where == "" && it.name() == "" {
+	usage := it.usage(th, style)
+	// The name is not drawn, but an agent its harness names is one whose
+	// usage comes once its detail is read: keeping its second line keeps the
+	// row from growing a line when the detail comes.
+	if inPane && where == "" && usage == "" && it.name() == "" {
 		return strings.Join(lines, "\n")
 	}
 	lit := func(s string, from int) string {
 		return highlight(s, within(matches, from, len(s)), style(th.Path), style(th.Match))
 	}
 	right := ""
-	if name := ellipsis(it.name(), width-indent-1); name != "" {
-		right = lit(name, from+len(where)+1) + space(1)
+	if usage != "" && usageWidth <= width-indent-1 {
+		right = usage + space(1)
 	}
 	room = width - indent - lipgloss.Width(right)
 	if right != "" {
