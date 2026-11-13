@@ -52,11 +52,12 @@ func TestTheSwitchKeyOverAScreenTypesNothing(t *testing.T) {
 
 // A row is the agent's state and what it is on, without its harness, over
 // its project; the age of what it said last stands at the row's right end,
-// and the name its harness gives it under the age.
+// and the cache's minutes end under the age. The name its harness gives it is
+// the pane's.
 func TestAnAgentRowLeadsWithItsStateAndNamesItsProject(t *testing.T) {
 	now := time.Now()
 	m, _, _ := listedWorld(t, 140, 20,
-		listed{project: "alpha", status: revier.StatusIdle, on: "Taskmgr tickets", said: "done", at: now.Add(-4 * time.Minute), name: "alpha-a0"})
+		listed{project: "alpha", status: revier.StatusIdle, on: "Taskmgr tickets", said: "done", at: now.Add(-4 * time.Minute), name: "alpha-a0", tokens: 62_074})
 	all := lines(m)
 	first, _, _ := strings.Cut(all[4], "│")
 	second, _, _ := strings.Cut(all[5], "│")
@@ -72,19 +73,22 @@ func TestAnAgentRowLeadsWithItsStateAndNamesItsProject(t *testing.T) {
 	if column(second, "alpha") != column(first, "Taskmgr tickets") || strings.Contains(second, "claude") {
 		t.Errorf("second line = %q, want the project under the summary of %q, and no harness", second, first)
 	}
-	if end := strings.TrimRight(second, " "); !strings.HasSuffix(end, " alpha-a0") || column(second, "alpha-a0")+len("alpha-a0") != column(first, "4m")+len("4m") {
-		t.Errorf("second line = %q, want the name ending under the age of %q", second, first)
+	if end := strings.TrimRight(second, " "); !strings.HasSuffix(end, " 56m") || column(second, "56m")+len("56m") != column(first, "4m")+len("4m") || !strings.Contains(second, "62k") {
+		t.Errorf("second line = %q, want the tokens, and the cache ending under the age of %q", second, first)
+	}
+	if strings.Contains(second, "alpha-a0") {
+		t.Errorf("second line = %q, want no name", second)
 	}
 }
 
 // The project pane's Agents draw a row as the agent list does: the state, what
-// the agent is on and its age, over its worktree and its name. The project,
-// which every row there shares, is left out, and so is a second line that
-// would be blank.
+// the agent is on and its age, over its worktree and its tokens and cache. The
+// project, which every row there shares, is left out, and so is a second line
+// that would be blank.
 func TestTheProjectPaneDrawsAnAgentAsTheAgentListDoes(t *testing.T) {
 	m, _, _ := listedSurface(t, 160, 30,
 		listed{project: "alpha", status: revier.StatusIdle, on: "Taskmgr tickets", said: "done",
-			at: time.Now().Add(-4 * time.Minute), name: "alpha-a0", dir: "/p/alpha/.claude/worktrees/delete-key"})
+			at: time.Now().Add(-4 * time.Minute), name: "alpha-a0", dir: "/p/alpha/.claude/worktrees/delete-key", tokens: 62_074})
 	rows := strings.Split(pane(m.Said()), "\n")
 	var first, second string
 	if i := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "Taskmgr tickets") }); i >= 0 && i+1 < len(rows) {
@@ -93,8 +97,8 @@ func TestTheProjectPaneDrawsAnAgentAsTheAgentListDoes(t *testing.T) {
 	if !strings.Contains(first, "idle") || !strings.HasSuffix(first, "4m") || strings.Contains(first, "claude") {
 		t.Errorf("first line = %q, want the state, the summary and the age, and no harness", first)
 	}
-	if !strings.HasPrefix(second, "delete-key") || !strings.HasSuffix(second, " alpha-a0") {
-		t.Errorf("second line = %q, want the worktree alone, and the name", second)
+	if !strings.HasPrefix(second, "delete-key") || !strings.HasSuffix(second, " 56m") || !strings.Contains(second, "62k") || strings.Contains(second, "alpha-a0") {
+		t.Errorf("second line = %q, want the worktree alone, the tokens and the cache, and no name", second)
 	}
 
 	// The Screen heading's blank line follows the row at once.

@@ -282,11 +282,18 @@ type AgentDetail struct {
 	// surface keeps every answer while the agent lives.
 	Prompt string     `json:"prompt,omitempty"`
 	Tools  []ToolCall `json:"tools,omitempty"`
+
+	// Context is how many tokens the conversation holds, as the harness
+	// counted them for the agent's last answer, and CacheUntil when the
+	// harness's prompt cache of the conversation goes cold.
+	Context    int       `json:"context,omitempty"`
+	CacheUntil time.Time `json:"cache_until,omitzero"`
 }
 
 // IsZero reports whether the probe had nothing to say about the agent.
 func (d AgentDetail) IsZero() bool {
-	return d.Message == "" && d.At.IsZero() && d.Prompt == "" && len(d.Tools) == 0
+	return d.Message == "" && d.At.IsZero() && d.Prompt == "" && len(d.Tools) == 0 &&
+		d.Context == 0 && d.CacheUntil.IsZero()
 }
 
 // ToolCall is one tool an agent called: the tool under the harness's own

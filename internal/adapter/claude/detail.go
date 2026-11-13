@@ -231,8 +231,24 @@ type entry struct {
 	Message          struct {
 		Role    string          `json:"role"`
 		Content json.RawMessage `json:"content"`
+		Usage   usage           `json:"usage"`
 	} `json:"message"`
 }
+
+// usage is the tokens one answer counted. The input the model read is the
+// three input counts together: what was new, what the cache served, and what
+// was written to it.
+type usage struct {
+	Input       int `json:"input_tokens"`
+	CacheRead   int `json:"cache_read_input_tokens"`
+	CacheCreate int `json:"cache_creation_input_tokens"`
+}
+
+func (u usage) context() int { return u.Input + u.CacheRead + u.CacheCreate }
+
+// cacheTTL is how long Claude Code's prompt cache stays warm after an answer:
+// it is taken to write the cache for an hour (decisions.md D170).
+const cacheTTL = time.Hour
 
 // block is one part of a message's content: text the agent or the user wrote,
 // a tool the agent called, or what a tool answered.
@@ -274,6 +290,11 @@ func lastSaid(tail []byte) (revier.AgentDetail, error) {
 		text, blocks := contentOf(e.Message.Content)
 		switch e.Message.Role {
 		case "assistant":
+			// The last answer that counted tokens: an answer Claude Code
+			// makes up itself, as for an interrupt, counts none.
+			if d.Context == 0 && e.Message.Usage.context() > 0 {
+				d.Context, d.CacheUntil = e.Message.Usage.context(), e.Timestamp.Add(cacheTTL)
+			}
 			if d.Message == "" && text != "" {
 				d.Message, d.At = text, e.Timestamp
 			}
