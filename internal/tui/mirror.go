@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"regexp"
 	"slices"
 	"strconv"
@@ -44,20 +45,21 @@ const mirrorNotch = 3
 
 // mirror is the screen of one agent as last read.
 type mirror struct {
-	key      listedKey // the agent it shows
-	text     string    // the screen as read
-	textDeep bool      // whether text holds the scrollback
-	err      error     // why the last read gave none
-	read     bool      // a read for key has answered
-	deep     bool      // the scrollback is asked for: the user scrolled up
-	off      int       // the lines the view is scrolled up from the end
-	room     int       // the lines the pane last had for it
-	width    int       // the columns the pane last set its lines at
-	seq      int       // the number of the last read asked for
-	took     int       // the number of the last read taken
-	ticking  bool      // whether a tick is out, so a switch starts no second one
-	gen      int       // the number of the tick that is out; an older one is dropped
-	held     bool      // reads wait for the survey a raise asked for: the last one is from before the hide
+	key      listedKey       // the agent it shows
+	text     string          // the screen as read
+	textDeep bool            // whether text holds the scrollback
+	err      error           // why the last read gave none
+	read     bool            // a read for key has answered
+	deep     bool            // the scrollback is asked for: the user scrolled up
+	off      int             // the lines the view is scrolled up from the end
+	room     int             // the lines the pane last had for it
+	width    int             // the columns the pane last set its lines at
+	seq      int             // the number of the last read asked for
+	took     int             // the number of the last read taken
+	ticking  bool            // whether a tick is out, so a switch starts no second one
+	gen      int             // the number of the tick that is out; an older one is dropped
+	held     bool            // reads wait for the survey a raise asked for: the last one is from before the hide
+	gone     map[string]bool // the panels a read found closed, each logged once
 
 	// The lines text was last set as, and the width they were set at: the
 	// pane is drawn again on every message, and a scrollback is long. A read
@@ -178,14 +180,26 @@ func (mi *mirror) take(msg mirroredMsg) {
 	if msg.key != mi.key || msg.seq <= mi.took {
 		return
 	}
-	// A panel that closed while it was read is no failure: a close of its
-	// project reads it last as it ends (decisions.md D172).
-	if !errors.Is(msg.err, core.ErrNoScreen) && !errors.Is(msg.err, revier.ErrPanelGone) {
+	at := msg.key.agent
+	panel := "mirror\x00" + at.host + "\x00" + at.id + "\x00" + string(at.panel)
+	switch {
+	case errors.Is(msg.err, core.ErrNoScreen):
+	case errors.Is(msg.err, revier.ErrPanelGone):
+		// A panel that closed while it was read is no failure, as a close of
+		// its project reads it last as it ends; one INFO line per panel still
+		// shows a panel that stays unmatched (decisions.md D172).
+		if !mi.gone[panel] {
+			if mi.gone == nil {
+				mi.gone = map[string]bool{}
+			}
+			mi.gone[panel] = true
+			slog.Info("mirror: panel gone", "panel", at.panel, "err", msg.err)
+		}
+	default:
 		// One line per panel that fails: a key for them all would log again
 		// each time the cursor went from a panel that reads to one that does
 		// not.
-		at := msg.key.agent
-		logging.Repeat("mirror\x00"+at.host+"\x00"+at.id+"\x00"+string(at.panel), "mirror", msg.err, "panel", at.panel)
+		logging.Repeat(panel, "mirror", msg.err, "panel", at.panel)
 	}
 	before := len(mi.screenLines())
 	mi.took, mi.read, mi.err = msg.seq, true, msg.err

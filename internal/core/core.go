@@ -1315,8 +1315,8 @@ func (r Report) HostErr() error { return hostErrs(r.Failed).err() }
 // the other with Lay (decisions.md D114).
 //
 // Its line names the linked hosts it waited for and why any gave no answer,
-// as a close's survey does (decisions.md D115): a slow survey is most often a
-// host elsewhere, whose own WARN may be another survey's.
+// as a close's survey does: a slow survey is most often a host elsewhere,
+// whose own WARN may be another survey's.
 func (c *Core) Survey(ctx context.Context, projects []Project) (r Report, err error) {
 	start := time.Now()
 	var answers RemoteAnswers

@@ -132,14 +132,15 @@ type PanelWriter interface {
 // and style of each run as SGR sequences and nothing else of the terminal's.
 // scrollback asks for the lines above the screen too. What of it is drawn is
 // the surface's decision; the runtime hands it over as the terminal holds it.
-// A panel that is no longer open is an error that wraps ErrPanelGone.
+// A runtime that can tell a panel that is no longer open may return an error
+// that wraps ErrPanelGone for it; any other error stays a failure.
 type PanelReader interface {
 	ReadPanel(ctx context.Context, ref TargetRef, panel PanelID, scrollback bool) (string, error)
 }
 
 // ErrPanelGone means the panel ReadPanel was asked for is no longer open: a
 // normal outcome when a read crosses the panel's close, which the mirror
-// does not log (decisions.md D172).
+// logs once per panel as INFO and not as a failure (decisions.md D172).
 var ErrPanelGone = errors.New("the panel is not open")
 
 // PanelOpener is an optional capability of a Runtime, detected by type

@@ -66,7 +66,7 @@ doc reads what it already did.
 | `record line skipped` | one `WARN` per line of the state record that is not a line, with `file` and `line` |
 | `survey`, `remote survey` | a survey failed, or took 500 ms or more (at most once a minute per host); a fast one writes nothing. A `survey` that waited for linked hosts has `asked`, the hosts, and `unanswered`, why one gave no answer; a TUI refresh's has neither |
 | `probe` | an agent probe failed, and the agent shows unknown |
-| `mirror` | one `WARN` per panel the mirror could not read, with `panel`; the pane keeps the screen it last read. A panel that closed before the next survey writes no `recovered`. A read the runtime says crossed the panel's close writes nothing (`docs/design/decisions.md` D172) |
+| `mirror` | one `WARN` per panel the mirror could not read, with `panel`; the pane keeps the screen it last read. A panel that closed before the next survey writes no `recovered`. A read the runtime says crossed the panel's close writes `mirror: panel gone` at `INFO` instead, once per panel, with `panel` and `err` (`docs/design/decisions.md` D172) |
 | `panel mark` | one `WARN` per panel of a launch that could not be marked; the instance opened, and a return home from a tab falls back to its guess (`docs/design/decisions.md` D100) |
 | `session saved` | a save, with its counts and gaps; `by` is why: `saved` by hand, `shutdown`, `project-closed`, or `last-seen` for what a surface last saw, saved after an end with no shutdown. A plain restore never opens a `project-closed` save (`docs/design/decisions.md` D149) |
 | `session seen` | one `WARN` when a surface could not write what it last saw, `$STATE/seen.toml`, with `path` (`docs/design/decisions.md` D150) |

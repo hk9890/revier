@@ -973,8 +973,8 @@ Rejected: the word for the ascii glyphs alone, two rules for one row.
 ### D172 — a read of a panel that closed says the panel is gone
 
 A pane's mirror reads the panel under its cursor while a close of its project
-ends it, and kitty answers "No matching windows". That is no failure, yet it
-was a `mirror` WARN after most closes. `PanelReader` now wraps
-`revier.ErrPanelGone` for a panel no longer open, and the mirror logs it as
-it logs `ErrNoScreen`: not at all. Rejected: the TUI dropping the read of a
-panel its own close ended, which misses a panel closed by hand.
+ends it, and the runtime answers that no such panel exists. That is no
+failure, yet it was a `mirror` WARN after most closes. A `PanelReader` that can
+tell wraps `revier.ErrPanelGone`, and the mirror logs it once per panel as
+INFO, which still shows a panel that stays unmatched. Rejected: the TUI dropping
+the read of a panel its own close ended, which misses a panel closed by hand.

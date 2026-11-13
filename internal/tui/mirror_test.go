@@ -154,9 +154,10 @@ func TestAPanelThatCannotBeReadLeavesANote(t *testing.T) {
 	}
 }
 
-// A read that crosses its panel's close is no failure: the mirror logs
-// nothing for it (decisions.md D172).
-func TestAReadOfAPanelThatClosedIsNotLogged(t *testing.T) {
+// A read that crosses its panel's close is no failure: the mirror logs no
+// WARN for it, and one INFO line however often it is read, which still
+// shows a panel that stays unmatched (decisions.md D172).
+func TestAReadOfAPanelThatClosedIsLoggedOnceAsInfo(t *testing.T) {
 	m, rt, _ := listedWorld(t, 160, 30,
 		listed{project: "alpha", status: revier.StatusIdle, on: "one", screen: "never shown"})
 	rt.ScreenErr = fmt.Errorf("%w: no matching window", revier.ErrPanelGone)
@@ -166,9 +167,10 @@ func TestAReadOfAPanelThatClosedIsNotLogged(t *testing.T) {
 	t.Cleanup(func() { slog.SetDefault(previous) })
 
 	m, _ = press(m, "down")
-	_ = switched(switched(m)).Mirrored()
-	if strings.Contains(logged.String(), `"msg":"mirror"`) {
-		t.Errorf("log = %s, want no mirror line for a panel that closed", logged.String())
+	m = switched(switched(m)).Mirrored()
+	_ = m.Mirrored()
+	if strings.Contains(logged.String(), `"msg":"mirror"`) || strings.Count(logged.String(), `"msg":"mirror: panel gone"`) != 1 {
+		t.Errorf("log = %s, want one mirror: panel gone line and no mirror WARN", logged.String())
 	}
 }
 
