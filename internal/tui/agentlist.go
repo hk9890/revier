@@ -102,8 +102,8 @@ func newAgentItem(a revier.AgentView, p revier.Project, d revier.AgentDetail, no
 }
 
 // shortTokens is a token count as the row says it, in at most tokensWidth
-// cells: "840", "62k", "1.2M", "12M". Every unit cuts its count down, so no
-// count is rounded up into a wider one.
+// cells: "840", "62k", "1.2M", "12M", and "999M" at most. Every unit cuts its
+// count down, so no count is rounded up into a wider one.
 func shortTokens(n int) string {
 	switch {
 	case n <= 0:
@@ -115,13 +115,14 @@ func shortTokens(n int) string {
 	case n < 10_000_000:
 		return fmt.Sprintf("%d.%dM", n/1_000_000, n/100_000%10)
 	default:
-		return fmt.Sprintf("%dM", n/1_000_000)
+		return fmt.Sprintf("%dM", min(n/1_000_000, 999))
 	}
 }
 
 // cacheLeft is how long after now a prompt cache goes cold, in whole minutes
-// rounded up, or "--" once it is, and whether it is in its last minutes. A
-// time nothing says is no text.
+// rounded up to "99m" at most, or "--" once it is, and whether it is in its
+// last minutes. A time nothing says is no text. A cache lives an hour at
+// most; the cap holds the column where a clock ahead of this one says more.
 func cacheLeft(now, until time.Time) (text string, cooling bool) {
 	if until.IsZero() {
 		return "", false
@@ -130,7 +131,7 @@ func cacheLeft(now, until time.Time) (text string, cooling bool) {
 	if left <= 0 {
 		return "--", false
 	}
-	return fmt.Sprintf("%dm", int((left+time.Minute-1)/time.Minute)), left <= coolingFrom
+	return fmt.Sprintf("%dm", min(int((left+time.Minute-1)/time.Minute), 99)), left <= coolingFrom
 }
 
 // The usage columns at the right end of a row's second line: the tokens, and
@@ -330,7 +331,10 @@ func agentLines(th theme.Theme, it agentItem, matches []int, width int, sel, ove
 	// where gives way to it when the line is short of room.
 	where, from := it.where(inPane), len(it.text)+1
 	usage := it.usage(th, style)
-	if inPane && where == "" && usage == "" {
+	// The name is not drawn, but an agent its harness names is one whose
+	// usage comes once its detail is read: keeping its second line keeps the
+	// row from growing a line when the detail comes.
+	if inPane && where == "" && usage == "" && it.name() == "" {
 		return strings.Join(lines, "\n")
 	}
 	lit := func(s string, from int) string {

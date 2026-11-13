@@ -111,6 +111,22 @@ func TestTheUsageColumnsLineUp(t *testing.T) {
 	}
 }
 
+// In the pane, an agent its harness names keeps its second line before its
+// usage is read, so the row does not grow a line when it comes; one with no
+// name, no worktree and no usage has none.
+func TestAPaneRowKeepsItsHeightUntilItsUsageComes(t *testing.T) {
+	now := time.Now()
+	for _, c := range []struct {
+		name  string
+		lines int
+	}{{"revier-c0", 2}, {"", 1}} {
+		it := newAgentItem(revier.AgentView{State: revier.AgentState{Harness: "claude", Name: c.name}}, revier.Project{Name: "revier"}, revier.AgentDetail{}, now)
+		if got := strings.Count(agentLines(theme.Default(), it, nil, 60, false, false, false, true), "\n") + 1; got != c.lines {
+			t.Errorf("name %q: the pane row has %d lines, want %d", c.name, got, c.lines)
+		}
+	}
+}
+
 // The row leaves the harness's name to the pane: on a row it said the
 // project a second time.
 func TestAnAgentRowLeavesTheNameOut(t *testing.T) {
@@ -146,7 +162,7 @@ func TestTheCacheIsLitOnlyInItsLastMinutes(t *testing.T) {
 // A token count fits its column, and a cache says its minutes rounded up,
 // "--" once it is cold, and nothing where the harness said nothing.
 func TestTheUsageAsTheRowSaysIt(t *testing.T) {
-	for n, want := range map[int]string{0: "", 840: "840", 62_074: "62k", 999_999: "999k", 1_250_000: "1.2M", 1_299_999: "1.2M", 9_960_000: "9.9M", 12_500_000: "12M"} {
+	for n, want := range map[int]string{0: "", 840: "840", 62_074: "62k", 999_999: "999k", 1_250_000: "1.2M", 1_299_999: "1.2M", 9_960_000: "9.9M", 12_500_000: "12M", 2_000_000_000: "999M"} {
 		if got := shortTokens(n); got != want || lipgloss.Width(got) > tokensWidth {
 			t.Errorf("shortTokens(%d) = %q, want %q in %d cells", n, got, want, tokensWidth)
 		}
@@ -159,6 +175,7 @@ func TestTheUsageAsTheRowSaysIt(t *testing.T) {
 	}{
 		{time.Time{}, "", false},
 		{now.Add(time.Hour), "60m", false},
+		{now.Add(3 * time.Hour), "99m", false},
 		{now.Add(59*time.Minute + 30*time.Second), "60m", false},
 		{now.Add(5 * time.Minute), "5m", true},
 		{now.Add(30 * time.Second), "1m", true},

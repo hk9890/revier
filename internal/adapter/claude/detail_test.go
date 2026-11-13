@@ -308,26 +308,53 @@ func TestDetailCountsNoTokensFromBeforeACompaction(t *testing.T) {
 	}
 }
 
-// A usage that does not parse costs the tokens and nothing else, and an
-// answer with no time says no cache.
+// A usage that does not parse costs the tokens and nothing else: the message
+// is read, and no older answer's count stands in for it.
 func TestDetailReadsTheMessageOfAnAnswerWhoseUsageDoesNotParse(t *testing.T) {
 	p, root := transcripts(t)
 	writeTranscript(t, root, "-demo", "s1",
-		`{"type":"assistant","message":{"role":"assistant","content":"counted, untimed","usage":{"input_tokens":5000}}}`,
+		`{"type":"assistant","timestamp":"2026-09-24T09:00:00Z","message":{"role":"assistant","content":"older","usage":{"input_tokens":5000}}}`,
 		`{"type":"assistant","timestamp":"2026-09-24T10:00:00Z","message":{"role":"assistant","content":"spelled otherwise","usage":{"input_tokens":"many"}}}`,
 	)
 	d, err := p.Detail(t.Context(), revier.Panel{PID: 101})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d.Message != "spelled otherwise" || d.Context != 5000 || !d.CacheUntil.IsZero() {
-		t.Errorf("Detail = %+v; want the message, the untimed answer's tokens and no cache", d)
+	if d.Message != "spelled otherwise" || d.Context != 0 || !d.CacheUntil.IsZero() {
+		t.Errorf("Detail = %+v; want the message, and no tokens and no cache", d)
+	}
+}
+
+// An answer with no time says its tokens and no cache.
+func TestDetailOfAnUntimedAnswerSaysNoCache(t *testing.T) {
+	p, root := transcripts(t)
+	writeTranscript(t, root, "-demo", "s1",
+		`{"type":"assistant","message":{"role":"assistant","content":"untimed","usage":{"input_tokens":5000}}}`)
+	d, err := p.Detail(t.Context(), revier.Panel{PID: 101})
+	if err != nil || d.Context != 5000 || !d.CacheUntil.IsZero() {
+		t.Errorf("Detail = %+v, %v; want 5000 tokens and no cache", d, err)
+	}
+}
+
+// A copy of a request that Claude Code files beside the conversation is no
+// one's word: it is no prompt, and no message.
+func TestDetailPassesOverACopyOfARequest(t *testing.T) {
+	p, root := transcripts(t)
+	writeTranscript(t, root, "-demo", "s1",
+		`{"type":"user","timestamp":"2026-09-24T10:00:00Z","message":{"role":"user","content":"fix the test"}}`,
+		`{"type":"assistant","timestamp":"2026-09-24T10:01:00Z","message":{"role":"assistant","content":"fixed"}}`,
+		`{"type":"api-request-blob","hash":"h","message":{"role":"user","content":"a request's copy of the prompt"}}`,
+		`{"type":"api-request-blob","hash":"i","message":{"role":"assistant","content":"a request's copy of the answer"}}`,
+	)
+	d, err := p.Detail(t.Context(), revier.Panel{PID: 101})
+	if err != nil || d.Prompt != "fix the test" || d.Message != "fixed" {
+		t.Errorf("Detail = %+v, %v; want the conversation's prompt and message", d, err)
 	}
 }
 
 // The cache lives as long as the answer wrote it for: five minutes where it
-// wrote it for five minutes alone, and an hour where it wrote it for an hour
-// or does not say.
+// wrote any of it for five minutes, as that is the conversation's end, and an
+// hour where it wrote it for an hour or does not say.
 func TestDetailTakesTheCacheLengthFromTheAnswer(t *testing.T) {
 	for _, c := range []struct {
 		name, creation string
@@ -335,7 +362,7 @@ func TestDetailTakesTheCacheLengthFromTheAnswer(t *testing.T) {
 	}{
 		{"five minutes", `"cache_creation":{"ephemeral_5m_input_tokens":900,"ephemeral_1h_input_tokens":0}`, 5 * time.Minute},
 		{"an hour", `"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":900}`, time.Hour},
-		{"both", `"cache_creation":{"ephemeral_5m_input_tokens":100,"ephemeral_1h_input_tokens":900}`, time.Hour},
+		{"both", `"cache_creation":{"ephemeral_5m_input_tokens":100,"ephemeral_1h_input_tokens":900}`, 5 * time.Minute},
 		{"nothing written", `"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0}`, time.Hour},
 		{"not said", `"output_tokens":3`, time.Hour},
 	} {

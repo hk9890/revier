@@ -30,6 +30,7 @@ const tailBytes = 512 << 10
 var errNoMessage = fmt.Errorf("%w: no prompt, message or tool call in the transcript's tail", revier.ErrNoDetail)
 
 // Detail is the last thing the agent in the panel said and the turn it is in,
+// with the tokens and the cache of its last answer that counted any,
 // read from the end of its transcript: ~/.claude/projects/<dir>/<session
 // id>.jsonl, the session named for the panel's pid by the listing Inspect
 // keeps.
@@ -224,6 +225,10 @@ func readTail(path string, n int64) ([]byte, error) {
 // entry is the part of a transcript line Detail reads. Everything else a line
 // carries is ignored, so a field Claude Code adds costs nothing.
 type entry struct {
+	// Type is "user" or "assistant" for a line of the conversation. A copy
+	// of a request Claude Code files beside it ("api-request-blob") carries a
+	// role and content too, but no time, and is no one's word.
+	Type             string    `json:"type"`
 	IsSidechain      bool      `json:"isSidechain"`
 	IsMeta           bool      `json:"isMeta"`
 	IsCompactSummary bool      `json:"isCompactSummary"`
@@ -249,13 +254,15 @@ type usage struct {
 	} `json:"cache_creation"`
 }
 
-// usageOf is one answer's usage. A usage that does not parse counts none.
-func usageOf(raw json.RawMessage) usage {
+// usageOf is one answer's usage, and whether it parsed. An answer with none
+// counts none and parses.
+func usageOf(raw json.RawMessage) (usage, bool) {
 	var u usage
-	if json.Unmarshal(raw, &u) != nil {
-		return usage{}
+	if len(raw) == 0 {
+		return u, true
 	}
-	return u
+	err := json.Unmarshal(raw, &u)
+	return u, err == nil
 }
 
 // context is the input the model read for the answer: the three input counts
@@ -263,10 +270,11 @@ func usageOf(raw json.RawMessage) usage {
 func (u usage) context() int { return u.Input + u.CacheRead + u.CacheCreate }
 
 // ttl is how long the cache stays warm after the answer: five minutes where
-// the answer wrote it for five minutes alone, and an hour otherwise, which is
-// what Claude Code writes where the answer does not say (decisions.md D170).
+// the answer wrote any of it for five minutes, as the API puts the shorter
+// life last, on the conversation's end, and an hour otherwise, which is what
+// Claude Code writes where the answer does not say (decisions.md D170).
 func (u usage) ttl() time.Duration {
-	if u.CacheCreation.FiveMinutes > 0 && u.CacheCreation.OneHour == 0 {
+	if u.CacheCreation.FiveMinutes > 0 {
 		return 5 * time.Minute
 	}
 	return time.Hour
@@ -303,7 +311,9 @@ const briefRunes = 300
 // The tokens are the last answer's that counted any, which can be older than
 // the turn and the message: an answer Claude Code makes up itself, for an
 // interrupt or an API error, counts none. An answer before a compaction read
-// a conversation the next prompt does not, so the walk counts none past one.
+// a conversation the next prompt does not, so the walk counts none past one,
+// and an answer whose usage does not parse ends the count too: an older one's
+// would read as now.
 func lastSaid(tail []byte) (revier.AgentDetail, error) {
 	var d revier.AgentDetail
 	failed := map[string]bool{}
@@ -311,7 +321,7 @@ func lastSaid(tail []byte) (revier.AgentDetail, error) {
 	lines := bytes.Split(tail, []byte("\n"))
 	for i := len(lines) - 1; i >= 0 && (inTurn || d.Message == "" || counting); i-- {
 		var e entry
-		if json.Unmarshal(lines[i], &e) != nil || e.IsSidechain || e.IsMeta {
+		if json.Unmarshal(lines[i], &e) != nil || e.Type != "user" && e.Type != "assistant" || e.IsSidechain || e.IsMeta {
 			continue
 		}
 		if e.IsCompactSummary {
@@ -321,10 +331,16 @@ func lastSaid(tail []byte) (revier.AgentDetail, error) {
 		text, blocks := contentOf(e.Message.Content)
 		switch e.Message.Role {
 		case "assistant":
-			if u := usageOf(e.Message.Usage); counting && u.context() > 0 {
-				d.Context, counting = u.context(), false
-				if !e.Timestamp.IsZero() {
-					d.CacheUntil = e.Timestamp.Add(u.ttl())
+			if counting {
+				u, ok := usageOf(e.Message.Usage)
+				switch {
+				case !ok:
+					counting = false
+				case u.context() > 0:
+					d.Context, counting = u.context(), false
+					if !e.Timestamp.IsZero() {
+						d.CacheUntil = e.Timestamp.Add(u.ttl())
+					}
 				}
 			}
 			if d.Message == "" && text != "" {

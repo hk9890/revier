@@ -479,7 +479,7 @@ type listed struct {
 	dir     string
 	screen  string
 	name    string // what the harness calls it
-	tokens  int    // its cache goes cold an hour after at
+	tokens  int    // the tokens its conversation holds, with a cache warm for an hour after at
 }
 
 // listedWorld is listedSurface with the agent list in view and its asks
@@ -507,10 +507,11 @@ func listedSurface(t *testing.T, width, height int, agents ...listed) (tui.Model
 		id := revier.PanelID(fmt.Sprint(i + 1))
 		p := hosttest.NewDetailedProbe("claude", marker)
 		p.State = revier.AgentState{Harness: "claude", Status: a.status, Activity: a.on, Dir: a.dir, Name: a.name}
-		p.Said[id] = revier.AgentDetail{Message: a.said, At: a.at}
+		said := revier.AgentDetail{Message: a.said, At: a.at}
 		if a.tokens != 0 {
-			p.Said[id] = revier.AgentDetail{Message: a.said, At: a.at, Context: a.tokens, CacheUntil: a.at.Add(time.Hour)}
+			said.Context, said.CacheUntil = a.tokens, a.at.Add(time.Hour)
 		}
+		p.Said[id] = said
 		probes, fakes = append(probes, p), append(fakes, p)
 		if !slices.Contains(names, a.project) {
 			names = append(names, a.project)
