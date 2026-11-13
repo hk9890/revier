@@ -1083,8 +1083,15 @@ func (h *Host) ReadPanel(ctx context.Context, ref revier.TargetRef, panel revier
 		extent = "all"
 	}
 	out, err := h.kitten(ctx, socket, "get-text", "--match", "id:"+panel.String(), "--ansi", "--extent", extent)
+	if err != nil && strings.Contains(err.Error(), noMatch) {
+		return "", fmt.Errorf("%w: %w", revier.ErrPanelGone, err)
+	}
 	return string(out), err
 }
+
+// noMatch is what kitten says of a --match no window of the socket answers:
+// the window closed.
+const noMatch = "No matching windows"
 
 // Close closes every kitty window of the OS window, across its tabs, in one
 // call; kitty closes an OS window whose last window closed. kitten has no

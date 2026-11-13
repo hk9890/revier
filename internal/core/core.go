@@ -902,7 +902,7 @@ func (c *Core) bind(ctx context.Context, p Project, name revier.TargetName, befo
 			}
 		}
 		if len(candidates) > 1 {
-			slog.Warn("bind: more than one new window of the class, none bound", "project", p.Name, "target", name, "candidates", len(candidates))
+			slog.Warn("bind", "project", p.Name, "target", name, "err", "more than one new window of the class, none bound", "candidates", len(candidates))
 			return revier.Instance{}, false, true
 		}
 		if len(candidates) == 1 {
@@ -911,7 +911,7 @@ func (c *Core) bind(ctx context.Context, p Project, name revier.TargetName, befo
 		return revier.Instance{}, false, false
 	})
 	if errors.Is(err, errNoNewWindow) {
-		slog.Warn("bind: no window appeared in the wait, left to the TUI", "project", p.Name, "target", name, "wait", wait.String())
+		slog.Warn("bind", "project", p.Name, "target", name, "err", "no window appeared in the wait, left to the TUI", "wait", wait.String())
 		return revier.Instance{}, false, nil
 	}
 	if err != nil || !found {
@@ -1313,10 +1313,15 @@ func (r Report) HostErr() error { return hostErrs(r.Failed).err() }
 // It answers when the slowest linked host has. A surface that refreshes takes
 // the two parts apart instead, SurveyLocal and AskRemotes, and lays one over
 // the other with Lay (decisions.md D114).
+//
+// Its line names the linked hosts it waited for and why any gave no answer,
+// as a close's survey does: a slow survey is most often a host elsewhere,
+// whose own WARN may be another survey's.
 func (c *Core) Survey(ctx context.Context, projects []Project) (r Report, err error) {
 	start := time.Now()
+	var answers RemoteAnswers
 	defer func() {
-		logging.Poll("survey", "survey", start, err, "projects", len(projects), "hosts", r.Hosts, "instances", len(r.Instances))
+		logging.Poll("survey", "survey", start, err, surveyLine(len(projects), r, answers)...)
 	}()
 	// The remote hosts are asked while the local ones are listed and the
 	// local agents probed: a round trip to another machine is the slow part,
@@ -1325,8 +1330,19 @@ func (c *Core) Survey(ctx context.Context, projects []Project) (r Report, err er
 	go func() { remote <- c.AskRemotes(ctx, projects) }()
 	st := c.state()
 	r = c.listed(ctx, projects, st, st.Attached)
-	c.lay(&r, <-remote)
+	answers = <-remote
+	c.lay(&r, answers)
 	return r, nil
+}
+
+// surveyLine is what the line of a survey says: asked and unanswered only
+// when it waited for a linked host, so their presence says it did.
+func surveyLine(projects int, r Report, answers RemoteAnswers) []any {
+	line := []any{"projects", projects, "hosts", r.Hosts, "instances", len(r.Instances)}
+	if asked := answers.hosts(); len(asked) > 0 {
+		line = append(line, "asked", asked, "unanswered", answers.failures())
+	}
+	return line
 }
 
 // SurveyToClose is the survey a close draws its plan from: this machine

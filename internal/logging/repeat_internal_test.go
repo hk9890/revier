@@ -89,6 +89,28 @@ func TestAFailureThatAlternatesLogsEachCauseOnce(t *testing.T) {
 	}
 }
 
+// A recovery says how many polls of its run failed and when the last one did,
+// so a run that went back to an error it had logged, and was silent since,
+// reads as failing until then and not until the recovery.
+func TestARecoverySaysHowManyPollsFailedAndWhenTheLastDid(t *testing.T) {
+	now := time.Date(2026, 11, 10, 8, 0, 0, 0, time.UTC)
+	r, buf := capture(func() time.Time { return now })
+	down, late := errors.New("host down"), errors.New("no answer")
+	for _, err := range []error{down, late, down} {
+		r.repeat("remote a", "remote survey", err, nil)
+		now = now.Add(time.Minute)
+	}
+	lastFailed := now.Add(-time.Minute)
+	now = now.Add(24 * time.Hour)
+	r.repeat("remote a", "remote survey", nil, nil)
+
+	got := lines(t, buf)
+	rec := got[len(got)-1]
+	if rec["msg"] != "remote survey: recovered" || rec["was"] != "host down" || rec["failures"] != float64(3) || rec["last_failed"] != lastFailed.Format(time.RFC3339) {
+		t.Errorf("recovery = %v, want was host down, 3 failures, the last at %s", rec, lastFailed.Format(time.RFC3339))
+	}
+}
+
 func TestASlowPollIsLoggedAtMostOncePerInterval(t *testing.T) {
 	now := time.Date(2026, 9, 14, 9, 0, 0, 0, time.Local)
 	r, buf := capture(func() time.Time { return now })

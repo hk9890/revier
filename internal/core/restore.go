@@ -121,7 +121,7 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 		// The plan was built from a survey of these projects, so a project it
 		// knew cannot be missing here. Reported rather than asserted.
 		if step.Action == RestoreLaunch && !loaded {
-			slog.Warn("restore step: planned project not loaded", "project", step.Project, "target", step.Target)
+			slog.Warn("restore step", "project", step.Project, "target", step.Target, "err", "planned project not loaded")
 			res.Action = RestoreNoProject
 		}
 		// Logged before the launch, so a step that hangs on its window is
@@ -262,7 +262,9 @@ func (c *Core) activateWaiting(ctx context.Context, p Project, name revier.Targe
 	}
 	if res.Launched && ref.IsZero() && err == nil {
 		at := time.Now()
-		c.update(func(st *state.State) { st.Launched(p.Name, res.Target, at) })
+		var replaced *state.Launch
+		c.update(func(st *state.State) { replaced = st.Launched(p.Name, res.Target, at) })
+		LogReplacedLaunch(replaced, p.Name, res.Target, at)
 		var inst revier.Instance
 		var ok bool
 		inst, ok, err = c.bindWindow(ctx, p, res.Target, res.Before, BindWait, raise)

@@ -191,6 +191,32 @@ func TestSurveyAsksAHostOnceForAllItsProjects(t *testing.T) {
 	}
 }
 
+// A survey's line names the linked host it waited for and why it gave no
+// answer: that host's own WARN may be another survey's, logged once. A survey
+// that asked no host says nothing of one.
+func TestASurveyLineNamesTheLinkedHostItWaitedFor(t *testing.T) {
+	remote := hosttest.NewRemote("buildbox")
+	remote.Err = errors.New("buildbox: no answer before the wait ran out")
+	c := &core.Core{Runtime: hosttest.NewRuntime("kitty"), Remotes: map[string]revier.Remote{"buildbox": remote}}
+	fields := func(line []any) map[string]any {
+		m := map[string]any{}
+		for i := 0; i+1 < len(line); i += 2 {
+			m[line[i].(string)] = line[i+1]
+		}
+		return m
+	}
+
+	line := fields(core.SurveyLine(1, core.Report{}, c.AskRemotes(t.Context(), []core.Project{prepared(t, remoteProject("demo"))})))
+	asked, _ := line["asked"].([]string)
+	unanswered, _ := line["unanswered"].([]string)
+	if !slices.Equal(asked, []string{"buildbox"}) || len(unanswered) != 1 || !strings.Contains(unanswered[0], "no answer") {
+		t.Errorf("line = %v, want buildbox asked and its reason", line)
+	}
+	if line := fields(core.SurveyLine(1, core.Report{}, c.AskRemotes(t.Context(), nil))); line["asked"] != nil || line["unanswered"] != nil {
+		t.Errorf("line of a survey that asked no host = %v, want no asked and no unanswered", line)
+	}
+}
+
 // slowRemote answers only once the local probe has run: a survey that
 // probed after the host answered would wait here for good.
 type slowRemote struct {

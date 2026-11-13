@@ -160,10 +160,12 @@ func PlanAction(c *core.Core, p core.Project, name string, run []string) (Action
 		a.machine = p.Remote.Host
 	}
 	if a.here {
+		var replaced *state.Launch
 		a.ledger.Update(func(st *state.State) bool {
-			st.Launched(a.project, "", a.start)
+			replaced = st.Launched(a.project, "", a.start)
 			return true
 		})
+		core.LogReplacedLaunch(replaced, a.project, "", a.start)
 	}
 	return a, nil
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -85,6 +86,26 @@ func TestAttachIsIdempotent(t *testing.T) {
 	s.Attach("p", ref)
 	if len(s.Attached["p"]) != 1 {
 		t.Errorf("got %d attachments, want 1", len(s.Attached["p"]))
+	}
+}
+
+// A launch says which launch of another target, still pending, it replaced:
+// the one launch on record is the only one a window is claimed for. A launch
+// past its window, or of the same target again, replaced nothing to claim.
+func TestALaunchSaysWhichPendingLaunchItReplaced(t *testing.T) {
+	now := time.Now()
+	s := &state.State{}
+	if got := s.Launched("p", "editor", now); got != nil {
+		t.Errorf("first launch replaced %+v, want nothing", got)
+	}
+	if got := s.Launched("p", "editor", now.Add(time.Second)); got != nil {
+		t.Errorf("same target again replaced %+v, want nothing", got)
+	}
+	if got := s.Launched("q", "editor", now.Add(2*time.Second)); got == nil || got.Project != "p" || got.Target != "editor" {
+		t.Errorf("another target replaced %+v, want p's editor", got)
+	}
+	if got := s.Launched("r", "home", now.Add(2*time.Second+state.BindWindow+time.Second)); got != nil {
+		t.Errorf("a launch past its window replaced %+v, want nothing", got)
 	}
 }
 
@@ -184,7 +205,7 @@ func TestPruneKeepsRefsOnHostsItDidNotAsk(t *testing.T) {
 	s.Attach("p", window)
 	s.Bind("p", "editor", window)
 
-	if s.Prune([]string{"tmux"}, nil, s) {
+	if len(s.Prune([]string{"tmux"}, nil, s)) > 0 {
 		t.Error("Prune reported a change for refs on a host it did not ask")
 	}
 	if len(s.Attached["p"]) != 1 || s.Bound["p"]["editor"] != window {
@@ -206,10 +227,13 @@ func TestPruneKeepsRefsWrittenAfterTheSurveyStarted(t *testing.T) {
 	now.Bind("p", "editor", fresh)
 	now.Attach("p", fresh)
 
-	now.Prune([]string{"gnome"}, nil, before)
+	dropped := now.Prune([]string{"gnome"}, nil, before)
 
 	if _, ok := now.Bound["p"]["home"]; ok {
 		t.Error("home's window was there to be listed and was not; want its binding dropped")
+	}
+	if !slices.Equal(dropped, []state.Dropped{{Project: "p", Target: "home", Ref: old}}) {
+		t.Errorf("dropped %v, want only home's binding", dropped)
 	}
 	if now.Bound["p"]["editor"] != fresh || len(now.Attached["p"]) != 1 {
 		t.Errorf("state = %+v, want the refs written after the survey started kept", now)

@@ -42,34 +42,39 @@ doc reads what it already did.
 - `INFO` — an operation that succeeded.
 - `ERROR` — an operation that failed. An error the TUI showed in its footer that no operation logged has `msg` `tui`.
 - `WARN` — an error revier carried on past: a state file it could not read or save, a probe that reported unknown, a window it could not place or bind.
-- A failure that recurs every refresh — a probe, a survey, a remote host, the TUI's state file — is one `WARN` per different `err`, then one `INFO` `<msg>: recovered` whose `was` is the `err` of the last failed refresh (`logging.Repeat`). Silence after a `WARN` means still failing, per process, with an `err` already written.
+- A failure that recurs every refresh — a probe, a survey, a remote host, the TUI's state file — is one `WARN` per different `err`, then one `INFO` `<msg>: recovered` (`logging.Repeat`). Its `was` is the `err` of the last failed refresh, `last_failed` when that refresh failed, and `failures` how many refreshes failed.
+- Silence after a `WARN` means no refresh of that process succeeded since: it still failed, with an `err` already written, or it did not refresh. A hidden popup does not refresh (`docs/design/decisions.md` D86), so its `recovered` comes at its next raise. Read the end of an outage from `last_failed`, not from the time of the line.
 
 ## Operations
 
 | `msg` | Written when |
 |---|---|
-| `command` | a CLI process ends, with `args` and `exit`. A surface that a signal ended, as a closed terminal does, has `signal` (`hangup` or `terminated`) and `exit` 128 plus its number. A surface with no `command` line was killed, or is still running. |
+| `command` | a CLI process ends, with `args` and `exit`. A surface that a signal ended, as a closed terminal does, has `signal` (`hangup` or `terminated`) and `exit` 128 plus its number. A surface with no `command` line was killed, or is still running. `revier assist` writes `assist` in its place. |
+| `assist` | `revier assist` replaces itself with the agent, with `exec` and `dir`. The agent's process writes no `command` line |
 | `resolve` | a command picks its project, `by` flag, directory, focused window or last project |
 | `go` | run-or-raise ends: `launched`, `landed`, `ref`, and `agents` for a resume. A toggle back writes a second line for the Go home, a tab target a second line for its workspace. A command target's line has `ran` and `focused`, the window the run left the focus on, empty when the focus did not move; its toggle back has `ran` false and `landed` the home, after the line of the Go home (`docs/design/decisions.md` D166). |
-| `bind` | the wait for a launched window ends |
+| `bind` | the wait for a launched window ends. A `WARN` `bind` with `err` comes first when no window appeared in the `wait`, or when more than one new window of the class did (`candidates`): the window is left for a `claim` |
 | `claim` | the TUI binds or attaches a window that appeared |
+| `claim: launch expired with no window claimed` | the launch on record passed its window, with `launched_at`, and no window was claimed for it |
+| `claim: launch replaced` | a launch replaced one still pending, of another target: `project`, `target` and `launched_at` are the replaced one's, `by_project` and `by_target` the new one's, `age_ms` how old the replaced one was. No window is claimed for the replaced one |
+| `binding dropped` | a survey found the window or terminal of a binding gone, with its `project`, `target` (empty for an attachment) and `ref` |
 | `instances` | a `host` could not list; its targets show unknown and a press on one is refused, while the other hosts' go on (`docs/design/decisions.md` D89) |
 | `remote events` | `revier events` asked a `host` for its events, with the `events` count |
 | `event` | one `WARN` when an event could not be appended; the operation went on |
 | `event line skipped` | one `WARN` per line of the event file that is not an event, with `line` |
 | `record` | one `WARN` per different `err` when a line could not be appended to the state record, with its `kind`; the operation went on |
 | `record line skipped` | one `WARN` per line of the state record that is not a line, with `file` and `line` |
-| `survey`, `remote survey` | a survey failed, or took 500 ms or more (at most once a minute per host); a fast one writes nothing |
+| `survey`, `remote survey` | a survey failed, or took 500 ms or more (at most once a minute per host); a fast one writes nothing. A `survey` that waited for linked hosts has `asked`, the hosts, and `unanswered`, why one gave no answer; a TUI refresh's has neither |
 | `probe` | an agent probe failed, and the agent shows unknown |
-| `mirror` | one `WARN` per panel the mirror could not read, with `panel`; the pane keeps the screen it last read. A panel that closed before the next survey writes no `recovered` |
+| `mirror` | one `WARN` per panel the mirror could not read, with `panel`; the pane keeps the screen it last read. A panel that closed before the next survey writes no `recovered`. A read the runtime says crossed the panel's close writes `mirror: panel gone` at `INFO` instead, once per panel, with `panel` and `err` (`docs/design/decisions.md` D172) |
 | `panel mark` | one `WARN` per panel of a launch that could not be marked; the instance opened, and a return home from a tab falls back to its guess (`docs/design/decisions.md` D100) |
 | `session saved` | a save, with its counts and gaps; `by` is why: `saved` by hand, `shutdown`, `project-closed`, or `last-seen` for what a surface last saw, saved after an end with no shutdown. A plain restore never opens a `project-closed` save (`docs/design/decisions.md` D149) |
 | `session seen` | one `WARN` when a surface could not write what it last saw, `$STATE/seen.toml`, with `path` (`docs/design/decisions.md` D150) |
 | `unclean end` | a surface's first survey, or a plain `revier session restore`, found an end with no shutdown that lost a target: `seen_at` when the snapshot last changed, `missing` the targets not open now, and `session` the save it offers. A `WARN` with `err` alone when the check failed |
-| `session restore`, `restore step`, `restore agent`, `session restored` | a restore: the session, each target's action, each recorded agent's `session`, `dir` and `outcome` |
+| `session restore`, `restore step`, `restore agent`, `session restored` | a restore: the session, each target's action, each recorded agent's `session`, `dir` and `outcome`. A `WARN` `restore step` with `err` `planned project not loaded` is a step whose project no file loads now |
 | `session restore cancelled`, `shutdown cancelled` | ctrl+c in the TUI, or on `revier session restore` or `revier shutdown`, stopped a restore or a shutdown between two steps, with `walked` of `steps`; `walked` equal to `steps` is a shutdown whose wait after its last step the cancel ended. Both still write their closing line, `session restored` or `shutdown`, with its counts (`docs/design/decisions.md` D140) |
 | `shutdown survey`, `shutdown recheck`, `shutdown save` | the phases of a close before its first step, each with `duration_ms`: the plan's survey, the reading of its agents again, the session save. A save made before a cancel logs no `err`: the cancel is `shutdown cancelled` with `walked` 0. The two surveys carry `asked`, the linked hosts waited for, and `unanswered`, why a host gave no answer for a link (`docs/design/decisions.md` D115) |
-| `shutdown step`, `shutdown`, `shutdown refused` | a shutdown: each step's `ref`, `panel`, `busy`, `unread` and `err`, then the counts and the `duration_ms` from the recheck to the last wait; its save writes `session saved` with `by` `shutdown`, or `project-closed` for one project. A close the busy guard refused writes `shutdown refused` alone, with the plan's `steps` and `busy` counts, and closed and saved nothing (`docs/design/decisions.md` D99) |
+| `shutdown step`, `shutdown`, `shutdown refused` | a shutdown: each step's `ref`, `panel`, `busy`, `unread` and `err`, then the counts and the `duration_ms` from the recheck to the last wait; its save writes `session saved` with `by` `shutdown`, or `project-closed` for one project. A close the busy guard refused writes `shutdown refused`, with the plan's `steps` and `busy` counts, and closed and saved nothing (`docs/design/decisions.md` D99); the confirm it asks again ends as any other. A close left at its confirm unrun, by Esc, No, a raise of the popup or ctrl+c, writes `shutdown declined`: its `project`, empty for a full shutdown, the `target` a del picked, `steps`, and `planned` false when its survey had not answered, whose line then comes after it |
 | `agent close` | a close of one agent, with its `address` and `force`, and `err` for a refusal. Before it, `shutdown survey`; a close past the busy guard adds `shutdown recheck`, then `shutdown refused`, or `shutdown step` and `shutdown`. It writes no `shutdown save` or `session saved` |
 | `shutdown state set`, `shutdown state cleared` | a full shutdown was recorded after its save, with `at` and the `session` it saved; or the record ended, with `set_at`: something opened, a cancel or a second ctrl+c left a step of the shutdown that wrote it not reached, a restore started, or the start dialog started fresh (`docs/design/decisions.md` D141) |
 | `surface raise` | a restore in the TUI ended, and the TUI brought the terminal it runs in back to the front, with its `ref` and its `panel`, or `popup` when the TUI is the popup; with `err` alone when the runtime listing failed. A TUI in no terminal the runtime lists writes nothing |
@@ -78,8 +83,10 @@ doc reads what it already did.
 | `config problem` | one `WARN` per refusal at load, with `project` and `file`; not written by `list`, which runs every refresh on a linked host |
 | `state load`, `state update` | a process could not read the state file, or could not update it; it went on with the state it read last, and with nothing remembered when it had read none. A `state load` whose `err` says the file does not parse discarded it: the process went on with an empty state, the bindings and a shutdown on record lost, and its next write replaced the file |
 | `close: nothing open`, `close: held open` | an `INFO` line when del in the TUI found nothing of the project open here, or what is open of it held open by another project, `by`. The footer says so, and no `ERROR` line is written |
+| `close: plan dropped` | the plan of a del, for its `project` and `target`, came after a screen opened, a close started or the popup was raised, and nothing was asked |
+| `popup: launched`, `popup: raise`, `popup: switch`, `popup: hide` | the popup key launched the popup, with `over`, the window it was pressed over, and `place`; raised it, with `minimized`; was handed to the surface it was pressed over; or Esc hid it. A `WARN` `popup: switch`, `popup: focused window` or `popup: mark the raise` with `err` is a step of the key that failed; the key went on. `popup hide after go` and `popup hide, quitting instead` are `WARN`s of a hide that failed: after a Go the popup stays, otherwise it quits |
 | `action`, `clone`, `each project`, `agent new`, `shell new`, `go agent`, `agent focus`, `attach`, `focus attached`, `keys install`, `keys uninstall` | the operation named |
-| `config written`, `project created`, `project deleted`, `runtime switched` | the file or setting changed |
+| `config written`, `project created`, `project file written`, `project deleted`, `runtime switched` | the file or setting changed |
 
 ## The event file
 

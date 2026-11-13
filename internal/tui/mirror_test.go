@@ -1,7 +1,9 @@
 package tui_test
 
 import (
+	"bytes"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"testing"
@@ -149,6 +151,26 @@ func TestAPanelThatCannotBeReadLeavesANote(t *testing.T) {
 	body := pane(m)
 	if !strings.Contains(body, "cannot be read") || !strings.Contains(body, "Agent    one") {
 		t.Errorf("pane = %q, want the head and a note in the mirror's place", body)
+	}
+}
+
+// A read that crosses its panel's close is no failure: the mirror logs no
+// WARN for it, and one INFO line however often it is read, which still
+// shows a panel that stays unmatched (decisions.md D172).
+func TestAReadOfAPanelThatClosedIsLoggedOnceAsInfo(t *testing.T) {
+	m, rt, _ := listedWorld(t, 160, 30,
+		listed{project: "alpha", status: revier.StatusIdle, on: "one", screen: "never shown"})
+	rt.ScreenErr = fmt.Errorf("%w: no matching window", revier.ErrPanelGone)
+	var logged bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	m, _ = press(m, "down")
+	m = switched(switched(m)).Mirrored()
+	_ = m.Mirrored()
+	if strings.Contains(logged.String(), `"msg":"mirror"`) || strings.Count(logged.String(), `"msg":"mirror: panel gone"`) != 1 {
+		t.Errorf("log = %s, want one mirror: panel gone line and no mirror WARN", logged.String())
 	}
 }
 
