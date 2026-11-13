@@ -14,8 +14,9 @@ Each section is also the text of its release on the
   last 5 and show `--` once the cache is cold; the next prompt to that agent
   then reads the whole conversation again. A cache written for five minutes,
   as with an API key, Bedrock or Vertex, counts five minutes, not an hour.
-- **The harness's name moved from the row to the pane.** The filter no longer
-  matches it.
+- **An agent's row no longer shows the name its harness gives it,** the name
+  Claude Code's other agents send messages to. The agent list's pane still
+  shows it, and the filter no longer matches it.
 - **An agent's row shows its state by its glyph and colour alone.** The word
   took 11 cells of every row; those cells now show what the agent does. The
   agent list's pane still says the state in words.
