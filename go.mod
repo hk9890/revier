@@ -14,7 +14,7 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.4.1
 	github.com/sahilm/fuzzy v0.1.3
 	golang.org/x/sys v0.50.0
-	golang.org/x/term v0.47.0
+	golang.org/x/term v0.48.0
 )
 
 require (
