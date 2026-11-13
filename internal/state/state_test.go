@@ -89,9 +89,6 @@ func TestAttachIsIdempotent(t *testing.T) {
 	}
 }
 
-// A clone holds all the state holds and shares none of it: the ledger keeps
-// one while its caller changes the other. Every field has a value here, so a
-// field Clone leaves behind is a difference.
 // A launch says which launch of another target, still pending, it replaced:
 // the one launch on record is the only one a window is claimed for. A launch
 // past its window, or of the same target again, replaced nothing to claim.
@@ -112,6 +109,9 @@ func TestALaunchSaysWhichPendingLaunchItReplaced(t *testing.T) {
 	}
 }
 
+// A clone holds all the state holds and shares none of it: the ledger keeps
+// one while its caller changes the other. Every field has a value here, so a
+// field Clone leaves behind is a difference.
 func TestCloneHoldsEveryFieldAndSharesNone(t *testing.T) {
 	ref := revier.TargetRef{Host: "gnome", ID: "7"}
 	s := &state.State{}
