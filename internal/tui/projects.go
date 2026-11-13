@@ -384,7 +384,7 @@ func agentColumn(th theme.Theme, counts map[revier.Status]int, room int, style f
 var statusOrder = []revier.Status{revier.StatusAttention, revier.StatusRunning, revier.StatusIdle, revier.StatusUnknown}
 
 // statusGlyph is the state's glyph alone, for a row's counts, which have no
-// room for its words.
+// room for its words, and for an agent's row (decisions.md D171).
 func statusGlyph(th theme.Theme, s revier.Status) string {
 	glyph, _, _ := strings.Cut(statusLabel(th, s), " ")
 	return glyph
