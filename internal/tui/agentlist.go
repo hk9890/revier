@@ -338,7 +338,7 @@ func agentLines(th theme.Theme, it agentItem, matches []int, width int, sel, ove
 		}
 	}
 
-	// The name stands under the age, the two ending at the same cell, and
+	// The usage stands under the age, the two ending at the same cell, and
 	// where gives way to it when the line is short of room.
 	where, from := it.where(inPane), len(it.text)+1
 	usage := it.usage(th, style)
@@ -348,7 +348,6 @@ func agentLines(th theme.Theme, it agentItem, matches []int, width int, sel, ove
 	lit := func(s string, from int) string {
 		return highlight(s, within(matches, from, len(s)), style(th.Path), style(th.Match))
 	}
-	// The usage ends the line, under the age.
 	right := ""
 	if usage != "" && usageWidth <= width-indent-1 {
 		right = usage + space(1)

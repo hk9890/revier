@@ -259,7 +259,7 @@ func TestDetailCountsTheTokensOfTheLastAnswer(t *testing.T) {
 		`{"type":"assistant","isSidechain":true,"timestamp":"2026-09-24T10:07:00Z","message":{"role":"assistant","content":"a subagent","usage":{"input_tokens":9,"cache_read_input_tokens":9000,"cache_creation_input_tokens":0}}}`,
 		`{"type":"assistant","timestamp":"2026-09-24T10:08:00Z","message":{"role":"assistant","model":"<synthetic>","content":"No response requested.","usage":{"input_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}`,
 	)
-	d, err := p.Detail(context.Background(), revier.Panel{PID: 101})
+	d, err := p.Detail(t.Context(), revier.Panel{PID: 101})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +275,7 @@ func TestDetailCountsTheTokensOfTheLastAnswer(t *testing.T) {
 func TestDetailWithoutUsageSaysNoTokens(t *testing.T) {
 	p, root := transcripts(t)
 	writeTranscript(t, root, "-demo", "s1", said("no usage here"))
-	d, err := p.Detail(context.Background(), revier.Panel{PID: 101})
+	d, err := p.Detail(t.Context(), revier.Panel{PID: 101})
 	if err != nil || d.Context != 0 || !d.CacheUntil.IsZero() {
 		t.Errorf("Detail = %+v, %v; want no tokens and no cache", d, err)
 	}
