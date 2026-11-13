@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -204,6 +206,36 @@ func TestAgentWaitOnAProjectWithNoAgentFailsAtOnce(t *testing.T) {
 	err := agentWait(io.Discard, []string{"demo", "--until", "idle", "--timeout", "10"}, open)
 	if !errors.Is(err, core.ErrNoAgent) {
 		t.Fatalf("err = %v, want ErrNoAgent", err)
+	}
+}
+
+// With --json, wait prints the id of the conversation the agent holds beside
+// the status: how a script learns it for the agent it started. A harness that
+// names none gives an empty id, which stays in the output for the script to
+// read.
+func TestAgentWaitJSONPrintsTheConversation(t *testing.T) {
+	for _, session := range []revier.SessionID{"abc-123", ""} {
+		rt := hosttest.NewRuntime("tmux")
+		rt.Add("home", "", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "agent", Command: []string{"agent"}})
+		probe := &hosttest.FakeProbe{Harness: "agent", State: revier.AgentState{Harness: "agent", Status: revier.StatusIdle, Session: session}}
+		c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}, Poll: testPoll}
+		a := withState(t, &app{cfg: &config.Config{}, cfgRoot: t.TempDir(), stateRoot: t.TempDir(), core: c, projects: []core.Project{demoProject(t)}}, &state.State{})
+		open := func(_ context.Context, out io.Writer) (*app, error) {
+			a.out = out
+			return a, nil
+		}
+		var out bytes.Buffer
+		if err := agentWait(&out, []string{"demo:home:1", "--until", "idle", "--timeout", "10", "--json"}, open); err != nil {
+			t.Fatalf("wait: %v", err)
+		}
+		var got map[string]string
+		if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+			t.Fatalf("wait printed %q, not JSON: %v", out.String(), err)
+		}
+		want := map[string]string{"status": "idle", "session": string(session)}
+		if !maps.Equal(got, want) {
+			t.Errorf("wait printed %v, want %v", got, want)
+		}
 	}
 }
 

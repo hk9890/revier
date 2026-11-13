@@ -49,6 +49,10 @@ the agent list.
   as the one `agent new --no-focus` prints, `wait` first waits for an agent to
   start in the panel, within the same `--timeout`, so you can run it at once.
   Without `--timeout`, a panel where no agent starts holds the wait for good.
+  With `--json`, `wait` also prints the id of the conversation the agent
+  holds, such as `{"status": "idle", "session": "..."}`. It is the id when
+  the wait ends: Claude Code starts another conversation on `/clear`. A
+  harness that does not name its conversation leaves it empty.
 - `read` needs a harness whose conversation revier can read, which today is
   Claude Code. `--screen` works for every harness.
 - `send-keys` types keys whatever the agent does, so read the screen first.

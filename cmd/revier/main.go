@@ -86,7 +86,7 @@ usage:
                                 write them into the terminal's configuration
   revier term uninstall [-n] [--json]
                                 remove what revier wrote there
-  revier agent wait <agent> --until <status> [--timeout s]
+  revier agent wait <agent> --until <status> [--timeout s] [--json]
                                 block until an agent reaches a status
   revier agent prompt <agent> <text>
                                 type one line into an agent and submit it
