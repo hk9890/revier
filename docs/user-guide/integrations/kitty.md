@@ -104,7 +104,7 @@ term status` names them as `shadowed by kitty.conf:<line>`.
 - A kitty window does not keep its contents after kitty exits. Use
   `revier session save` and `revier session restore`; see
   [Projects](../projects.md).
-- `revier open --attach` needs tmux or herdr.
+- `revier open --attach` needs tmux, herdr or hc.
 - A window you opened yourself in a kitty of your own is no workspace until
   you run `revier attach` in it. revier reads its agents only when it is the
   one unnamed window of its kitty process. In an OS window you opened in

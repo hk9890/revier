@@ -16,7 +16,12 @@
 // ParentIn, which the herdr host finds a pane's process with, Foreground and
 // ForegroundIn, which the tmux and herdr hosts read a pane's command with,
 // Scan, the one read of every process's environment, which this host and the
-// herdr host share, and RunsUnder, the panels a shutdown closes last.
+// herdr host share, EnvIn, the one variable the herdr and hc hosts read of
+// a server's environment, PeerPID and ServerPATH, the server behind their
+// socket and the PATH it starts a program with, RunsUnder, the panels a
+// shutdown closes last, and AgentSessionVars, TerminalVars, CommandVars,
+// WithoutAgentSession, Without and Cleared, what the herdr and hc hosts keep
+// from the programs their server starts.
 package proc
 
 import (
@@ -24,6 +29,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -31,6 +37,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -47,7 +54,71 @@ const (
 	// and a shell carry it empty, so a name inherited from the environment
 	// `revier agent exec` ran in does not mark them.
 	AgentVar = "REVIER_AGENT"
+
+	// HerdrOpenVar marks the first shell of a workspace the herdr host
+	// creates, with a value no other Open uses. It is named here, not in the
+	// herdr host, so that the hc host can name it among what a program must
+	// not inherit.
+	HerdrOpenVar = "REVIER_HERDR_OPEN"
 )
+
+// AgentSessionVars name what Claude Code sets in the environment of each
+// program it runs, to tie that program to its own session. A server started
+// from inside such a session hands them to every program it starts, and a
+// Claude Code started there takes itself for that session's child: it saves
+// no transcript, lists no session of its own, and holds the parent's
+// messaging socket and token. TRACEPARENT, set when the session traces, ties
+// a program's spans to that session's trace. Claude Code's configuration,
+// such as CLAUDE_CONFIG_DIR, CLAUDE_CODE_USE_BEDROCK or ANTHROPIC_API_KEY, is
+// the user's, and is not here.
+var AgentSessionVars = []string{
+	"AI_AGENT", "CLAUDECODE", "CLAUDE_CODE_BRIDGE_SESSION_ID", "CLAUDE_CODE_CHILD_SESSION",
+	"CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_EXECPATH", "CLAUDE_CODE_INVOKED_SKILLS",
+	"CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_MESSAGING_TOKEN", "CLAUDE_CODE_SESSION_ATTENDED",
+	"CLAUDE_CODE_SESSION_ID", "CLAUDE_EFFORT", "CLAUDE_PID", "TRACEPARENT",
+}
+
+// WithoutAgentSession is env, the environment a server is started with,
+// without AgentSessionVars and without GIT_EDITOR=true. Claude Code sets
+// GIT_EDITOR=true in each program it runs, so that git opens no editor; a
+// server that kept it would give every shell a git commit that aborts on its
+// empty message. Any other GIT_EDITOR is the user's and is kept, and no pane
+// sets GIT_EDITOR empty: git runs an empty GIT_EDITOR as an editor, and fails.
+// env itself is left as it was.
+func WithoutAgentSession(env []string) []string {
+	return slices.DeleteFunc(slices.Clone(env), func(kv string) bool {
+		name, _, _ := strings.Cut(kv, "=")
+		return slices.Contains(AgentSessionVars, name) || kv == "GIT_EDITOR=true"
+	})
+}
+
+// TerminalVars name what a terminal or a multiplexer sets in each program it
+// runs. A server started inside one hands them to every program it starts,
+// which then acts on a kitty window, a tmux pane or an hc terminal that is not
+// its own. herdr's own are not here: the herdr host's server sets them itself.
+// hc's are: hc sets its own in each of its terminals over the env a run gives.
+var TerminalVars = []string{
+	"KITTY_WINDOW_ID", "KITTY_LISTEN_ON", "KITTY_PID", "KITTY_PUBLIC_KEY", "KITTY_INSTALLATION_DIR",
+	"KITTY_SHELL_INTEGRATION", "WINDOWID",
+	"TMUX", "TMUX_PANE",
+	"ZELLIJ", "ZELLIJ_SESSION_NAME", "ZELLIJ_PANE_ID",
+	"STY", "WEZTERM_PANE",
+	"HC_TERMINAL_ID", "HC_TERMINAL_SOCKET", "HC_SCOPE",
+}
+
+// CommandVars name what a revier command sets in what it starts. A server
+// started under one hands them to every program it starts, and this host
+// then lists that program under a tag that is not its own.
+var CommandVars = []string{TagVar, WorkspaceVar, AgentVar, HerdrOpenVar}
+
+// Without is env without the variables names name. env itself is left as it
+// was.
+func Without(env, names []string) []string {
+	return slices.DeleteFunc(slices.Clone(env), func(kv string) bool {
+		name, _, _ := strings.Cut(kv, "=")
+		return slices.Contains(names, name)
+	})
+}
 
 // ErrListsOnly refuses an Open or a Focus.
 var ErrListsOnly = errors.New("proc: lists what `revier agent exec` started and opens nothing")
@@ -294,6 +365,74 @@ func ParentIn(root string, pid int) (int, bool) {
 	}
 	ppid, err := strconv.Atoi(fields[1])
 	return ppid, err == nil
+}
+
+// EnvIn is the value of the variable name in the environment of process pid,
+// from the /proc tree at root, which a test replaces. It is false when the
+// environment cannot be read or does not set name.
+func EnvIn(root string, pid int, name string) (string, bool) {
+	env, err := os.ReadFile(filepath.Join(root, strconv.Itoa(pid), "environ"))
+	if err != nil {
+		return "", false
+	}
+	for kv := range strings.SplitSeq(string(env), "\x00") {
+		if value, ok := strings.CutPrefix(kv, name+"="); ok {
+			return value, true
+		}
+	}
+	return "", false
+}
+
+// Cleared is the env that keeps names from a program the server pid starts,
+// from the /proc tree at root: each of names that the server's own
+// environment holds, set empty. A server's env sets a variable and cannot
+// remove one, and a tool that tests a variable for being set, not for a
+// value, takes an empty one as set, so a name the server does not hold is
+// left out. When the environment cannot be read, only the names among
+// AgentSessionVars and CommandVars are set empty: Claude Code and revier read
+// an empty one as unset, and a terminal's variable set empty would read as
+// set.
+func Cleared(root string, pid int, names []string) map[string]string {
+	cleared := map[string]string{}
+	env, err := os.ReadFile(filepath.Join(root, strconv.Itoa(pid), "environ"))
+	held := strings.Split(string(env), "\x00")
+	for _, name := range names {
+		holds := slices.ContainsFunc(held, func(kv string) bool { return strings.HasPrefix(kv, name+"=") })
+		if err == nil && holds || err != nil && (slices.Contains(AgentSessionVars, name) || slices.Contains(CommandVars, name)) {
+			cleared[name] = ""
+		}
+	}
+	return cleared
+}
+
+// ServerPATH is the PATH the server with process pid starts a program with:
+// its own, from the /proc tree at root, which a test replaces. With an
+// environment that cannot be read or holds no PATH, it is this process's.
+func ServerPATH(root string, pid int) string {
+	if path, ok := EnvIn(root, pid, "PATH"); ok {
+		return path
+	}
+	return os.Getenv("PATH")
+}
+
+// PeerPID is the pid of the process at the other end of a Unix socket, as
+// the kernel reports it.
+func PeerPID(conn *net.UnixConn) (int, error) {
+	raw, err := conn.SyscallConn()
+	if err != nil {
+		return 0, err
+	}
+	var cred *syscall.Ucred
+	var credErr error
+	if err := raw.Control(func(fd uintptr) {
+		cred, credErr = syscall.GetsockoptUcred(int(fd), syscall.SOL_SOCKET, syscall.SO_PEERCRED)
+	}); err != nil {
+		return 0, err
+	}
+	if credErr != nil {
+		return 0, credErr
+	}
+	return int(cred.Pid), nil
 }
 
 // Dir is the working directory of the first of pids that /proc shows one

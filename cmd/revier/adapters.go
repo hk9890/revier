@@ -11,6 +11,7 @@ import (
 	"github.com/hk9890/revier/internal/adapter/claude"
 	"github.com/hk9890/revier/internal/adapter/execprobe"
 	"github.com/hk9890/revier/internal/adapter/gnome"
+	"github.com/hk9890/revier/internal/adapter/hc"
 	"github.com/hk9890/revier/internal/adapter/herdr"
 	"github.com/hk9890/revier/internal/adapter/kitty"
 	"github.com/hk9890/revier/internal/adapter/opencode"
@@ -23,13 +24,14 @@ import (
 )
 
 // The compiled-in adapters. This list is the whole registry: adding one is a
-// line here and its name in defaultRuntimeOrder, not an init() somewhere, so
-// what a build contains is readable in one place.
+// line here and its name in defaultRuntimeOrder or optInRuntimes, not an
+// init() somewhere, so what a build contains is readable in one place.
 func runtimeAdapters() map[string]revier.Runtime {
 	return map[string]revier.Runtime{
 		"kitty": &kitty.Host{},
 		"tmux":  &tmux.Host{},
 		"herdr": &herdr.Host{},
+		"hc":    &hc.Host{},
 	}
 }
 
@@ -59,6 +61,12 @@ var (
 	defaultRuntimeOrder = []string{"kitty", "tmux", "herdr"}
 	defaultWindowOrder  = []string{"gnome"}
 )
+
+// optInRuntimes are registered and left out of defaultRuntimeOrder, which
+// TestEveryAdapterIsInItsDefaultOrder checks: selection tries a runtime
+// outside the default order only when config names it. hc is a prototype, and
+// must not take over a machine that has it installed (decisions.md D174).
+var optInRuntimes = []string{"hc"}
 
 // hostNone disables a host class. Listing it is how a machine that HAS a usable
 // adapter runs without one anyway - a test that must not touch the desktop, or

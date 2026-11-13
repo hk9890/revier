@@ -3,7 +3,7 @@
 ```bash
 mise run test              # L1 + L2   fast, no processes, no display
 mise run test:integration  # L3        adapter parsing against recorded output
-mise run test:live         # L4        real processes: tmux, herdr and sh, still headless
+mise run test:live         # L4        real processes: tmux, herdr, hc and sh, still headless
 mise run test:all          # everything runnable without a screen
 mise run quality           # fmt + vet + lint + build + L1-L3   (pre-commit)
 mise run quality:full      # + L4                               (pre-handoff)
@@ -18,8 +18,8 @@ Only L6 ever reaches one. L5 was retired and its number is not reused.
 |---|---|---|---|
 | L1 | none — pure functions | — | matching, status encoding, project lookup (`pkg/revier`) |
 | L2 | `internal/hosttest.Fake` | — | resolution, run-or-raise, toggle-back, survey, probe dispatch (`internal/core`) |
-| L3 | recorded tool output | `integration` | adapter parsing: `kitten @ ls` JSON, `wctl list --json`, herdr `session.snapshot` |
-| L4 | real processes: tmux and herdr on private sockets, `sh` scripts | `live` | the tmux and herdr hosts, the core against a real substrate, the adapters that run a shell (`claude`, `execprobe`, `ssh`), and the process group of what `kitty` and `gnome` run |
+| L3 | recorded tool output | `integration` | adapter parsing: `kitten @ ls` JSON, `wctl list --json`, herdr `session.snapshot`, hc `hello` and `terminal.list` |
+| L4 | real processes: tmux, herdr and hc on private sockets, `sh` scripts | `live` | the tmux, herdr and hc hosts, the core against a real substrate, the adapters that run a shell (`claude`, `execprobe`, `ssh`), and the process group of what `kitty` and `gnome` run |
 | L6 | the user's GNOME session | manual | the GNOME host, and the kitty host's `Open` and `Focus` |
 
 L2 is where most behaviour is pinned. The core's decisions depend only on what a
@@ -99,9 +99,10 @@ that did not focus after `Open` passed L2 and failed L4.
   stay green on a machine without tmux.
 - Leave tmux unpinned in `.mise.toml`: the live layer runs against
   whatever is installed, which is how CI caught the delimiter difference above.
-- Keep herdr pinned in `.github/workflows/ci.yml`: it is pre-1.0 and its JSON
-  API has no version. `.github/workflows/herdr-latest.yml` runs its live tests
-  against the latest release weekly. To bump the pin, update the version and
+- Keep herdr pinned in `.github/workflows/ci.yml`: it is pre-1.0, and the host
+  checks its release, not the protocol its API reports.
+  `.github/workflows/herdr-latest.yml` runs its live tests against the latest
+  release weekly. To bump the pin, update the version and
   digest in `ci.yml` and record a new
   `internal/adapter/herdr/testdata/herdr-<version>/snapshot.json`: start the
   private server in [RUNNING.md](RUNNING.md#run-a-private-herdr-server)
@@ -109,6 +110,16 @@ that did not focus after `Open` passed L2 and failed L4.
   `hd herdr ...` commands, and save `hd herdr api snapshot`. Point the
   `os.ReadFile` path in `herdr_integration_test.go` at the new file. The test
   serves the file as one response line and reads only its `result`.
+- Keep hc pinned in `.github/workflows/ci.yml` as herdr is: it is pre-1.0. To
+  bump the pin, take the `linux-x86_64` URL and digest from
+  `https://releases.herdr.dev/core/<version>/manifest.json`, and record a new
+  `internal/adapter/hc/testdata/hc-<version>/`: `hello.json` and `list.json`,
+  the `hello` and `terminal.list` answers of the private core in
+  [RUNNING.md](RUNNING.md#run-a-private-hc-core), with terminals that carry
+  revier's labels. Point the paths in `hc_integration_test.go` at them.
+- Run hc in a live test on a private core only: `world` in
+  `internal/adapter/hc/helpers_live_test.go`. Any `hc` command starts a core
+  when none answers its socket, the user's own included.
 - tmux leaves an inert socket file in `/tmp/tmux-$UID/` after `kill-server`.
   A `revier-test-*` entry there is a dead socket, not a leaked server; confirm
   with `tmux -L <name> list-sessions`, which reports no server running.

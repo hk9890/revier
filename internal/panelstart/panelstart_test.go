@@ -1,8 +1,10 @@
 package panelstart_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/hk9890/revier/internal/panelstart"
@@ -55,6 +57,31 @@ func TestStartableOnSearchesTheGivenPATH(t *testing.T) {
 	}
 }
 
+// A bare program is resolved to its file on the given PATH, its arguments
+// kept; a program named by a path is kept as written, and a panel with no
+// command has none. A program not on PATH is refused as StartableOn refuses
+// it.
+func TestCommandsOnResolvesEachBareProgram(t *testing.T) {
+	testenv.NoTools(t)
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "agent"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, err := panelstart.CommandsOn([]revier.PanelSpec{
+		{Kind: revier.PanelAgent, Command: []string{"agent", "-c"}},
+		{Kind: revier.PanelTool, Command: []string{"./tool"}},
+		{Kind: revier.PanelShell},
+	}, dir)
+	want := [][]string{{filepath.Join(dir, "agent"), "-c"}, {"./tool"}, nil}
+	if err != nil || !slices.EqualFunc(got, want, slices.Equal) {
+		t.Errorf("CommandsOn = %q, %v; want %q", got, err, want)
+	}
+	_, err = panelstart.CommandsOn([]revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"agent"}}}, "")
+	if want := `the agent panel's command "agent" is not on PATH`; err == nil || err.Error() != want {
+		t.Errorf("CommandsOn on an empty PATH = %v, want %q", err, want)
+	}
+}
+
 // A panel is named by its kind, and a launch, which has none, by its command
 // alone.
 func TestExitedAtOnceNamesThePanel(t *testing.T) {
@@ -68,6 +95,24 @@ func TestExitedAtOnceNamesThePanel(t *testing.T) {
 	} {
 		if got := panelstart.ExitedAtOnce(tc.panel).Error(); got != tc.want {
 			t.Errorf("ExitedAtOnce(%+v) = %q, want %q", tc.panel, got, tc.want)
+		}
+	}
+}
+
+// The runtime's reason follows the panel's name, and stays an error of its
+// own that a caller can still find.
+func TestDidNotStartNamesThePanelAndKeepsTheReason(t *testing.T) {
+	reason := errors.New("no interpreter")
+	for _, tc := range []struct {
+		panel revier.PanelSpec
+		want  string
+	}{
+		{revier.PanelSpec{Kind: revier.PanelShell}, "the shell panel's shell did not start: no interpreter"},
+		{revier.PanelSpec{Kind: revier.PanelAgent, Command: []string{"claude", "-c"}}, `the agent panel's command "claude -c" did not start: no interpreter`},
+	} {
+		err := panelstart.DidNotStart(tc.panel, reason)
+		if err.Error() != tc.want || !errors.Is(err, reason) {
+			t.Errorf("DidNotStart(%+v) = %q, want %q wrapping the reason", tc.panel, err, tc.want)
 		}
 	}
 }

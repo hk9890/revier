@@ -26,8 +26,9 @@ command left it. See [Which kind to declare](#which-kind-to-declare).
 
 revier drives two kinds of program, called hosts:
 
-- **The runtime host** runs terminals: kitty, tmux or herdr. It opens the workspace
-  and its tabs, and lets a probe read each panel.
+- **The runtime host** runs terminals: kitty, tmux or herdr, or the
+  experimental hc. It opens the workspace and its tabs, and lets a probe read
+  each panel.
 - **The window host** manages desktop windows: GNOME, through `wctl`. It opens
   and raises window targets, and tells which window has the focus.
 
