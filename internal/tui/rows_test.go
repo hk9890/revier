@@ -323,7 +323,8 @@ func TestALongPathKeepsItsStartAndItsEnd(t *testing.T) {
 }
 
 // Each column means one thing: the mark says the project is open, and the
-// agents are counted by state on the right. The pane says the state in words.
+// agents are counted by state on the right. The pane's agent row says the
+// state by its glyph too.
 func TestTheMarkSaysOpenAndTheAgentSaysItNeedsYou(t *testing.T) {
 	_, _, c, projects := world(t, 2) // project-01 is open and its agent needs you
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 20)
@@ -339,8 +340,8 @@ func TestTheMarkSaysOpenAndTheAgentSaysItNeedsYou(t *testing.T) {
 	if !strings.Contains(first, g.NeedsYou+" 1") || strings.Contains(first, "needs you") {
 		t.Errorf("row = %q, want the agent counted by its glyph, without words", first)
 	}
-	if body := pane(m); !strings.Contains(body, g.NeedsYou+" needs you") {
-		t.Errorf("pane = %q, want the agent's glyph and words", body)
+	if body := pane(m); !strings.Contains(body, g.NeedsYou+" needs a decision") || strings.Contains(body, "needs you") {
+		t.Errorf("pane = %q, want the agent's glyph before what it is on, without words", body)
 	}
 }
 

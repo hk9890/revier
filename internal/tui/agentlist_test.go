@@ -8,6 +8,7 @@ import (
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -50,8 +51,8 @@ func TestTheSwitchKeyOverAScreenTypesNothing(t *testing.T) {
 	}
 }
 
-// A row is the agent's state and what it is on, without its harness, over
-// its project; the age of what it said last stands at the row's right end,
+// A row is the agent's state, by its glyph alone, and what it is on, without
+// its harness, over its project; the age of what it said last stands at the row's right end,
 // and the cache's minutes end under the age. The name its harness gives it is
 // the pane's.
 func TestAnAgentRowLeadsWithItsStateAndNamesItsProject(t *testing.T) {
@@ -61,11 +62,8 @@ func TestAnAgentRowLeadsWithItsStateAndNamesItsProject(t *testing.T) {
 	all := lines(m)
 	first, _, _ := strings.Cut(all[4], "│")
 	second, _, _ := strings.Cut(all[5], "│")
-	if !strings.Contains(first, "idle") || !strings.Contains(first, "Taskmgr tickets") || strings.Contains(first, "claude") {
-		t.Errorf("row = %q, want the state and the summary and no harness", first)
-	}
-	if strings.Index(first, "idle") > strings.Index(first, "Taskmgr tickets") {
-		t.Errorf("row = %q, want the state before the summary", first)
+	if !strings.Contains(first, theme.Default().Glyphs.Idle+" Taskmgr tickets") || strings.Contains(first, "idle") || strings.Contains(first, "claude") {
+		t.Errorf("row = %q, want the state's glyph before the summary, no word for the state, and no harness", first)
 	}
 	if !strings.HasSuffix(strings.TrimSpace(first), "4m") {
 		t.Errorf("row = %q, want the age at its right end", first)
@@ -94,8 +92,8 @@ func TestTheProjectPaneDrawsAnAgentAsTheAgentListDoes(t *testing.T) {
 	if i := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "Taskmgr tickets") }); i >= 0 && i+1 < len(rows) {
 		first, second = rows[i], rows[i+1]
 	}
-	if !strings.Contains(first, "idle") || !strings.HasSuffix(first, "4m") || strings.Contains(first, "claude") {
-		t.Errorf("first line = %q, want the state, the summary and the age, and no harness", first)
+	if !strings.HasPrefix(first, theme.Default().Glyphs.Idle+" Taskmgr tickets") || strings.Contains(first, "idle") || !strings.HasSuffix(first, "4m") || strings.Contains(first, "claude") {
+		t.Errorf("first line = %q, want the state's glyph, the summary and the age, and no harness", first)
 	}
 	if !strings.HasPrefix(second, "delete-key") || !strings.HasSuffix(second, " 56m") || !strings.Contains(second, "62k") || strings.Contains(second, "alpha-a0") {
 		t.Errorf("second line = %q, want the worktree alone, the tokens and the cache, and no name", second)
