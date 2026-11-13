@@ -355,23 +355,25 @@ func (s *State) Bind(p revier.ProjectName, t revier.TargetName, ref revier.Targe
 	s.Bound[p][t] = ref
 }
 
-// Prune drops attachments and bindings whose instances are gone and reports
-// whether any were. hosts are the hosts a survey listed and instances what it
-// found. A ref on any other host is kept: a survey that did not ask its host -
-// a TUI started over SSH, a window host that did not probe - cannot tell a
-// closed window from one it never looked for.
+// Dropped is one ref Prune dropped: its project, the target it was bound to,
+// empty for an attachment, and the ref.
+type Dropped struct {
+	Project revier.ProjectName
+	Target  revier.TargetName
+	Ref     revier.TargetRef
+}
+
+// Prune drops attachments and bindings whose instances are gone and returns
+// each one it dropped, so that a later open of a target whose binding went
+// has a line that says why. hosts are the hosts a survey listed and instances
+// what it found. A ref on any other host is kept: a survey that did not ask
+// its host - a TUI started over SSH, a window host that did not probe -
+// cannot tell a closed window from one it never looked for.
 //
 // before is the state the survey started from. A ref it does not hold was
 // written while the survey was listing, for a window that may have opened
 // after the listing was taken, so it is kept for the next survey to judge.
-//
-// dropped, when not nil, is told each ref dropped, with its project and the
-// target it was bound to, empty for an attachment: a binding that is gone
-// otherwise explains a later open of its target with no line.
-func (s *State) Prune(hosts []string, instances []revier.Instance, before *State, dropped func(revier.ProjectName, revier.TargetName, revier.TargetRef)) bool {
-	if dropped == nil {
-		dropped = func(revier.ProjectName, revier.TargetName, revier.TargetRef) {}
-	}
+func (s *State) Prune(hosts []string, instances []revier.Instance, before *State) []Dropped {
 	asked := map[string]bool{}
 	for _, h := range hosts {
 		asked[h] = true
@@ -383,13 +385,12 @@ func (s *State) Prune(hosts []string, instances []revier.Instance, before *State
 	known := before.refs()
 	gone := func(ref revier.TargetRef) bool { return asked[ref.Host] && known[key(ref)] && !live[key(ref)] }
 
-	changed := false
+	var dropped []Dropped
 	for project, targets := range s.Bound {
 		for t, ref := range targets {
 			if gone(ref) {
 				delete(targets, t)
-				dropped(project, t, ref)
-				changed = true
+				dropped = append(dropped, Dropped{project, t, ref})
 			}
 		}
 		if len(targets) == 0 {
@@ -403,10 +404,7 @@ func (s *State) Prune(hosts []string, instances []revier.Instance, before *State
 				kept = append(kept, ref)
 				continue
 			}
-			dropped(project, "", ref)
-		}
-		if len(kept) != len(refs) {
-			changed = true
+			dropped = append(dropped, Dropped{Project: project, Ref: ref})
 		}
 		if len(kept) == 0 {
 			delete(s.Attached, project)
@@ -414,7 +412,7 @@ func (s *State) Prune(hosts []string, instances []revier.Instance, before *State
 		}
 		s.Attached[project] = kept
 	}
-	return changed
+	return dropped
 }
 
 // HeldByAnother reports whether a binding or an attachment of a project other

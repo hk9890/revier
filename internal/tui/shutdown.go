@@ -198,6 +198,7 @@ func (m Model) shutdownKey(msg keyPress) (tea.Model, tea.Cmd) {
 	m.err = nil
 	switch {
 	case key.Matches(msg, m.keys.Quit):
+		m.declined()
 		return m, tea.Quit
 	case key.Matches(msg, m.keys.Back):
 		m.shutBack()
@@ -211,17 +212,25 @@ func (m Model) shutdownKey(msg keyPress) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// declined writes the closing line of a close left at its confirm unrun, by
+// Esc, No, a raise of the popup or a quit: its survey wrote one, and nothing
+// else ends it. planned false is a survey that had not answered, whose line
+// comes after this one; target is the row a del picked, empty for its
+// project.
+func (m *Model) declined() {
+	s := &m.shut
+	if s.step != shutConfirm || s.running {
+		return
+	}
+	slog.Info("shutdown declined", "project", s.project, "target", s.pick.Target, "planned", s.planned, "steps", len(s.plan))
+}
+
 // shutBack is Esc: one step back, and from the first step or the result back
 // to the screen the wizard was opened from. The sessions screen is read
 // again: the shutdown may have saved one.
-//
-// A close that leaves its confirm unrun writes its closing line: its survey
-// wrote one, and nothing else ends it.
 func (m *Model) shutBack() {
 	s := &m.shut
-	if s.step == shutConfirm && !s.running {
-		slog.Info("shutdown declined", "project", s.project)
-	}
+	m.declined()
 	if s.one {
 		m.dialog, *s = dialogNone, shutdown{}
 		return

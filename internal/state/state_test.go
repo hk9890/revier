@@ -186,7 +186,7 @@ func TestPruneDropsDeadRefs(t *testing.T) {
 	s.Attach("p", dead)
 	s.Attach("q", dead)
 
-	s.Prune([]string{"gnome"}, []revier.Instance{{Ref: live}}, s, nil)
+	s.Prune([]string{"gnome"}, []revier.Instance{{Ref: live}}, s)
 
 	if len(s.Attached["p"]) != 1 || s.Attached["p"][0].ID != "7" {
 		t.Errorf("p = %+v, want only the live ref", s.Attached["p"])
@@ -205,7 +205,7 @@ func TestPruneKeepsRefsOnHostsItDidNotAsk(t *testing.T) {
 	s.Attach("p", window)
 	s.Bind("p", "editor", window)
 
-	if s.Prune([]string{"tmux"}, nil, s, nil) {
+	if len(s.Prune([]string{"tmux"}, nil, s)) > 0 {
 		t.Error("Prune reported a change for refs on a host it did not ask")
 	}
 	if len(s.Attached["p"]) != 1 || s.Bound["p"]["editor"] != window {
@@ -227,16 +227,13 @@ func TestPruneKeepsRefsWrittenAfterTheSurveyStarted(t *testing.T) {
 	now.Bind("p", "editor", fresh)
 	now.Attach("p", fresh)
 
-	var dropped []string
-	now.Prune([]string{"gnome"}, nil, before, func(p revier.ProjectName, t revier.TargetName, ref revier.TargetRef) {
-		dropped = append(dropped, string(p)+":"+string(t)+"@"+ref.ID)
-	})
+	dropped := now.Prune([]string{"gnome"}, nil, before)
 
 	if _, ok := now.Bound["p"]["home"]; ok {
 		t.Error("home's window was there to be listed and was not; want its binding dropped")
 	}
-	if !slices.Equal(dropped, []string{"p:home@7"}) {
-		t.Errorf("told dropped %v, want only home's binding", dropped)
+	if !slices.Equal(dropped, []state.Dropped{{Project: "p", Target: "home", Ref: old}}) {
+		t.Errorf("dropped %v, want only home's binding", dropped)
 	}
 	if now.Bound["p"]["editor"] != fresh || len(now.Attached["p"]) != 1 {
 		t.Errorf("state = %+v, want the refs written after the survey started kept", now)

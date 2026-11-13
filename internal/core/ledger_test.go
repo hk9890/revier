@@ -3,8 +3,11 @@
 package core_test
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,6 +39,26 @@ func TestActivateWaitingWritesTheLaunchThenTheLanding(t *testing.T) {
 	}
 	if len(wm.Opened) != 1 {
 		t.Errorf("the editor was launched %d times, want once: the second press found the launch", len(wm.Opened))
+	}
+}
+
+// A launch that replaces one still pending of another target says so: no
+// window can now be claimed for the one it replaced.
+func TestALaunchOverAPendingOneOfAnotherTargetSaysItReplacedIt(t *testing.T) {
+	shortBindWait(t)
+	var logged bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	l := &ledger{st: state.State{Launch: &state.Launch{Project: "other", Target: "editor", At: time.Now()}}}
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.NewLateWindows("wm"), Ledger: l}
+
+	if _, _, err := c.ActivateWaiting(t.Context(), prepared(t, project()), "editor", nil); err != nil {
+		t.Fatalf("ActivateWaiting: %v", err)
+	}
+	if !strings.Contains(logged.String(), `"msg":"claim: launch replaced","project":"other","target":"editor"`) ||
+		!strings.Contains(logged.String(), `"by_project":"revier","by_target":"editor"`) {
+		t.Errorf("log = %s, want other's editor launch replaced by revier's", logged.String())
 	}
 }
 
@@ -122,6 +145,26 @@ func TestSettlePrunesClaimsAndExpires(t *testing.T) {
 	}
 	if st := settle(); st.Launch != nil {
 		t.Errorf("launch = %+v, want the expired launch cleared", st.Launch)
+	}
+}
+
+// A binding a survey drops is a line: a later open of its target otherwise
+// has nothing that says why its window was not raised.
+func TestSettleLogsTheBindingItDrops(t *testing.T) {
+	var logged bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	gone := revier.TargetRef{Host: "wm", ID: "99"}
+	l := &ledger{}
+	l.st.Bind("revier", "editor", gone)
+	settle := settling(t, &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}, l, time.Now())
+
+	if st := settle(); len(st.Bound["revier"]) != 0 {
+		t.Fatalf("bound = %v, want the gone window's binding dropped", st.Bound)
+	}
+	if !strings.Contains(logged.String(), `"msg":"binding dropped","project":"revier","target":"editor"`) {
+		t.Errorf("log = %s, want the dropped binding of revier's editor", logged.String())
 	}
 }
 

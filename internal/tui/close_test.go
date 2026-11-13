@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
@@ -55,28 +57,30 @@ func TestDelClosesAProjectAfterAConfirm(t *testing.T) {
 	}
 }
 
-// A close left at its confirm closes nothing, and writes the line that ends
-// what its survey began.
+// A close left at its confirm, by Esc or by a quit, closes nothing, and
+// writes the line that ends what its survey began.
 func TestDelDeclinedAtItsConfirmClosesNothingAndSaysSo(t *testing.T) {
-	rt, _, c, projects := world(t, 2)
-	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
-	var logged bytes.Buffer
-	previous := slog.Default()
-	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
-	t.Cleanup(func() { slog.SetDefault(previous) })
+	for leave, msg := range map[string]tea.KeyPressMsg{"esc": {Code: tea.KeyEscape}, "ctrl+c": {Code: 'c', Mod: tea.ModCtrl}} {
+		rt, _, c, projects := world(t, 2)
+		m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 150, 30)
+		var logged bytes.Buffer
+		previous := slog.Default()
+		slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
 
-	m, cmd := press(m, "delete")
-	m = run(m, cmd)
-	if sub := lines(m)[2]; !strings.Contains(sub, "Close project-01?") {
-		t.Fatalf("subtitle = %q, want the confirm", sub)
-	}
-	_, _ = press(m, "esc")
+		m, cmd := press(m, "delete")
+		m = run(m, cmd)
+		if sub := lines(m)[2]; !strings.Contains(sub, "Close project-01?") {
+			t.Fatalf("subtitle = %q, want the confirm", sub)
+		}
+		_, _ = send(m, msg)
+		slog.SetDefault(previous)
 
-	if len(rt.Closed) != 0 {
-		t.Errorf("runtime closed %v, want nothing", rt.Closed)
-	}
-	if !strings.Contains(logged.String(), `"msg":"shutdown declined","project":"project-01"`) {
-		t.Errorf("log = %s, want the close declined for project-01", logged.String())
+		if len(rt.Closed) != 0 {
+			t.Errorf("%s: runtime closed %v, want nothing", leave, rt.Closed)
+		}
+		if !strings.Contains(logged.String(), `"msg":"shutdown declined","project":"project-01","target":"","planned":true`) {
+			t.Errorf("%s: log = %s, want the planned close of project-01 declined", leave, logged.String())
+		}
 	}
 }
 

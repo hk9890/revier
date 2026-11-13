@@ -149,9 +149,11 @@ func LogReplacedLaunch(replaced *state.Launch, p revier.ProjectName, t revier.Ta
 // settle is one pass of Settle over st. say takes the log line of a dropped
 // binding, of a claim or of an expiry.
 func (c *Core) settle(st *state.State, r Report, prev []revier.Instance, surveyed bool, projects []Project, now time.Time, say func(msg string, args ...any)) bool {
-	changed := st.Prune(r.Hosts, r.Instances, r.before, func(p revier.ProjectName, t revier.TargetName, ref revier.TargetRef) {
-		say("binding dropped", "project", p, "target", t, "ref", ref)
-	})
+	dropped := st.Prune(r.Hosts, r.Instances, r.before)
+	for _, d := range dropped {
+		say("binding dropped", "project", d.Project, "target", d.Target, "ref", d.Ref)
+	}
+	changed := len(dropped) > 0
 	l := st.Launch
 	if !surveyed || l == nil {
 		return changed

@@ -1321,8 +1321,7 @@ func (c *Core) Survey(ctx context.Context, projects []Project) (r Report, err er
 	start := time.Now()
 	var answers RemoteAnswers
 	defer func() {
-		logging.Poll("survey", "survey", start, err, "projects", len(projects), "hosts", r.Hosts, "instances", len(r.Instances),
-			"asked", answers.hosts(), "unanswered", answers.failures())
+		logging.Poll("survey", "survey", start, err, surveyLine(len(projects), r, answers)...)
 	}()
 	// The remote hosts are asked while the local ones are listed and the
 	// local agents probed: a round trip to another machine is the slow part,
@@ -1334,6 +1333,16 @@ func (c *Core) Survey(ctx context.Context, projects []Project) (r Report, err er
 	answers = <-remote
 	c.lay(&r, answers)
 	return r, nil
+}
+
+// surveyLine is what the line of a survey says: asked and unanswered only
+// when it waited for a linked host, so their presence says it did.
+func surveyLine(projects int, r Report, answers RemoteAnswers) []any {
+	line := []any{"projects", projects, "hosts", r.Hosts, "instances", len(r.Instances)}
+	if asked := answers.hosts(); len(asked) > 0 {
+		line = append(line, "asked", asked, "unanswered", answers.failures())
+	}
+	return line
 }
 
 // SurveyToClose is the survey a close draws its plan from: this machine
