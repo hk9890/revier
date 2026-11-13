@@ -139,8 +139,9 @@ reads its state:
 | `idle` | idle, blue | pause, `◇`, `.` | The agent finished its turn and waits for a prompt. |
 | `unknown` | unknown, gray | question mark, `?`, `?` | A probe knows the agent but cannot read its state. |
 
-An agent's row shows the glyph alone, in the state's colour; the agent list's
-pane says the word.
+An agent's row in the agent list and the project pane shows the glyph alone,
+in the state's colour; the agent list's pane says the word, as does every
+other screen that lists agents.
 
 A program that no probe knows is not an agent, and revier does not list it.
 revier reads [Claude Code](integrations/claude-code.md) with nothing to
