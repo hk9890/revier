@@ -231,20 +231,29 @@ type entry struct {
 	Message          struct {
 		Role    string          `json:"role"`
 		Content json.RawMessage `json:"content"`
-		Usage   usage           `json:"usage"`
+		// Usage is read apart from the line, so a count Claude Code
+		// spells another way costs the tokens and not the message.
+		Usage json.RawMessage `json:"usage"`
 	} `json:"message"`
 }
 
-// usage is the tokens one answer counted. The input the model read is the
-// three input counts together: what was new, what the cache served, and what
-// was written to it.
+// usage is the tokens one answer counted.
 type usage struct {
 	Input       int `json:"input_tokens"`
 	CacheRead   int `json:"cache_read_input_tokens"`
 	CacheCreate int `json:"cache_creation_input_tokens"`
 }
 
-func (u usage) context() int { return u.Input + u.CacheRead + u.CacheCreate }
+// contextOf is the input the model read for one answer: the three input
+// counts together, what was new, what the cache served, and what was written
+// to it. A usage that does not parse counts none.
+func contextOf(raw json.RawMessage) int {
+	var u usage
+	if json.Unmarshal(raw, &u) != nil {
+		return 0
+	}
+	return u.Input + u.CacheRead + u.CacheCreate
+}
 
 // cacheTTL is how long Claude Code's prompt cache stays warm after an answer:
 // it is taken to write the cache for an hour (decisions.md D170).
@@ -277,23 +286,33 @@ const briefRunes = 300
 //
 // A call's result is on a line after the call, so walking back meets it
 // first; a call met with no result is still open.
+//
+// The tokens are the last answer's that counted any, which can be older than
+// the turn and the message: an answer Claude Code makes up itself, for an
+// interrupt or an API error, counts none. An answer before a compaction read
+// a conversation the next prompt does not, so the walk counts none past one.
 func lastSaid(tail []byte) (revier.AgentDetail, error) {
 	var d revier.AgentDetail
 	failed := map[string]bool{}
-	inTurn := true
+	inTurn, counting := true, true
 	lines := bytes.Split(tail, []byte("\n"))
-	for i := len(lines) - 1; i >= 0 && (inTurn || d.Message == ""); i-- {
+	for i := len(lines) - 1; i >= 0 && (inTurn || d.Message == "" || counting); i-- {
 		var e entry
-		if json.Unmarshal(lines[i], &e) != nil || e.IsSidechain || e.IsMeta || e.IsCompactSummary {
+		if json.Unmarshal(lines[i], &e) != nil || e.IsSidechain || e.IsMeta {
+			continue
+		}
+		if e.IsCompactSummary {
+			counting = false
 			continue
 		}
 		text, blocks := contentOf(e.Message.Content)
 		switch e.Message.Role {
 		case "assistant":
-			// The last answer that counted tokens: an answer Claude Code
-			// makes up itself, as for an interrupt, counts none.
-			if d.Context == 0 && e.Message.Usage.context() > 0 {
-				d.Context, d.CacheUntil = e.Message.Usage.context(), e.Timestamp.Add(cacheTTL)
+			if n := contextOf(e.Message.Usage); counting && n > 0 {
+				d.Context, counting = n, false
+				if !e.Timestamp.IsZero() {
+					d.CacheUntil = e.Timestamp.Add(cacheTTL)
+				}
 			}
 			if d.Message == "" && text != "" {
 				d.Message, d.At = text, e.Timestamp

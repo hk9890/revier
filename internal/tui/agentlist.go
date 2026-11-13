@@ -59,18 +59,8 @@ type agentItem struct {
 	age     string // how long ago it spoke, as the row says it
 	tokens  string // how many tokens its conversation holds, as the row says it
 	cache   string // how long until its prompt cache goes cold, as the row says it
-	cool    cacheState
+	cooling bool   // the cache is in its last minutes: the row warns of it
 }
-
-// cacheState is how near an agent's prompt cache is to cold: what colours the
-// row's cache segment.
-type cacheState uint8
-
-const (
-	cacheWarm cacheState = iota
-	cacheCooling
-	cacheCold
-)
 
 // coolingFrom is how long before the cache goes cold the row warns of it.
 const coolingFrom = 5 * time.Minute
@@ -107,12 +97,13 @@ func summary(a revier.AgentView, said revier.AgentDetail) (text string, titled b
 func newAgentItem(a revier.AgentView, p revier.Project, d revier.AgentDetail, now time.Time) agentItem {
 	text, titled := summary(a, d)
 	it := agentItem{agent: a, project: p, detail: d, text: text, titled: titled, age: shortAgo(now, d.At), tokens: shortTokens(d.Context)}
-	it.cache, it.cool = cacheLeft(now, d.CacheUntil)
+	it.cache, it.cooling = cacheLeft(now, d.CacheUntil)
 	return it
 }
 
 // shortTokens is a token count as the row says it, in at most tokensWidth
-// cells: "840", "62k", "1.2M", "12M". No count is no text.
+// cells: "840", "62k", "1.2M", "12M". Every unit cuts its count down, so no
+// count is rounded up into a wider one.
 func shortTokens(n int) string {
 	switch {
 	case n <= 0:
@@ -122,27 +113,24 @@ func shortTokens(n int) string {
 	case n < 1_000_000:
 		return fmt.Sprintf("%dk", n/1000)
 	case n < 10_000_000:
-		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
+		return fmt.Sprintf("%d.%dM", n/1_000_000, n/100_000%10)
 	default:
 		return fmt.Sprintf("%dM", n/1_000_000)
 	}
 }
 
 // cacheLeft is how long after now a prompt cache goes cold, in whole minutes
-// rounded up, or "--" once it is. A time nothing says is no text.
-func cacheLeft(now, until time.Time) (string, cacheState) {
+// rounded up, or "--" once it is, and whether it is in its last minutes. A
+// time nothing says is no text.
+func cacheLeft(now, until time.Time) (text string, cooling bool) {
 	if until.IsZero() {
-		return "", cacheWarm
+		return "", false
 	}
 	left := until.Sub(now)
 	if left <= 0 {
-		return "--", cacheCold
+		return "--", false
 	}
-	minutes := fmt.Sprintf("%dm", int((left+time.Minute-1)/time.Minute))
-	if left <= coolingFrom {
-		return minutes, cacheCooling
-	}
-	return minutes, cacheWarm
+	return fmt.Sprintf("%dm", int((left+time.Minute-1)/time.Minute)), left <= coolingFrom
 }
 
 // The usage columns at the right end of a row's second line: the tokens, and
@@ -161,18 +149,18 @@ func (i agentItem) usage(th theme.Theme, style func(lipgloss.Style) lipgloss.Sty
 	if i.tokens == "" && i.cache == "" {
 		return ""
 	}
-	pad := func(s string, w int) string {
-		return style(th.Path).Render(strings.Repeat(" ", max(w-lipgloss.Width(s), 0)))
+	column := func(s lipgloss.Style, text string, w int) string {
+		return style(s).Width(w).Align(lipgloss.Right).Render(text)
 	}
-	out := pad(i.tokens, tokensWidth) + style(th.Path).Render(i.tokens) + pad("", gridGap)
-	if i.cache == "" {
-		return out + pad("", 2+minutesWidth)
+	minutes := th.Path
+	if i.cooling {
+		minutes = th.Warning
 	}
-	cs := th.Path
-	if i.cool == cacheCooling {
-		cs = th.Warning
+	glyph := ""
+	if i.cache != "" {
+		glyph = th.Glyphs.Cache + " "
 	}
-	return out + style(th.Path).Render(th.Glyphs.Cache+" ") + pad(i.cache, minutesWidth) + style(cs).Render(i.cache)
+	return column(th.Path, i.tokens, tokensWidth) + column(th.Path, glyph, gridGap+2) + column(minutes, i.cache, minutesWidth)
 }
 
 // worktree is the directory the agent works in when it is not the project's

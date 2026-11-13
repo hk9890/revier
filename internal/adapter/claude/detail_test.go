@@ -271,6 +271,60 @@ func TestDetailCountsTheTokensOfTheLastAnswer(t *testing.T) {
 	}
 }
 
+// An API error after the user's prompt is an answer Claude Code made up, which
+// counts no tokens: the answer before the prompt still says them, and the
+// cache it left.
+func TestDetailCountsTheTokensPastAnAPIError(t *testing.T) {
+	p, root := transcripts(t)
+	writeTranscript(t, root, "-demo", "s1",
+		`{"type":"assistant","timestamp":"2026-09-24T10:00:00Z","message":{"role":"assistant","content":"done","usage":{"input_tokens":2,"cache_read_input_tokens":61000,"cache_creation_input_tokens":1072}}}`,
+		`{"type":"user","timestamp":"2026-09-24T10:02:00Z","message":{"role":"user","content":"and now the docs"}}`,
+		`{"type":"assistant","timestamp":"2026-09-24T10:02:05Z","message":{"role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"API Error: 529 Overloaded"}],"usage":{"input_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}`,
+	)
+	d, err := p.Detail(t.Context(), revier.Panel{PID: 101})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := time.Date(2026, 9, 24, 11, 0, 0, 0, time.UTC); d.Context != 62_074 || !d.CacheUntil.Equal(want) {
+		t.Errorf("Context, CacheUntil = %d, %v; want 62074, %v", d.Context, d.CacheUntil, want)
+	}
+}
+
+// After a compaction the next prompt reads the summary, not the conversation
+// before it: no answer from before counts, until one after it does.
+func TestDetailCountsNoTokensFromBeforeACompaction(t *testing.T) {
+	p, root := transcripts(t)
+	writeTranscript(t, root, "-demo", "s1",
+		`{"type":"assistant","timestamp":"2026-09-24T10:00:00Z","message":{"role":"assistant","content":"done","usage":{"input_tokens":2,"cache_read_input_tokens":180000,"cache_creation_input_tokens":0}}}`,
+		`{"type":"system","subtype":"compact_boundary","timestamp":"2026-09-24T10:01:00Z"}`,
+		`{"type":"user","isCompactSummary":true,"timestamp":"2026-09-24T10:01:00Z","message":{"role":"user","content":"This session is being continued from a previous conversation."}}`,
+	)
+	d, err := p.Detail(t.Context(), revier.Panel{PID: 101})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Context != 0 || !d.CacheUntil.IsZero() {
+		t.Errorf("Context, CacheUntil = %d, %v; want none from before the compaction", d.Context, d.CacheUntil)
+	}
+}
+
+// A usage that does not parse costs the tokens and nothing else, and an
+// answer with no time says no cache.
+func TestDetailReadsTheMessageOfAnAnswerWhoseUsageDoesNotParse(t *testing.T) {
+	p, root := transcripts(t)
+	writeTranscript(t, root, "-demo", "s1",
+		`{"type":"assistant","message":{"role":"assistant","content":"counted, untimed","usage":{"input_tokens":5000}}}`,
+		`{"type":"assistant","timestamp":"2026-09-24T10:00:00Z","message":{"role":"assistant","content":"spelled otherwise","usage":{"input_tokens":"many"}}}`,
+	)
+	d, err := p.Detail(t.Context(), revier.Panel{PID: 101})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Message != "spelled otherwise" || d.Context != 5000 || !d.CacheUntil.IsZero() {
+		t.Errorf("Detail = %+v; want the message, the untimed answer's tokens and no cache", d)
+	}
+}
+
 // A transcript that counts no tokens says nothing of them or of the cache.
 func TestDetailWithoutUsageSaysNoTokens(t *testing.T) {
 	p, root := transcripts(t)
