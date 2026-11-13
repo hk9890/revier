@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -21,8 +21,8 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// minVersion is the oldest herdr this host was tested against. herdr's JSON
-// API carries no version of its own, so the release is what is checked.
+// minVersion is the oldest herdr this host was tested against. The release
+// its ping answers with is checked, not the protocol its snapshot carries.
 const minVersion = "0.9.5"
 
 // maxPanes is the most panes one layout.apply builds.
@@ -34,7 +34,7 @@ const metadataSource = "revier"
 // openVar is the variable Open starts a new workspace's first shell with,
 // set to a value no other Open uses, so that a workspace whose create was
 // not answered can still be told apart.
-const openVar = "REVIER_HERDR_OPEN"
+const openVar = proc.HerdrOpenVar
 
 // Open creates a workspace for the realization, starting the server when none
 // runs yet. The workspace is labelled r.Name and carries it as its name
@@ -81,7 +81,7 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		return revier.TargetRef{}, err
 	}
 	workspace := created.Workspace.ID
-	if err := h.fill(ctx, workspace, created.Tab.ID, r, panels); err != nil {
+	if err := h.fill(ctx, pid, workspace, created.Tab.ID, r, panels); err != nil {
 		// Best effort: the error that failed the workspace is the one worth
 		// reporting, and a workspace whose panes all exited is gone already.
 		// The close has a bound of its own: the end of ctx may be what failed
@@ -129,8 +129,8 @@ func (h *Host) closeMarked(ctx context.Context, mark string) {
 
 // fill names a new workspace and replaces its first tab, the shell herdr
 // starts it with, by the realization's panels, then checks that every one of
-// them still runs.
-func (h *Host) fill(ctx context.Context, workspace, tab string, r revier.Realization, panels []revier.PanelSpec) error {
+// them still runs. server is the pid of the server that made the workspace.
+func (h *Host) fill(ctx context.Context, server int, workspace, tab string, r revier.Realization, panels []revier.PanelSpec) error {
 	if survives(r.Name) {
 		if _, err := h.request(ctx, "workspace.report_metadata", map[string]any{
 			"workspace_id": workspace, "source": metadataSource, "tokens": map[string]string{nameToken: r.Name},
@@ -139,7 +139,7 @@ func (h *Host) fill(ctx context.Context, workspace, tab string, r revier.Realiza
 		}
 	}
 
-	_, panes, err := h.apply(ctx, "tab_id", tab, panels)
+	_, panes, err := h.apply(ctx, server, "tab_id", tab, panels)
 	if err != nil {
 		return err
 	}
@@ -196,29 +196,30 @@ func validKey(k string) bool {
 // layoutNode is a layout as herdr describes and takes it: a pane, or a split
 // of two nodes.
 type layoutNode struct {
-	Type      string      `json:"type"`
-	PaneID    string      `json:"pane_id,omitempty"`
-	Label     string      `json:"label,omitempty"`
-	Cwd       string      `json:"cwd,omitempty"`
-	Command   []string    `json:"command,omitempty"`
-	Direction string      `json:"direction,omitempty"`
-	Ratio     float64     `json:"ratio,omitempty"`
-	First     *layoutNode `json:"first,omitempty"`
-	Second    *layoutNode `json:"second,omitempty"`
+	Type      string            `json:"type"`
+	PaneID    string            `json:"pane_id,omitempty"`
+	Label     string            `json:"label,omitempty"`
+	Cwd       string            `json:"cwd,omitempty"`
+	Command   []string          `json:"command,omitempty"`
+	Env       map[string]string `json:"env,omitempty"`
+	Direction string            `json:"direction,omitempty"`
+	Ratio     float64           `json:"ratio,omitempty"`
+	First     *layoutNode       `json:"first,omitempty"`
+	Second    *layoutNode       `json:"second,omitempty"`
 }
 
 // layout puts the panels side by side in equal widths: each split halves the
 // panels and gives its first half its share of the width. Halves, not one
 // panel per split: herdr refuses a layout more than 16 levels deep, and a
 // split per panel would be 24 levels deep for 24 panels. A panel with no
-// command runs the shell herdr starts.
-func layout(panels []revier.PanelSpec) layoutNode {
+// command runs the shell herdr starts. Each pane is given env.
+func layout(panels []revier.PanelSpec, env map[string]string) layoutNode {
 	if len(panels) == 1 {
 		p := panels[0]
-		return layoutNode{Type: "pane", Label: p.Title, Cwd: p.Dir, Command: p.Command}
+		return layoutNode{Type: "pane", Label: p.Title, Cwd: p.Dir, Command: p.Command, Env: env}
 	}
 	half := len(panels) / 2
-	first, second := layout(panels[:half]), layout(panels[half:])
+	first, second := layout(panels[:half], env), layout(panels[half:], env)
 	return layoutNode{
 		Type: "split", Direction: "right", Ratio: float64(half) / float64(len(panels)),
 		First: &first, Second: &second,
@@ -253,11 +254,11 @@ func (h *Host) buildable(ctx context.Context, panels []revier.PanelSpec) error {
 }
 
 // serverPATH is the PATH herdr starts a pane's program with: its server's,
-// since a layout carries no environment. With no server running, or one whose
-// environment cannot be read or holds no PATH, it is this process's, the one
-// a server Open starts is given. A server that fails the ping is an error: a
-// PATH guessed in its place would name a program as missing that the server
-// may hold, instead of the server's own failure.
+// since the layout Open hands it sets no PATH. With no server running, or one
+// whose environment cannot be read or holds no PATH, it is this process's,
+// the one a server Open starts is given. A server that fails the ping is an
+// error: a PATH guessed in its place would name a program as missing that the
+// server may hold, instead of the server's own failure.
 func (h *Host) serverPATH(ctx context.Context) (string, error) {
 	pid, err := h.request(ctx, "ping", struct{}{}, nil)
 	if errors.Is(err, errNoServer) {
@@ -266,14 +267,7 @@ func (h *Host) serverPATH(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if env, err := os.ReadFile(filepath.Join(h.root(), strconv.Itoa(pid), "environ")); err == nil {
-		for _, kv := range strings.Split(string(env), "\x00") {
-			if path, ok := strings.CutPrefix(kv, "PATH="); ok {
-				return path, nil
-			}
-		}
-	}
-	return os.Getenv("PATH"), nil
+	return proc.ServerPATH(h.root(), pid), nil
 }
 
 // running makes sure a server answers, starting one when none does, and
@@ -330,7 +324,9 @@ func (h *Host) waitPing(ctx context.Context) (string, error) {
 // does at once, leaves no zombie behind.
 func (h *Host) start() error {
 	cmd := exec.Command("herdr", "server")
-	cmd.Env = os.Environ()
+	// A server hands its own environment to every pane it starts, for its
+	// whole life.
+	cmd.Env = proc.Without(proc.WithoutAgentSession(os.Environ()), slices.Concat(proc.TerminalVars, proc.CommandVars))
 	if h.Socket != "" {
 		cmd.Env = append(cmd.Env, "HERDR_SOCKET_PATH="+h.Socket)
 	}
@@ -401,14 +397,21 @@ func (h *Host) Close(ctx context.Context, ref revier.TargetRef) error {
 // restart the same id names an unrelated workspace, and neither a focus nor a
 // close is to be made on the wrong one.
 func (h *Host) current(ctx context.Context, ref revier.TargetRef) (string, error) {
+	workspace, _, err := h.serving(ctx, ref)
+	return workspace, err
+}
+
+// serving is current, and the pid of the server that answers.
+func (h *Host) serving(ctx context.Context, ref revier.TargetRef) (string, int, error) {
 	if err := h.own(ref); err != nil {
-		return "", err
+		return "", 0, err
 	}
 	pid, err := h.request(ctx, "ping", struct{}{}, nil)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
-	return workspaceAt(ref, pid)
+	workspace, err := workspaceAt(ref, pid)
+	return workspace, pid, err
 }
 
 // workspaceAt is the workspace ref names, once pid, the server that answered,

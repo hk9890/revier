@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hk9890/revier/internal/adapter/proc"
 	"github.com/hk9890/revier/internal/panelstart"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -32,7 +33,7 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 	if err := h.buildable(ctx, panels); err != nil {
 		return "", err
 	}
-	workspace, err := h.current(ctx, ref)
+	workspace, server, err := h.serving(ctx, ref)
 	if err != nil {
 		return "", err
 	}
@@ -41,7 +42,7 @@ func (h *Host) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Reali
 		return "", err
 	}
 
-	tab, panes, err := h.apply(ctx, "workspace_id", workspace, panels)
+	tab, panes, err := h.apply(ctx, server, "workspace_id", workspace, panels)
 	if err == nil {
 		for i, id := range panes {
 			if err = h.mark(ctx, id, vars); err != nil {
@@ -110,14 +111,27 @@ func keeps(vars map[string]string) error {
 	return nil
 }
 
+// herdrRemoves names the terminal's variables that herdr removes from the
+// environment of each pane it starts: herdr 0.9.5 does, from its server's.
+var herdrRemoves = []string{"TMUX", "TMUX_PANE", "KITTY_WINDOW_ID", "ZELLIJ", "ZELLIJ_SESSION_NAME", "ZELLIJ_PANE_ID", "STY", "WEZTERM_PANE"}
+
 // apply builds the panels side by side, without moving the focus, in a new
 // tab after the tabs of the workspace a "workspace_id" key names, or in the
 // tab a "tab_id" key names, which they replace. It returns the tab and its
 // panes, left to right, and fails when a panel's command exited as soon as it
 // started. The tab is returned with a failure too, once herdr made it, for
 // the caller to close.
-func (h *Host) apply(ctx context.Context, key, id string, panels []revier.PanelSpec) (string, []string, error) {
-	params := map[string]any{key: id, "focus": false, "root": layout(panels)}
+//
+// Each pane sets empty the agent session variables, revier's command
+// variables and the terminal's variables that server, the pid of the server
+// that builds it, holds: one started by hand from inside an agent's session,
+// a revier command or a terminal hands them to every pane (proc.Cleared). One
+// that Open started holds none of them. A terminal's variable that herdr
+// removes from each pane itself is not set: an empty one reads as set.
+func (h *Host) apply(ctx context.Context, server int, key, id string, panels []revier.PanelSpec) (string, []string, error) {
+	terminal := slices.DeleteFunc(slices.Clone(proc.TerminalVars), func(name string) bool { return slices.Contains(herdrRemoves, name) })
+	env := proc.Cleared(h.root(), server, slices.Concat(proc.AgentSessionVars, proc.CommandVars, terminal))
+	params := map[string]any{key: id, "focus": false, "root": layout(panels, env)}
 	var applied struct {
 		Layout struct {
 			TabID string     `json:"tab_id"`

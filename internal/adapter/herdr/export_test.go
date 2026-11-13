@@ -18,6 +18,12 @@ func (h *Host) Request(ctx context.Context, method string, params, out any) erro
 	return err
 }
 
+// ServerPID is the pid of the server that answers, for a live test that
+// reads the server's own environment.
+func (h *Host) ServerPID(ctx context.Context) (int, error) {
+	return h.request(ctx, "ping", struct{}{}, nil)
+}
+
 // SetProcRoot replaces /proc.
 func (h *Host) SetProcRoot(root string) { h.procRoot = root }
 
