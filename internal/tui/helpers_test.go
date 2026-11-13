@@ -503,7 +503,7 @@ func listedSurface(t *testing.T, width, height int, agents ...listed) (tui.Model
 	var names []string
 	panels := map[string][]revier.Panel{}
 	for i, a := range agents {
-		marker := fmt.Sprintf("agent-%d", i)
+		marker := fmt.Sprintf("agent-%d.", i) // the dot keeps agent-1 from matching agent-12
 		id := revier.PanelID(fmt.Sprint(i + 1))
 		p := hosttest.NewDetailedProbe("claude", marker)
 		p.State = revier.AgentState{Harness: "claude", Status: a.status, Activity: a.on, Dir: a.dir, Name: a.name}

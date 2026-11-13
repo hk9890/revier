@@ -120,14 +120,11 @@ func (m *Model) took(msg detailsMsg) {
 		said[k] = d
 	}
 	m.adetails = said
-	m.reloadAgents()
 	// The agent list opened before this answer, on an order that did not
-	// know when each agent spoke. The row it opens on is the one of the order
-	// that does (switchList).
-	if m.agents.shown && m.agents.top {
-		m.agents.top = false
-		m.agents.selectOpenRow()
-	}
+	// know when each agent spoke. This reload chooses its row in the order
+	// that does, and is the last to choose it (switchList).
+	m.reloadAgents()
+	m.agents.top = false
 }
 
 // pickAgent puts the pane's cursor on an agent row the user moved it to, and

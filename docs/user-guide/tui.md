@@ -125,7 +125,7 @@ agents, then idle ones, then those in state `unknown`. Among those that need
 you and among the idle ones, the one that spoke last is first. The list
 opens with no query, on the first agent that needs you or, if none does, the
 first idle one. It skips working agents because they need nothing from you
-yet.
+yet. When every agent is working or `unknown`, it opens on the first row.
 
 Each agent takes two lines:
 
