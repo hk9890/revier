@@ -237,27 +237,40 @@ type entry struct {
 	} `json:"message"`
 }
 
-// usage is the tokens one answer counted.
+// usage is the tokens one answer counted, and how long the cache it wrote
+// lives: the tokens written for five minutes and for an hour.
 type usage struct {
-	Input       int `json:"input_tokens"`
-	CacheRead   int `json:"cache_read_input_tokens"`
-	CacheCreate int `json:"cache_creation_input_tokens"`
+	Input         int `json:"input_tokens"`
+	CacheRead     int `json:"cache_read_input_tokens"`
+	CacheCreate   int `json:"cache_creation_input_tokens"`
+	CacheCreation struct {
+		FiveMinutes int `json:"ephemeral_5m_input_tokens"`
+		OneHour     int `json:"ephemeral_1h_input_tokens"`
+	} `json:"cache_creation"`
 }
 
-// contextOf is the input the model read for one answer: the three input
-// counts together, what was new, what the cache served, and what was written
-// to it. A usage that does not parse counts none.
-func contextOf(raw json.RawMessage) int {
+// usageOf is one answer's usage. A usage that does not parse counts none.
+func usageOf(raw json.RawMessage) usage {
 	var u usage
 	if json.Unmarshal(raw, &u) != nil {
-		return 0
+		return usage{}
 	}
-	return u.Input + u.CacheRead + u.CacheCreate
+	return u
 }
 
-// cacheTTL is how long Claude Code's prompt cache stays warm after an answer:
-// it is taken to write the cache for an hour (decisions.md D170).
-const cacheTTL = time.Hour
+// context is the input the model read for the answer: the three input counts
+// together, what was new, what the cache served, and what was written to it.
+func (u usage) context() int { return u.Input + u.CacheRead + u.CacheCreate }
+
+// ttl is how long the cache stays warm after the answer: five minutes where
+// the answer wrote it for five minutes alone, and an hour otherwise, which is
+// what Claude Code writes where the answer does not say (decisions.md D170).
+func (u usage) ttl() time.Duration {
+	if u.CacheCreation.FiveMinutes > 0 && u.CacheCreation.OneHour == 0 {
+		return 5 * time.Minute
+	}
+	return time.Hour
+}
 
 // block is one part of a message's content: text the agent or the user wrote,
 // a tool the agent called, or what a tool answered.
@@ -308,10 +321,10 @@ func lastSaid(tail []byte) (revier.AgentDetail, error) {
 		text, blocks := contentOf(e.Message.Content)
 		switch e.Message.Role {
 		case "assistant":
-			if n := contextOf(e.Message.Usage); counting && n > 0 {
-				d.Context, counting = n, false
+			if u := usageOf(e.Message.Usage); counting && u.context() > 0 {
+				d.Context, counting = u.context(), false
 				if !e.Timestamp.IsZero() {
-					d.CacheUntil = e.Timestamp.Add(cacheTTL)
+					d.CacheUntil = e.Timestamp.Add(u.ttl())
 				}
 			}
 			if d.Message == "" && text != "" {

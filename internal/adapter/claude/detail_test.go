@@ -325,6 +325,35 @@ func TestDetailReadsTheMessageOfAnAnswerWhoseUsageDoesNotParse(t *testing.T) {
 	}
 }
 
+// The cache lives as long as the answer wrote it for: five minutes where it
+// wrote it for five minutes alone, and an hour where it wrote it for an hour
+// or does not say.
+func TestDetailTakesTheCacheLengthFromTheAnswer(t *testing.T) {
+	for _, c := range []struct {
+		name, creation string
+		want           time.Duration
+	}{
+		{"five minutes", `"cache_creation":{"ephemeral_5m_input_tokens":900,"ephemeral_1h_input_tokens":0}`, 5 * time.Minute},
+		{"an hour", `"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":900}`, time.Hour},
+		{"both", `"cache_creation":{"ephemeral_5m_input_tokens":100,"ephemeral_1h_input_tokens":900}`, time.Hour},
+		{"nothing written", `"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0}`, time.Hour},
+		{"not said", `"output_tokens":3`, time.Hour},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			p, root := transcripts(t)
+			writeTranscript(t, root, "-demo", "s1",
+				`{"type":"assistant","timestamp":"2026-09-24T10:00:00Z","message":{"role":"assistant","content":"done","usage":{"input_tokens":2,"cache_read_input_tokens":61000,"cache_creation_input_tokens":900,`+c.creation+`}}}`)
+			d, err := p.Detail(t.Context(), revier.Panel{PID: 101})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := time.Date(2026, 9, 24, 10, 0, 0, 0, time.UTC).Add(c.want); !d.CacheUntil.Equal(want) {
+				t.Errorf("CacheUntil = %v, want %v", d.CacheUntil, want)
+			}
+		})
+	}
+}
+
 // A transcript that counts no tokens says nothing of them or of the cache.
 func TestDetailWithoutUsageSaysNoTokens(t *testing.T) {
 	p, root := transcripts(t)

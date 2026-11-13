@@ -955,7 +955,8 @@ the user's rules.json (D30, D147).
 
 Which agent goes cold soon, and what its next prompt reads, is what picks the
 agent to answer first. The Claude probe reads both from the transcript's last
-answer, display only (D106), and takes the cache to go cold an hour after it.
+answer, display only (D106): the cache goes cold as long after it as the answer
+wrote it for, an hour where the answer does not say.
 The harness's name leaves the row for the pane, since it repeats the project.
 Rejected: a copy of the status line's input, the one source of the session's
 cost, which every user's status line would have to write; a share of the
