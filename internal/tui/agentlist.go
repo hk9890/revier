@@ -489,8 +489,8 @@ func (al *agentList) selectKey(key listedKey) bool {
 }
 
 // switchList is the switch key and its button: the other list takes the
-// surface. The agent list opens with no query, on the row openRow names; the
-// project list is as it was left.
+// surface. The agent list opens with no query, on the row selectOpenRow
+// chooses; the project list is as it was left.
 //
 // Which row that is is known once every agent's last word is read, and that
 // answer comes after the list is drawn. The cursor stays on the row it opened
