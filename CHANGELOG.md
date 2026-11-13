@@ -6,6 +6,27 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## v0.27.0
+
+- **A Claude Code agent's row shows its context tokens and the minutes left
+  on its prompt cache.** They stand at the right of the row's second line,
+  in the agent list and in the project pane. The minutes turn yellow in the
+  last 5 and show `--` once the cache is cold; the next prompt to that agent
+  then reads the whole conversation again. A cache written for five minutes,
+  as with an API key, Bedrock or Vertex, counts five minutes, not an hour.
+- **The harness's name moved from the row to the pane.** The filter no longer
+  matches it.
+- **An agent's row shows its state by its glyph and colour alone.** The word
+  took 11 cells of every row; those cells now show what the agent does. The
+  agent list's pane still says the state in words.
+- **The agent list opens on the first agent that needs you,** else on the
+  first idle one. Before, it opened on the first row, which was often a
+  working agent.
+- **The logs explain more of what went wrong.** A slow survey names the host
+  it waited for, a recovered failure says when it last failed and how many
+  times, and a close declined at its confirm writes a line. A panel that
+  closes as revier reads it no longer adds a WARN line.
+
 ## v0.26.0
 
 - **A `git_url` that is a page of the forge is refused, and revier names the
