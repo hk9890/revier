@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"strconv"
@@ -106,8 +107,10 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	return unknownProjects(unknown)
 }
 
-func (a *app) printJSON(v any) error {
-	enc := json.NewEncoder(a.out)
+func (a *app) printJSON(v any) error { return printJSON(a.out, v) }
+
+func printJSON(out io.Writer, v any) error {
+	enc := json.NewEncoder(out)
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
 }

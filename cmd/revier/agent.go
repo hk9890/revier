@@ -23,7 +23,7 @@ import (
 const agentUsage = `revier agent - drive one agent from a script
 
 usage:
-  revier agent wait <agent> --until <status> [--timeout <seconds>]
+  revier agent wait <agent> --until <status> [--timeout <seconds>] [--json]
   revier agent prompt <agent> [--] <text>
   revier agent read <agent> [--screen [--lines <n>]]
   revier agent send-keys <agent> [--] <key>..
@@ -38,6 +38,9 @@ usage:
              the default agent among named ones
   --until    idle, running, attention, or stopped (idle or attention)
   --timeout  give up after this many seconds and exit 2; 0 waits for good
+  --json     with wait, print {"status": ..., "session": ...}: the session
+             is the conversation the agent holds, empty when its harness
+             does not say
   --screen   print what the agent's panel shows, not what the agent said
   --lines    with --screen, the last <n> lines of the panel and its
              scrollback
@@ -87,7 +90,9 @@ exec becomes the project's agent in this terminal. It is what the agent panel
 of a link runs on the project's machine over ssh; --tag is that panel's name
 for the agent, which a survey there reports it under.
 
-wait prints the status it ended on. On a panel that is not an agent's, such
+wait prints the status it ended on, and with --json the agent's session as
+well, which is how a script learns the session of an agent new --no-focus
+started. On a panel that is not an agent's, such
 as the one agent new --no-focus prints before its harness has started, wait
 waits for the harness to start, within --timeout. prompt types one line and
 submits it, and returns once an idle agent has started on it, so
@@ -160,12 +165,13 @@ func agentWait(out io.Writer, args []string, open func(context.Context, io.Write
 	fs := flag.NewFlagSet("agent wait", flag.ContinueOnError)
 	until := fs.String("until", "", "idle, running, attention, or stopped")
 	timeout := fs.Float64("timeout", 0, "seconds before giving up; 0 waits for good")
+	asJSON := fs.Bool("json", false, "print the status and the session as JSON")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
 	}
 	if len(pos) != 1 || *until == "" {
-		return fmt.Errorf("usage: revier agent wait <agent> --until <status> [--timeout <seconds>]")
+		return fmt.Errorf("usage: revier agent wait <agent> --until <status> [--timeout <seconds>] [--json]")
 	}
 	statuses, err := core.Until(*until)
 	if err != nil {
@@ -192,8 +198,18 @@ func agentWait(out io.Writer, args []string, open func(context.Context, io.Write
 	if err != nil {
 		return err
 	}
+	if *asJSON {
+		return printJSON(out, waited{Status: state.Status, Session: state.Session})
+	}
 	_, _ = fmt.Fprintln(out, state.Status)
 	return nil
+}
+
+// waited is what `revier agent wait --json` prints: a shape of its own, so a
+// field the survey adds to an agent's state does not change it.
+type waited struct {
+	Status  revier.Status    `json:"status"`
+	Session revier.SessionID `json:"session"`
 }
 
 // waitFor finds the agent an address names and waits for one of the statuses.
