@@ -964,7 +964,8 @@ context window, whose size the transcript does not record.
 
 ### D171 — an agent's row says its state by its glyph alone
 
-The word for the state took 11 cells of every row, which what the agent does
-needs more. The glyph, its colour and the sort by state still say it, and
-the pane says it in words. The project pane's Agents rows draw the same row.
+The word for the state took 11 cells of every row on the agent list, which
+what the agent does needs more. The glyph and its colour still say it there,
+with the sort by state, and the list's pane says it in words. The project
+pane's Agents rows draw the same row, so there the glyph alone says it.
 Rejected: the word for the ascii glyphs alone, two rules for one row.

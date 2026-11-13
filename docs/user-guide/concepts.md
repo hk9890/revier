@@ -132,12 +132,15 @@ An agent is a panel that runs a coding agent. The **harness** is the agent
 program, such as Claude Code or opencode. A **probe** knows one harness and
 reads its state:
 
-| State | In the TUI | Means |
-|---|---|---|
-| `attention` | needs you | The agent asked a question or a permission, and waits for you. |
-| `running` | working | The agent is in a turn. |
-| `idle` | idle | The agent finished its turn and waits for a prompt. |
-| `unknown` | unknown | A probe knows the agent but cannot read its state. |
+| State | In the TUI | Glyph: nerd, unicode, ascii | Means |
+|---|---|---|---|
+| `attention` | needs you, red | bell, `◆`, `!` | The agent asked a question or a permission, and waits for you. |
+| `running` | working, green | spinner, `⠋`, `\|` | The agent is in a turn. |
+| `idle` | idle, blue | pause, `◇`, `.` | The agent finished its turn and waits for a prompt. |
+| `unknown` | unknown, gray | question mark, `?`, `?` | A probe knows the agent but cannot read its state. |
+
+An agent's row shows the glyph alone, in the state's colour; the agent list's
+pane says the word.
 
 A program that no probe knows is not an agent, and revier does not list it.
 revier reads [Claude Code](integrations/claude-code.md) with nothing to

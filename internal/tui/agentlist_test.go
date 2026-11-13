@@ -51,10 +51,48 @@ func TestTheSwitchKeyOverAScreenTypesNothing(t *testing.T) {
 	}
 }
 
+// Every state is its glyph alone in one column, so what each agent does
+// starts at the same cell, whichever state leads it (decisions.md D171).
+func TestEveryAgentStateIsItsGlyphInOneColumn(t *testing.T) {
+	g := theme.Default().Glyphs
+	states := []struct {
+		status revier.Status
+		glyph  string
+		word   string
+	}{
+		{revier.StatusAttention, g.NeedsYou, "needs you"},
+		{revier.StatusRunning, g.Working, "working"},
+		{revier.StatusIdle, g.Idle, "idle"},
+		{revier.StatusUnknown, g.Unknown, "unknown"},
+	}
+	agents := make([]listed, 0, len(states))
+	for i, s := range states {
+		agents = append(agents, listed{project: "alpha", status: s.status, on: "task " + s.word, at: time.Now().Add(-time.Duration(i+1) * time.Minute)})
+	}
+	m, _, _ := listedWorld(t, 140, 20, agents...)
+	at := -1
+	for _, s := range states {
+		list := func(l string) string { left, _, _ := strings.Cut(l, "│"); return left }
+		i := slices.IndexFunc(lines(m), func(l string) bool { return strings.Contains(list(l), "task "+s.word) })
+		if i < 0 {
+			t.Fatalf("no row for %s in %q", s.word, lines(m))
+		}
+		first := list(lines(m)[i])
+		if !strings.Contains(first, s.glyph+" task "+s.word) || strings.Contains(strings.Replace(first, "task "+s.word, "", 1), s.word) {
+			t.Errorf("row = %q, want the glyph of %s alone before the summary", first, s.word)
+		}
+		if c := column(first, "task "); at >= 0 && c != at {
+			t.Errorf("row = %q starts its summary at %d, want %d as the rows above", first, c, at)
+		} else {
+			at = c
+		}
+	}
+}
+
 // A row is the agent's state, by its glyph alone, and what it is on, without
-// its harness, over its project; the age of what it said last stands at the row's right end,
-// and the cache's minutes end under the age. The name its harness gives it is
-// the pane's.
+// its harness, over its project; the age of what it said last stands at the
+// row's right end, and the cache's minutes end under the age. The name its
+// harness gives it is the pane's.
 func TestAnAgentRowLeadsWithItsStateAndNamesItsProject(t *testing.T) {
 	now := time.Now()
 	m, _, _ := listedWorld(t, 140, 20,
@@ -62,8 +100,9 @@ func TestAnAgentRowLeadsWithItsStateAndNamesItsProject(t *testing.T) {
 	all := lines(m)
 	first, _, _ := strings.Cut(all[4], "│")
 	second, _, _ := strings.Cut(all[5], "│")
-	if !strings.Contains(first, theme.Default().Glyphs.Idle+" Taskmgr tickets") || strings.Contains(first, "idle") || strings.Contains(first, "claude") {
-		t.Errorf("row = %q, want the state's glyph before the summary, no word for the state, and no harness", first)
+	g := theme.Default().Glyphs
+	if !strings.HasPrefix(strings.TrimLeft(first, " "+g.Cursor), g.Idle+" Taskmgr tickets") || strings.Contains(first, "idle") || strings.Contains(first, "claude") {
+		t.Errorf("row = %q, want the state's glyph leading the summary, no word for the state, and no harness", first)
 	}
 	if !strings.HasSuffix(strings.TrimSpace(first), "4m") {
 		t.Errorf("row = %q, want the age at its right end", first)

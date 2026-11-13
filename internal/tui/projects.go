@@ -386,8 +386,16 @@ var statusOrder = []revier.Status{revier.StatusAttention, revier.StatusRunning, 
 // statusGlyph is the state's glyph alone, for a row's counts, which have no
 // room for its words, and for an agent's row (decisions.md D171).
 func statusGlyph(th theme.Theme, s revier.Status) string {
-	glyph, _, _ := strings.Cut(statusLabel(th, s), " ")
-	return glyph
+	switch s {
+	case revier.StatusAttention:
+		return th.Glyphs.NeedsYou
+	case revier.StatusRunning:
+		return th.Glyphs.Working
+	case revier.StatusIdle:
+		return th.Glyphs.Idle
+	default:
+		return th.Glyphs.Unknown
+	}
 }
 
 // statusLabel is an agent state as the surface says it: its glyph and a word
@@ -398,13 +406,13 @@ func statusGlyph(th theme.Theme, s revier.Status) string {
 func statusLabel(th theme.Theme, s revier.Status) string {
 	switch s {
 	case revier.StatusAttention:
-		return th.Glyphs.NeedsYou + " needs you"
+		return statusGlyph(th, s) + " needs you"
 	case revier.StatusRunning:
-		return th.Glyphs.Working + " working"
+		return statusGlyph(th, s) + " working"
 	case revier.StatusIdle:
-		return th.Glyphs.Idle + " idle"
+		return statusGlyph(th, s) + " idle"
 	default:
-		return th.Glyphs.Unknown + " unknown"
+		return statusGlyph(th, s) + " unknown"
 	}
 }
 

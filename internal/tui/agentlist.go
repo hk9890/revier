@@ -247,7 +247,7 @@ func (d agentDelegate) Spacing() int                        { return 0 }
 func (d agentDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
 
 // listedStateWidth is the state column of an agent row: the state's glyph and
-// a gap. The pane says the state in words.
+// a gap. The agent list's pane says the state in words.
 const listedStateWidth = 2
 
 func (d agentDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
@@ -291,10 +291,10 @@ func agentLines(th theme.Theme, it agentItem, matches []int, width int, sel, ove
 	prefix := bar + space(1)
 	indent := lipgloss.Width(prefix) + listedStateWidth
 
-	// The state leads, because it is what the list is sorted by, as its glyph
-	// alone: the pane says it in words (decisions.md D171). The age
-	// stands at the right edge, in a column of its own, so the order within
-	// a state reads down it.
+	// The state leads, as its glyph alone (decisions.md D171): the agent list
+	// is sorted by it, and its pane says it in words. The age stands at the
+	// right edge, in a column of its own, so the order within a state reads
+	// down it.
 	status := it.agent.State.Status
 	state := cell(style(statusStyle(th, status)).Render(statusGlyph(th, status)), listedStateWidth)
 	age := ""
