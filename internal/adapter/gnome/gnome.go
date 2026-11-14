@@ -42,7 +42,7 @@ type Host struct {
 }
 
 // minWctl is the oldest wctl this host drives.
-var minWctl = [3]int{0, 16, 0}
+var minWctl = [3]int{0, 23, 0}
 
 // versionDoc is what `wctl version --json` prints, on every outcome.
 type versionDoc struct {
