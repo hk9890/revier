@@ -3,8 +3,10 @@ package proc_test
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -202,5 +204,89 @@ func TestDirFallsBackToTheNextProcess(t *testing.T) {
 	}
 	if got := proc.DirIn(root, 10, 0); got != "" {
 		t.Errorf("DirIn(hidden, none) = %q, want none", got)
+	}
+}
+
+// A variable is read whole, an '=' in its value included, and one that a
+// longer name only starts with is not it.
+func TestEnvInReadsOneVariable(t *testing.T) {
+	root := t.TempDir()
+	fake(t, root, 30, 1, []string{"server"}, "PATHS=no", "PATH=/a:/b=c")
+	if got, ok := proc.EnvIn(root, 30, "PATH"); !ok || got != "/a:/b=c" {
+		t.Errorf("EnvIn(PATH) = %q, %v; want /a:/b=c", got, ok)
+	}
+	if got, ok := proc.EnvIn(root, 30, "HOME"); ok {
+		t.Errorf("EnvIn(HOME) = %q, want unset", got)
+	}
+	if got, ok := proc.EnvIn(root, 31, "PATH"); ok {
+		t.Errorf("EnvIn of a process that is gone = %q, want unset", got)
+	}
+}
+
+// A server is started without the agent session and without the
+// GIT_EDITOR=true of a Claude Code session, and keeps the rest: Claude
+// Code's configuration, the user's own GIT_EDITOR, and a variable whose name
+// only starts like one of the list's.
+func TestWithoutAgentSessionKeepsTheUsersConfiguration(t *testing.T) {
+	kept := []string{
+		"PATH=/bin", "CLAUDE_CONFIG_DIR=/c", "CLAUDE_CODE_USE_BEDROCK=1", "ANTHROPIC_MODEL=m",
+		"GIT_EDITOR=vim", "CLAUDE_PIDS=1", "TRACEPARENTS=x",
+	}
+	env := []string{"GIT_EDITOR=true"}
+	for _, name := range proc.AgentSessionVars {
+		env = append(env, name+"=x")
+	}
+	env = append(env, kept...)
+	given := slices.Clone(env)
+	if got := proc.WithoutAgentSession(env); !slices.Equal(got, kept) {
+		t.Errorf("WithoutAgentSession = %q, want %q", got, kept)
+	}
+	if !slices.Equal(env, given) {
+		t.Errorf("WithoutAgentSession changed its input to %q", env)
+	}
+}
+
+// Without drops each variable named, and keeps one whose name only starts
+// like one of them. The environment given is left as it was.
+func TestWithoutDropsTheNamedVariablesAlone(t *testing.T) {
+	env := []string{"TMUX=/t,1,0", "PATH=/bin", "REVIER_TAG=outer", "TMUXX=1"}
+	given := slices.Clone(env)
+	if got, want := proc.Without(env, []string{"TMUX", proc.TagVar}), []string{"PATH=/bin", "TMUXX=1"}; !slices.Equal(got, want) {
+		t.Errorf("Without = %q, want %q", got, want)
+	}
+	if !slices.Equal(env, given) {
+		t.Errorf("Without changed its input to %q", env)
+	}
+}
+
+// Only a name the server's environment holds is set empty: one it does not
+// hold is left out, a pane given it empty would take it as set. A name that
+// a held one only starts with is not held. An environment that cannot be
+// read sets the agent session's and revier's command names empty alone:
+// Claude Code and revier read an empty one as unset, and a terminal's empty
+// one reads as set.
+func TestClearedSetsEmptyOnlyTheNamesTheServerHolds(t *testing.T) {
+	root := t.TempDir()
+	fake(t, root, 30, 1, []string{"server"}, "TMUX_PANE=%1", "AI_AGENT=claude", "CLAUDECODE=")
+	names := []string{"TMUX", "TMUX_PANE", "AI_AGENT", "CLAUDECODE", "CLAUDE_PID", proc.TagVar}
+	if got, want := proc.Cleared(root, 30, names), map[string]string{"TMUX_PANE": "", "AI_AGENT": "", "CLAUDECODE": ""}; !maps.Equal(got, want) {
+		t.Errorf("Cleared = %v, want %v", got, want)
+	}
+	if got, want := proc.Cleared(root, 31, names), map[string]string{"AI_AGENT": "", "CLAUDECODE": "", "CLAUDE_PID": "", proc.TagVar: ""}; !maps.Equal(got, want) {
+		t.Errorf("Cleared of a server whose environment cannot be read = %v, want %v", got, want)
+	}
+}
+
+// A server's PATH is its own; one whose environment cannot be read, or holds
+// no PATH, starts a program with this process's.
+func TestServerPATHIsTheServersOwn(t *testing.T) {
+	root := t.TempDir()
+	fake(t, root, 30, 1, []string{"server"}, "PATH=/server/bin")
+	fake(t, root, 32, 1, []string{"server"}, "HOME=/h")
+	t.Setenv("PATH", "/mine")
+	for pid, want := range map[int]string{30: "/server/bin", 31: "/mine", 32: "/mine"} {
+		if got := proc.ServerPATH(root, pid); got != want {
+			t.Errorf("ServerPATH(%d) = %q, want %q", pid, got, want)
+		}
 	}
 }

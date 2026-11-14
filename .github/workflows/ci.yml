@@ -38,10 +38,10 @@ jobs:
       - name: L3 adapter parsing
         run: CGO_ENABLED=1 go test -race -tags=integration ./...
 
-      # herdr is pinned, unlike tmux: it is pre-1.0 and its JSON API carries no
-      # version, so a new release is taken on purpose, with new fixtures
-      # (herdr-latest.yml runs the latest one weekly). The digest is the one
-      # GitHub lists for the release asset.
+      # herdr is pinned, unlike tmux: it is pre-1.0 and the host checks its
+      # release, not its API's protocol, so a new release is taken on purpose,
+      # with new fixtures (herdr-latest.yml runs the latest one weekly). The
+      # digest is the one GitHub lists for the release asset.
       - name: Install herdr
         env:
           HERDR_VERSION: v0.9.5
@@ -53,13 +53,29 @@ jobs:
           chmod +x "$RUNNER_TEMP/herdr/herdr"
           echo "$RUNNER_TEMP/herdr" >> "$GITHUB_PATH"
 
-      # ubuntu-latest ships tmux and sh; herdr comes from the step above. Every
-      # tmux or herdr test starts a private server on its own socket and stops
-      # it in cleanup.
+      # hc (herdr-core) is pinned as herdr is: it is pre-1.0, and a new release
+      # is taken on purpose, with new fixtures. The URL and digest are the
+      # linux-x86_64 entry of the release's manifest.json on releases.herdr.dev.
+      - name: Install hc
+        env:
+          HC_VERSION: 0.1.21
+          HC_SHA256: 78424755c10a40dde38a0bdb55c20ac19706e9ae05ed68fc2acf1fcff0d941c1
+        run: |
+          mkdir -p "$RUNNER_TEMP/hc"
+          curl -fsSL -o "$RUNNER_TEMP/hc.tar.gz" "https://releases.herdr.dev/core/$HC_VERSION/herdr-core-linux-x86_64.tar.gz"
+          echo "$HC_SHA256  $RUNNER_TEMP/hc.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/hc.tar.gz" -C "$RUNNER_TEMP/hc" herdr-core
+          ln -s herdr-core "$RUNNER_TEMP/hc/hc"
+          echo "$RUNNER_TEMP/hc" >> "$GITHUB_PATH"
+
+      # ubuntu-latest ships tmux and sh; herdr and hc come from the steps
+      # above. Every tmux, herdr or hc test starts a private server on its own
+      # socket and stops it in cleanup.
       - name: L4 live
         run: |
           tmux -V
           herdr --version
+          hc --version
           CGO_ENABLED=1 go test -race -tags=live -timeout=300s ./...
 
       - name: build

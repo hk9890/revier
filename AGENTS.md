@@ -60,8 +60,8 @@ comment cites a decision.
 **MUST read [docs/RUNNING.md](docs/RUNNING.md) before running anything that
 opens a window, starts a terminal, or talks to a window manager** — for
 example `./bin/revier`, `revier`, `go run ./scripts/drive`, or any `tmux`,
-`herdr`, `kitten` or `wctl` command. revier acts on the user's live desktop;
-the doc carries the substrates that verify a change without touching it.
+`herdr`, `hc`, `kitten` or `wctl` command. revier acts on the user's live
+desktop; the doc carries the substrates that verify a change without touching it.
 
 ### Finding out what revier did
 

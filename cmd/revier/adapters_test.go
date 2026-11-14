@@ -143,13 +143,19 @@ func TestATmuxKeysCommandsTryTmuxAlone(t *testing.T) {
 
 // selectHost skips a default it cannot find without a word, so a name spelled
 // one way in the order and another in the registry drops that adapter, and an
-// adapter left out of the order is never tried.
+// adapter left out of the order is never tried, unless it is one a user opts
+// into by name.
 func TestEveryAdapterIsInItsDefaultOrder(t *testing.T) {
 	check := func(kind string, registry, order []string) {
 		if !slices.Equal(registry, slices.Sorted(slices.Values(order))) {
 			t.Errorf("%s adapters %q, default order %q: want the same names", kind, registry, order)
 		}
 	}
-	check("runtime", slices.Sorted(maps.Keys(runtimeAdapters())), defaultRuntimeOrder)
+	check("runtime", slices.Sorted(maps.Keys(runtimeAdapters())), slices.Concat(defaultRuntimeOrder, optInRuntimes))
+	for _, name := range optInRuntimes {
+		if slices.Contains(defaultRuntimeOrder, name) {
+			t.Errorf("opt-in runtime %q is in the default order %q: selection would try it unnamed", name, defaultRuntimeOrder)
+		}
+	}
 	check("window", slices.Sorted(maps.Keys(windowAdapters())), defaultWindowOrder)
 }

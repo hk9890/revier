@@ -509,13 +509,14 @@ window  = ["none"]
 
 | Key | Values | Default |
 |---|---|---|
-| `runtime` | `kitty`, `tmux`, `herdr`, `none` | `["kitty", "tmux", "herdr"]` |
+| `runtime` | `kitty`, `tmux`, `herdr`, `hc`, `none` | `["kitty", "tmux", "herdr"]` |
 | `window` | `gnome`, `none` | `["gnome"]` |
 
 A key you leave out uses its default, and revier skips a default host that
-does not work, without a message. A list you write is strict: revier tries the
-names in order and stops at the first that works, or at `none`, which turns
-that kind off. When it reaches an unknown name first, or no name works, every
+does not work, without a message. `hc` is experimental, and revier uses it
+only where you name it. A list you write is strict: revier tries the names in
+order and stops at the first that works, or at `none`, which turns that kind
+off. When it reaches an unknown name first, or no name works, every
 command that opens, raises or lists stops with an error. One exception:
 `revier agent new --panel` and `revier shell new --panel` with a tmux pane id
 use tmux wherever `runtime` names it before `none`, so a tmux key works where

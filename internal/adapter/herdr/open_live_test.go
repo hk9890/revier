@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/hk9890/revier/internal/adapter/herdr"
+	"github.com/hk9890/revier/internal/adapter/proc"
 	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -231,34 +232,7 @@ func TestFocusFocusedAndCloseRoundTrip(t *testing.T) {
 
 // With no server running, Open starts one, which outlives the call.
 func TestOpenStartsTheServerWhenNoneRuns(t *testing.T) {
-	if _, err := exec.LookPath("herdr"); err != nil {
-		t.Skip("herdr not installed; L4 needs it")
-	}
-	dir, err := os.MkdirTemp("", "rvh-"+testenv.ShortName(t)+"-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	// The server Open starts takes this process's environment: it must not
-	// read or write the user's herdr, nor run their shell.
-	t.Setenv("XDG_CONFIG_HOME", dir)
-	t.Setenv("XDG_STATE_HOME", dir)
-	t.Setenv("SHELL", "/bin/sh")
-	for _, name := range herdrEnv {
-		t.Setenv(name, "")
-		_ = os.Unsetenv(name)
-	}
-	h := &herdr.Host{Socket: filepath.Join(dir, "s.sock")}
-	t.Cleanup(func() {
-		stop, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = h.Request(stop, "server.stop", struct{}{}, nil)
-		for h.Request(stop, "ping", struct{}{}, nil) == nil && stop.Err() == nil {
-			time.Sleep(50 * time.Millisecond)
-		}
-	})
-
-	c := ctx(t)
+	h, c := noServer(t), ctx(t)
 	ref, err := h.Open(c, revier.Realization{Name: "first", Launch: []string{"sh", "-c", "sleep 30"}})
 	if err != nil {
 		t.Fatalf("Open: %v", err)
@@ -310,4 +284,112 @@ func TestTheMarkOfAnOpenClosesItsWorkspaceAlone(t *testing.T) {
 	if got := workspaces(); !slices.Equal(got, made[1:]) {
 		t.Errorf("workspaces = %q, want %q, the other Open's, alone", got, made[1:])
 	}
+}
+
+// A pane has none of the agent session of what started its server: a server
+// Open starts is started without it, nor the GIT_EDITOR=true a Claude Code
+// session sets, and a pane of one started by hand sets it empty. A pane of a
+// server that holds none of it is given none, not even empty. The same holds
+// for revier's command variables and the terminal's, but for those herdr
+// removes from each pane itself. A variable outside them is kept.
+func TestAPaneHasNoneOfTheAgentSessionOfWhatStartedTheServer(t *testing.T) {
+	leaked := func(t *testing.T, h *herdr.Host) string {
+		t.Helper()
+		out := filepath.Join(t.TempDir(), "env")
+		if _, err := h.Open(ctx(t), revier.Realization{Name: "env", Launch: []string{"sh", "-c", "env > " + out + "; exec sleep 30"}}); err != nil {
+			t.Fatalf("Open: %v", err)
+		}
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			env, _ := os.ReadFile(out)
+			if strings.Contains(string(env), "REVIER_HERDR_KEPT=yes") {
+				for line := range strings.Lines(string(env)) {
+					if strings.HasSuffix(line, "=leaked\n") {
+						t.Errorf("the pane's environment carries %s", strings.TrimSpace(line))
+					}
+				}
+				return "\n" + string(env)
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("the pane never wrote its environment: %q", env)
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+
+	t.Run("a server Open started", func(t *testing.T) {
+		h := noServer(t)
+		for _, name := range slices.Concat(proc.AgentSessionVars, proc.TerminalVars, proc.CommandVars) {
+			t.Setenv(name, "leaked")
+		}
+		t.Setenv("GIT_EDITOR", "true")
+		t.Setenv("REVIER_HERDR_KEPT", "yes")
+		if env := leaked(t, h); strings.Contains(env, "\nAI_AGENT=") {
+			t.Errorf("the pane's environment sets AI_AGENT, which its server does not hold:%s", env)
+		}
+		pid, err := h.ServerPID(ctx(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range slices.Concat([]string{"GIT_EDITOR"}, proc.AgentSessionVars, proc.TerminalVars, proc.CommandVars) {
+			if v, ok := proc.EnvIn("/proc", pid, name); ok {
+				t.Errorf("the server was started with %s=%s", name, v)
+			}
+		}
+		if v, ok := proc.EnvIn("/proc", pid, "REVIER_HERDR_KEPT"); v != "yes" || !ok {
+			t.Errorf("the server's REVIER_HERDR_KEPT = %q, %v; want yes, kept", v, ok)
+		}
+	})
+
+	t.Run("a server started by hand", func(t *testing.T) {
+		env := []string{"REVIER_HERDR_KEPT=yes"}
+		for _, name := range slices.Concat(proc.AgentSessionVars, proc.CommandVars, proc.TerminalVars) {
+			env = append(env, name+"=leaked")
+		}
+		got := leaked(t, serverWith(t, env...))
+		for _, name := range []string{"AI_AGENT", proc.TagVar, "KITTY_PID", "HC_TERMINAL_ID"} {
+			if !strings.Contains(got, "\n"+name+"=\n") {
+				t.Errorf("the pane's environment does not set %s empty:%s", name, got)
+			}
+		}
+		// herdr removes these itself: set empty, they would read as set.
+		for _, name := range []string{"TMUX", "KITTY_WINDOW_ID"} {
+			if strings.Contains(got, "\n"+name+"=") {
+				t.Errorf("the pane's environment sets %s, which herdr removes:%s", name, got)
+			}
+		}
+	})
+}
+
+// noServer is a host whose socket no server answers yet, for a test whose
+// Open starts the server. The server takes this process's environment, so
+// the test's is set to a scratch directory: the server must not read or write
+// the user's herdr, nor run their shell. The cleanup stops the server.
+func noServer(t *testing.T) *herdr.Host {
+	t.Helper()
+	if _, err := exec.LookPath("herdr"); err != nil {
+		t.Skip("herdr not installed; L4 needs it")
+	}
+	dir, err := os.MkdirTemp("", "rvh-"+testenv.ShortName(t)+"-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("XDG_STATE_HOME", dir)
+	t.Setenv("SHELL", "/bin/sh")
+	for _, name := range herdrEnv {
+		t.Setenv(name, "")
+		_ = os.Unsetenv(name)
+	}
+	h := &herdr.Host{Socket: filepath.Join(dir, "s.sock")}
+	t.Cleanup(func() {
+		stop, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = h.Request(stop, "server.stop", struct{}{}, nil)
+		for h.Request(stop, "ping", struct{}{}, nil) == nil && stop.Err() == nil {
+			time.Sleep(50 * time.Millisecond)
+		}
+	})
+	return h
 }

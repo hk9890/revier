@@ -978,3 +978,20 @@ failure, yet it was a `mirror` WARN after most closes. A `PanelReader` that can
 tell wraps `revier.ErrPanelGone`, and the mirror logs it once per panel as
 INFO, which still shows a panel that stays unmatched. Rejected: the TUI dropping
 the read of a panel its own close ended, which misses a panel closed by hand.
+
+### D173 — an hc instance is the set of terminals that share revier's instance label
+
+hc has no workspace object, only terminals with labels. Open gives each
+terminal it starts the same random instance id as a label, and the instance
+is every live terminal carrying it; its ref names the id behind hc's core id,
+which a core restart keeps, so a stale binding never names another core's
+terminal. Terminals are not kept: hc brings a kept one back after a reboot as
+a bare shell under the agent's labels, so a restore opens again instead. A
+close kills each terminal, as hc offers no polite close.
+
+### D174 — a prototype runtime runs only where [hosts] names it
+
+A prototype runtime is registered but left out of the default runtime order,
+so selection tries it only where the config's `[hosts]` names it. A prototype
+must not take over a machine that merely has its tool installed: a user of
+kitty, tmux or herdr who also installs hc keeps the runtime they had.

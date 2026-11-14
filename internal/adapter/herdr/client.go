@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/hk9890/revier/internal/adapter/proc"
 )
 
 // socketPath is the API socket of the server herdr's own CLI would talk to
@@ -70,7 +72,7 @@ func (h *Host) request(ctx context.Context, method string, params, out any) (int
 		return 0, fmt.Errorf("herdr %s: %w", method, err)
 	}
 
-	pid, err := peerPID(conn.(*net.UnixConn))
+	pid, err := proc.PeerPID(conn.(*net.UnixConn))
 	if err != nil {
 		return fail(err)
 	}
@@ -112,23 +114,4 @@ func (h *Host) socket() string {
 		return h.Socket
 	}
 	return socketPath()
-}
-
-// peerPID is the pid of the process at the other end of a Unix socket.
-func peerPID(conn *net.UnixConn) (int, error) {
-	raw, err := conn.SyscallConn()
-	if err != nil {
-		return 0, err
-	}
-	var cred *syscall.Ucred
-	var credErr error
-	if err := raw.Control(func(fd uintptr) {
-		cred, credErr = syscall.GetsockoptUcred(int(fd), syscall.SOL_SOCKET, syscall.SO_PEERCRED)
-	}); err != nil {
-		return 0, err
-	}
-	if credErr != nil {
-		return 0, credErr
-	}
-	return int(cred.Pid), nil
 }
