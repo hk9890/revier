@@ -44,7 +44,7 @@ A findability map: where things live, and how to search for them.
 - `KeyBinder`: `pkg/revier/keys.go`
 - `TermKeys`: `pkg/revier/termkeys.go`
 
-What each port is: [docs/design/architecture.md](design/architecture.md#five-ports).
+What each port is: [docs/design/architecture.md](design/architecture.md#ports).
 
 ## Finding things
 

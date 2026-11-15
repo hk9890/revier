@@ -27,16 +27,20 @@ without writing Go. The contract is the user guide's
 panel on every refresh, so it stays cheap or it becomes the reason the surface
 feels slow. It wins over every compiled-in probe except the Claude probe.
 
-Of the ports, only the agent probe has a subprocess form. A host is stateful and
-sits in the latency path of every keystroke, so it is Go or nothing.
+Of the ports, only the agent probe has a subprocess form. A runtime, a view
+and a window host are stateful and sit in the latency path of every
+keystroke, so each is Go or nothing.
 
-## Level 3 — a Go host
+## Level 3 — a Go runtime, view or window host
 
-A new terminal, multiplexer or compositor is a Go adapter behind the host
-port ([architecture.md](architecture.md#five-ports)). It lists, opens and
-focuses, holds no policy, and reports whether it can work where it runs, which
-keeps automatic selection correct on a machine that has several. What a host
-must never decide is in [CODING.md](../CODING.md#adapters-hold-no-policy).
+A new terminal runtime, terminal view or compositor is a Go adapter behind
+one of the three ports that run and show programs
+([architecture.md](architecture.md#ports)): a runtime lists and starts
+terminals, a view shows and focuses them, and a window host lists, opens and
+raises OS windows. Each holds no policy, and reports whether it can work where
+it runs, which keeps automatic selection correct on a machine that has
+several. What an adapter must never decide is in
+[CODING.md](../CODING.md#adapters-hold-no-policy).
 
 ## What is not extensible, on purpose
 

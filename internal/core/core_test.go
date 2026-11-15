@@ -526,7 +526,7 @@ func TestToggleBackNeedsTheOSWindowFocused(t *testing.T) {
 
 // A runtime that does not report OSWindows - a multiplexer - gets no bridge
 // to the window host: its refs are never judged by it, and never raised
-// (decisions.md D16, D19).
+// (decisions.md D16, D177).
 func TestNoBridgeWithoutOSWindows(t *testing.T) {
 	rt, wm, _, diffWm := osWindowHosts()
 	rt.SetCapabilities(revier.Capabilities{})
@@ -1017,7 +1017,7 @@ func TestGoRaisesAnUnnamedWindowInsteadOfOpeningASecond(t *testing.T) {
 }
 
 // The process id was rejected for pairing a pane to a window, because one
-// kitty process can own several OS windows (decisions.md D19). That case is
+// kitty process can own several OS windows (decisions.md D177). That case is
 // refused here rather than guessed at: a wrong title would send a keypress to
 // the wrong window.
 func TestTwoWindowsOfOneProcessAreLeftUnidentified(t *testing.T) {

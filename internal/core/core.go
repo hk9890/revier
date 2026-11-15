@@ -418,7 +418,7 @@ func (c *Core) listing(ctx context.Context) (snapshot, hostErrs) {
 // every named runtime window of the process is found there by its title, one
 // window per named window, so two named windows of one title need two. The
 // process id was rejected for pairing a pane to a window, because every OS
-// window of one kitty process shares its pid (D19); that objection is exactly
+// window of one kitty process shares its pid (D177); that objection is exactly
 // this refusal, so an ambiguous process is left as it was rather than guessed
 // at (D63). A named window the window host does not list could
 // be the one left over, and its title would then be lent to the wrong window.
@@ -971,7 +971,7 @@ func (c *Core) awaitNew(ctx context.Context, before []revier.Instance, wait, pol
 // opened. A terminal's own focus does not raise its OS window where the
 // compositor refuses it, kitty's on GNOME Wayland, and the workspace kitty
 // never holds the window the key was pressed in (decisions.md D165). So the
-// window host raises it, as it raises one already open (D19). A failure is
+// window host raises it, as it raises one already open (D177). A failure is
 // not returned, unlike a raise of an open window (D63): the launch ran, and
 // the press is one, with only the raise missing, as place says of a placement.
 // The OS window is the one place waited for, if it did; one place waited for

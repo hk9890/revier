@@ -22,7 +22,8 @@ territory. revier is how you walk it.
 | **Project** | A directory, a name, and the targets bound to it |
 | **Target** | A named thing you reach with a key: the workspace, an editor, a diff viewer, a page |
 | **Home** | The project's workspace target — the terminal you live in and return to |
-| **Panel** | One pane inside a runtime target: an agent, a shell, a tool |
+| **Panel** | One terminal of a runtime target: an agent, a shell, a tool |
+| **Tab** | The panels of one instance that share a tab mark. The runtime keeps the mark, so a view that opens again draws the same tabs (D179) |
 | **Agent** | A program an agent panel runs. The layout's first agent panel is the project's default agent; a named agent is declared once and opened by its name (D145) |
 | **Agent state** | What an agent panel is doing: idle, running, or waiting for you |
 | **Session** | A recorded set: which projects were open, which of their targets, and each agent's conversation, directory and named agent (D46, D146) |
@@ -47,7 +48,7 @@ the diff viewer *is* depends on which host can provide it (D14):
 | Host | The same target, realized |
 |---|---|
 | Compositor (GNOME) | a Meld window, found by its window class, raised by the compositor |
-| Runtime (kitty, tmux) | a diff in nvim, in a pane, found by its title, focused by the terminal |
+| Runtime (kitty, hc) | a diff in nvim, in a panel, found by what the runtime reports of it, shown and focused by the view (D176) |
 
 The key, the name, and the promise are identical. Only the resolution differs.
 This is why the same binding works on a desktop and on a headless SSH box, and
@@ -146,27 +147,28 @@ machine's rows never wait for a linked host (D114).
 - Toggle back to home on a second keypress
 - Attached instances through the project-scoped picker
 - Agent state for Claude Code, shown per project
-- kitty runtime, GNOME window control, Claude probe
+- kitty as runtime and view, GNOME window control, Claude probe
 - The popup the desktop key opens: the TUI in kitty on GNOME (D76), hidden and
   raised again (D86)
 - JSON output
 - Projects on another machine, surveyed by the revier installed there (D40)
 
 Saved sessions (D46), shutdown (D78), `revier doctor` (D85), `revier each`
-(D32), `revier events` (D112) and the config assistant (D135) extend it.
+(D32), `revier events` (D112), the config assistant (D135) and the hc
+runtime, shown by kitty or by no view (D178), extend it.
 
 **Out, deliberately**
 
 | Left out | Why |
 |---|---|
 | Dev container execution | The heaviest, least general transport. It belongs to whatever launches the shell, not to a project switcher. |
-| The contents of a pane across a reboot | The runtime owns persistence. tmux has it, kitty does not, and revier does not paper over the difference. The *set* of open projects is revier's own model and is recorded (D46). |
+| The contents of a pane across a reboot | The runtime owns persistence. hc keeps a panel when its view closes but not across a reboot (D173, D181), kitty keeps neither, and revier does not paper over the difference. The *set* of open projects is revier's own model and is recorded (D46). |
 | Browser tabs | A tab cannot be enumerated or activated from outside the browser. An app-mode window can, which is what a bound page is. A command target can hand a tab to a tool that drives the browser; revier still knows no tab (D166). |
 
 ## Non-goals
 
 revier is not a terminal multiplexer and does not replace one. It sits above
-whatever runtime you already use and gives it a project-shaped view.
+a runtime, kitty or hc, and gives it a project-shaped surface.
 
 revier does not wrap your agent or proxy its output. It starts the program a
 panel declares, then observes the panel and reports what it sees. The one
@@ -183,8 +185,13 @@ runs on any machine, and what it can reach there is its own concern (D166).
 | Environment | What works |
 |---|---|
 | kitty and GNOME | every target, both realizations |
-| tmux over SSH, no desktop | every target with a runtime realization; window-only targets are unavailable |
+| hc shown by kitty, GNOME | every target, both realizations; an agent outlives the window that shows it |
+| hc over SSH, no desktop, no view | every target with a runtime realization runs and is monitored, and a terminal reaches a panel by attaching to it; window-only targets are unavailable |
 | kitty, unsupported compositor | home and agent monitoring; window-only targets are unavailable, and under Wayland the home opens but is not raised |
+
+Under hc, a pane's mirror has no colour and no history, a view that attaches
+again loses the images a program drew, and a large output lags. Each is hc's,
+and revier does not work around it.
 
 The mechanism is portable. An individual target may not be, and its config says
 so by which realizations it declares.

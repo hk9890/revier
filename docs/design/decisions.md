@@ -79,12 +79,6 @@ gets the focus back.
 A workspace that opens in kitty's own directory is the one thing a session file
 never got wrong.
 
-### D19 — a runtime that owns OS windows says so, and the window host raises them
-
-On GNOME Wayland, kitty cannot raise its own window. With `OSWindows`, the core
-finds the OS window by title and raises and judges focus there. PID lineage was
-rejected: one kitty process owns many windows.
-
 ### D21 — a key binds to the instance it landed on, and a launch waits for its window
 
 Replaces the claim-on-appear rule for targets. Titles move after launch, so a
@@ -221,9 +215,9 @@ and `attach-session` reaches one workspace.
 ### D74 — an agent is reached by making its tab current
 
 `Focus` on the instance and `FocusPanel` already reach a tab target, so going
-to an agent is those two and a raise, and needs no new runtime capability. The
-instance comes first: on tmux its focus is what switches a terminal showing
-another session.
+to an agent is those two and a raise, and needs no new capability of the view.
+The instance comes first: on tmux its focus is what switches a terminal
+showing another session.
 
 ### D75 — an agent is named by its instance and its panel
 
@@ -257,7 +251,8 @@ A shutdown is the moment before a restart, so it saves the session when it
 differs from the newest one. An agent that works or waits for an answer would
 lose its turn, so the CLI refuses before the save and `--force` goes on; the
 TUI's confirm names the busy agents instead, and confirming them is the force.
-`Closer` and `PanelCloser` are optional and polite, so nothing is killed.
+`Closer` and `PanelCloser` are optional and polite, so nothing is killed,
+except under hc, which has no polite close (D173).
 
 ### D80 — the file name is the project's name, and a rename moves the file
 
@@ -302,9 +297,10 @@ Replaces D71, the link half of D74, and the one pane attached to a tmux
 workspace on the host. Tabs, scrollback, keys and focus in that pane were
 tmux's inside the terminal's, and every act on an agent was a round trip to
 the host. Each panel here now runs `revier agent exec` or `revier shell exec`
-there, so the runtime here opens, focuses, types into and closes it, and
-`Remote` keeps the questions only. The two machines name the agent by a tag
-its process carries, so nothing is recorded and no title can move it.
+there, so the runtime here opens, types into and closes it, the view here
+focuses it, and `Remote` keeps the questions only. The two machines name the
+agent by a tag its process carries, so nothing is recorded and no title can
+move it.
 
 ### D85 — a refusal disables the smallest thing that is wrong
 
@@ -471,7 +467,7 @@ agent by need: waiting for the user, working, at rest, unknown. The first and
 third stand by when each spoke, the latest first, read through `Detailed`; a
 working agent speaks all the time, so those stand by project. The surface
 always opens on the projects. The desktop takes its key before any terminal
-does, so `revier popup` types it into the surface the focused window shows.
+does, so the press reaches the surface through `revier popup` (D182).
 Rejected: a mode of the project list, which hides the projects it is for.
 
 ### D111 — the agent list's pane mirrors the agent's panel, with its colour and nothing else
@@ -888,10 +884,10 @@ Extends D76 and D110. A kitty option is its whole process's, and a workspace
 opened in the kitty it was asked from, the popup's too: the popup's options
 reached every workspace, so its title bar could not go alone. revier now
 starts one kitty for workspaces and opens every new OS window there; no key
-opens anything in the popup. The survey still reads every kitty, for D110 and
-for terminals of the user's own. That kitty never has the focus, so the window
-host raises a new workspace (D19). Rejected: a kitty per workspace, which
-costs a kitty's memory for each.
+opens anything in the popup. Under the kitty runtime the survey still reads
+every kitty, for terminals of the user's own. That kitty never has the focus,
+so the window host raises a new workspace (D177). Rejected: a kitty per
+workspace, which costs a kitty's memory for each.
 
 ### D166 — a command target runs its command and binds nothing
 
@@ -989,3 +985,91 @@ Keeping herdr as well kept a second host and a second probe for the same
 makers' product, pinned and tracked weekly, for what hc gives. A config that
 names herdr is refused with what to name instead, not taken as an unknown host.
 herdr's interface may come back later as a view over hc, not as a runtime.
+
+### D176 — a terminal is two ports: the Runtime runs programs, the View shows them
+
+Extends D14. kitty and tmux each ran programs and drew them, so one host port
+did both; hc runs programs and draws nothing, so a port that also drew would
+be half empty there. The runtime lists, starts, types into, reads and closes;
+the view shows, focuses, reports the focus and maps a key's panel id. Each
+view call takes and returns the runtime's refs and panel ids, so no id of a
+view's reaches the core (D16). The core composes the two, so run-or-raise
+stays one operation. The window host is unchanged.
+
+### D177 — a view that owns OS windows says so, and the window host raises them
+
+Replaces D19. On GNOME Wayland, kitty cannot raise its own window. A view that
+gives each window the title the window host reports says so, and the core
+finds the OS window by that title, raises it and judges the focus there. The
+kitty view does under either runtime, so GNOME raises an hc instance's window
+and a second press on it goes home. PID lineage was rejected: one kitty
+process owns many windows.
+
+### D178 — the runtimes are kitty and hc, the one view is kitty, and three setups work
+
+kitty shown by the same kitty is the setup of before and installs nothing
+more. hc is shown by kitty where kitty can work and by no view otherwise, so
+`[hosts]` names a runtime and never a view. With no view, revier lists, reads,
+prompts and attaches, and focuses nothing: over ssh that is all a terminal
+needs. Under hc revier reads no kitty but the view's, so a terminal attached
+by hand in a kitty of the user's own is its window alone (D95). Rejected: a
+kitty runtime in another view, since kitty runs programs in its own windows.
+
+### D179 — a tab is the runtime terminals that share an instance label and a tab mark
+
+Extends D64, D145 and D173. Under hc a tab drawn by the view would be lost with
+the view, so the runtime keeps it: each terminal carries its instance and its
+tab as labels, a target's tab its target mark (D64), a launcher's tab a token
+of its own, so two agent tabs stay two (D145). The labels also hold the tab's
+place among the tabs and the panel's within its tab, so a view that opens
+again draws the same tabs in the same order. Under kitty the tab is kitty's
+own, since the runtime draws it.
+
+### D180 — under hc the kitty view gives each panel a kitty window that attaches its terminal
+
+Extends D165 and D179. hc's attach shows one terminal, so a tab of an agent and
+a shell is two kitty windows in one kitty tab, and an instance is one kitty OS
+window of the workspace kitty, titled as its match expects. Each kitty window
+carries the hc address it attaches, which maps a key's kitty window id to its
+terminal and a terminal to its window. A view's window is never held: holding
+is a runtime's, and hc removes a terminal whose program exited, so the window
+ends with its panel (D94).
+
+### D181 — under hc a view that closes ends no agent, and the next press opens a view again
+
+Extends D173. A view only attaches to hc's terminals, so a kitty window closed
+by hand or crashed leaves every terminal live, and the survey still lists the
+instance. The view reports the instances it shows by the addresses its windows
+carry (D180); run-or-raise on a live instance it does not show opens a view
+over its terminals, in their tabs (D179), and starts nothing. A shutdown still
+closes the terminals through the runtime (D78). Under kitty the view is the
+runtime, so a closed window still ends its programs.
+
+### D182 — the popup's second press reaches its surface over a socket of its own
+
+Extends D76 and D110. The key was typed into the surface through the runtime,
+which ties the popup to kitty's, and under hc the runtime lists no popup. The
+popup's surface now listens on a private socket under revier's runtime
+directory, removed when it ends; a press while the popup has the focus, which
+the window host tells by its class, tells it to switch lists, and the popup is
+raised by its class alone. A revier started in a terminal of the user's own
+has no socket: the key raises or opens the popup instead of switching it.
+
+### D183 — under hc a terminal key outside a workspace opens a tab of kitty's own
+
+Extends D148, D153 and D164. An hc terminal that no instance holds would list
+as an instance of its own in every survey and outlive the window it was asked
+from. So under hc the plain tab, and the agent D164 names, open as kitty's own
+tab beside the window, in the directory D153 reads, and revier lists neither:
+no project holds them. Rejected: an hc terminal under a mark the survey skips,
+which keeps a program running that nothing shows or reaches.
+
+### D184 — hc is the headless substrate, and tmux goes once the live tests run on it
+
+The core's and the CLI's live tests and the hand driver need a runtime with no
+display, and tmux is today's, with tabs and focus of its own. hc runs headless
+with no view, so those tests move to a real hc on private sockets beside a
+fake view that reports the focus and tabs the core asks for, and tmux is
+removed with that move, not before. The kitty view needs a display, so it is
+tested on recorded output and by hand. Accepted: focus over a real view, and
+a read's history, which hc does not give, lose their headless test.
