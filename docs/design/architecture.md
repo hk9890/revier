@@ -82,7 +82,8 @@ its terminal (D180). Each kitty window carries the hc address it attaches, so
 a kitty window id maps to its terminal and a terminal to its window. A window
 ends with its panel, and a tab with its last one (D94). A panel's command
 that ends holds its window, as the kitty runtime holds it: the window shows
-what the command left and how it ended, and closes on Enter (D187).
+what the command left and how it ended, until the person dismisses it
+(D187).
 
 What a setup without the kitty runtime does not read:
 

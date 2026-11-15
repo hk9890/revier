@@ -6,6 +6,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -134,4 +136,34 @@ func listing(t *testing.T, h *hc.Host, ref revier.TargetRef) []revier.Panel {
 	}
 	t.Fatalf("no instance %s: %+v", ref.ID, instances)
 	return nil
+}
+
+// waitForRecords waits until the states of the instance's records, live or
+// finished, sorted and joined by a space, are want: "" for none.
+func waitForRecords(t *testing.T, c context.Context, h *hc.Host, ref revier.TargetRef, want string) {
+	t.Helper()
+	_, id, _ := strings.Cut(ref.ID, "/")
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		var list struct {
+			Terminals []struct {
+				State string `json:"state"`
+			} `json:"terminals"`
+		}
+		params := map[string]any{"all": true, "labels": map[string]string{"revier.instance": id}}
+		if err := h.Request(c, "terminal.list", params, &list); err != nil {
+			t.Fatalf("terminal.list: %v", err)
+		}
+		var states []string
+		for _, r := range list.Terminals {
+			states = append(states, r.State)
+		}
+		slices.Sort(states)
+		if got := strings.Join(states, " "); got == want {
+			return
+		} else if time.Now().After(deadline) {
+			t.Fatalf("records of %s = %q, want %q", ref.ID, got, want)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
