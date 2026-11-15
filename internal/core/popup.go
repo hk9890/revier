@@ -40,9 +40,11 @@ const (
 // window and places it (D76). A revier the user runs in a terminal of their
 // own is no popup: the key raises or opens the popup over it. The size is
 // decided before the launch, so revier places the window once and never
-// measures it to place it again. argv is a function, asked only for a launch:
-// what it carries - the project the surface opens on - costs a listing the
-// raise must not pay.
+// measures it to place it again. Where the window host's rules for the popup
+// are current, they placed it before its first frame, by the monitor it
+// opened on, and revier does not place it again (D189). argv is a function,
+// asked only for a launch: what it carries - the project the surface opens
+// on - costs a listing the raise must not pay.
 func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (revier.TargetRef, error) {
 	if c.Window == nil {
 		return revier.TargetRef{}, ErrNoPopupHost
@@ -86,9 +88,14 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 	}
 	// A mark left by a popup that went away is no raise of the new one.
 	c.TakePopupHidden()
-	width, err := area.WorkareaWidth(ctx)
-	if err != nil {
-		return revier.TargetRef{}, fmt.Errorf("%s: workarea: %w", c.Window.Name(), err)
+	byRules := c.popupPlacedByRules(ctx)
+	geometry := ""
+	if !byRules {
+		width, err := area.WorkareaWidth(ctx)
+		if err != nil {
+			return revier.TargetRef{}, fmt.Errorf("%s: workarea: %w", c.Window.Name(), err)
+		}
+		geometry = popupGeometry(width)
 	}
 	if _, err := c.Window.Open(ctx, revier.Realization{
 		Launch: argv(ctx),
@@ -107,14 +114,30 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 		return revier.TargetRef{}, err
 	}
 	ref := w.Ref
-	geometry := popupGeometry(width)
-	slog.Info("popup: launched", "ref", ref, "over", over.ID, "workarea_width", width, "place", geometry)
+	slog.Info("popup: launched", "ref", ref, "over", over.ID, "by_rules", byRules, "place", geometry)
 	// The raise goes first, so the keyboard reaches the window before it moves.
 	if err := c.Window.Focus(ctx, ref); err != nil {
 		return ref, err
 	}
-	c.place(ctx, revier.Realization{Place: geometry}, ref)
+	if !byRules {
+		c.place(ctx, revier.Realization{Place: geometry}, ref)
+	}
 	return ref, nil
+}
+
+// popupPlacedByRules reports whether the window host's rules place the
+// popup: revier's rules for it are current. A read that fails leaves the
+// place to revier.
+func (c *Core) popupPlacedByRules(ctx context.Context) bool {
+	if c.WindowRules == nil {
+		return false
+	}
+	report, err := c.PopupRuleReport(ctx)
+	if err != nil {
+		slog.Warn("popup: window rules", "err", err)
+		return false
+	}
+	return report.State == PopupRulesCurrent
 }
 
 // switchPopup tells the popup to switch its list when it is the focused
@@ -250,10 +273,10 @@ type popupTier struct {
 // pane's 100 columns. On a 29 inch wide screen it is most of the screen, and
 // on a laptop all of it.
 //
-// revier places the popup it launched by them, against the workarea, and
-// writes them as the window host's rules, which place it against the
-// monitor before its first frame (decisions.md D189). The two agree but on
-// a screen whose dock takes it across a tier's width.
+// revier writes them as the window host's rules, which place the popup
+// against its monitor before its first frame (decisions.md D189). Where
+// those rules are not current, revier places the popup it launched by them
+// itself, against the primary monitor's workarea.
 var popupTiers = []popupTier{
 	{minWidth: 3400, place: "center top 1800 100%"},
 	{minWidth: 2200, place: "center top 75% 100%"},

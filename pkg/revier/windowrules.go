@@ -22,6 +22,10 @@ type WindowRule struct {
 	// Other says the rule holds something the fields above do not carry:
 	// a second match, a tile, a workspace. Such a rule is the user's.
 	Other bool
+	// Raw is the rule as the host stores it, all of it, so that the user can
+	// put back a rule of theirs that `revier setup install --force`
+	// replaced. Empty in a rule revier builds to write.
+	Raw string
 }
 
 // WindowRules reads the window host's placement rules.

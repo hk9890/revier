@@ -95,7 +95,21 @@ func printRulePlan(w io.Writer, plan core.PopupRulePlan, sub string, dryRun, for
 	if sub == "install" || dryRun || plan.Err != "" {
 		printFoundRules(w, plan.Report.Found)
 	}
+	printRemovedRules(w, plan.Removed)
 	if plan.Done && sub == "install" {
 		_, _ = fmt.Fprintln(w, "\n  The extension reads the change by itself: the next popup gets it.")
+	}
+}
+
+// printRemovedRules prints each rule of the user's that --force removed, as
+// the file held it: revier keeps no copy, and this is what the user puts
+// back, with an editor or wctl.
+func printRemovedRules(w io.Writer, removed []revier.WindowRule) {
+	if len(removed) == 0 {
+		return
+	}
+	_, _ = fmt.Fprintln(w, "\n  Removed, as the file held them, for you to put back:")
+	for _, r := range removed {
+		_, _ = fmt.Fprintf(w, "    %s\n", r.Raw)
 	}
 }

@@ -40,7 +40,10 @@ func runSetup(t *testing.T, a *app, args ...string) (string, error) {
 	return b.String(), err
 }
 
-var userPopupRule = revier.WindowRule{Class: core.PopupClass, Place: []string{"center", "top", "50%", "100%"}}
+var userPopupRule = revier.WindowRule{
+	Class: core.PopupClass, Place: []string{"center", "top", "50%", "100%"},
+	Raw: `{"match":{"class":"revier-popup"},"place":["center","top","50%","100%"]}`,
+}
 
 // A dry run says so once, and writes no rule.
 func TestSetupDryRunWritesNoRule(t *testing.T) {
@@ -60,7 +63,8 @@ func TestSetupDryRunWritesNoRule(t *testing.T) {
 }
 
 // A rule of the user's for the popup's window holds the install back and
-// makes it incomplete; --force replaces it.
+// makes it incomplete; --force replaces it and prints it as the file held
+// it, for the user to put back.
 func TestSetupInstallNeedsForceForARuleOfTheUsers(t *testing.T) {
 	a, w := rulesApp(t, userPopupRule)
 	out, err := runSetup(t, a, "install")
@@ -74,8 +78,12 @@ func TestSetupInstallNeedsForceForARuleOfTheUsers(t *testing.T) {
 		t.Fatalf("install without --force wrote: %v", w.Calls)
 	}
 
-	if _, err := runSetup(t, a, "install", "--force"); err != nil {
+	out, err = runSetup(t, a, "install", "--force")
+	if err != nil {
 		t.Fatalf("install --force: %v", err)
+	}
+	if !strings.Contains(out, "for you to put back:\n    "+userPopupRule.Raw+"\n") {
+		t.Errorf("install --force does not print the rule it removed:\n%s", out)
 	}
 	if !reflect.DeepEqual(w.Rules, core.PopupRules()) {
 		t.Errorf("rules = %+v, want revier's", w.Rules)

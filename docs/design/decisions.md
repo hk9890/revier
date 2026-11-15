@@ -1097,13 +1097,11 @@ built-in mapping, until a second agent sends the records.
 
 ### D189 — revier writes the popup's window rules, and one command writes all of revier's setup
 
-Extends D30 and D147: wctl's rules file is a third write outside revier's own
-files. The popup's class is revier's (D76), so the rules for it in that file
-are revier's too. A rule places the popup before its first frame, by the
-monitor's width, where revier's own place moves it after (D24). D24's reason
-does not hold for the popup, as its class names its window before it opens.
-revier writes the rules through wctl, which writes the file whole through a
-link, as D147's writes go. A rule for the class in another shape is the
-user's, replaced only with --force, as a key (D27). `revier setup` writes the
-desktop keys, the terminal keys and the rules in one run, because a user sets
-up a machine, not one store.
+Extends D30 and D147: wctl's rules file is a third write, which wctl makes
+whole through a link. The popup's class is revier's (D76) and names its window
+before it opens, so its rules are revier's and place it by its monitor before
+its first frame. D24's place after that frame shows as a jump, so revier places
+the popup only where its rules are not current. A rule for the class in another
+shape is the user's, replaced only with --force (D27), which prints it: no tool
+writes it again. `revier setup` writes the desktop keys, the terminal keys and
+the rules in one run, because a user sets up a machine, not one store.

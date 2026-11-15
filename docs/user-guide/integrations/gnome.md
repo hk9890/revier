@@ -50,9 +50,13 @@ hide it when another window takes the focus or the overview opens.
 - The extension sizes the window before it draws it on GNOME 49 or later
   under Wayland. On an older GNOME, and under X11, the popup opens and then
   moves into place.
+- While the rules are as revier wrote them, revier does not move the popup
+  itself. Else it places the popup by the same widths, but measures the
+  primary monitor, less its panels.
 - A rule of yours for `revier-popup` that keeps the popup on top is
   revier's: install replaces it. Any other rule of yours for it holds the
-  install back, and `revier setup install --force` replaces it.
+  install back, and `revier setup install --force` replaces it. The install
+  prints each rule it removed, as the file held it, for you to put back.
 - An extension older than version 23 cannot read the rules, and
   `revier setup install` skips them and says so. Upgrade the extension.
   `revier setup uninstall` still removes them, with or without a running

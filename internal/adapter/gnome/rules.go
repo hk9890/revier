@@ -1,6 +1,7 @@
 package gnome
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -133,13 +134,22 @@ func (r *Rules) wctl(ctx context.Context, args ...string) ([]byte, error) {
 // Anything in a rule that WindowRule does not carry marks it Other, so the
 // core never takes a rule of the user's for one of revier's.
 func decodeRules(raw []byte) ([]revier.WindowRule, error) {
-	var docs []map[string]json.RawMessage
+	var docs []json.RawMessage
 	if err := json.Unmarshal(raw, &docs); err != nil {
 		return nil, fmt.Errorf("decode wctl rules list: %w", err)
 	}
 	out := make([]revier.WindowRule, len(docs))
 	for i, doc := range docs {
-		out[i] = decodeRule(doc)
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(doc, &fields); err != nil {
+			return nil, fmt.Errorf("decode wctl rules list: rule %d: %w", i, err)
+		}
+		var compact bytes.Buffer
+		if err := json.Compact(&compact, doc); err != nil {
+			return nil, fmt.Errorf("decode wctl rules list: rule %d: %w", i, err)
+		}
+		out[i] = decodeRule(fields)
+		out[i].Raw = compact.String()
 	}
 	return out, nil
 }

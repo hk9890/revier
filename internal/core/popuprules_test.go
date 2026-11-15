@@ -102,9 +102,10 @@ func TestInstallRewritesRevierRulesWithoutForce(t *testing.T) {
 }
 
 // A rule for the popup's class in any other shape is the user's. Install
-// without --force changes nothing; with it, the user's rule goes.
+// without --force changes nothing; with it, the user's rule goes, and the
+// plan carries it as the host stored it.
 func TestARuleOfTheUsersForThePopupNeedsForce(t *testing.T) {
-	mine := revier.WindowRule{Class: core.PopupClass, Place: []string{"center", "top", "50%", "100%"}}
+	mine := revier.WindowRule{Class: core.PopupClass, Place: []string{"center", "top", "50%", "100%"}, Raw: `{"mine":true}`}
 	for _, force := range []bool{false, true} {
 		w := hosttest.NewWindowRuleWriter(mine, kittyRule)
 		c := &core.Core{WindowRules: w}
@@ -125,6 +126,13 @@ func TestARuleOfTheUsersForThePopupNeedsForce(t *testing.T) {
 		}
 		if plan.Done != force {
 			t.Errorf("force %v: done = %v", force, plan.Done)
+		}
+		var removed []revier.WindowRule
+		if force {
+			removed = []revier.WindowRule{mine}
+		}
+		if !reflect.DeepEqual(plan.Removed, removed) {
+			t.Errorf("force %v: removed = %+v, want %+v", force, plan.Removed, removed)
 		}
 	}
 }

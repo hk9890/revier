@@ -256,6 +256,44 @@ func TestPopupLaunchesAndPlacesByTheWorkarea(t *testing.T) {
 	}
 }
 
+// Rules of revier's for the popup that are current placed it before its
+// first frame, by the monitor it opened on, so the launch raises it and
+// does not place it again: a place by the primary workarea would undo the
+// size they gave on another monitor. Rules that are not current, or that
+// cannot be read, leave the place to revier (decisions.md D189).
+func TestPopupLeavesThePlaceToRulesThatAreCurrent(t *testing.T) {
+	stale := core.PopupRules()[1:]
+	unread := hosttest.NewWindowRules(core.PopupRules()...)
+	unread.ReadErr = errors.New("wctl not answering")
+	cases := []struct {
+		name   string
+		rules  revier.WindowRules
+		placed bool
+	}{
+		{name: "current", rules: hosttest.NewWindowRules(core.PopupRules()...), placed: false},
+		{name: "stale", rules: hosttest.NewWindowRules(stale...), placed: true},
+		{name: "unread", rules: unread, placed: true},
+		{name: "none", rules: nil, placed: true},
+	}
+	for _, tc := range cases {
+		wm := hosttest.New("wm")
+		wm.Detached = true
+		wm.Workarea = 2560
+		c := &core.Core{Window: wm, WindowRules: tc.rules}
+
+		ref, err := c.Popup(context.Background(), popupArgv)
+		if err != nil {
+			t.Fatalf("%s: Popup: %v", tc.name, err)
+		}
+		if _, placed := wm.Placements[ref.ID]; placed != tc.placed {
+			t.Errorf("%s: placed = %v, want %v", tc.name, placed, tc.placed)
+		}
+		if !slices.Equal(wm.Focuses, []revier.TargetRef{ref}) {
+			t.Errorf("%s: focuses = %v, want the new popup", tc.name, wm.Focuses)
+		}
+	}
+}
+
 // switches stands for the popup's socket: it counts the switches it was told,
 // and fails each with err.
 type switches struct {

@@ -60,6 +60,32 @@ func TestRulesAddOnlyWhereTheExtensionReadsEveryKeyRevierWrites(t *testing.T) {
 	}
 }
 
+// The host's Rules read what the host's own probe read of the extension, so
+// the popup's launch asks wctl for no second version.
+func TestTheHostsRulesKnowWhatItsProbeRead(t *testing.T) {
+	for _, tc := range []struct {
+		caps string
+		adds bool
+	}{
+		{`["rules","rules-overlay","rules-min-width"]`, true},
+		{`["rules","rules-overlay"]`, false},
+	} {
+		onGNOME(t)
+		w := &wctl{reply: versionReply(`{"wctl":"0.23.0","extension":"23","capabilities":`+tc.caps+`}`, 0)}
+		h := w.host()
+		if err := h.Probe(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		calls := len(w.calls)
+		if err := h.Rules().CanAdd(); (err == nil) != tc.adds {
+			t.Errorf("%s: CanAdd = %v, want adds %v", tc.caps, err, tc.adds)
+		}
+		if len(w.calls) != calls {
+			t.Errorf("%s: CanAdd ran wctl: %q", tc.caps, w.calls[calls:])
+		}
+	}
+}
+
 // Add puts the match first and --at last, and leaves out what the rule does
 // not have; Remove names the index.
 func TestTheWriterAsksWctlForTheRuleAsWritten(t *testing.T) {
@@ -105,7 +131,8 @@ func TestTheRulesReaderCannotWrite(t *testing.T) {
 
 // A place value may be a number in a file the user wrote, and reads as the
 // string revier writes. A key revier does not write marks the rule as the
-// user's.
+// user's. Each rule keeps all of what the file held, for the user to put
+// back.
 func TestDecodeRulesReadsNumbersAndMarksTheRest(t *testing.T) {
 	got, err := gnome.DecodeRules([]byte(`[
 		{"match":{"class":"revier-popup"},"place":["center","top",1800,"100%"],"overlay":true},
@@ -117,10 +144,11 @@ func TestDecodeRulesReadsNumbersAndMarksTheRest(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []revier.WindowRule{
-		{Class: "revier-popup", Place: []string{"center", "top", "1800", "100%"}, Overlay: true},
-		{Class: "revier-popup", Overlay: true, Other: true},
-		{Class: "code", Other: true},
-		{Class: "kitty", Other: true},
+		{Class: "revier-popup", Place: []string{"center", "top", "1800", "100%"}, Overlay: true,
+			Raw: `{"match":{"class":"revier-popup"},"place":["center","top",1800,"100%"],"overlay":true}`},
+		{Class: "revier-popup", Overlay: true, Other: true, Raw: `{"match":{"class":"revier-popup","title":"x"},"overlay":true}`},
+		{Class: "code", Other: true, Raw: `{"match":{"class":"code"},"tile":"left"}`},
+		{Class: "kitty", Other: true, Raw: `{"match":{"class":"kitty"},"place":["center","top","50%"]}`},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("rules =\n%+v\nwant\n%+v", got, want)

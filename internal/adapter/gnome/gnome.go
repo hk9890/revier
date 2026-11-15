@@ -39,6 +39,8 @@ type Host struct {
 	// minimizes and activates without the animation, as Probe read it. A host
 	// that was never probed asks for the animation.
 	quietHide, quietFocus bool
+	// version is what Probe read, for the Rules it gives.
+	version versionDoc
 }
 
 // minWctl is the oldest wctl this host drives.
@@ -131,10 +133,15 @@ func (h *Host) Probe(ctx context.Context) error {
 	if doc.Extension == nil {
 		return fmt.Errorf("wctl is present but no extension answers: %s", doc.Message)
 	}
+	h.version = doc
 	h.quietHide = slices.Contains(doc.Capabilities, "no-animation")
 	h.quietFocus = slices.Contains(doc.Capabilities, "activate-no-animation")
 	return nil
 }
+
+// Rules reads the rules through this host's wctl, with what Probe read of
+// the extension, so that CanAdd asks wctl nothing again.
+func (h *Host) Rules() *Rules { return &Rules{run: h.run, version: h.version} }
 
 // wctlVersion reads `wctl version --json` and refuses a wctl older than
 // minWctl. What it says of the extension is the caller's to read.
