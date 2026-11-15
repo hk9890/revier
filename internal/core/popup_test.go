@@ -281,7 +281,7 @@ func TestPopupLeavesThePlaceToRulesThatAreCurrent(t *testing.T) {
 		wm.Workarea = 2560
 		c := &core.Core{Window: wm, WindowRules: tc.rules}
 
-		ref, err := c.Popup(context.Background(), popupArgv)
+		ref, err := c.Popup(t.Context(), popupArgv)
 		if err != nil {
 			t.Fatalf("%s: Popup: %v", tc.name, err)
 		}
