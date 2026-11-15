@@ -61,10 +61,11 @@ func cmdPopup(ctx context.Context, a *app) error {
 // makes the surface the popup.
 //
 // listenOn is the control socket of this kitty, a file only the user can
-// reach, in place of the one `listen_on` in kitty.conf names. revier reaches
-// the popup through it to switch its list (D110) and to raise it after a
-// restore, so remote control is on for that socket alone. With none,
-// kitty.conf decides both: a socket it names may be one every user can reach.
+// reach, in place of the one `listen_on` in kitty.conf names, and remote
+// control is on for that socket alone. With none, kitty.conf decides both: a
+// socket it names may be one every user can reach. revier no longer reaches
+// the popup through it: the switch of its list comes over the surface's own
+// socket, and the raise after a restore by its class (D182).
 func popupArgv(self string, start revier.ProjectName, listenOn string) []string {
 	mark := core.PopupEnv + "=" + string(start)
 	argv := []string{"kitty", "--class", core.PopupClass, "--title", "revier"}

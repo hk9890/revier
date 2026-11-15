@@ -30,6 +30,7 @@ import (
 	"errors"
 	"log/slog"
 	"maps"
+	"net"
 	"os/exec"
 	"slices"
 	"time"
@@ -48,6 +49,7 @@ import (
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/logging"
+	"github.com/hk9890/revier/internal/popupswitch"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/internal/theme"
@@ -175,6 +177,7 @@ type Model struct {
 	start        revier.ProjectName               // the project to open on, from the working directory
 	placing      bool                             // the cursor was put on the starting project; the next body sync places the list around it
 	popup        bool                             // the surface is the popup: Esc or the desktop hides it, and the next press raises it
+	switchSocket net.Listener                     // the popup's socket, where the second press of the desktop's key arrives; nil for none
 	endHung      func()                           // ends the host command of a step that hangs, as the second ctrl+c quits; nil to leave it
 	hidden       bool                             // the popup is off the screen; nothing surveys until it is raised, unless a launch is coming up
 	errands      int                              // the raises, presses, pastes, clicks and wheel turns so far; a go hides the popup only when none came since its own press
@@ -305,6 +308,15 @@ func (m Model) WithAssistant(p core.Project) Model {
 // D86, D129). A hide by the desktop is Esc's hide (D169).
 func (m Model) WithPopup() Model {
 	m.popup = true
+	return m
+}
+
+// WithSwitchSocket gives the popup the socket it listens on for the second
+// press of the desktop's key, which the desktop takes before the popup's
+// terminal sees it (decisions.md D182). A press there is the switch key
+// pressed in the surface. The caller closes ln once the surface has ended.
+func (m Model) WithSwitchSocket(ln net.Listener) Model {
+	m.switchSocket = ln
 	return m
 }
 
@@ -451,7 +463,26 @@ type actedMsg struct {
 
 // Init surveys immediately; the timer starts once the first survey answers.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.Survey(), m.input.Focus(), m.lookupStart(), m.firstBeat())
+	return tea.Batch(m.Survey(), m.input.Focus(), m.lookupStart(), m.firstBeat(), m.awaitSwitch())
+}
+
+// switchMsg is a press of the desktop's key on the focused popup, come over
+// its socket.
+type switchMsg struct{}
+
+// awaitSwitch waits for the next press on the popup's socket. Nil with no
+// socket; nothing comes once the socket is closed.
+func (m Model) awaitSwitch() tea.Cmd {
+	ln := m.switchSocket
+	if ln == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		if err := popupswitch.Await(ln); err != nil {
+			return nil
+		}
+		return switchMsg{}
+	}
 }
 
 // lookupStart asks the core where to open, when the working directory did
@@ -717,6 +748,12 @@ func (m Model) mouseMode() tea.MouseMode {
 // is a function of the state after the message rather than something every
 // branch has to remember to refresh.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// A press on the popup's socket is the switch key, pressed: it means in
+	// every screen what that key means there, and the wait goes on.
+	if _, ok := msg.(switchMsg); ok {
+		next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeySpace, Mod: tea.ModAlt})
+		return next, tea.Batch(cmd, m.awaitSwitch())
+	}
 	if csi, ok := msg.(uv.UnknownCsiEvent); ok {
 		m.consoleF = csi == consoleF
 		return m, nil

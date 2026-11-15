@@ -17,19 +17,20 @@ import (
 func configured(t *testing.T) *core.Core {
 	t.Helper()
 	c := &core.Core{
-		Runtime:   hosttest.NewRuntime("rt"),
-		Window:    hosttest.New("wm"),
-		Probes:    []revier.AgentProbe{hosttest.NewResumableProbe("claude", "claude")},
-		Served:    hosttest.New("served"),
-		Self:      func(revier.Panel) bool { return false },
-		Run:       func(context.Context, []string, string) error { return nil },
-		Machine:   "laptop",
-		Remotes:   map[string]revier.Remote{"buildbox": hosttest.NewRemote("buildbox")},
-		NewRemote: func(host string) revier.Remote { return hosttest.NewRemote(host) },
-		Ledger:    &ledger{},
-		KeyBinder: hosttest.NewKeys("gnome"),
-		TermKeys:  hosttest.NewTermKeys(revier.TermKeyState{}),
-		Poll:      time.Millisecond,
+		Runtime:     hosttest.NewRuntime("rt"),
+		Window:      hosttest.New("wm"),
+		Probes:      []revier.AgentProbe{hosttest.NewResumableProbe("claude", "claude")},
+		Served:      hosttest.New("served"),
+		Self:        func(revier.Panel) bool { return false },
+		Run:         func(context.Context, []string, string) error { return nil },
+		SwitchPopup: func(context.Context) error { return nil },
+		Machine:     "laptop",
+		Remotes:     map[string]revier.Remote{"buildbox": hosttest.NewRemote("buildbox")},
+		NewRemote:   func(host string) revier.Remote { return hosttest.NewRemote(host) },
+		Ledger:      &ledger{},
+		KeyBinder:   hosttest.NewKeys("gnome"),
+		TermKeys:    hosttest.NewTermKeys(revier.TermKeyState{}),
+		Poll:        time.Millisecond,
 	}
 	v := reflect.ValueOf(c).Elem()
 	for i := range v.NumField() {

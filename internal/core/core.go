@@ -67,6 +67,12 @@ type Core struct {
 	// refuses the press of every command target.
 	Run func(ctx context.Context, argv []string, dir string) error
 
+	// SwitchPopup tells the popup's surface to switch its list, over the
+	// socket that surface listens on (decisions.md D182), and fails when no
+	// surface listens. The socket is a fact about this machine, so the wiring
+	// supplies it; nil leaves the second press the raise of the popup.
+	SwitchPopup func(ctx context.Context) error
+
 	// Machine is this machine's name, as `uname -n` prints it: the first half
 	// of the tag a link's panel gives what it starts on a host. Empty reads
 	// it from the kernel.
@@ -146,6 +152,7 @@ func (c *Core) clone() *Core {
 		Served:        c.Served,
 		Self:          c.Self,
 		Run:           c.Run,
+		SwitchPopup:   c.SwitchPopup,
 		Machine:       c.Machine,
 		Remotes:       maps.Clone(c.Remotes),
 		NewRemote:     c.NewRemote,

@@ -467,8 +467,8 @@ agent by need: waiting for the user, working, at rest, unknown. The first and
 third stand by when each spoke, the latest first, read through `Detailed`; a
 working agent speaks all the time, so those stand by project. The surface
 always opens on the projects. The desktop takes its key before any terminal
-does, so the press reaches the surface through `revier popup` (D182).
-Rejected: a mode of the project list, which hides the projects it is for.
+does, so the popup takes the press over its socket (D182); a surface in a
+terminal of the user's own switches only where the desktop leaves the key.
 
 ### D111 — the agent list's pane mirrors the agent's panel, with its colour and nothing else
 
@@ -1049,7 +1049,7 @@ runtime, so a closed window still ends its programs.
 
 Extends D76 and D110. The key was typed into the surface through the runtime,
 which ties the popup to kitty's, and under hc the runtime lists no popup. The
-popup's surface now listens on a private socket under revier's runtime
+popup's surface now listens on a private socket in the user's runtime
 directory, removed when it ends; a press while the popup has the focus, which
 the window host tells by its class, tells it to switch lists, and the popup is
 raised by its class alone. A revier started in a terminal of the user's own

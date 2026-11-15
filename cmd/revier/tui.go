@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"log/slog"
+	"net"
 	"os"
 	"os/signal"
 	"slices"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/ledger"
+	"github.com/hk9890/revier/internal/popupswitch"
 	"github.com/hk9890/revier/internal/procgroup"
 	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
@@ -45,8 +48,29 @@ func cmdTUI(ctx context.Context, a *app) error {
 	// alternate screen, and pointer and focus reports (tui.Model.View).
 	if popup {
 		m = m.WithPopup()
+		if ln := listenForSwitch(); ln != nil {
+			defer func() { _ = ln.Close() }()
+			m = m.WithSwitchSocket(ln)
+		}
 	}
 	return runSurface(m, colourOf(os.Getenv)...)
+}
+
+// listenForSwitch is the socket the popup's surface takes the second press
+// of the desktop's key on (decisions.md D182), and nil when it cannot have
+// one: the popup then runs as before, and that press raises it. Closing the
+// socket removes its file.
+func listenForSwitch() net.Listener {
+	path, err := popupswitch.Path()
+	if err == nil {
+		ln, listenErr := popupswitch.Listen(path)
+		if listenErr == nil {
+			return ln
+		}
+		err = listenErr
+	}
+	slog.Warn("popup: no switch socket", "err", err)
+	return nil
 }
 
 // colourOf is the colour the environment allows the surface. Any NO_COLOR

@@ -233,16 +233,21 @@ func (m Model) restored(msg restoredMsg) (tea.Model, tea.Cmd) {
 	if msg.current != "" {
 		m.selectName(msg.current)
 	}
-	return m, raiseSelf(m.core)
+	return m, raiseSelf(m.core, m.popup)
 }
 
-// raiseSelf brings the surface's own terminal to the front. A raise that
-// fails leaves it where it is, which is where it was.
-func raiseSelf(c *core.Core) tea.Cmd {
+// raiseSelf brings the surface's own terminal to the front: the popup by its
+// class, any other surface by its panel. A raise that fails leaves it where
+// it is, which is where it was.
+func raiseSelf(c *core.Core, popup bool) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), localHostWait)
 		defer cancel()
-		_ = c.RaiseSelf(ctx)
+		if popup {
+			_ = c.RaisePopup(ctx)
+		} else {
+			_ = c.RaiseSelf(ctx)
+		}
 		return nil
 	}
 }

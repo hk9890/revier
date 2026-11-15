@@ -474,45 +474,6 @@ func TestAnAgentWhoseTabCannotBeFocusedIsNotRaised(t *testing.T) {
 	}
 }
 
-// The second press of the popup's key is typed into the popup. When the
-// typing fails the press is what it was before the popup had a second list:
-// the popup, raised.
-func TestAPopupThatCannotBeTypedIntoIsRaised(t *testing.T) {
-	wm := hosttest.New("wm")
-	open := wm.Add("revier", core.PopupClass)
-	wm.SetFocus(open)
-	rt := hosttest.NewRuntime("rt")
-	rt.Add("revier", core.PopupClass, revier.Panel{ID: "9"})
-	rt.SendErr = errRuntimeGone
-	c := &core.Core{Window: wm, Runtime: rt}
-
-	ref, err := c.Popup(context.Background(), popupArgv)
-	if err != nil || ref != open {
-		t.Fatalf("Popup = %v, %v; want the open popup and no error", ref, err)
-	}
-	if !slices.Equal(wm.Focuses, []revier.TargetRef{open}) || len(wm.Opened) != 0 {
-		t.Errorf("focuses = %v, opened = %v; want the popup raised and none opened", wm.Focuses, wm.Opened)
-	}
-}
-
-// A terminal whose current panel cannot be read is not taken for a surface:
-// nothing is typed into it, and the popup opens.
-func TestATerminalWhoseCurrentPanelCannotBeReadIsNoSurface(t *testing.T) {
-	wm, rt, _, _ := surfaceTerminal(
-		revier.Panel{ID: "1", Command: []string{"zsh"}},
-		revier.Panel{ID: "2", Command: []string{"revier"}})
-	wm.Workarea = 5120
-	rt.FocusedPanelErr = errRuntimeGone
-	c := &core.Core{Window: wm, Runtime: rt}
-
-	if _, err := c.Popup(context.Background(), popupArgv); err != nil {
-		t.Fatalf("Popup: %v", err)
-	}
-	if len(rt.Sent) != 0 || len(wm.Opened) != 1 {
-		t.Errorf("sent = %+v, opened = %v; want nothing typed and the popup launched", rt.Sent, wm.Opened)
-	}
-}
-
 // The surface's press of an agent: its tab is made current, the press is one
 // agent event, and nothing is written to the ledger.
 func TestActivateAgentWaitingFocusesTheAgentAndWritesNothing(t *testing.T) {

@@ -13,6 +13,9 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
+// AwaitSwitch is the wait for the next press on the popup's socket.
+func (m Model) AwaitSwitch() tea.Cmd { return m.awaitSwitch() }
+
 // NewWithoutWaits is New with no close wait and no mirror gap, the model
 // every test builds: a shutdown whose host keeps a closed instance listed
 // does not wait out core.CloseWait, and the mirror's tick fires at once.

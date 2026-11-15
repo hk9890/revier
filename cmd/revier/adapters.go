@@ -19,6 +19,7 @@ import (
 	"github.com/hk9890/revier/internal/adapter/tmux"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/popupswitch"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -243,7 +244,17 @@ func termKeyWriter() revier.TermKeyWriter { return kitty.TermKeyWriter{} }
 func sshRemote(host string) revier.Remote { return ssh.New(host) }
 
 func newCore(cfg *config.Config, rt revier.Runtime, win revier.WindowController, keys revier.KeyBinder) *core.Core {
-	return &core.Core{Runtime: rt, Window: win, Served: servedProcesses(), Self: proc.RunsUnder(), Run: runTargetCommand, Probes: probes(cfg), KeyBinder: keys, NewRemote: sshRemote}
+	return &core.Core{Runtime: rt, Window: win, Served: servedProcesses(), Self: proc.RunsUnder(), Run: runTargetCommand, SwitchPopup: switchPopup, Probes: probes(cfg), KeyBinder: keys, NewRemote: sshRemote}
+}
+
+// switchPopup tells the popup's surface to switch its list, over the socket
+// it listens on (decisions.md D182).
+func switchPopup(ctx context.Context) error {
+	path, err := popupswitch.Path()
+	if err != nil {
+		return err
+	}
+	return popupswitch.Switch(ctx, path)
 }
 
 // servedProcesses lists what `revier agent exec` started here for a terminal

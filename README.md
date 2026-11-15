@@ -29,8 +29,9 @@ territory.
   See [The popup](docs/user-guide/tui.md#the-popup).
 - **All agents in one list.** In the popup, press the trigger key again to
   see every agent of every open project in one list. In a terminal, press
-  alt+space. Agents that need you are on top, then working, idle and
-  `unknown` agents. The project list shows each project with its agents
+  alt+space, or click `agents` where the trigger key is alt+space. Agents
+  that need you are on top, then working, idle and `unknown` agents. The
+  project list shows each project with its agents
   counted by state. See [The agent list](docs/user-guide/tui.md#the-agent-list).
 - **Jump to an agent.** Select an agent and press Enter. revier raises its
   tab and its window. The pane shows the agent's terminal as it is now.
