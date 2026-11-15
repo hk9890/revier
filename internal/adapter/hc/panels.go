@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -241,12 +242,14 @@ func (h *Host) AttachPanel(panel revier.PanelID) ([]string, error) {
 		return nil, fmt.Errorf("hc: %w", err)
 	}
 	argv := []string{"env", "HC_SOCKET=" + h.socket()}
-	if h.Revier == "" {
-		return append(argv, path, "attach", panel.String()), nil
-	}
 	// env reads a word with "=" in it as one more variable to set.
 	if strings.Contains(h.Revier, "=") {
 		return nil, fmt.Errorf("hc: the revier binary's path %s has a \"=\" in it, which env cannot run", h.Revier)
+	}
+	// A revier binary an upgrade removed under a running revier is no
+	// window's: the window shows the terminal unheld.
+	if _, err := os.Stat(h.Revier); h.Revier == "" || err != nil {
+		return append(argv, path, "attach", panel.String()), nil
 	}
 	return append(argv, h.Revier, AttachCmd, path, panel.String()), nil
 }

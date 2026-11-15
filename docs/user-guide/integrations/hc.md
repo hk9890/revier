@@ -18,7 +18,8 @@ and shows your workspaces, as before.
 ## Switch to hc
 
 1. Close the workspaces kitty runs with `revier shutdown`. Once you switch,
-   revier does not see them.
+   revier does not see them, and a window left open has the title of the
+   hc workspace's window, so a press cannot tell the two apart.
 
 2. Name hc in `~/.config/revier/config.toml`
    (see [`[hosts]`](../configuration.md#hosts)):
@@ -45,9 +46,10 @@ runtime does not read hc's terminals.
 - To end a program, close it in revier: `revier shutdown` or `revier agent
   close`. Its window then closes.
 - When a panel's command ends on its own, as an agent that exits or fails,
-  its window shows what the command printed and its exit code, and closes
-  when you press Enter, as on kitty. A shell's window closes when the shell
-  exits.
+  its window stays open with what the command printed and its exit code, and
+  closes when you press Enter. Until then the window is still the
+  workspace's, and `revier agent close` or `revier shutdown` closes it. A
+  shell's window closes when the shell exits.
 - `revier agent new --no-focus` adds the tab to the window that shows the
   workspace, and opens no window where none shows it.
 - In a kitty window that shows no workspace, the shell key opens a plain kitty

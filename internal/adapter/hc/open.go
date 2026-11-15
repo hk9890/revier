@@ -65,7 +65,6 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		return revier.TargetRef{}, err
 	}
 	defer s.close()
-	s.sweep(time.Now())
 	// The core starts each program on its own PATH, which can differ from
 	// this process's: the core runs as a service of the user's service
 	// manager, with the manager's PATH, or was started by hand. So the core
@@ -100,6 +99,8 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		h.closeAfter(ctx, s.hello.Core.ID, map[string]string{instanceLabel: id})
 		return revier.TargetRef{}, err
 	}
+	// After the start, so the sweep does not delay the press's programs.
+	s.sweep(time.Now())
 	return revier.TargetRef{Host: h.Name(), ID: s.hello.Core.ID + "/" + id, Title: r.Name}, nil
 }
 
@@ -131,7 +132,6 @@ func (h *Host) OpenTab(ctx context.Context, r revier.TargetRef, real revier.Real
 	if ref.byHand() {
 		return "", fmt.Errorf("hc: %s is a terminal started by hand, not an instance of revier's, and opens no tab", ref.key)
 	}
-	s.sweep(time.Now())
 	var list listResult
 	if err := s.call("terminal.list", map[string]any{"labels": map[string]string{instanceLabel: ref.key}}, &list); err != nil {
 		return "", err
@@ -160,6 +160,7 @@ func (h *Host) OpenTab(ctx context.Context, r revier.TargetRef, real revier.Real
 		h.closeAfter(ctx, ref.core, map[string]string{instanceLabel: ref.key, tabLabel: token})
 		return "", err
 	}
+	s.sweep(time.Now())
 	return revier.PanelID(first), nil
 }
 

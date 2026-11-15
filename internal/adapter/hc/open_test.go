@@ -405,6 +405,13 @@ func TestAPanelThatExitedAtOnceFailsTheOpen(t *testing.T) {
 	if records := c.records(); len(records) != 0 {
 		t.Errorf("records = %q, want none", records)
 	}
+	killed := map[any]bool{}
+	for _, k := range c.paramsOf("terminal.kill") {
+		killed[k["terminal"]] = true
+	}
+	if !killed["t1"] || !killed["t3"] {
+		t.Errorf("killed %v, want t1 and t3, the panels that still ran", killed)
+	}
 }
 
 // What hc would not keep as written, or a directory that is not there, is

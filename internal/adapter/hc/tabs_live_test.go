@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"slices"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -91,11 +90,7 @@ func TestAnAttachedPanelEndsWithItsTerminal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AttachPanel: %v", err)
 	}
-	quoted := make([]string, len(argv))
-	for i, a := range argv {
-		quoted[i] = "'" + a + "'"
-	}
-	attach := exec.Command(script, "-qec", strings.Join(quoted, " "), "/dev/null")
+	attach := windowCmd(script, argv)
 	if err := attach.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -141,12 +136,8 @@ func TestAnAttachThatIsHungUpOrKilledLeavesItsTerminal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AttachPanel: %v", err)
 	}
-	quoted := make([]string, len(argv))
-	for i, a := range argv {
-		quoted[i] = "'" + a + "'"
-	}
 	for _, sig := range []syscall.Signal{syscall.SIGHUP, syscall.SIGKILL} {
-		attach := exec.Command(script, "-qec", strings.Join(quoted, " "), "/dev/null")
+		attach := windowCmd(script, argv)
 		attach.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		if err := attach.Start(); err != nil {
 			t.Fatal(err)

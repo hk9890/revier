@@ -16,9 +16,9 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// endedPanel opens an instance whose command prints a line and exits 3 once
-// the test says so, and returns it and its panel once the panel finished.
-func endedPanel(t *testing.T, h *hc.Host) (revier.TargetRef, revier.PanelID) {
+// endingPanel opens an instance whose command prints a line and exits 3 once
+// the file the test writes exists, and returns it, its panel and that file.
+func endingPanel(t *testing.T, h *hc.Host) (revier.TargetRef, revier.PanelID, string) {
 	t.Helper()
 	c := ctx(t)
 	done := filepath.Join(t.TempDir(), "done")
@@ -27,19 +27,23 @@ func endedPanel(t *testing.T, h *hc.Host) (revier.TargetRef, revier.PanelID) {
 		t.Fatalf("Open: %v", err)
 	}
 	panel := waitFor(t, h, func(in []revier.Instance) bool { return len(in) == 1 })[0].Panels[0].ID
+	return ref, panel, done
+}
+
+// endedPanel is endingPanel's instance once its command ended.
+func endedPanel(t *testing.T, h *hc.Host) (revier.TargetRef, revier.PanelID) {
+	t.Helper()
+	ref, panel, done := endingPanel(t, h)
 	if err := os.WriteFile(done, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	waitForRecords(t, c, h, ref, "finished")
+	waitForRecords(t, ctx(t), h, ref, "finished")
 	return ref, panel
 }
 
-// A window whose command ended shows what it left and its exit code, and
-// removes its terminal, though the program ended before hc's attach could
-// show it (decisions.md D187).
-func TestAWindowShowsWhatAnEndedCommandLeft(t *testing.T) {
-	h := world(t)
-	ref, panel := endedPanel(t, h)
+// hcPath is the hc binary a window names by its path.
+func hcPath(t *testing.T) string {
+	t.Helper()
 	bin, err := hc.Program()
 	if err != nil {
 		t.Fatal(err)
@@ -47,6 +51,15 @@ func TestAWindowShowsWhatAnEndedCommandLeft(t *testing.T) {
 	if bin, err = exec.LookPath(bin); err != nil {
 		t.Fatal(err)
 	}
+	return bin
+}
+
+// A window whose command ended shows what it left and its exit code, though
+// the program ended before hc's attach could show it, and removes the
+// terminal on Enter (decisions.md D187).
+func TestAWindowShowsWhatAnEndedCommandLeft(t *testing.T) {
+	h := world(t)
+	ref, panel := endedPanel(t, h)
 	in, enter, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
@@ -62,7 +75,7 @@ func TestAWindowShowsWhatAnEndedCommandLeft(t *testing.T) {
 	}
 	defer func() { _ = out.Close() }()
 
-	if err := h.Attach(ctx(t), bin, panel, in, out); err != nil {
+	if err := h.Attach(ctx(t), hcPath(t), panel, in, out); err != nil {
 		t.Fatalf("Attach: %v", err)
 	}
 	shown, err := os.ReadFile(out.Name())
@@ -90,6 +103,40 @@ func TestAClosedTerminalHoldsNoWindow(t *testing.T) {
 	if held, err := h.Hold(c, panel, strings.NewReader(""), &out); err != nil || held || out.Len() != 0 {
 		t.Errorf("Hold = %v, %v and showed %q; want not held", held, err, out.String())
 	}
+}
+
+// A held terminal is its workspace's panel until revier closes it, as a
+// shutdown or an agent close does: the close removes it, and the held window
+// ends with no Enter.
+func TestAHeldWindowEndsWithTheCloseOfItsTerminal(t *testing.T) {
+	h := world(t)
+	ref, panel := endedPanel(t, h)
+	never, wait, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = never.Close(); _ = wait.Close() }()
+	done := make(chan error, 1)
+	go func() {
+		_, err := h.Hold(ctx(t), panel, never, &bytes.Buffer{})
+		done <- err
+	}()
+	got := waitFor(t, h, func(in []revier.Instance) bool { return len(in) == 1 })
+	if got[0].Ref != ref || len(got[0].Panels) != 1 || got[0].Panels[0].ID != panel {
+		t.Fatalf("Instances = %+v, want the held terminal's instance", got)
+	}
+	if err := h.ClosePanel(ctx(t), ref, panel); err != nil {
+		t.Fatalf("ClosePanel of the held terminal: %v", err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("Hold = %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the held window still waits after the close")
+	}
+	waitForRecords(t, ctx(t), h, ref, "")
 }
 
 // Once "hc server stop" ended the core, a window ends and starts no core: any
@@ -125,8 +172,8 @@ func TestASweepRemovesAnEndedTerminalAfterAMinute(t *testing.T) {
 
 // A view's window, on a terminal of its own, attaches the panel while its
 // command runs; once the command ends the window shows what it left and its
-// exit code, and stays until Enter (decisions.md D187). The test binary is
-// revier here, and script gives the window its terminal.
+// exit code, its workspace still lists it, and it stays until Enter
+// (decisions.md D187). The test binary is revier here.
 func TestAViewsWindowIsHeldUntilEnterOnceItsCommandEnds(t *testing.T) {
 	script, err := exec.LookPath("script")
 	if err != nil {
@@ -134,21 +181,12 @@ func TestAViewsWindowIsHeldUntilEnterOnceItsCommandEnds(t *testing.T) {
 	}
 	h, c := world(t), ctx(t)
 	h.Revier = os.Args[0]
-	done := filepath.Join(t.TempDir(), "done")
-	ref, err := h.Open(c, revier.Realization{Name: "ends", Launch: []string{"sh", "-c", `echo no such config; while [ ! -e "$0" ]; do sleep 0.05; done; exit 3`, done}})
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-	panel := waitFor(t, h, func(in []revier.Instance) bool { return len(in) == 1 })[0].Panels[0].ID
+	ref, panel, done := endingPanel(t, h)
 	argv, err := h.AttachPanel(panel)
 	if err != nil {
 		t.Fatalf("AttachPanel: %v", err)
 	}
-	quoted := make([]string, len(argv))
-	for i, a := range argv {
-		quoted[i] = "'" + a + "'"
-	}
-	window := exec.Command(script, "-qec", strings.Join(quoted, " "), "/dev/null")
+	window := windowCmd(script, argv)
 	enter, err := window.StdinPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -181,7 +219,9 @@ func TestAViewsWindowIsHeldUntilEnterOnceItsCommandEnds(t *testing.T) {
 	if !strings.Contains(shown.String(), "no such config") {
 		t.Errorf("the held window shows %q, want the command's line", shown.String())
 	}
-	waitForRecords(t, c, h, ref, "")
+	if got, err := h.Instances(c); err != nil || len(got) != 1 || got[0].Ref != ref {
+		t.Errorf("Instances while held = %+v, %v; want the workspace", got, err)
+	}
 	select {
 	case err := <-ended:
 		t.Fatalf("the held window ended before Enter: %v", err)
@@ -195,6 +235,7 @@ func TestAViewsWindowIsHeldUntilEnterOnceItsCommandEnds(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("the held window still runs after Enter")
 	}
+	waitForRecords(t, c, h, ref, "")
 }
 
 // syncBuffer is a buffer a process writes and a test reads at once.

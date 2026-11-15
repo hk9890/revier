@@ -5,6 +5,7 @@ package hc_test
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/hk9890/revier/internal/adapter/hc"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/shell"
 	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -166,4 +168,14 @@ func waitForRecords(t *testing.T, c context.Context, h *hc.Host, ref revier.Targ
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+}
+
+// windowCmd runs argv as a view's window runs it, in a terminal script
+// gives it.
+func windowCmd(script string, argv []string) *exec.Cmd {
+	quoted := make([]string, len(argv))
+	for i, a := range argv {
+		quoted[i] = shell.Quote(a)
+	}
+	return exec.Command(script, "-qec", strings.Join(quoted, " "), "/dev/null")
 }

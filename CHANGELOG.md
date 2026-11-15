@@ -41,8 +41,8 @@ Each section is also the text of its release on the
   work as on kitty. Closing kitty ends no agent: the next press opens the
   window again over the running agents, where `place` puts a new one, and
   starts nothing. When an agent or another panel's command ends, its window
-  shows what it printed and its exit code until you press Enter, as on
-  kitty. With no kitty or
+  stays open with what it printed and its exit code until you press Enter.
+  With no kitty or
   no display, as over ssh, nothing shows hc, and `revier open --attach`
   reaches a workspace. `revier doctor` says which view shows hc. Where
   systemd runs your session, revier starts the hc core as a user service

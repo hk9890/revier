@@ -1076,12 +1076,13 @@ always opens. A raise of a window that shows the instance still moves nothing.
 An agent reached from the TUI names no target, so a window it opens again is
 not placed.
 
-### D187 — under hc a view's window holds a panel's command once it ends, as kitty does
+### D187 — under hc a view's window holds a panel's command once it ends, as the kitty runtime keeps it open
 
-Extends D180, whose window ended with its panel. The kitty runtime holds a
-panel's command so its output stays readable, while under hc an agent that
-failed took its error with its window. So hc keeps a command's terminal once
-it ends, and the window shows what it left and how it ended, removes it, and
-closes on Enter. A shell, a close and a shutdown end the window at once. The
-next open removes a terminal no window took within a minute. The window asks
-the core with no hc command, as one would start a core a stop ended.
+Extends D180. The kitty runtime keeps a command's window open so its output
+stays readable; under hc a failed agent took its error with its window. So hc
+keeps a command's terminal once it ends, and its window shows what it left
+and how it ended until dismissed. The held terminal stays its workspace's
+panel, so a press raises the workspace and a close ends the window; a shell's
+window ends at once. The next open removes a terminal no window took within a
+minute. The window asks the core with no hc command, as one would start a core
+a stop ended.

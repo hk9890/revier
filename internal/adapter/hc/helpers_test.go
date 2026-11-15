@@ -275,7 +275,7 @@ func (c *fakeCore) dispatch(req request) (any, map[string]any) {
 		return map[string]any{
 			"generation": 1, "version": "0.1.21", "core": map[string]string{"id": c.id, "name": "here"},
 			"framed": req.Params["framed"] == true, "features": c.features,
-			"methods": []string{"hello", "terminal.run", "terminal.list", "terminal.get", "terminal.kill", "terminal.rm", "terminal.read", "terminal.attach"},
+			"methods": []string{"hello", "terminal.run", "terminal.list", "terminal.get", "terminal.kill", "terminal.rm", "terminal.read", "terminal.attach", "terminal.label"},
 		}, nil
 	case "terminal.run":
 		c.runs++
@@ -345,8 +345,20 @@ func (c *fakeCore) dispatch(req request) (any, map[string]any) {
 		if t == nil {
 			return nil, notFound
 		}
+		if t.State == "live" {
+			return nil, map[string]any{"code": -32000, "message": "terminal is live", "data": map[string]string{"kind": "live"}}
+		}
 		c.remove(t)
 		return map[string]string{"removed": t.Address}, nil
+	case "terminal.label":
+		t := c.find(req.Params["terminal"])
+		if t == nil {
+			return nil, notFound
+		}
+		for k, v := range asMap(req.Params["labels"]) {
+			t.Labels[k] = v.(string)
+		}
+		return t, nil
 	case "terminal.read":
 		if c.readErr != nil {
 			return nil, c.readErr
