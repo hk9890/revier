@@ -45,14 +45,15 @@ type (
 
 // playedKitty is the workspace kitty: a launch adds an OS window, a tab or a
 // window, which takes the keyboard unless --keep-focus says not to, and
-// focus-window makes a window current. lsErr fails every ls, and slow makes
-// an ls of no window wait, as a busy kitty does, so two Shows at once both
-// list before either launches.
+// focus-window makes a window current. lsErr fails the next lsFails ls, as a
+// busy kitty times out and then answers, and slow makes an ls of no window
+// wait, so two Shows at once both list before either launches.
 type playedKitty struct {
 	mu      sync.Mutex
 	next    int
 	windows []playedOS
 	lsErr   error
+	lsFails int
 	slow    time.Duration
 	focused []int
 }
@@ -84,7 +85,8 @@ func (k *playedKitty) run(args []string) ([]byte, error) {
 	k.mu.Lock()
 	switch args[0] {
 	case "ls":
-		if k.lsErr != nil {
+		if k.lsFails > 0 {
+			k.lsFails--
 			k.mu.Unlock()
 			return nil, k.lsErr
 		}
@@ -231,10 +233,11 @@ func TestTwoShowsAtOnceOpenOneWindow(t *testing.T) {
 }
 
 // A workspace kitty whose ls fails may show the instance, so the Show fails
-// and opens no window beside the one it may have.
+// and opens no window beside the one it may have, also when the kitty answers
+// the next ls, as a busy one does.
 func TestAShowWhoseKittyDoesNotAnswerOpensNothing(t *testing.T) {
 	k := played(t)
-	k.lsErr = errors.New("kitten @ ls: timed out")
+	k.lsErr, k.lsFails = errors.New("kitten @ ls: timed out"), 1
 	v := k.viewOver(t, attaching{})
 	if opened, err := v.Show(t.Context(), demo, true); err == nil || opened {
 		t.Errorf("Show = %v, %v; want it failed", opened, err)

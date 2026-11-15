@@ -159,7 +159,9 @@ func (c *Core) agentTabs(host revier.Host, p Project, layout []revier.PanelSpec,
 // addAgents opens an agent tab in a workspace that has just opened, for each
 // agent, in order, and then makes the panel that was current before them
 // current again: a restore leaves the workspace as it opened, after a failed
-// tab too. A tab that fails stops the rest, which are named as not added, and
+// tab too. Under a view that draws the workspace only once its tabs run, no
+// panel is current yet, and the launch makes its active tab current after
+// the view draws it. A tab that fails stops the rest, which are named as not added, and
 // the error is returned beside the outcomes: the workspace is open, so it is
 // not the launch's failure. A failed OpenTab leaves no tab behind, so the
 // agent it names is not running anywhere.

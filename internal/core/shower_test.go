@@ -81,6 +81,31 @@ func TestAPressOpensOneViewWindowOverEveryTab(t *testing.T) {
 	}
 }
 
+// A restore that adds an agent past the layout to a workspace it opens adds
+// its tab before the view draws the workspace, so nothing is current yet:
+// the tab opens, the window draws it with every other, and the active tab is
+// current, as with no agent past the layout.
+func TestAnAgentPastTheLayoutOpensBeforeTheViewDrawsTheWorkspace(t *testing.T) {
+	c, rt, view := viewed()
+	c.Probes = []revier.AgentProbe{resumable()}
+
+	res, err := pressResuming(t.Context(), c, prepared(t, viewedProject()), "home", []core.Resume{
+		{Harness: "claude", Session: "main"}, {Harness: "claude", Session: "by-hand"},
+	})
+	if err != nil || res.AgentErr != nil {
+		t.Fatalf("press = %v, agent tabs %v; want both agents added", err, res.AgentErr)
+	}
+	if want := []core.AgentOutcome{core.AgentResumed, core.AgentResumed}; !slices.Equal(res.Agents, want) {
+		t.Errorf("agents = %v, want %v", res.Agents, want)
+	}
+	if shown, _ := view.Showing(res.Ref); !slices.Equal(shown, panelIDs(t, rt, res.Ref)) || view.Shows != 1 {
+		t.Errorf("view shows %v in %d shows, want every panel %v in one", shown, view.Shows, panelIDs(t, rt, res.Ref))
+	}
+	if cur, _ := view.FocusedPanel(t.Context(), res.Ref); cur != rt.Tabs[0].Panel {
+		t.Errorf("current panel %s, want the active agent tab's %s", cur, rt.Tabs[0].Panel)
+	}
+}
+
 // A view closed by hand ends no program: the next press finds the instance
 // running, opens a window over its tabs, and starts nothing (decisions.md
 // D181). The window ends with the active tab current, as a launch's does,

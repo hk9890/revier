@@ -135,9 +135,14 @@ func (v *FakeView) FocusPanel(_ context.Context, ref revier.TargetRef, panel rev
 	return nil
 }
 
+// FocusedPanel reports the current panel of the instance's window, and
+// fails for an instance no window shows, as kitty does.
 func (v *FakeView) FocusedPanel(_ context.Context, ref revier.TargetRef) (revier.PanelID, error) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
+	if _, ok := v.windows[ref.ID]; !ok {
+		return "", fmt.Errorf("%s: no window shows %s", v.name, ref.ID)
+	}
 	return v.current[ref.ID], nil
 }
 

@@ -78,7 +78,8 @@ type panelOpener interface {
 // it shows already; one it does not show it leaves alone, so a script's tab
 // opens no window (decisions.md D118). A tab of an instance being opened is
 // drawn by nothing: the launch draws the instance once every tab runs
-// (D180).
+// (D180). Until then no panel of it is current, and the launch makes its
+// active tab current after.
 type tabs struct {
 	revier.TabOpener
 	c         *Core
@@ -108,6 +109,9 @@ func (t tabs) FocusPanel(ctx context.Context, ref revier.TargetRef, panel revier
 func (t tabs) FocusedPanel(ctx context.Context, ref revier.TargetRef) (revier.PanelID, error) {
 	f, ok := t.c.View.(revier.PanelFocuser)
 	if !ok {
+		return "", nil
+	}
+	if _, draws := t.c.shower(ref); draws && t.launching {
 		return "", nil
 	}
 	return f.FocusedPanel(ctx, ref)
