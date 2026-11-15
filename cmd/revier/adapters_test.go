@@ -163,7 +163,8 @@ func TestTheDefaultViewIsTheRuntimesOwn(t *testing.T) {
 
 // A configured view is a preference order: "none" leaves the runtime unshown,
 // and a view that cannot show the runtime is refused by name, as an unknown
-// name is.
+// name is. With runtime "none" there is nothing to show, and the view is
+// none, so every command still runs.
 func TestAConfiguredViewIsTriedInOrder(t *testing.T) {
 	adapters := runtimeAdapters()
 	kittyRT, hcRT := adapters["kitty"], adapters["hc"]
@@ -174,8 +175,10 @@ func TestAConfiguredViewIsTriedInOrder(t *testing.T) {
 	if view, err := selectView(ctx, []string{"kitty"}, kittyRT); err != nil || view != kittyRT.(revier.View) {
 		t.Errorf("kitty over kitty: view %v, %v; want kitty", view, err)
 	}
-	if _, err := selectView(ctx, []string{"kitty"}, nil); err == nil || !strings.Contains(err.Error(), "no runtime") {
-		t.Errorf("kitty over no runtime: err = %v, want it refused", err)
+	cfg := &config.Config{}
+	cfg.Hosts.View = []string{"kitty"}
+	if rt, view, err := selectTerminal(ctx, cfg, []string{hostNone}); rt != nil || view != nil || err != nil {
+		t.Errorf("kitty over runtime none: %v, %v, %v; want no runtime and no view, and no error", rt, view, err)
 	}
 	if _, err := selectView(ctx, []string{"tmux"}, kittyRT); err == nil || err.Error() != "hosts.view: the tmux view was removed; use kitty" {
 		t.Errorf("tmux: err = %v, want it named removed", err)

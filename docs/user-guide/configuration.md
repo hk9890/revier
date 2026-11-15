@@ -519,7 +519,8 @@ view shows the kitty runtime. hc shows
 nothing itself, so the kitty view shows it, in kitty windows that attach to
 hc's terminals; it works where kitty is installed and a display is set
 ([hc](integrations/hc.md)). With no view, revier opens and lists the
-workspaces, and a press focuses nothing.
+workspaces, and a press focuses nothing. With `runtime = ["none"]` there is
+nothing to show, and revier ignores `view`.
 
 A key you leave out uses its default, and revier skips a default host that
 does not work, without a message. `hc` is experimental, and revier uses it

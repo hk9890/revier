@@ -174,12 +174,13 @@ func defaultViewOrder(rt revier.Runtime) []string {
 // order, as selectHost reads one, and a view it names that cannot show rt is
 // an error; among the defaults such a view is passed over, and finding none
 // leaves the runtime unshown: hc with no kitty, or no display, as over ssh
-// (decisions.md D185).
+// (decisions.md D185). With no runtime there is nothing to show, and no view
+// is selected, whatever the list names.
 func selectView(ctx context.Context, want []string, rt revier.Runtime) (revier.View, error) {
+	if rt == nil {
+		return nil, nil
+	}
 	if len(want) == 0 {
-		if rt == nil {
-			return nil, nil
-		}
 		for _, name := range defaultViewOrder(rt) {
 			if view, err := viewOf(ctx, name, rt); err == nil {
 				return view, nil
@@ -194,9 +195,6 @@ func selectView(ctx context.Context, want []string, rt revier.Runtime) (revier.V
 			return nil, nil
 		case !slices.Contains(views, name):
 			return nil, fmt.Errorf("hosts.view: %w", unknownHost("view", name, views))
-		case rt == nil:
-			errs = append(errs, fmt.Errorf("%s: no runtime is selected to show", name))
-			continue
 		}
 		view, err := viewOf(ctx, name, rt)
 		if err == nil {
