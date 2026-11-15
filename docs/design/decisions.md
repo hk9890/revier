@@ -889,8 +889,9 @@ program its core's, and each was started by whichever process asked first: a
 shell's venv or credentials then reached every workspace, or every agent,
 until that kitty or core exited. revier now starts both through the user's
 service manager, so each has the login environment however it was asked, and
-starts one detached only where there is none. Rejected: a fixed list of
-variables, which drops what the desktop sets that revier does not know of.
+starts one detached only where there is none. A service ends with the last
+login session unless the user lingers, which doctor says. Rejected: a fixed
+list of variables, which drops each desktop variable revier does not know.
 
 ### D168 — a window opened by hand in the workspace kitty is no instance
 

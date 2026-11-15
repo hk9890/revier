@@ -27,15 +27,6 @@ Each section is also the text of its release on the
   lists, now whatever runs your workspaces, hc included. A popup that was
   open before the upgrade only comes to the front on that press: quit it
   once with ctrl+c, and the next press opens one that switches.
-- **Under hc, a shell's own settings no longer reach your agents.** The hc
-  core gives every program it runs the environment of the command that
-  started it, so an activated virtualenv or a credential of the shell you
-  first ran revier in reached every agent until the core stopped. Where
-  systemd runs your session, revier now starts the core as a user service
-  named `revier-hc-` and a short hash of the core's socket, one per hc
-  session, with your desktop session's environment, as it starts its
-  kitty. A variable your agents need, such as `CLAUDE_CONFIG_DIR`, now
-  comes from the session: set it with `systemctl --user set-environment`.
 - **Action required: revier no longer runs workspaces in herdr.** Name
   `kitty` or `hc` in `[hosts] runtime` in place of `herdr`. A command
   that reaches `herdr` in that list stops with `the herdr runtime was removed;
@@ -51,8 +42,15 @@ Each section is also the text of its release on the
   window again over the running agents, where `place` puts a new one, and
   starts nothing. With no kitty or
   no display, as over ssh, nothing shows hc, and `revier open --attach`
-  reaches a workspace. `revier doctor` says which view shows hc. Without the
-  setting, kitty runs your workspaces as before. Images are gone once a
+  reaches a workspace. `revier doctor` says which view shows hc. Where
+  systemd runs your session, revier starts the hc core as a user service
+  named `revier-hc-` and a short hash of the core's socket, so your agents
+  get your desktop session's environment and not that of the shell you ran
+  revier in. Set a variable your agents need, such as `CLAUDE_CONFIG_DIR`,
+  with `systemctl --user set-environment`. That core stops at your last
+  logout, with every agent in it, unless you run `loginctl enable-linger`;
+  `revier doctor` says so. Without the setting, kitty runs your workspaces
+  as before. Images are gone once a
   window opens again, and a program with a lot of output lags in its window.
 - **`[hosts] view` names what shows your workspaces.** Left out, kitty
   shows the kitty runtime, as before, and kitty

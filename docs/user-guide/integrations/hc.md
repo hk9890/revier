@@ -85,6 +85,14 @@ the session with `systemctl --user set-environment NAME=value` before the core
 starts. `hc server stop` stops the core, and ends every program in it. A core
 you start yourself with `hc server start` takes your shell's environment.
 
+A user service stops when you log out of your last session, and so the core
+and every agent in it stop too. To keep them running after you log out, as
+over ssh, run once:
+
+```bash
+loginctl enable-linger
+```
+
 Without systemd, a core revier starts takes the environment of the revier
 command, without the variables of the terminal, the multiplexer, the Claude
 Code session or the revier command it ran in, such as `KITTY_WINDOW_ID`,

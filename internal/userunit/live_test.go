@@ -107,3 +107,53 @@ func TestRunNamesTheCommandThatFailed(t *testing.T) {
 		t.Errorf("Run = %v, want an error that names sh", err)
 	}
 }
+
+// A unit outlives the user's last session only where the user lingers, as
+// loginctl says. Where Start would start the program detached, or loginctl
+// says nothing it knows, the answer is unknown.
+func TestAUnitOutlivesTheLastSessionWhereTheUserLingers(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		systemdRun     bool
+		loginctl       string // the script's body; "" for none on PATH
+		lingers, known bool
+	}{
+		{"lingers", true, "echo yes", true, true},
+		{"does not linger", true, "echo no", false, true},
+		{"no systemd-run", false, "echo no", false, false},
+		{"no loginctl", true, "", false, false},
+		{"loginctl fails", true, "exit 1", false, false},
+		{"loginctl says something else", true, "echo maybe", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bin, argv := t.TempDir(), filepath.Join(t.TempDir(), "argv")
+			write := func(name, body string) {
+				if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.systemdRun {
+				write("systemd-run", "exit 0")
+			}
+			if tc.loginctl != "" {
+				write("loginctl", "echo \"$@\" > '"+argv+"'\n"+tc.loginctl)
+			}
+			t.Setenv("PATH", bin)
+
+			lingers, known := userunit.Outlives(t.Context())
+			if lingers != tc.lingers || known != tc.known {
+				t.Errorf("Outlives = %v, %v, want %v, %v", lingers, known, tc.lingers, tc.known)
+			}
+			if !tc.known {
+				return
+			}
+			b, err := os.ReadFile(argv)
+			if err != nil {
+				t.Fatalf("loginctl never ran: %v", err)
+			}
+			if want := "show-user " + strconv.Itoa(os.Getuid()) + " --property=Linger --value"; strings.TrimSpace(string(b)) != want {
+				t.Errorf("loginctl ran with %q, want %q", strings.TrimSpace(string(b)), want)
+			}
+		})
+	}
+}
