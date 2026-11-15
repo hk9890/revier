@@ -30,7 +30,8 @@ type Unit struct {
 }
 
 // Start runs argv as u through systemd-run. A start that fails because u runs
-// already is one another process made, and no error. Where there is no
+// already, or is starting, is one another process made, and no error: a
+// forking unit is starting until its program has forked. Where there is no
 // systemd-run, or it cannot start u, Start calls detached, which starts the
 // program apart from the service manager.
 func Start(ctx context.Context, u Unit, argv []string, detached func(context.Context) error) error {
@@ -46,11 +47,24 @@ func Start(ctx context.Context, u Unit, argv []string, detached func(context.Con
 		args = append(args, "--setenv="+e)
 	}
 	err = Run(ctx, run, append(append(args, "--"), argv...)...)
-	if err == nil || Run(ctx, "systemctl", "--user", "--quiet", "is-active", u.Name) == nil {
+	if err == nil || running(ctx, u.Name) {
 		return nil
 	}
 	slog.Warn("the service manager did not start the unit; starting it detached", "unit", u.Name, "err", err)
 	return detached(ctx)
+}
+
+// running reports whether the service manager runs the unit name, or is
+// starting it.
+func running(ctx context.Context, name string) bool {
+	// is-active exits non-zero for a unit that is starting, and prints its
+	// state whatever it exits with.
+	out, _ := exec.CommandContext(ctx, "systemctl", "--user", "is-active", name).Output()
+	switch strings.TrimSpace(string(out)) {
+	case "active", "activating", "reloading":
+		return true
+	}
+	return false
 }
 
 // Outlives reports whether a unit Start starts outlives the user's last

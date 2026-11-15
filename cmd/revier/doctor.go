@@ -332,7 +332,11 @@ func shownBy(rt revier.Runtime, view revier.View) string {
 		return ""
 	}
 	if view == nil {
-		return fmt.Sprintf("runtime %s is shown by no view: nothing is focused; revier open --attach puts a terminal on a workspace", rt.Name())
+		line := fmt.Sprintf("runtime %s is shown by no view: nothing is focused", rt.Name())
+		if _, ok := rt.(revier.Attacher); ok {
+			line += "; revier open --attach puts a terminal on a workspace"
+		}
+		return line
 	}
 	return fmt.Sprintf("runtime %s is shown by the %s view", rt.Name(), view.Name())
 }

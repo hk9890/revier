@@ -51,31 +51,35 @@ func TestKittenRunsInAProcessGroupOfItsOwn(t *testing.T) {
 // says.
 func TestTheWorkspaceKittyStartsThroughTheServiceManager(t *testing.T) {
 	const service = "systemd-run --user --quiet --collect --unit=revier-kitty -- %s/kitty --listen-on unix:/s"
-	const active = "systemctl --user --quiet is-active revier-kitty"
+	const active = "systemctl --user is-active revier-kitty"
 	const detached = "kitty --detach --listen-on unix:/s"
 	for _, tc := range []struct {
 		name       string
 		systemdRun string // the exit status of systemd-run; "" for none on PATH
-		systemctl  string // the exit status of is-active
+		state      string // the state is-active prints; it exits 0 for active alone
 		want       []string
 	}{
-		{"started as a service", "0", "3", []string{service}},
-		{"no systemd-run", "", "3", []string{detached}},
-		{"the service runs already", "1", "0", []string{service, active}},
-		{"no service manager", "1", "3", []string{service, active, detached}},
+		{"started as a service", "0", "inactive", []string{service}},
+		{"no systemd-run", "", "inactive", []string{detached}},
+		{"the service runs already", "1", "active", []string{service, active}},
+		{"no service manager", "1", "", []string{service, active, detached}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			bin, out := t.TempDir(), filepath.Join(t.TempDir(), "argv")
-			record := func(name, status string) {
-				script := "#!/bin/sh\necho " + name + " \"$@\" >> '" + out + "'\nexit " + status + "\n"
+			record := func(name, status, says string) {
+				script := "#!/bin/sh\necho " + name + " \"$@\" >> '" + out + "'\necho '" + says + "'\nexit " + status + "\n"
 				if err := os.WriteFile(filepath.Join(bin, name), []byte(script), 0o755); err != nil {
 					t.Fatal(err)
 				}
 			}
-			record("kitty", "0")
-			record("systemctl", tc.systemctl)
+			status := "3"
+			if tc.state == "active" {
+				status = "0"
+			}
+			record("kitty", "0", "")
+			record("systemctl", status, tc.state)
 			if tc.systemdRun != "" {
-				record("systemd-run", tc.systemdRun)
+				record("systemd-run", tc.systemdRun, "")
 			}
 			t.Setenv("PATH", bin)
 

@@ -9,16 +9,7 @@ import (
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/state"
-	"github.com/hk9890/revier/pkg/revier"
 )
-
-// attachingRuntime is a runtime that attaches with argv.
-type attachingRuntime struct {
-	*hosttest.FakeRuntime
-	argv []string
-}
-
-func (r attachingRuntime) AttachCommand(revier.TargetRef) ([]string, error) { return r.argv, nil }
 
 // openAttach runs `revier open demo --attach` against rt, with the exec
 // recorded instead of done, and returns the argv exec'd.

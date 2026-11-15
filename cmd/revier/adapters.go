@@ -161,15 +161,6 @@ func showWith(ctx context.Context, name string, rt revier.Runtime) (revier.View,
 	return view, nil
 }
 
-// defaultViewOrder is the views tried when config names none: the runtime's
-// own, when it is one, and then kitty.
-func defaultViewOrder(rt revier.Runtime) []string {
-	if _, ok := rt.(revier.View); ok && rt.Name() != "kitty" {
-		return []string{rt.Name(), "kitty"}
-	}
-	return []string{"kitty"}
-}
-
 // selectView picks the view that shows rt. A configured list is a preference
 // order, as selectHost reads one, and a view it names that cannot show rt is
 // an error; among the defaults such a view is passed over, and finding none
@@ -181,7 +172,7 @@ func selectView(ctx context.Context, want []string, rt revier.Runtime) (revier.V
 		return nil, nil
 	}
 	if len(want) == 0 {
-		for _, name := range defaultViewOrder(rt) {
+		for _, name := range views {
 			if view, err := viewOf(ctx, name, rt); err == nil {
 				return view, nil
 			}

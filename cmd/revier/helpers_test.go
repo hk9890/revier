@@ -322,3 +322,11 @@ func kittyOnPath(t *testing.T, display bool) {
 		t.Setenv("WAYLAND_DISPLAY", "wayland-0")
 	}
 }
+
+// attachingRuntime is a runtime that attaches with argv.
+type attachingRuntime struct {
+	*hosttest.FakeRuntime
+	argv []string
+}
+
+func (r attachingRuntime) AttachCommand(revier.TargetRef) ([]string, error) { return r.argv, nil }

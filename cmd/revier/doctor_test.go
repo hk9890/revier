@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/hosttest"
 )
 
 // A message of several lines carries its label on the first line only: the
@@ -533,5 +534,17 @@ func TestDoctorSaysNothingOfARuntimeThatIsItsOwnView(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "shown by") {
 		t.Errorf("report names a view:\n%s", out.String())
+	}
+}
+
+// A runtime shown by no view gets the hint of `revier open --attach` only
+// where it can put a terminal on a workspace: kitty cannot.
+func TestDoctorNamesTheAttachOnlyForARuntimeThatAttaches(t *testing.T) {
+	const attach = "revier open --attach"
+	if line := shownBy(attachingRuntime{FakeRuntime: hosttest.NewRuntime("hc")}, nil); !strings.Contains(line, attach) {
+		t.Errorf("hc: %q, want the hint %q", line, attach)
+	}
+	if line := shownBy(hosttest.NewRuntime("kitty"), nil); line == "" || strings.Contains(line, attach) {
+		t.Errorf("kitty: %q, want no view named and no hint %q", line, attach)
 	}
 }
