@@ -96,10 +96,10 @@ const openVar = "REVIER_KITTY_OPEN"
 
 // programStatusVar is the panel variable that carries the window's OSC 7501
 // records, kitty's program_status, as the JSON list kitty reports, from kitty
-// 0.50. The records name a program, not an agent, so the host passes them on
-// unread and a probe says what they mean. A user var of the same name is
-// dropped: any program in the window can set one, and kitty keeps its own
-// records apart (decisions.md D144, D187).
+// 0.50 (read from kitty 0.50.0's protocol docs; not run against a live
+// kitty). The records name a program, not an agent, so the host passes them
+// on unread and a probe says what they mean. A user var of the same name is
+// dropped, so the var holds only what kitty reports (decisions.md D187).
 const programStatusVar = "kitty_program_status"
 
 // runtimeDir is the directory that is the user's alone, and "" when the
@@ -557,11 +557,8 @@ func programStatus(raw json.RawMessage) string {
 	if json.Unmarshal(raw, &records) != nil || len(records) == 0 {
 		return ""
 	}
-	var line bytes.Buffer
-	if json.Compact(&line, raw) != nil {
-		return ""
-	}
-	return line.String()
+	line, _ := json.Marshal(records)
+	return string(line)
 }
 
 // dirOf is the directory of the panel's process, as --cwd=current takes it

@@ -66,23 +66,28 @@ func TestAHeldWindowUnderKitty050IsTheShellOnceItsProgramEnds(t *testing.T) {
 // an agent's. A user var of the same name never stands in for them.
 func TestAPanelCarriesItsWindowsProgramStatus(t *testing.T) {
 	noParents := func(int) (int, bool) { return 0, false }
-	forged := `"id": 4, "pid": 10, "user_vars": {"kitty_program_status": "forged"}`
-	cases := map[string]struct{ status, want string }{
-		"a record": {
-			`, "program_status": [{"id": "", "state": "blocked", "progress": -1, "app": "dtop", "msg": "deploy?\nnow"}]`,
-			`[{"id":"","state":"blocked","progress":-1,"app":"dtop","msg":"deploy?\nnow"}]`,
-		},
-		"no record":  {`, "program_status": []`, ""},
-		"kitty 0.49": {``, ""},
+	forged := `"user_vars": {"kitty_program_status": "forged", "revier_target": "agent"}`
+	record := `, "program_status": [{"id": "", "state": "blocked", "kind": "", "progress": -1, "app": "dtop", "title": "Größe", "msg": "deploy?\nnow"}]`
+	want := `[{"id":"","state":"blocked","kind":"","progress":-1,"app":"dtop","title":"Größe","msg":"deploy?\nnow"}]`
+	cases := map[string]struct{ window, want string }{
+		"a record":            {forged + record, want},
+		"a record, no vars":   {`"user_vars": {}` + record, want},
+		"a record, null vars": {`"user_vars": null` + record, want},
+		"no record":           {forged + `, "program_status": []`, ""},
+		"kitty 0.49":          {forged, ""},
 	}
 	for name, c := range cases {
 		var w window
-		if err := json.Unmarshal([]byte("{"+forged+c.status+"}"), &w); err != nil {
+		if err := json.Unmarshal([]byte(`{"id": 4, "pid": 10, `+c.window+"}"), &w); err != nil {
 			t.Fatal(err)
 		}
-		got, ok := panelOf(w, noParents).Vars[programStatusVar]
+		vars := panelOf(w, noParents).Vars
+		got, ok := vars[programStatusVar]
 		if got != c.want || ok != (c.want != "") {
 			t.Errorf("%s: var = %q, want %q", name, got, c.want)
+		}
+		if w.UserVars["revier_target"] != "" && vars["revier_target"] != "agent" {
+			t.Errorf("%s: vars = %v, want revier_target kept", name, vars)
 		}
 	}
 }

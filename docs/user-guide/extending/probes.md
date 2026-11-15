@@ -43,13 +43,16 @@ title; many agents write their state there. `vars`, `pid`, `command`, `tab`
 and `dir` are optional. `pid` and `command` are the panel's foreground process.
 `dir` is the panel's working directory.
 
-In kitty 0.50 or later, `vars` has `kitty_program_status` when a program in
-the window reported its state with OSC 7501: kitty's `program_status` list,
-as one JSON string. Any program can send it, so pick the records by `app`.
-This prints the state dtop reported, or an empty line:
+With the kitty runtime and kitty 0.50 or later, `vars` has
+`kitty_program_status` when a program in the window reported its state with
+OSC 7501: kitty's `program_status` list, as one JSON string. Under hc it is
+not there. Any program can send a record, and one program can keep several,
+so pick the records by `app` and take the most urgent. This prints dtop's
+state, `blocked` or `error` before the others, or an empty line:
 
 ```sh
-jq -r '.vars.kitty_program_status // "[]" | fromjson | map(select(.app == "dtop"))[0].state // ""'
+jq -r '.vars.kitty_program_status // "[]" | fromjson | map(select(.app == "dtop"))
+  | (map(select(.state == "blocked" or .state == "error")) + .)[0].state // ""'
 ```
 
 Print one JSON object and exit 0 within 500 ms:
