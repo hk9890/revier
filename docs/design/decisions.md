@@ -911,8 +911,7 @@ in a file beside the state, not fsynced, and the surface takes the mark at the
 focus as Esc's hide, where Esc hides from: no screen, question or walk. So
 does a slow refresh's survey that lists it minimized. Every raise clears what
 Esc clears, the query and the note, but no error. Rejected: a key typed in at
-the raise, two kitty round trips; looks after the blur, a gap; revier writing
-the user's rules.json (D30, D147).
+the raise, two kitty round trips; looks after the blur, a gap.
 
 ### D170 — an agent's row shows its tokens and its cache, and leaves its name to the pane
 
@@ -1095,3 +1094,14 @@ neither filters nor maps them, and drops a user var of the same name, so the
 var holds only what kitty reports; any program can still send a record. Rejected:
 the socket to the probe, which hands it all of kitty's remote control; a
 built-in mapping, until a second agent sends the records.
+
+### D189 — revier writes the popup's window rules, and one command writes all of revier's setup
+
+Extends D30 and D147: wctl's rules file is a third write, which wctl makes
+whole through a link. The popup's class is revier's (D76) and names its window
+before it opens, so its rules are revier's and place it by its monitor before
+its first frame. D24's place after that frame shows as a jump, so revier places
+the popup only where its rules are not current. A rule for the class in another
+shape is the user's, replaced only with --force (D27), which prints it: no tool
+writes it again. `revier setup` writes the desktop keys, the terminal keys and
+the rules in one run, because a user sets up a machine, not one store.

@@ -15,7 +15,7 @@ import (
 // Comparing them is the whole of "does revier hold this key", so there is one
 // canonical form and a parser that accepts every spelling. Canonical is
 // bubbletea's separator with one fixed modifier order, because the TUI prints
-// it and a user reading `revier keys status` should see the same text the
+// it and a user reading `revier setup status` should see the same text the
 // footer shows.
 type Chord string
 
@@ -201,7 +201,7 @@ func splitAngle(raw string) (mods []string, key string, err error) {
 // GTK's own - shift, control, alt, super - so a chord revier writes reads back
 // identical to one the settings UI wrote.
 //
-// This is the half `keys install` writes with; reading goes the other way,
+// This is the half `setup install` writes with; reading goes the other way,
 // through ParseChord. A conversion proved in one direction only is a
 // conversion nobody has checked, which is why both are tested.
 func (c Chord) GNOME() string {

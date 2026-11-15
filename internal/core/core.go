@@ -114,8 +114,12 @@ type Core struct {
 
 	// TermKeys reads the keys the terminal holds for revier: the second key
 	// store, beside the desktop's (decisions.md D147). Nil leaves `revier
-	// term` with no terminal.
+	// setup` with no terminal.
 	TermKeys revier.TermKeys
+
+	// WindowRules reads the window host's placement rules, the popup's among
+	// them (decisions.md D189). Nil leaves `revier setup` with no rules.
+	WindowRules revier.WindowRules
 
 	// Poll is how often an agent of this machine is read again: the
 	// interval PollOf gives Wait and Prompt, and StartedAgent's. Zero is
@@ -166,6 +170,7 @@ func (c *Core) clone() *Core {
 		Ledger:        c.Ledger,
 		KeyBinder:     c.KeyBinder,
 		TermKeys:      c.TermKeys,
+		WindowRules:   c.WindowRules,
 		Poll:          c.Poll,
 	}
 }

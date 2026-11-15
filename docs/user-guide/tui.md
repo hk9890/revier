@@ -175,9 +175,10 @@ kitty, and GNOME with the Window Control extension. See
   It stays when you press a key, click, scroll or raise it again before the
   window comes up, so a question you started, such as a delete, waits for
   your answer.
-- To keep the popup on top and hide it when another window takes the focus,
-  see [Keep the popup on top](integrations/gnome.md#keep-the-popup-on-top).
-  That hide acts as Esc.
+- `revier setup install` keeps the popup on top and hides it when another
+  window takes the focus; see
+  [The popup's window](integrations/gnome.md#the-popups-window). That hide
+  acts as Esc.
 - After a full shutdown the popup quits, so the next press starts it again
   and shows the [start dialog](#after-a-full-shutdown). When `revier shutdown`
   shut everything down while the popup was hidden, the next raise shows the

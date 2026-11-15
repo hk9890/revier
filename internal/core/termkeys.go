@@ -64,7 +64,7 @@ const (
 	// TermKeyWritten: revier's key file holds the key as config.toml wants it.
 	TermKeyWritten TermKeyStatus = "written"
 	// TermKeyMissing: revier's key file does not hold it, or runs another
-	// command on it. `revier term install` writes it.
+	// command on it. `revier setup install` writes it.
 	TermKeyMissing TermKeyStatus = "missing"
 	// TermKeyRefused: a desktop key revier wants is on the same chord, and the
 	// desktop takes a press before the terminal does (decisions.md D110), so
@@ -190,7 +190,7 @@ func wantedTermRows(keys []TermKey, projects []Project, trigger Chord) []TermKey
 	return rows
 }
 
-// InstalledTermKeys is the keys of keys that `revier term install` writes:
+// InstalledTermKeys is the keys of keys that `revier setup install` writes:
 // every one no desktop key is on.
 func InstalledTermKeys(keys []TermKey, projects []Project, trigger Chord) []TermKey {
 	rows := wantedTermRows(keys, projects, trigger)
@@ -308,7 +308,7 @@ const (
 // Writes reports whether the action changes the file.
 func (a TermKeyAction) Writes() bool { return a != TermKeyOK && a != TermKeyAbsent && a != TermKeyKept }
 
-// TermKeyPlan is what a run of `revier term install` or `uninstall` does,
+// TermKeyPlan is what a run of `revier setup install` or `uninstall` does,
 // before it does it. The same value is what the command prints afterwards,
 // with Done or Err filled and the report read again.
 type TermKeyPlan struct {

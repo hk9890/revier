@@ -218,17 +218,19 @@ func TestTakePopupHiddenTakesItOnce(t *testing.T) {
 }
 
 // With no popup open, the terminal is launched, and its window is placed and
-// raised. Height is always 100%. Width is a fixed 1800 px, centred, where the
-// workarea holds it, and 100% where it does not.
+// raised. Height is always 100%. Width is a fixed 1800 px, centred, on a very
+// wide workarea, 75% on a 29 inch wide screen, and 100% on a laptop.
 func TestPopupLaunchesAndPlacesByTheWorkarea(t *testing.T) {
 	cases := []struct {
 		width int
 		want  []string
 	}{
 		{width: 5120, want: []string{"center", "top", "1800", "100%"}},
-		{width: 1920, want: []string{"center", "top", "1800", "100%"}},
-		{width: 1800, want: []string{"center", "top", "1800", "100%"}},
-		{width: 1799, want: []string{"left", "top", "100%", "100%"}},
+		{width: 3400, want: []string{"center", "top", "1800", "100%"}},
+		{width: 3399, want: []string{"center", "top", "75%", "100%"}},
+		{width: 2560, want: []string{"center", "top", "75%", "100%"}},
+		{width: 2200, want: []string{"center", "top", "75%", "100%"}},
+		{width: 2199, want: []string{"left", "top", "100%", "100%"}},
 		{width: 1440, want: []string{"left", "top", "100%", "100%"}},
 	}
 	for _, tc := range cases {
@@ -250,6 +252,44 @@ func TestPopupLaunchesAndPlacesByTheWorkarea(t *testing.T) {
 		}
 		if !slices.Equal(wm.Focuses, []revier.TargetRef{ref}) {
 			t.Errorf("width %d: focuses = %v, want the new popup", tc.width, wm.Focuses)
+		}
+	}
+}
+
+// Rules of revier's for the popup that are current placed it before its
+// first frame, by the monitor it opened on, so the launch raises it and
+// does not place it again: a place by the primary workarea would undo the
+// size they gave on another monitor. Rules that are not current, or that
+// cannot be read, leave the place to revier (decisions.md D189).
+func TestPopupLeavesThePlaceToRulesThatAreCurrent(t *testing.T) {
+	stale := core.PopupRules()[1:]
+	unread := hosttest.NewWindowRules(core.PopupRules()...)
+	unread.ReadErr = errors.New("wctl not answering")
+	cases := []struct {
+		name   string
+		rules  revier.WindowRules
+		placed bool
+	}{
+		{name: "current", rules: hosttest.NewWindowRules(core.PopupRules()...), placed: false},
+		{name: "stale", rules: hosttest.NewWindowRules(stale...), placed: true},
+		{name: "unread", rules: unread, placed: true},
+		{name: "none", rules: nil, placed: true},
+	}
+	for _, tc := range cases {
+		wm := hosttest.New("wm")
+		wm.Detached = true
+		wm.Workarea = 2560
+		c := &core.Core{Window: wm, WindowRules: tc.rules}
+
+		ref, err := c.Popup(t.Context(), popupArgv)
+		if err != nil {
+			t.Fatalf("%s: Popup: %v", tc.name, err)
+		}
+		if _, placed := wm.Placements[ref.ID]; placed != tc.placed {
+			t.Errorf("%s: placed = %v, want %v", tc.name, placed, tc.placed)
+		}
+		if !slices.Equal(wm.Focuses, []revier.TargetRef{ref}) {
+			t.Errorf("%s: focuses = %v, want the new popup", tc.name, wm.Focuses)
 		}
 	}
 }

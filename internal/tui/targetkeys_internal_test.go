@@ -13,7 +13,7 @@ import (
 // A target key is bound under the one canonical spelling, whatever spelling
 // the project file used. Lowercasing and swapping the separator is not enough:
 // "shift-ctrl-o" would be bound as "shift+ctrl+o", which no keypress produces,
-// while `revier keys status` reports the same target as holding
+// while `revier setup status` reports the same target as holding
 // "ctrl+shift+o".
 func TestATargetKeyIsBoundUnderItsCanonicalSpelling(t *testing.T) {
 	for _, tc := range []struct {

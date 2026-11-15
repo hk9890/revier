@@ -8,7 +8,7 @@ import (
 )
 
 // FakeKeys is an in-memory KeyBinder. The desktop's shortcut store is the one
-// thing `revier keys status` reads, so a fake of it drives the whole command
+// thing `revier setup status` reads, so a fake of it drives the whole command
 // with no desktop, which is what layer L2 needs.
 type FakeKeys struct {
 	name     string

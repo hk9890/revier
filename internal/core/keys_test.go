@@ -45,7 +45,7 @@ func TestEveryWantedChordIsReportedTaken(t *testing.T) {
 }
 
 // The chord a project declares carries the command revier would install, so
-// what `keys install` will write is visible before it writes it.
+// what `setup install` will write is visible before it writes it.
 func TestActiveAndStaleAreTheSameOwnerDifferentCommand(t *testing.T) {
 	report := keysOf(t, hosttest.NewKeys("gnome",
 		hosttest.Custom("<Alt>space", `sh -lc "revier popup"`, "revier: popup"),

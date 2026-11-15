@@ -31,7 +31,7 @@ problem. See [Agents](agents.md#let-an-agent-configure-revier).
 ## A key does nothing
 
 ```
-revier keys status
+revier setup status
 ```
 
 This lists each desktop key revier wants, and who holds it.
@@ -39,10 +39,10 @@ This lists each desktop key revier wants, and who holds it.
 | Status | What to do |
 |---|---|
 | `active` | revier holds the key. Read on. |
-| `free`, `stale`, `inert` | `revier keys install` |
-| `taken`, `builtin` | `revier keys install --force`, or give the target another key |
+| `free`, `stale`, `inert` | `revier setup install` |
+| `taken`, `builtin` | `revier setup install --force`, or give the target another key |
 
-Run `revier keys install --dry-run` first to see what changes. See
+Run `revier setup install --dry-run` first to see what changes. See
 [integrations/gnome.md](integrations/gnome.md).
 
 When the key is `active` and still does nothing:

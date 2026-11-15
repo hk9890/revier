@@ -22,6 +22,7 @@ func cmdPopup(ctx context.Context, a *app) error {
 	if err != nil {
 		return fmt.Errorf("popup: %w", err)
 	}
+	a.core.WindowRules = popupRules(a.core.Window)
 	// The project the surface opens on is resolved here, at the keypress,
 	// where the focused window is still the user's: once the popup is up it
 	// is the focused window itself, and no target matches it. A launch alone

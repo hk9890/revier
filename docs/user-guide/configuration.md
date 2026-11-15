@@ -211,7 +211,7 @@ Write modifiers and a key joined by `-` or `+`: `ctrl-o`, `ctrl+shift+d`,
 | Modifiers | `ctrl` (`control`, `primary`), `alt` (`mod1`), `shift`, `super` (`mod4`, `meta`, `hyper`) |
 | Keys | a letter, a digit, `f1`-`f24`, `enter`, `esc`, `tab`, `backspace`, `delete`, `insert`, `up`, `down`, `left`, `right`, `home`, `end`, `pgup`, `pgdown`, `menu`, `print`, a punctuation character, any GNOME key name |
 
-`revier keys install` binds the key to the target's name in the project you
+`revier setup install` binds the key to the target's name in the project you
 are in, so give a target the same key in every project. Two targets of a
 project cannot share a key. A target named `popup` or `picker` cannot have a key.
 
@@ -466,7 +466,7 @@ You cannot set a single colour. To turn colour off, set `NO_COLOR`
 ## `[terminal]`
 
 The keys your terminal holds for revier, and what they do in a terminal window
-that is no project's workspace. Only in `config.toml`. `revier term install`
+that is no project's workspace. Only in `config.toml`. `revier setup install`
 writes the keys into the terminal's configuration; run it again after you
 change one.
 
@@ -493,7 +493,7 @@ outside   = "tab"
   tab there, because no project fills it in; the error names the agent.
 - revier refuses a key that another terminal key already holds, or that it
   cannot read. The other keys still work.
-- `revier term install` leaves out a key on the same chord as `trigger_key`
+- `revier setup install` leaves out a key on the same chord as `trigger_key`
   or a target's `key`: the desktop takes that press first.
 
 ## `[hosts]`
@@ -543,7 +543,7 @@ agent revier does not know: see [extending/probes.md](extending/probes.md).
 
 A mistake stops only the table, target or project it is in. An unknown
 `theme` or `glyphs` uses its default, a `trigger_key` revier cannot read
-stops only `revier keys`, and a `[[probe]]` without `name` or `exec` is not
+stops only `revier setup`, and a `[[probe]]` without `name` or `exec` is not
 run. One exception: when `config.toml` is not valid TOML, or a value in
 it has the wrong type, such as `theme = 3`, no command that reads the
 projects runs. `revier doctor` prints the error, and `revier assist` starts

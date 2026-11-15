@@ -30,6 +30,10 @@ type app struct {
 	// test, so a test reads what was printed without swapping the process's
 	// stdout. Warnings go to stderr as before.
 	out io.Writer
+	// stores picks the stores `revier setup` reads and writes. Nil probes
+	// this machine; a test sets fakes, so no run of it reaches the user's
+	// desktop.
+	stores func(ctx context.Context, write bool) setupStores
 }
 
 func newApp(ctx context.Context, out io.Writer) (*app, error) {
@@ -52,7 +56,7 @@ func newApp(ctx context.Context, out io.Writer) (*app, error) {
 		return nil, err
 	}
 	// No keybinder: probing the desktop costs a process, and only
-	// `revier keys` reads one. cmdKeys selects it when it is needed.
+	// `revier setup` reads one. cmdSetup selects it when it is needed.
 	c := newCore(cfg, rt, view, win, nil)
 	c.Ledger = ledger.File{Root: stateRoot, Failed: warnState}
 	return &app{

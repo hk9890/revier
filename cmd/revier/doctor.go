@@ -191,7 +191,7 @@ func duplicates(projects []core.Project) []duplicate {
 // workspace, because the agent it runs there cannot run in no project
 // (decisions.md D164). kitty's own new tab hides the failure, so doctor says
 // it; every other command does not, since the configuration loaded whole. A
-// key `revier term install` does not write is never pressed, so it is left
+// key `revier setup install` does not write is never pressed, so it is left
 // out; with a trigger key that does not parse, install writes none.
 func outsideProblems(cfg *config.Config, projects []core.Project) []error {
 	trigger, err := cfg.TriggerKey()

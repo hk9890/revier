@@ -17,7 +17,7 @@ func runTerm(t *testing.T, a *app, args ...string) (string, error) {
 	t.Helper()
 	var b bytes.Buffer
 	a.out = &b
-	err := cmdTerm(context.Background(), a, args)
+	err := cmdSetup(context.Background(), a, args)
 	return b.String(), err
 }
 
@@ -63,8 +63,11 @@ func TestTermInstallDryRunThenRunThenStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var plan struct{ File, Include core.TermKeyAction }
-	if err := json.Unmarshal([]byte(out), &plan); err != nil || plan.File != core.TermKeyRemove || plan.Include != core.TermKeyRemove {
+	var setup struct {
+		Term struct{ File, Include core.TermKeyAction }
+	}
+	err = json.Unmarshal([]byte(out), &setup)
+	if plan := setup.Term; err != nil || plan.File != core.TermKeyRemove || plan.Include != core.TermKeyRemove {
 		t.Errorf("uninstall plan = %+v, %v:\n%s", plan, err, out)
 	}
 	if b, _ := os.ReadFile(filepath.Join(dir, "kitty.conf")); string(b) != "map ctrl+shift+t new_tab\n" {
@@ -77,8 +80,8 @@ func TestTermInstallDryRunThenRunThenStatus(t *testing.T) {
 func TestTermInstallOfAKeyTheDesktopHoldsIsIncomplete(t *testing.T) {
 	a, dir := termApp(t, "[terminal]\nshell_key = \"alt+space\"\n", "")
 	out, err := runTerm(t, a, "install")
-	if !errors.Is(err, errKeysIncomplete) {
-		t.Errorf("err = %v, want errKeysIncomplete", err)
+	if !errors.Is(err, errSetupIncomplete) {
+		t.Errorf("err = %v, want errSetupIncomplete", err)
 	}
 	if !strings.Contains(out, "refused: the desktop key that opens revier") {
 		t.Errorf("output:\n%s", out)
@@ -120,15 +123,15 @@ func TestTermInstallOnALinkToNothingWritesNothing(t *testing.T) {
 				t.Errorf("status: %v\n%s", err, out)
 			}
 			out, err = runTerm(t, a, "install", "-n")
-			if !errors.Is(err, errKeysIncomplete) || !strings.Contains(out, "install would be refused: "+want) || strings.Contains(out, "would be created") {
+			if !errors.Is(err, errSetupIncomplete) || !strings.Contains(out, "install would be refused: "+want) || strings.Contains(terminalPart(out), "would be created") {
 				t.Errorf("dry run: %v\n%s", err, out)
 			}
 			out, err = runTerm(t, a, "install")
-			if !errors.Is(err, errKeysIncomplete) || !strings.Contains(out, "refused: "+want) {
+			if !errors.Is(err, errSetupIncomplete) || !strings.Contains(out, "refused: "+want) {
 				t.Errorf("install: %v\n%s", err, out)
 			}
 			for _, claim := range []string{": created", "  written"} {
-				if strings.Contains(out, claim) {
+				if strings.Contains(terminalPart(out), claim) {
 					t.Errorf("install claims %q:\n%s", claim, out)
 				}
 			}
@@ -137,6 +140,13 @@ func TestTermInstallOnALinkToNothingWritesNothing(t *testing.T) {
 			}
 		})
 	}
+}
+
+// terminalPart is what a setup run printed of the terminal keys.
+func terminalPart(out string) string {
+	_, after, _ := strings.Cut(out, "terminal keys:")
+	part, _, _ := strings.Cut(after, "popup rules:")
+	return part
 }
 
 // A run that failed half way says the step that ran did what it did, and
@@ -168,7 +178,7 @@ func TestTermInstallWarnsOfALateInclude(t *testing.T) {
 	}
 }
 
-// A second install writes nothing and marks every key as revier keys marks
+// A second install writes nothing and marks every key as the desktop keys are marked
 // one that is already right.
 func TestASecondTermInstallMarksTheKeysOK(t *testing.T) {
 	a, _ := termApp(t, "", "")

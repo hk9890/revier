@@ -32,6 +32,7 @@ func configured(t *testing.T) *core.Core {
 		Ledger:      &ledger{},
 		KeyBinder:   hosttest.NewKeys("gnome"),
 		TermKeys:    hosttest.NewTermKeys(revier.TermKeyState{}),
+		WindowRules: hosttest.NewWindowRules(),
 		Poll:        time.Millisecond,
 	}
 	v := reflect.ValueOf(c).Elem()

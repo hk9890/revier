@@ -93,7 +93,7 @@ type UI struct {
 }
 
 // DefaultTriggerKey is the chord revier expects to be opened with. It has a
-// default so `revier keys status` reports the key on a machine with no
+// default so `revier setup status` reports the key on a machine with no
 // config.toml at all, which is the common case.
 const DefaultTriggerKey = "alt-space"
 
@@ -666,7 +666,7 @@ func validateTargets(p revier.Project, prepared core.Project) []error {
 			}
 			// A key that cannot be read is rejected here rather than dropped
 			// later. Dropped, it costs the target its desktop chord and its
-			// row in `revier keys status`, which is the one place a user
+			// row in `revier setup status`, which is the one place a user
 			// would look to find out what happened to it.
 			chord, err := core.ParseChord(t.Key)
 			if err != nil {

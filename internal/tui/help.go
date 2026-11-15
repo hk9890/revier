@@ -184,7 +184,7 @@ func (m Model) targetHelpEntries() []helpEntry {
 }
 
 // desktopHelpEntries is the keys the desktop carries rather than the surface:
-// the one that opens revier, and every target's. `revier keys install` puts
+// the one that opens revier, and every target's. `revier setup install` puts
 // them on the desktop, so on a desktop where it has not run they do nothing.
 func (m Model) desktopHelpEntries() []helpEntry {
 	seen := map[helpEntry]bool{}

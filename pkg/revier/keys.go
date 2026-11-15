@@ -43,7 +43,7 @@ type Binding struct {
 // KeyBinder reads the desktop's keyboard shortcuts.
 //
 // It is read-only, and an implementation of it must stay that way: this is
-// what `revier keys status` is given, and a status command an agent may run
+// what `revier setup status` is given, and a status command an agent may run
 // against a live desktop has to be one that cannot change it. Writing is
 // KeyWriter, which an implementation keeps behind a separate type.
 type KeyBinder interface {

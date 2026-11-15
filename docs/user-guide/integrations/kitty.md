@@ -69,15 +69,15 @@ agent. [`[terminal]`](../configuration.md#terminal) sets them. To write them
 into kitty's configuration:
 
 ```bash
-revier term install --dry-run   # see what would change
-revier term install
+revier setup install --dry-run   # see what would change
+revier setup install
 ```
 
 This writes `revier.conf` in kitty's configuration directory and adds
 `include revier.conf` at the top of `kitty.conf`. kitty reads the change by
-itself. If `kitty.conf` did not exist, restart kitty. Run `revier term
-install` again after you change a terminal key in `config.toml`. `revier term
-status` shows each key, and `revier term uninstall` removes both again. If
+itself. If `kitty.conf` did not exist, restart kitty. Run `revier setup
+install` again after you change a terminal key in `config.toml`. `revier setup
+status` shows each key, and `revier setup uninstall` removes both again. If
 nothing else is left in `kitty.conf`, uninstall removes the file too, or
 leaves it empty when `kitty.conf` itself is a link.
 
@@ -85,7 +85,7 @@ leaves it empty when `kitty.conf` itself is a link.
   stays a link.
 - A map of your own below the include wins: for example a
   `map --when-focus-on var:in_tmux ctrl+shift+t ...` for windows that run
-  tmux. `revier term status` names each such map by its line.
+  tmux. `revier setup status` names each such map by its line.
 - A terminal key on the same chord as `trigger_key` or a target's `key` is
   left out: the desktop takes that press first.
 - A shell tab starts in the directory of the window you pressed the key in.
@@ -99,7 +99,7 @@ leaves it empty when `kitty.conf` itself is a link.
 **You wrote these maps by hand before.** Delete your own `map ctrl+shift+z`
 and `map ctrl+shift+t` lines that run `revier agent new` or `revier shell new`
 from `kitty.conf`: they come after the include and win over revier's. `revier
-term status` names them as `shadowed by kitty.conf:<line>`.
+setup status` names them as `shadowed by kitty.conf:<line>`.
 
 ## What does not work
 

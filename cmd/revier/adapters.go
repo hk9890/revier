@@ -265,13 +265,13 @@ func keyBinders() map[string]revier.KeyBinder {
 
 // keyWriters are the desktops whose shortcuts revier can change. A writer is a
 // separate type from the reader in the same adapter, so that the reader stays
-// read-only and `revier keys status` cannot reach a write through it.
+// read-only and `revier setup status` cannot reach a write through it.
 func keyWriters() map[string]revier.KeyBinder {
 	return map[string]revier.KeyBinder{"gnome": &gnome.Writer{}}
 }
 
 // selectKeyBinder picks the desktop to read shortcuts from. Finding none is
-// survivable: every other command works, and `revier keys` says so.
+// survivable: every other command works, and `revier setup` says so.
 func selectKeyBinder(ctx context.Context, binders map[string]revier.KeyBinder) revier.KeyBinder {
 	for _, name := range defaultWindowOrder {
 		b, ok := binders[name].(interface {
@@ -298,7 +298,7 @@ func selectKeyWriter(ctx context.Context, binders map[string]revier.KeyBinder) r
 // termKeys is the terminal whose keys revier writes, and termKeyWriter the
 // same terminal behind the type that writes. kitty is the one there is, and
 // its configuration directory is there to read on any machine, so nothing is
-// probed. As with the desktop's keys, `revier term status` is given only the
+// probed. As with the desktop's keys, `revier setup status` is given only the
 // reader.
 func termKeys() revier.TermKeys { return kitty.TermKeys{} }
 
@@ -308,6 +308,22 @@ func termKeyWriter() revier.TermKeyWriter { return kitty.TermKeyWriter{} }
 // ssh. A host is not probed: whether it answers is learned when it is asked,
 // and reported on the projects that live there rather than refusing to start.
 func sshRemote(host string) revier.Remote { return ssh.New(host) }
+
+// popupRules reads the window host's rules where its extension reads the
+// rules revier writes for the popup, so that a launch leaves the popup's
+// place to them (decisions.md D189). Elsewhere it is nil, and the launch
+// places the popup.
+func popupRules(win revier.WindowController) revier.WindowRules {
+	h, ok := win.(*gnome.Host)
+	if !ok {
+		return nil
+	}
+	rules := h.Rules()
+	if rules.CanAdd() != nil {
+		return nil
+	}
+	return rules
+}
 
 func newCore(cfg *config.Config, rt revier.Runtime, view revier.View, win revier.WindowController, keys revier.KeyBinder) *core.Core {
 	return &core.Core{Runtime: rt, View: view, Window: win, Served: servedProcesses(), Self: proc.RunsUnder(), Run: runTargetCommand, SwitchPopup: switchPopup, Probes: probes(cfg), KeyBinder: keys, NewRemote: sshRemote}

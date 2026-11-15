@@ -1,82 +1,14 @@
 package main
 
 import (
-	"context"
-	"flag"
 	"fmt"
 	"io"
-	"log/slog"
-	"os"
 	"path/filepath"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/hk9890/revier/internal/core"
 )
-
-const termUsage = `revier term - the terminal keys revier wants, in the terminal's own configuration
-
-usage:
-  revier term status [--json]              what the terminal holds of them now
-  revier term install [-n] [--json]        write them
-  revier term uninstall [-n] [--json]      remove what revier wrote
-
-The keys are [terminal] shell_key and agent_key, and the key of each
-[[agent]] in config.toml. For kitty, install writes revier.conf in kitty's
-configuration directory and one include of it at the top of kitty.conf, so a
-map of yours below it wins. A key a desktop key of revier's is on is left
-out: the desktop takes the press first.
-
-  -n, --dry-run  print what would happen and change nothing
-  --json   print the report, or the plan and what became of it, as JSON
-`
-
-func cmdTerm(ctx context.Context, a *app, args []string) error {
-	sub := ""
-	if len(args) > 0 {
-		sub, args = args[0], args[1:]
-	}
-	switch sub {
-	case "", "help", "--help", "-h":
-		_, _ = fmt.Fprint(a.out, termUsage)
-		return nil
-	case "status":
-		// status is given the reader, so nothing on its path can write.
-		a.core.TermKeys = termKeys()
-		return cmdTermStatus(ctx, a, args)
-	case "install", "uninstall":
-		a.core.TermKeys = termKeyWriter()
-		return cmdTermApply(ctx, a, sub, args)
-	default:
-		fmt.Fprint(os.Stderr, termUsage)
-		return fmt.Errorf("unknown term command %q", sub)
-	}
-}
-
-func cmdTermStatus(ctx context.Context, a *app, args []string) error {
-	fs := flag.NewFlagSet("term status", flag.ContinueOnError)
-	asJSON := fs.Bool("json", false, "emit the report as JSON")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) > 0 {
-		return fmt.Errorf("usage: revier term status [--json]")
-	}
-	trigger, err := a.cfg.TriggerKey()
-	if err != nil {
-		return err
-	}
-	report, err := a.core.TermKeyReport(ctx, a.cfg.TermKeys(), a.projects, trigger)
-	if err != nil {
-		return err
-	}
-	if *asJSON {
-		return a.printJSON(report)
-	}
-	printTermReport(a.out, report)
-	return nil
-}
 
 func printTermReport(w io.Writer, r core.TermKeyReport) {
 	_, _ = fmt.Fprintf(w, "terminal: %s\n", r.Terminal)
@@ -115,7 +47,7 @@ func termFileNote(r core.TermKeyReport) string {
 	case core.TermKeyFileCurrent:
 		return "current"
 	case core.TermKeyFileStale:
-		return "stale: it holds other keys than config.toml declares; `revier term install` rewrites it"
+		return "stale: it holds other keys than config.toml declares; `revier setup install` rewrites it"
 	}
 	return "absent"
 }
@@ -156,72 +88,9 @@ func termRowNote(r core.TermKeyReport, row core.TermKeyRow) string {
 	return "shadowed by " + strings.Join(at, ", ")
 }
 
-// cmdTermApply is install and uninstall: build the plan, apply it unless this
-// is a dry run, print what happened.
-func cmdTermApply(ctx context.Context, a *app, sub string, args []string) error {
-	fs := flag.NewFlagSet("term "+sub, flag.ContinueOnError)
-	var dryRun bool
-	fs.BoolVar(&dryRun, "dry-run", false, "print what would happen and change nothing")
-	fs.BoolVar(&dryRun, "n", false, "print what would happen and change nothing (shorthand)")
-	asJSON := fs.Bool("json", false, "emit the plan as JSON")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) > 0 {
-		return fmt.Errorf("usage: revier term %s [-n] [--json]", sub)
-	}
-	trigger, err := a.cfg.TriggerKey()
-	if err != nil {
-		return err
-	}
-	planFor := a.core.PlanInstallTermKeys
-	if sub == "uninstall" {
-		planFor = a.core.PlanUninstallTermKeys
-	}
-	plan, err := planFor(ctx, a.cfg.TermKeys(), a.projects, trigger)
-	if err != nil {
-		return err
-	}
-	before := plan
-	if !dryRun {
-		plan = a.core.ApplyTermKeys(ctx, plan)
-		switch {
-		case plan.Err != "":
-			slog.Error("term "+sub, "file", plan.File, "include", plan.Include, "err", plan.Err)
-		case plan.Done:
-			slog.Info("term "+sub, "file", plan.File, "include", plan.Include, "path", plan.Report.File)
-		}
-	}
-
-	if *asJSON {
-		if err := a.printJSON(plan); err != nil {
-			return err
-		}
-	} else {
-		printTermPlan(a.out, before, plan, sub, dryRun)
-	}
-
-	if plan.Err != "" || plan.Refused != "" {
-		return errKeysIncomplete
-	}
-	if sub == "install" {
-		for _, row := range plan.Report.Rows {
-			if row.Status == core.TermKeyRefused {
-				return errKeysIncomplete
-			}
-		}
-	}
-	return nil
-}
-
 // printTermPlan prints the plan, or what became of it. before is the plan as
 // it was built: its rows say which keys the run had to write.
 func printTermPlan(w io.Writer, before, plan core.TermKeyPlan, sub string, dryRun bool) {
-	_, _ = fmt.Fprintf(w, "=== revier term %s ===\n\n", sub)
-	if dryRun {
-		_, _ = fmt.Fprint(w, "  dry run: nothing is changed\n\n")
-	}
 	r := plan.Report
 	file := termStep{action: plan.File, done: plan.FileDone, dangling: r.FileDangling}
 	include := termStep{action: plan.Include, done: plan.IncludeDone, dangling: r.ConfigDangling, late: r.Include == core.TermKeyIncludeLate}
@@ -259,7 +128,7 @@ func printTermPlan(w io.Writer, before, plan core.TermKeyPlan, sub string, dryRu
 	}
 }
 
-// termKeyLine is the mark and the note of one key, as revier keys marks
+// termKeyLine is the mark and the note of one key, as the desktop keys mark
 // its keys: + for one that was already written, > for one this run writes,
 // ! for one refused or not written. before is the row as the plan found it.
 func termKeyLine(before core.TermKeyRow, plan core.TermKeyPlan, dryRun bool) (mark, note string) {

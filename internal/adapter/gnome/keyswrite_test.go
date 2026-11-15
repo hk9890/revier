@@ -207,7 +207,7 @@ func TestTheWriterStillRefusesWhatItDoesNotNeed(t *testing.T) {
 	}
 }
 
-// The reader is what `revier keys status` is given, and it must stay unable to
+// The reader is what `revier setup status` is given, and it must stay unable to
 // write whatever the writer beside it can do.
 func TestTheReaderStillCannotWrite(t *testing.T) {
 	for _, tc := range []struct {

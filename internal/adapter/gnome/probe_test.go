@@ -23,28 +23,28 @@ func TestProbeNeedsARecentWctlAndALoadedExtension(t *testing.T) {
 	}{
 		{
 			name:   "matching",
-			doc:    `{"wctl":"0.16.0","expects_extension":"16","extension":"16","compatible":true,"capabilities":[]}`,
+			doc:    `{"wctl":"0.23.0","expects_extension":"23","extension":"23","compatible":true,"capabilities":[]}`,
 			usable: true,
 		},
 		{
 			name:   "an extension outside the range wctl was built for",
-			doc:    `{"wctl":"0.17.0","expects_extension":"17","min_extension":"16","extension":"15","compatible":false,"capabilities":[],"message":"wctl 0.17.0 works with extension versions 16 to 17."}`,
+			doc:    `{"wctl":"0.23.0","expects_extension":"23","min_extension":"16","extension":"15","compatible":false,"capabilities":[],"message":"wctl 0.23.0 works with extension versions 16 to 23."}`,
 			code:   5,
 			usable: true,
 		},
 		{
 			name:   "a pre-release",
-			doc:    `{"wctl":"0.17.0-rc.1","extension":"17","compatible":true}`,
+			doc:    `{"wctl":"0.23.0-rc.1","extension":"23","compatible":true}`,
 			usable: true,
 		},
 		{
 			name: "no extension running",
-			doc:  `{"wctl":"0.16.0","expects_extension":"16","extension":null,"compatible":false,"message":"Window Control extension is not running."}`,
+			doc:  `{"wctl":"0.23.0","expects_extension":"23","extension":null,"compatible":false,"message":"Window Control extension is not running."}`,
 			code: 5,
 		},
 		{
 			name: "a wctl older than the oldest revier drives",
-			doc:  `{"wctl":"0.15.2","expects_extension":"15","extension":"15","compatible":true}`,
+			doc:  `{"wctl":"0.22.0","expects_extension":"22","extension":"22","compatible":true}`,
 		},
 		{name: "a wctl that prints no document", doc: "wctl 0.9.0"},
 		{name: "a wctl that fails with no document", code: 1},
@@ -95,7 +95,7 @@ func TestHideAndFocusSkipTheAnimationWhereTheExtensionCan(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			onGNOME(t)
-			w := &wctl{reply: versionReply(`{"wctl":"0.16.0","extension":"16","compatible":true,"capabilities":`+tc.capabilities+`}`, 0)}
+			w := &wctl{reply: versionReply(`{"wctl":"0.23.0","extension":"23","compatible":true,"capabilities":`+tc.capabilities+`}`, 0)}
 			h := w.host()
 			if tc.capabilities != "" {
 				if err := h.Probe(context.Background()); err != nil {
@@ -120,10 +120,10 @@ func TestHideAndFocusSkipTheAnimationWhereTheExtensionCan(t *testing.T) {
 // asks for the animation.
 func TestARefusedProbeLeavesTheAnimation(t *testing.T) {
 	onGNOME(t)
-	w := &wctl{reply: versionReply(`{"wctl":"0.15.0","extension":"15","capabilities":["no-animation"]}`, 0)}
+	w := &wctl{reply: versionReply(`{"wctl":"0.22.0","extension":"22","capabilities":["no-animation"]}`, 0)}
 	h := w.host()
 	if err := h.Probe(context.Background()); err == nil {
-		t.Fatal("Probe accepted wctl 0.15.0")
+		t.Fatal("Probe accepted wctl 0.22.0")
 	}
 	w.calls = nil
 	if err := h.Hide(context.Background(), revier.TargetRef{Host: "gnome", ID: "1"}); err != nil {

@@ -11,7 +11,7 @@ import (
 // Writer changes GNOME's keyboard shortcuts.
 //
 // It is a type of its own, and not three more methods on Keys, so that the
-// read-only guard Keys carries stays true. `revier keys status` is handed a
+// read-only guard Keys carries stays true. `revier setup status` is handed a
 // Keys and cannot reach a write from it whatever a later change does here.
 //
 // Writer embeds Keys, so it reads with the same read-only guard and writes

@@ -785,7 +785,7 @@ func TestValidateAcceptsAFullPlacement(t *testing.T) {
 	}
 }
 
-// The chord that opens revier has a default, so `revier keys status` reports
+// The chord that opens revier has a default, so `revier setup status` reports
 // the key on a machine with no config.toml at all.
 func TestTriggerKeyDefaults(t *testing.T) {
 	cfg, _, err := config.Load(t.TempDir())
@@ -822,7 +822,7 @@ func TestTriggerKeyIsCanonical(t *testing.T) {
 }
 
 // A target key that cannot be read must be refused, not dropped. Dropped, the
-// target loses its desktop chord and its row in `revier keys status`, which is
+// target loses its desktop chord and its row in `revier setup status`, which is
 // the one place a user would look to find out what happened to it.
 func TestValidateRejectsATargetKeyItCannotRead(t *testing.T) {
 	p := revier.Project{Name: "p", Path: "/p", Targets: []revier.Target{

@@ -1,115 +1,14 @@
 package main
 
 import (
-	"context"
-	"errors"
-	"flag"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strings"
 	"text/tabwriter"
-	"time"
 
 	"github.com/hk9890/revier/internal/core"
 )
-
-const keysUsage = `revier keys - the desktop keys revier wants, and who holds each one
-
-usage:
-  revier keys status [--json]              who holds each key now
-  revier keys install [--force] [-n] [--json]
-                                           claim the keys
-  revier keys uninstall [-n] [--json]      release the keys revier holds
-
-  --force  take a key something else holds. Without it, install adds only
-           what is free and reports the rest.
-  -n, --dry-run  print what would happen and change nothing
-  --json   print the report, or the plan and what became of it, as JSON
-`
-
-// keyBinderWait bounds the desktop probe, and keysWait the whole read. Both
-// are short because nothing about this command is worth waiting on: gsettings
-// answers in milliseconds, and a dconf service that has stopped answering
-// should say so rather than hold the terminal for the minute a keypress
-// command is allowed. keysWait covers seven subprocesses, so it is the looser
-// of the two.
-const (
-	keyBinderWait = 3 * time.Second
-	keysWait      = 15 * time.Second
-)
-
-func cmdKeys(ctx context.Context, a *app, args []string) error {
-	sub := ""
-	if len(args) > 0 {
-		sub, args = args[0], args[1:]
-	}
-	switch sub {
-	case "", "help", "--help", "-h":
-		_, _ = fmt.Fprint(a.out, keysUsage)
-		return nil
-	case "status", "install", "uninstall":
-		// The desktop is probed here and not in newApp: it costs a gsettings
-		// process, and every other command - `revier go` on a keypress above
-		// all - would pay for a value only these read.
-		ctx, cancelRead := context.WithTimeout(ctx, keysWait)
-		defer cancelRead()
-		probe, cancelProbe := context.WithTimeout(ctx, keyBinderWait)
-		defer cancelProbe()
-		// status is given the reader, which cannot write whatever a later
-		// change does to it. Only the two commands that change something are
-		// given a desktop that can be changed.
-		if sub == "status" {
-			a.core.KeyBinder = selectKeyBinder(probe, keyBinders())
-			return cmdKeysStatus(ctx, a, args)
-		}
-		a.core.KeyBinder = selectKeyWriter(probe, keyWriters())
-		return cmdKeysApply(ctx, a, sub, args)
-	default:
-		fmt.Fprint(os.Stderr, keysUsage)
-		return fmt.Errorf("unknown keys command %q", sub)
-	}
-}
-
-// cmdKeysStatus reads and prints. Nothing on this path writes a binding: a
-// command an agent may run against the user's live desktop has to be one that
-// cannot change it.
-func cmdKeysStatus(ctx context.Context, a *app, args []string) error {
-	fs := flag.NewFlagSet("keys status", flag.ContinueOnError)
-	asJSON := fs.Bool("json", false, "emit the report as JSON")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) > 0 {
-		return errors.New("usage: revier keys status [--json]")
-	}
-
-	trigger, err := a.cfg.TriggerKey()
-	if err != nil {
-		return err
-	}
-	report, err := a.core.KeyReport(ctx, a.projects, trigger)
-	switch {
-	case errors.Is(err, core.ErrNoKeyBinder):
-		// A machine with no desktop is a normal outcome, not a failure.
-		// Reporting it as an error would leave a --json caller with an exit
-		// status and no JSON at all.
-		report = core.KeyReport{Rows: []core.KeyRow{}}
-		if !*asJSON {
-			fmt.Fprintln(os.Stderr, "revier:", err)
-		}
-	case err != nil:
-		return err
-	}
-
-	if *asJSON {
-		return a.printJSON(report)
-	}
-	printKeys(a.out, report)
-	return nil
-}
 
 func printKeys(w io.Writer, report core.KeyReport) {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
