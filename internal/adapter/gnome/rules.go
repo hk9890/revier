@@ -17,8 +17,9 @@ import (
 // to a dotfiles repository too. The extension reads the file again on every
 // change, so a rule written here holds for the next window, with no restart.
 //
-// wctl writes as well as reads, so the commands this type may run are listed
-// in readRuleCommands and checked before each one runs, as Keys does.
+// wctl writes as well as reads, so every rules command this type runs goes
+// through exec, which allows readRuleCommands alone, as Keys does. The
+// writes are RuleWriter's write.
 type Rules struct {
 	// run runs wctl with the arguments and returns its standard output.
 	// Tests replace it; production leaves it nil and runs the wctl on PATH.
@@ -66,7 +67,7 @@ func (r *Rules) CanAdd() error {
 
 // Read lists the rules in one command.
 func (r *Rules) Read(ctx context.Context) ([]revier.WindowRule, error) {
-	raw, err := r.exec(ctx, readRuleCommands, "rules", "list", "--json")
+	raw, err := r.exec(ctx, "rules", "list", "--json")
 	if err != nil {
 		return nil, err
 	}
@@ -90,13 +91,13 @@ func (w *RuleWriter) Add(ctx context.Context, at int, rule revier.WindowRule) er
 		args = append(append(args, "place"), rule.Place...)
 	}
 	args = append(args, "--at", strconv.Itoa(at))
-	_, err := w.exec(ctx, writeRuleCommands, args...)
+	_, err := w.write(ctx, args...)
 	return err
 }
 
 // Remove runs `wctl rules remove`.
 func (w *RuleWriter) Remove(ctx context.Context, index int) error {
-	_, err := w.exec(ctx, writeRuleCommands, "rules", "remove", strconv.Itoa(index))
+	_, err := w.write(ctx, "rules", "remove", strconv.Itoa(index))
 	return err
 }
 
@@ -107,11 +108,18 @@ var (
 	writeRuleCommands = []string{"add", "remove"}
 )
 
-func (r *Rules) exec(ctx context.Context, allowed []string, args ...string) ([]byte, error) {
-	if err := ruleCommand(allowed, args); err != nil {
+func (r *Rules) exec(ctx context.Context, args ...string) ([]byte, error) {
+	if err := ruleCommand(readRuleCommands, args); err != nil {
 		return nil, err
 	}
 	return r.wctl(ctx, args...)
+}
+
+func (w *RuleWriter) write(ctx context.Context, args ...string) ([]byte, error) {
+	if err := ruleCommand(writeRuleCommands, args); err != nil {
+		return nil, err
+	}
+	return w.wctl(ctx, args...)
 }
 
 // ruleCommand refuses a wctl command that is not a rules subcommand in

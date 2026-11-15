@@ -88,15 +88,11 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 	}
 	// A mark left by a popup that went away is no raise of the new one.
 	c.TakePopupHidden()
-	byRules := c.popupPlacedByRules(ctx)
-	geometry := ""
-	if !byRules {
-		width, err := area.WorkareaWidth(ctx)
-		if err != nil {
-			return revier.TargetRef{}, fmt.Errorf("%s: workarea: %w", c.Window.Name(), err)
-		}
-		geometry = popupGeometry(width)
+	width, err := area.WorkareaWidth(ctx)
+	if err != nil {
+		return revier.TargetRef{}, fmt.Errorf("%s: workarea: %w", c.Window.Name(), err)
 	}
+	placedByRules := c.readPopupRules(ctx)
 	if _, err := c.Window.Open(ctx, revier.Realization{
 		Launch: argv(ctx),
 		Match:  revier.Match{Class: "^" + PopupClass + "$"},
@@ -114,7 +110,9 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 		return revier.TargetRef{}, err
 	}
 	ref := w.Ref
-	slog.Info("popup: launched", "ref", ref, "over", over.ID, "by_rules", byRules, "place", geometry)
+	geometry := popupGeometry(width)
+	byRules := placedByRules()
+	slog.Info("popup: launched", "ref", ref, "over", over.ID, "workarea_width", width, "place", geometry, "by_rules", byRules)
 	// The raise goes first, so the keyboard reaches the window before it moves.
 	if err := c.Window.Focus(ctx, ref); err != nil {
 		return ref, err
@@ -125,19 +123,23 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 	return ref, nil
 }
 
-// popupPlacedByRules reports whether the window host's rules place the
-// popup: revier's rules for it are current. A read that fails leaves the
-// place to revier.
-func (c *Core) popupPlacedByRules(ctx context.Context) bool {
+// readPopupRules starts the read of whether the window host's rules place
+// the popup - revier's rules for it are current - and returns the wait for
+// the answer. The read runs while the terminal starts, off the key's path. A
+// read that fails leaves the place to revier.
+func (c *Core) readPopupRules(ctx context.Context) func() bool {
 	if c.WindowRules == nil {
-		return false
+		return func() bool { return false }
 	}
-	report, err := c.PopupRuleReport(ctx)
-	if err != nil {
-		slog.Warn("popup: window rules", "err", err)
-		return false
-	}
-	return report.State == PopupRulesCurrent
+	answer := make(chan bool, 1)
+	go func() {
+		report, err := c.PopupRuleReport(ctx)
+		if err != nil {
+			slog.Warn("popup: window rules", "err", err)
+		}
+		answer <- err == nil && report.State == PopupRulesCurrent
+	}()
+	return func() bool { return <-answer }
 }
 
 // switchPopup tells the popup to switch its list when it is the focused

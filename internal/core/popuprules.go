@@ -193,10 +193,10 @@ func (c *Core) PlanUninstallPopupRules(ctx context.Context) (PopupRulePlan, erro
 }
 
 // ApplyPopupRules carries out a plan and returns it with its report read
-// again. A write removes the rules it replaces from the last one up, so each
-// index it removes is still where the report found it, then adds the wanted
-// rules at the top, the last one first. A take-over without force changes
-// nothing.
+// again. A write adds the wanted rules at the top first, then removes the
+// rules they replace from the last one up, each the wanted rules' number
+// further down than the report found it: a step that fails leaves rules that
+// place the popup. A take-over without force changes nothing.
 func (c *Core) ApplyPopupRules(ctx context.Context, plan PopupRulePlan, force bool) PopupRulePlan {
 	if !plan.Action.Writes() || (plan.Action.Blocked() && !force) {
 		return plan
@@ -236,26 +236,26 @@ func (c *Core) ApplyPopupRules(ctx context.Context, plan PopupRulePlan, force bo
 // applyPopupRules returns the rules of the user's it removed, also when a
 // later step fails: they are gone either way.
 func applyPopupRules(ctx context.Context, w revier.WindowRuleWriter, plan PopupRulePlan) ([]revier.WindowRule, error) {
+	shift := 0
+	if plan.Action != PopupRuleRemove {
+		for i, rule := range plan.Report.Want {
+			if err := w.Add(ctx, i, rule); err != nil {
+				return nil, err
+			}
+		}
+		shift = len(plan.Report.Want)
+	}
 	var removed []revier.WindowRule
 	found := plan.Report.Found
 	for i := len(found) - 1; i >= 0; i-- {
 		if !found[i].Own && plan.Action != PopupRuleTakeOver {
 			continue
 		}
-		if err := w.Remove(ctx, found[i].Index); err != nil {
+		if err := w.Remove(ctx, found[i].Index+shift); err != nil {
 			return removed, err
 		}
 		if !found[i].Own {
 			removed = slices.Insert(removed, 0, found[i].Rule)
-		}
-	}
-	if plan.Action == PopupRuleRemove {
-		return removed, nil
-	}
-	want := plan.Report.Want
-	for i := len(want) - 1; i >= 0; i-- {
-		if err := w.Add(ctx, 0, want[i]); err != nil {
-			return removed, err
 		}
 	}
 	return removed, nil

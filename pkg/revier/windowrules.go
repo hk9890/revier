@@ -8,24 +8,24 @@ import "context"
 type WindowRule struct {
 	// Class is the window class the rule matches. Empty for a rule that
 	// matches by something else.
-	Class string
+	Class string `json:"class,omitempty"`
 	// MinWidth limits the rule to a monitor at least this many logical
 	// pixels wide. 0 matches any monitor.
-	MinWidth int
+	MinWidth int `json:"min_width,omitempty"`
 	// Place is the rule's x, y, width and height, in the spelling
 	// WindowPlacer.Place reads, such as ["center", "top", "1800", "100%"].
 	// Empty for a rule that places nothing.
-	Place []string
+	Place []string `json:"place,omitempty"`
 	// Overlay keeps the window above every other window and out of the
 	// window switcher, and hides it when another window takes the focus.
-	Overlay bool
+	Overlay bool `json:"overlay,omitempty"`
 	// Other says the rule holds something the fields above do not carry:
 	// a second match, a tile, a workspace. Such a rule is the user's.
-	Other bool
+	Other bool `json:"other,omitempty"`
 	// Raw is the rule as the host stores it, all of it, so that the user can
 	// put back a rule of theirs that `revier setup install --force`
 	// replaced. Empty in a rule revier builds to write.
-	Raw string
+	Raw string `json:"raw,omitempty"`
 }
 
 // WindowRules reads the window host's placement rules.

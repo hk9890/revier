@@ -95,8 +95,9 @@ func TestInstallRewritesRevierRulesWithoutForce(t *testing.T) {
 	if want := append(core.PopupRules(), kittyRule); !reflect.DeepEqual(w.Rules, want) {
 		t.Errorf("rules =\n%+v\nwant\n%+v", w.Rules, want)
 	}
-	// From the last one up, so each index is still where the report found it.
-	if want := []string{"remove 2", "remove 1", "add 0", "add 0", "add 0"}; !slices.Equal(w.Calls, want) {
+	// The adds first, at the top; then the removes from the last one up,
+	// each three further down than the report found it.
+	if want := []string{"add 0", "add 1", "add 2", "remove 5", "remove 4"}; !slices.Equal(w.Calls, want) {
 		t.Errorf("calls = %v, want %v", w.Calls, want)
 	}
 }
@@ -183,6 +184,26 @@ func TestARunThatFailsHalfWayReportsTheFileAsLeft(t *testing.T) {
 	}
 	if plan.Report.State != core.PopupRulesStale {
 		t.Errorf("state = %s, want stale: one rule of three was written", plan.Report.State)
+	}
+}
+
+// The adds go before the removes, so a run that stops after them leaves
+// revier's rules first, where they place the popup, and the old ones below
+// them, where the host never reaches them.
+func TestARunThatFailsAfterTheAddsLeavesRulesThatPlaceThePopup(t *testing.T) {
+	w := hosttest.NewWindowRuleWriter(kittyRule, popupRule(0, "center", "top", "1800", "100%"))
+	w.FailAt = 4
+	c := &core.Core{WindowRules: w}
+	plan, err := c.PlanInstallPopupRules(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan = c.ApplyPopupRules(t.Context(), plan, false)
+	if plan.Done || plan.Err == "" {
+		t.Fatalf("done %v, err %q; want a failure", plan.Done, plan.Err)
+	}
+	if want := core.PopupRules(); !reflect.DeepEqual(w.Rules[:len(want)], want) {
+		t.Errorf("rules =\n%+v\nwant revier's first", w.Rules)
 	}
 }
 
