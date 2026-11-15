@@ -49,8 +49,8 @@ is an app-mode window.
 
 Replaces the earlier model of three ports and a project as a set of OS windows.
 A binding is to a name: "diff viewer" is a Meld window on a desktop and a
-panel in a terminal. Matching, templates and toggle-back are the core's, so two adapters
-cannot disagree.
+panel in a terminal. Matching, templates and toggle-back are the core's, so
+two adapters cannot disagree.
 
 ### D15 — `Open` produces what `Match` finds, and the core focuses after it
 
@@ -366,9 +366,9 @@ A tab opened with a panel group holds panels that carry no target mark, so
 closing the one panel the target is found by left the others on screen while
 the shutdown said "closed". A close step now carries every panel of the tab
 and closes each through `PanelCloser`; the tab ends with its last panel, so no
-close-a-tab capability is needed. The step's busy check covers every panel it carries. An
-agent's step closes its tab the same way, except the workspace's own tab,
-where the shell the layout declares beside the agent stays.
+close-a-tab capability is needed. The step's busy check covers every panel it
+carries. An agent's step closes its tab the same way, except the workspace's
+own tab, where the shell the layout declares beside the agent stays.
 
 ### D95 — an attachment is the window and the terminal inside it
 

@@ -100,9 +100,9 @@ type Capabilities struct {
 }
 
 // Instance is one live thing a host holds: a kitty OS window, the hc
-// terminals of one workspace, a Meld window. Panels is populated by runtime hosts only. Minimized is set
-// only by a window host that can tell a minimized window apart; any other host
-// leaves it false.
+// terminals of one workspace, a Meld window. Panels is populated by runtime
+// hosts only. Minimized is set only by a window host that can tell a
+// minimized window apart; any other host leaves it false.
 type Instance struct {
 	Ref       TargetRef `json:"ref"`
 	Title     string    `json:"title"`

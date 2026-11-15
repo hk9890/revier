@@ -13,8 +13,8 @@
 //
 // The package is also the one reader of a process's parent and terminal on
 // this machine: Parent, which the kitty host walks a window's processes with,
-// PeerPID and ServerPATH, the hc core behind its socket and the PATH it starts a program
-// with, RunsUnder, the panels a shutdown closes last, and AgentSessionVars,
+// PeerPID and ServerPATH, the hc core behind its socket and the PATH it
+// starts a program with, RunsUnder, the panels a shutdown closes last, and AgentSessionVars,
 // TerminalVars, CommandVars, WithoutAgentSession, Without and Cleared, what
 // the hc host keeps from the programs its core starts.
 package proc
@@ -84,8 +84,9 @@ func WithoutAgentSession(env []string) []string {
 // TerminalVars name what a terminal or a multiplexer sets in each program it
 // runs. A server started inside one hands them to every program it starts,
 // which then acts on a kitty window, a tmux pane, a herdr pane or an hc
-// terminal that is not its own: revier may itself run inside any of them. hc's are here too: hc sets its own in each of
-// its terminals over the env a run gives.
+// terminal that is not its own: revier may itself run inside any of them.
+// hc's are here too: hc sets its own in each of its terminals over the env a
+// run gives.
 var TerminalVars = []string{
 	"KITTY_WINDOW_ID", "KITTY_LISTEN_ON", "KITTY_PID", "KITTY_PUBLIC_KEY", "KITTY_INSTALLATION_DIR",
 	"KITTY_SHELL_INTEGRATION", "WINDOWID",

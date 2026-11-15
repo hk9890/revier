@@ -218,8 +218,8 @@ project cannot share a key. A target named `popup` or `picker` cannot have a key
 ### Tabs
 
 `inside` opens the target as a tab of another target's instance: a kitty tab,
-or hc terminals that kitty shows as one. `tabs` on the outer target opens a new instance
-with those tabs.
+or hc terminals that kitty shows as one. `tabs` on the outer target opens a
+new instance with those tabs.
 
 ```toml
 [[target]]

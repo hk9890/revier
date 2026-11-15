@@ -9,6 +9,10 @@ package hc_test
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -167,4 +171,71 @@ func TestABindingDoesNotOutliveItsCore(t *testing.T) {
 func press(ctx context.Context, c *core.Core, p core.Project, name revier.TargetName) (core.Result, error) {
 	_, res, err := c.ActivateWaiting(ctx, p, name, nil)
 	return res, err
+}
+
+// A tab the listing holds can end before its focus: its view window ends
+// with its terminal, so the focus fails. The press is made once more, finds
+// the tab gone and opens it again; that tab's command now exits at once,
+// which the second press names.
+func TestCoreOpensAgainATabThatEndsAsItIsFocused(t *testing.T) {
+	h, c := world(t), ctx(t)
+	dir := t.TempDir()
+	view := &endingView{FakeView: hosttest.NewView("kitty")}
+	cr := &core.Core{Runtime: h, View: view}
+	p := homeAndDiff()
+	waits := []string{"sh", "-c", "while [ ! -e release ]; do sleep 0.01; done"}
+	p.Targets = append(p.Targets, revier.Target{Name: "quick", Runtime: &revier.Realization{
+		Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelTool, Dir: dir, Command: waits}},
+	}})
+	p = core.PrepareProject(p.Project)
+	home, err := press(c, cr, p, "home")
+	if err != nil {
+		t.Fatalf("open home: %v", err)
+	}
+	if _, err := press(c, cr, p, "quick"); err != nil {
+		t.Fatalf("open quick: %v", err)
+	}
+	panels := listing(t, h, home.Ref)
+	if len(panels) != 2 {
+		t.Fatalf("home's panels = %+v, want home's own and quick's", panels)
+	}
+	first := panels[1].ID
+	// Off the tab, so the next press focuses it and does not return home.
+	if err := view.FakeView.FocusPanel(c, home.Ref, panels[0].ID); err != nil {
+		t.Fatal(err)
+	}
+
+	view.ending = func(panel revier.PanelID) error {
+		if panel != first {
+			return nil
+		}
+		if err := os.WriteFile(filepath.Join(dir, "release"), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		waitFor(t, h, func([]revier.Instance) bool {
+			return !slices.ContainsFunc(listing(t, h, home.Ref), func(p revier.Panel) bool { return p.ID == first })
+		})
+		return fmt.Errorf("kitty: no window shows panel %s", panel)
+	}
+	want := `hc: open tab quick: the tool panel's command "sh -c while [ ! -e release ]; do sleep 0.01; done" exited as soon as it started`
+	if _, err := press(c, cr, p, "quick"); err == nil || !strings.HasPrefix(err.Error(), want) {
+		t.Errorf("press quick = %v, want %q", err, want)
+	}
+}
+
+// endingView is the fake view whose FocusPanel runs ending first, which can
+// end the panel's terminal and fail the focus, as a kitty window that ended
+// with its terminal does.
+type endingView struct {
+	*hosttest.FakeView
+	ending func(revier.PanelID) error
+}
+
+func (v *endingView) FocusPanel(ctx context.Context, ref revier.TargetRef, panel revier.PanelID) error {
+	if v.ending != nil {
+		if err := v.ending(panel); err != nil {
+			return err
+		}
+	}
+	return v.FakeView.FocusPanel(ctx, ref, panel)
 }

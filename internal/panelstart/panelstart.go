@@ -1,6 +1,7 @@
 // Package panelstart words what revier says about a panel whose command does
-// not start, so that the hc host and the core say it the same way: a program not on the PATH the runtime starts it with, a command the
-// runtime could not start, or a command that exited as soon as it started.
+// not start, so that the hc host and the core say it the same way: a program
+// not on the PATH the runtime starts it with, a command the runtime could not
+// start, or a command that exited as soon as it started.
 package panelstart
 
 import (

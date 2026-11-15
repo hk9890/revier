@@ -59,8 +59,8 @@ func TestCommandsOnSearchesTheGivenPATH(t *testing.T) {
 
 // A bare program is resolved to its file on the given PATH, its arguments
 // kept; a program named by a path is kept as written, and a panel with no
-// command has none. A program not on PATH is refused as Startable refuses
-// it.
+// command has none. A program not on PATH is refused before any panel
+// starts.
 func TestCommandsOnResolvesEachBareProgram(t *testing.T) {
 	testenv.NoTools(t)
 	dir := t.TempDir()

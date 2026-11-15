@@ -81,7 +81,8 @@ func NoTools(t *testing.T) {
 // ShortName is at most 32 of the test name's letters and digits, enough to
 // tell which test left a socket behind, and a hash of the whole name, so two
 // tests whose names differ only in what was cut or dropped still differ. It
-// is at most 40 bytes, short enough for a Unix socket path, which is at most 107 bytes.
+// is at most 40 bytes, short enough for a Unix socket path, which is at most
+// 107 bytes.
 func ShortName(t *testing.T) string {
 	name := strings.Map(func(r rune) rune {
 		if r < 128 && (unicode.IsLetter(r) || unicode.IsDigit(r)) {

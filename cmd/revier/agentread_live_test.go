@@ -1,8 +1,8 @@
 //go:build live
 
 // Layer L4 for `revier agent read`, `send-keys` and `new --no-focus`, against
-// real hc terminals in a fake view, with no window host. The agents are the stand-ins of
-// helpers_live_test.go.
+// real hc terminals in a fake view, with no window host. The agents are the
+// stand-ins of helpers_live_test.go.
 package main
 
 import (

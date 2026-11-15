@@ -1,9 +1,9 @@
 //go:build live
 
 // Layer L4 for `revier agent`: wait and prompt against real hc terminals,
-// with no window host. The agent is a stand-in that reports its state the way Claude
-// Code does, by rewriting its file in the sessions directory the fake claude
-// lists, and runs under the name claude so the Claude probe claims it.
+// with no window host. The agent is a stand-in that reports its state the way
+// Claude Code does, by rewriting its file in the sessions directory the fake
+// claude lists, and runs under the name claude so the Claude probe claims it.
 package main
 
 import (
