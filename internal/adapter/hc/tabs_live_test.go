@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hk9890/revier/internal/panelstart"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -48,21 +49,25 @@ func TestOpenTabThenInstancesListEachTabInOrder(t *testing.T) {
 	}
 }
 
-// A tab whose program exits at once is no tab: OpenTab fails, and the tab
-// before it runs on.
-func TestATabThatExitsAtOnceFailsAndLeavesTheInstance(t *testing.T) {
+// A tab whose program exits at once is no tab, and the tab before it runs
+// on. OpenTab fails where the program ended before the listing that checks
+// it, and a real core gives no bound on that: one that ends a moment later
+// passes the check, and hc then removes its terminal. The failure itself is
+// TestATabThatExitedAtOnceFailsTheOpenTab's, on a core that ends it first.
+func TestATabThatExitsAtOnceLeavesTheInstance(t *testing.T) {
 	h, c := world(t), ctx(t)
 	ref, err := h.Open(c, revier.Realization{Name: "home", Launch: []string{"sh", "-c", "exec sleep 30"}})
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	if _, err := h.OpenTab(c, ref, revier.Realization{Launch: []string{"true"}}, nil); err == nil {
-		t.Fatal("OpenTab of a program that exits at once passed")
+	own := waitFor(t, h, func(in []revier.Instance) bool { return len(in) == 1 })[0].Panels[0].ID
+	_, err = h.OpenTab(c, ref, revier.Realization{Launch: []string{"true"}}, nil)
+	if want := panelstart.ExitedAtOnce(revier.PanelSpec{Command: []string{"true"}}).Error(); err != nil && err.Error() != want {
+		t.Fatalf("OpenTab = %v, want it passed or %q", err, want)
 	}
-	got, err := h.Instances(c)
-	if err != nil || len(got) != 1 || len(got[0].Panels) != 1 {
-		t.Errorf("after the failed tab = %+v, %v; want the instance with its first tab alone", got, err)
-	}
+	waitFor(t, h, func(in []revier.Instance) bool {
+		return len(in) == 1 && in[0].Ref == ref && len(in[0].Panels) == 1 && in[0].Panels[0].ID == own
+	})
 }
 
 // A view's window runs hc's attach of one terminal, which ends when the

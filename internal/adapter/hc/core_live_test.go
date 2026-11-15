@@ -111,8 +111,11 @@ func TestCoreRunOrRaiseTogglesHomeInAView(t *testing.T) {
 	}
 }
 
-// A tab whose command exits as soon as it starts is named as having exited,
-// on every press, and leaves the instance as it was.
+// A tab whose command exits as soon as it starts leaves the instance as it
+// was, on every press, and a press that sees it end names it as exited. A
+// real core gives no bound on when the command ends against the listing that
+// checks it, so a press may also pass and the tab then end; that the core
+// names it is internal/core's to pin, on a fake that ends it first.
 func TestCoreSaysATabWhoseCommandEndsAtOnceExited(t *testing.T) {
 	h, c := world(t), ctx(t)
 	cr := &core.Core{Runtime: h, View: hosttest.NewView("kitty")}
@@ -128,12 +131,14 @@ func TestCoreSaysATabWhoseCommandEndsAtOnceExited(t *testing.T) {
 
 	want := `hc: open tab quick: the tool panel's command "true" exited as soon as it started`
 	for range 2 {
-		if _, err := press(c, cr, p, "quick"); err == nil || !strings.HasPrefix(err.Error(), want) {
-			t.Errorf("press quick = %v, want %q", err, want)
+		if _, err := press(c, cr, p, "quick"); err != nil && !strings.HasPrefix(err.Error(), want) {
+			t.Errorf("press quick = %v, want it passed or %q", err, want)
 		}
-	}
-	if panels := listing(t, h, home.Ref); len(panels) != 1 {
-		t.Errorf("home's panels = %+v, want its own alone", panels)
+		own := listing(t, h, home.Ref)[0].ID
+		waitFor(t, h, func([]revier.Instance) bool {
+			panels := listing(t, h, home.Ref)
+			return len(panels) == 1 && panels[0].ID == own
+		})
 	}
 }
 
@@ -170,8 +175,7 @@ func TestABindingDoesNotOutliveItsCore(t *testing.T) {
 
 // A tab the listing holds can end before its focus: its view window ends
 // with its terminal, so the focus fails. The press is made once more, finds
-// the tab gone and opens it again; that tab's command now exits at once,
-// which the second press names.
+// the tab gone and opens it again, and focuses the tab it opened.
 func TestCoreOpensAgainATabThatEndsAsItIsFocused(t *testing.T) {
 	h, c := world(t), ctx(t)
 	dir := t.TempDir()
@@ -210,11 +214,21 @@ func TestCoreOpensAgainATabThatEndsAsItIsFocused(t *testing.T) {
 		waitFor(t, h, func([]revier.Instance) bool {
 			return !slices.ContainsFunc(listing(t, h, home.Ref), func(p revier.Panel) bool { return p.ID == first })
 		})
+		// The tab opened again runs on.
+		if err := os.Remove(filepath.Join(dir, "release")); err != nil {
+			t.Fatal(err)
+		}
 		return fmt.Errorf("kitty: no window shows panel %s", panel)
 	}
-	want := `hc: open tab quick: the tool panel's command "sh -c while [ ! -e release ]; do sleep 0.01; done" exited as soon as it started`
-	if _, err := press(c, cr, p, "quick"); err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("press quick = %v, want %q", err, want)
+	if _, err := press(c, cr, p, "quick"); err != nil {
+		t.Fatalf("press quick = %v, want the tab opened again", err)
+	}
+	panels = listing(t, h, home.Ref)
+	if len(panels) != 2 || panels[1].ID == first {
+		t.Fatalf("home's panels = %+v, want home's own and a quick tab other than %s", panels, first)
+	}
+	if cur, _ := view.FocusedPanel(c, home.Ref); cur != panels[1].ID {
+		t.Errorf("current panel %s, want the quick tab opened again, %s", cur, panels[1].ID)
 	}
 }
 

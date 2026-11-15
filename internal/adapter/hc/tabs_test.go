@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/hk9890/revier/internal/adapter/hc"
+	"github.com/hk9890/revier/internal/panelstart"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -133,6 +134,25 @@ func TestAFailedTabClosesItsOwnTerminalsAlone(t *testing.T) {
 	}}, nil)
 	if err == nil || !strings.Contains(err.Error(), "Permission denied") {
 		t.Fatalf("OpenTab = %v, want hc's spawn failure", err)
+	}
+	if live := c.live(); !slices.Equal(live, []string{"t1"}) {
+		t.Errorf("live terminals = %q, want the first tab's t1 alone", live)
+	}
+}
+
+// A tab whose program ended before the listing that follows its runs fails
+// OpenTab, named as exited, and leaves the tab before it alone.
+func TestATabThatExitedAtOnceFailsTheOpenTab(t *testing.T) {
+	c, sock := newCore(t)
+	h := &hc.Host{Socket: sock}
+	ref, err := h.Open(t.Context(), revier.Realization{Name: "home", Launch: []string{"sh"}})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	c.exitRun = 2
+	_, err = h.OpenTab(t.Context(), ref, revier.Realization{Launch: []string{"true"}}, nil)
+	if want := panelstart.ExitedAtOnce(revier.PanelSpec{Command: []string{"true"}}).Error(); err == nil || err.Error() != want {
+		t.Fatalf("OpenTab = %v, want %q", err, want)
 	}
 	if live := c.live(); !slices.Equal(live, []string{"t1"}) {
 		t.Errorf("live terminals = %q, want the first tab's t1 alone", live)
