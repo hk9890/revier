@@ -56,7 +56,7 @@ runtime does not read hc's terminals.
 - `revier agent new --no-focus` from a script adds the tab to the window
   that shows the workspace, and opens no window where none shows it.
 - In a kitty window that shows no workspace, the shell key opens a plain kitty
-  tab, as `outside = "tab"` says. That tab is kitty's alone, so revier does
+  tab in that window's directory, as `outside = "tab"` says. That tab is kitty's alone, so revier does
   not list it, and it ends with kitty.
 
 ## Without a view

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -113,15 +114,15 @@ func (c *Core) show(ctx context.Context, ref revier.TargetRef, open bool) (bool,
 	if !ok || c.Runtime == nil || ref.Host != c.Runtime.Name() {
 		return false, nil
 	}
-	snap, err := c.answered(ctx, c.Runtime.Name())
+	instances, err := c.Runtime.Instances(ctx)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("%s: instances: %w", c.Runtime.Name(), err)
 	}
-	inst, ok := byRef(snap, ref)
-	if !ok {
+	i := slices.IndexFunc(instances, func(in revier.Instance) bool { return key(in.Ref) == key(ref) })
+	if i < 0 {
 		return false, fmt.Errorf("%s: %s is not listed to show", c.Runtime.Name(), ref.ID)
 	}
-	return shower.Show(ctx, inst, open)
+	return shower.Show(ctx, instances[i], open)
 }
 
 // raisableShown is raisable for a press on an instance that is open: a view

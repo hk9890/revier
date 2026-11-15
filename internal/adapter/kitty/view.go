@@ -313,16 +313,51 @@ func (v *View) FindPanel(ctx context.Context, instances []revier.Instance, panel
 // OpenBeside opens a kitty tab beside the window panel, in the kitty the key
 // was pressed in, running spec: kitty's own shell, or the agent spec runs,
 // held as the kitty runtime holds a panel's command. It is kitty's alone, so
-// the runtime lists no instance for it (decisions.md D183).
+// the runtime lists no instance for it (decisions.md D183). Without spec.Dir
+// it starts in the window's directory, read as the kitty runtime reads a
+// panel's, while it is a directory: the runtime lists no such window, so the
+// core cannot read it (D153, D164).
 func (v *View) OpenBeside(ctx context.Context, panel revier.PanelID, spec revier.PanelSpec) error {
 	socket := v.kitty.here()
 	if socket == "" {
 		return errors.New("kitty: the command runs in no kitty: KITTY_LISTEN_ON is not set")
 	}
+	dir := spec.Dir
+	if dir == "" {
+		var err error
+		if dir, err = v.windowDir(ctx, socket, panel); err != nil {
+			return err
+		}
+	}
 	args := slices.Concat([]string{"--type=tab", "--match", "window_id:" + panel.String()}, holdArgs(spec))
-	if spec.Dir != "" {
-		args = append(args, "--cwd", spec.Dir)
+	if dir != "" {
+		args = append(args, "--cwd", dir)
 	}
 	_, err := v.kitty.launch(ctx, socket, append(args, spec.Command...)...)
 	return err
+}
+
+// windowDir is the directory of the kitty window panel on socket, or "" when
+// it is no directory now, as one removed since.
+func (v *View) windowDir(ctx context.Context, socket string, panel revier.PanelID) (string, error) {
+	windows, err := v.kitty.ls(ctx, socket)
+	if err != nil {
+		return "", err
+	}
+	parent := v.kitty.parents()
+	for _, w := range windows {
+		for _, t := range w.Tabs {
+			for _, win := range t.Windows {
+				if strconv.Itoa(win.ID) != panel.String() {
+					continue
+				}
+				dir := panelOf(win, parent).Dir
+				if info, err := os.Stat(dir); dir == "" || err != nil || !info.IsDir() {
+					return "", nil
+				}
+				return dir, nil
+			}
+		}
+	}
+	return "", nil
 }

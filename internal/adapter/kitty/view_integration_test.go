@@ -251,11 +251,13 @@ func TestFindPanelMapsAKittyWindowToTheTerminalItAttaches(t *testing.T) {
 
 // A tab outside a workspace is kitty's own, beside the key's window, in the
 // kitty the key was pressed in: a shell unheld, an agent held as the kitty
-// runtime holds a panel's command.
+// runtime holds a panel's command. With no directory asked for, it starts in
+// the key's window's, which kitty alone lists (decisions.md D153, D164).
 func TestOpenBesideIsAKittyTabBesideTheKeysWindow(t *testing.T) {
-	v, rec := viewOn(t, "testdata/ls-hc-view.json")
+	dir := t.TempDir()
+	v, rec := viewOn(t, withDir(t, dir))
 	ctx := t.Context()
-	if err := v.OpenBeside(ctx, "6", revier.PanelSpec{Kind: revier.PanelShell, Dir: "/home/user/dev/demo"}); err != nil {
+	if err := v.OpenBeside(ctx, "6", revier.PanelSpec{Kind: revier.PanelShell, Dir: "/elsewhere"}); err != nil {
 		t.Fatalf("OpenBeside: %v", err)
 	}
 	if err := v.OpenBeside(ctx, "6", revier.PanelSpec{Kind: revier.PanelAgent, Command: []string{"claude"}}); err != nil {
@@ -263,10 +265,38 @@ func TestOpenBesideIsAKittyTabBesideTheKeysWindow(t *testing.T) {
 	}
 	got := launches(rec)
 	want := [][]string{
-		{"--type=tab", "--match", "window_id:6", "--cwd", "/home/user/dev/demo"},
-		{"--type=tab", "--match", "window_id:6", "--hold", "claude"},
+		{"--type=tab", "--match", "window_id:6", "--cwd", "/elsewhere"},
+		{"--type=tab", "--match", "window_id:6", "--hold", "--cwd", dir, "claude"},
 	}
 	if len(got) != 2 || !slices.Equal(got[0], want[0]) || !slices.Equal(got[1], want[1]) {
 		t.Errorf("launches = %q, want %q", got, want)
 	}
+}
+
+// A key's window in a directory removed since gets kitty's own default
+// directory: kitty starts no process in a removed one (decisions.md D153).
+func TestOpenBesideDropsARemovedDirectory(t *testing.T) {
+	v, rec := viewOn(t, withDir(t, t.TempDir()+"/removed"))
+	if err := v.OpenBeside(t.Context(), "6", revier.PanelSpec{Kind: revier.PanelShell}); err != nil {
+		t.Fatalf("OpenBeside: %v", err)
+	}
+	got := launches(rec)
+	if want := []string{"--type=tab", "--match", "window_id:6"}; len(got) != 1 || !slices.Equal(got[0], want) {
+		t.Errorf("launches = %q, want %q", got, want)
+	}
+}
+
+// withDir is the fixture with the directory of window 6, kitty's own tab
+// beside the workspace, moved to dir.
+func withDir(t *testing.T, dir string) string {
+	t.Helper()
+	raw, err := os.ReadFile("testdata/ls-hc-view.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := t.TempDir() + "/ls.json"
+	if err := os.WriteFile(path, []byte(strings.ReplaceAll(string(raw), "/home/user/dev/demo", dir)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }

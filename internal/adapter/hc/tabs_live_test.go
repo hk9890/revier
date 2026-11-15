@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -109,5 +110,52 @@ func TestAnAttachedPanelEndsWithItsTerminal(t *testing.T) {
 	}
 	if got, err := h.Instances(c); err != nil || slices.ContainsFunc(got, func(in revier.Instance) bool { return in.Ref == ref }) {
 		t.Errorf("after the close = %+v, %v; want no instance", got, err)
+	}
+}
+
+// A view's window that closes or crashes ends its attach as kitty does, by a
+// hang-up or a kill of the attach's process group, and its terminal runs on:
+// closing kitty ends no agent (decisions.md D181).
+func TestAnAttachThatIsHungUpOrKilledLeavesItsTerminal(t *testing.T) {
+	script, err := exec.LookPath("script")
+	if err != nil {
+		t.Skip("script is not installed; the attach needs a terminal")
+	}
+	h, c := world(t), ctx(t)
+	ref, err := h.Open(c, revier.Realization{Name: "home", Launch: []string{"sh", "-c", "exec sleep 30"}})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	panel := waitFor(t, h, func(in []revier.Instance) bool { return len(in) == 1 })[0].Panels[0].ID
+	argv, err := h.AttachPanel(panel)
+	if err != nil {
+		t.Fatalf("AttachPanel: %v", err)
+	}
+	quoted := make([]string, len(argv))
+	for i, a := range argv {
+		quoted[i] = "'" + a + "'"
+	}
+	for _, sig := range []syscall.Signal{syscall.SIGHUP, syscall.SIGKILL} {
+		attach := exec.Command(script, "-qec", strings.Join(quoted, " "), "/dev/null")
+		attach.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		if err := attach.Start(); err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan error, 1)
+		go func() { done <- attach.Wait() }()
+		select {
+		case err := <-done:
+			t.Fatalf("the attach ended before its %v: %v", sig, err)
+		case <-time.After(time.Second):
+		}
+		if err := syscall.Kill(-attach.Process.Pid, sig); err != nil {
+			t.Fatalf("%v the attach: %v", sig, err)
+		}
+		<-done
+		time.Sleep(500 * time.Millisecond)
+		got, err := h.Instances(c)
+		if err != nil || len(got) != 1 || got[0].Ref != ref || len(got[0].Panels) != 1 || got[0].Panels[0].ID != panel {
+			t.Fatalf("after %v of the attach = %+v, %v; want the instance with its terminal", sig, got, err)
+		}
 	}
 }
