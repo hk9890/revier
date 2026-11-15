@@ -99,7 +99,7 @@ const openVar = "REVIER_KITTY_OPEN"
 // 0.50 (read from kitty 0.50.0's protocol docs; not run against a live
 // kitty). The records name a program, not an agent, so the host passes them
 // on unread and a probe says what they mean. A user var of the same name is
-// dropped, so the var holds only what kitty reports (decisions.md D187).
+// dropped, so the var holds only what kitty reports (decisions.md D188).
 const programStatusVar = "kitty_program_status"
 
 // runtimeDir is the directory that is the user's alone, and "" when the

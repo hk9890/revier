@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"os"
 	"slices"
 	"strings"
 
@@ -26,9 +27,12 @@ import (
 // line here and its name in defaultRuntimeOrder or optInRuntimes, not an
 // init() somewhere, so what a build contains is readable in one place.
 func runtimeAdapters() map[string]revier.Runtime {
+	// Without its own path, a view's window over hc is not held once its
+	// program ends: nothing worse.
+	self, _ := os.Executable()
 	return map[string]revier.Runtime{
 		"kitty": &kitty.Host{},
-		"hc":    &hc.Host{},
+		"hc":    &hc.Host{Revier: self},
 	}
 }
 

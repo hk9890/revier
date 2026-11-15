@@ -33,6 +33,14 @@ type terminal struct {
 	Title      string            `json:"title"`
 	Labels     map[string]string `json:"labels"`
 	Foreground *foreground       `json:"foreground"`
+	// Reason is why a finished terminal's program ended: exited for one
+	// that ended on its own, killed for one a kill ended.
+	Reason   string `json:"reason"`
+	ExitCode *int   `json:"exit_code"`
+	Signal   *int   `json:"signal"`
+	// FinishedMS is when its program ended, in ms since the epoch; 0 while
+	// it runs.
+	FinishedMS int64 `json:"finished_ms"`
 }
 
 // foreground is what runs in a terminal now: its foreground process group's

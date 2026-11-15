@@ -1014,9 +1014,8 @@ Extends D165 and D179. hc's attach shows one terminal, so a tab of an agent and
 a shell is two kitty windows in one kitty tab, and an instance is one kitty OS
 window of the workspace kitty, titled as its match expects. Each kitty window
 carries the hc address it attaches, which maps a key's kitty window id to its
-terminal and a terminal to its window. A view's window is never held: holding
-is a runtime's, and hc removes a terminal whose program exited, so the window
-ends with its panel (D94).
+terminal and a terminal to its window. A window ends with its panel, and a
+tab with its last one (D94), past the hold of a command that ended (D187).
 
 ### D181 — under hc a view that closes ends no agent, and the next press opens a view again
 
@@ -1077,7 +1076,16 @@ always opens. A raise of a window that shows the instance still moves nothing.
 An agent reached from the TUI names no target, so a window it opens again is
 not placed.
 
-### D187 — a kitty panel carries the window's program status unread, and a probe reads it
+### D187 — under hc a view's window holds a panel's command once it ends, as the kitty runtime keeps it open
+
+Extends D180. The kitty runtime keeps a command's window open so its output
+stays readable; under hc a failed agent took its error with its window. So hc
+keeps a command's terminal once it ends, and its window shows what it left
+and how it ended until dismissed. The held terminal stays its workspace's
+panel, so a press raises the workspace and a close ends the window; a shell's
+window ends at once.
+
+### D188 — a kitty panel carries the window's program status unread, and a probe reads it
 
 Extends D119, D144. kitty 0.50 keeps the OSC 7501 records each program in a
 window sends, and the listing revier already takes reports them, so the panel

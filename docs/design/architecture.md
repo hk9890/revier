@@ -79,10 +79,11 @@ A runtime is shown by the view that follows it, and three setups work (D178):
 Under hc, the kitty view opens one kitty OS window per instance, one kitty tab
 per tab, and one kitty window per panel of a tab, each running hc's attach for
 its terminal (D180). Each kitty window carries the hc address it attaches, so
-a kitty window id maps to its terminal and a terminal to its window. A view's
-window is never held open after its program ends: hc removes a terminal whose
-program exited, so the window ends with it, and a tab still ends with its last
-panel (D94).
+a kitty window id maps to its terminal and a terminal to its window. A window
+ends with its panel, and a tab with its last one (D94). A panel's command
+that ends holds its window, as the kitty runtime holds it: the window shows
+what the command left and how it ended, until the person dismisses it
+(D187).
 
 What a setup without the kitty runtime does not read:
 
