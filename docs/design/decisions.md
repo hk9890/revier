@@ -1083,6 +1083,4 @@ stays readable; under hc a failed agent took its error with its window. So hc
 keeps a command's terminal once it ends, and its window shows what it left
 and how it ended until dismissed. The held terminal stays its workspace's
 panel, so a press raises the workspace and a close ends the window; a shell's
-window ends at once. The next open removes a terminal no window took within a
-minute. The window asks the core with no hc command, as one would start a core
-a stop ended.
+window ends at once.
