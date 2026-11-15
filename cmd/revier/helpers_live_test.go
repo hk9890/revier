@@ -166,7 +166,8 @@ var (
 
 // stopCore stops the test's core, which ends every program it runs, and
 // makes sure the core and its holders are gone: a pid still alive at the
-// deadline is killed. hc's own CLI starts a core when none answers, so it is
+// deadline is killed. It runs the binary the hc host runs, herdr-core where
+// no hc links to it. hc's own CLI starts a core when none answers, so it is
 // asked only of a core that does.
 func stopCore(t *testing.T) {
 	t.Helper()
@@ -175,18 +176,23 @@ func stopCore(t *testing.T) {
 		return
 	}
 	_ = conn.Close()
+	bin, err := hc.Program()
+	if err != nil {
+		t.Errorf("stop the test's hc core: %v", err)
+		return
+	}
 	var status struct {
 		PID     int `json:"pid"`
 		Holders []struct {
 			PID int `json:"pid"`
 		} `json:"holders"`
 	}
-	out, err := exec.Command("hc", "server", "status", "--json").Output()
+	out, err := exec.Command(bin, "server", "status", "--json").Output()
 	if err == nil {
 		_ = json.Unmarshal(out, &status)
 	}
-	if out, err := exec.Command("hc", "server", "stop").CombinedOutput(); err != nil {
-		t.Errorf("hc server stop: %v: %s", err, out)
+	if out, err := exec.Command(bin, "server", "stop").CombinedOutput(); err != nil {
+		t.Errorf("%s server stop: %v: %s", bin, err, out)
 	}
 	pids := []int{status.PID}
 	for _, holder := range status.Holders {

@@ -210,7 +210,7 @@ func (h *Host) AttachCommand(r revier.TargetRef) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	bin, err := program()
+	bin, err := Program()
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +230,7 @@ func (h *Host) AttachCommand(r revier.TargetRef) ([]string, error) {
 // view's own environment, not this process's, so the argv names hc by its
 // path and the core by its socket, even when neither was set here.
 func (h *Host) AttachPanel(panel revier.PanelID) ([]string, error) {
-	bin, err := program()
+	bin, err := Program()
 	if err != nil {
 		return nil, err
 	}

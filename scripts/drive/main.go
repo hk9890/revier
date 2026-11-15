@@ -84,12 +84,15 @@ func main() {
 
 	case "kill":
 		// hc's own CLI starts a core when none answers, so it is asked to
-		// stop only one that does.
+		// stop only one that does. The binary is the one the host runs,
+		// herdr-core where no hc links to it.
 		if conn, err := net.Dial("unix", sock); err == nil {
 			_ = conn.Close()
-			out, err := exec.CommandContext(ctx, "hc", "server", "stop").CombinedOutput()
+			bin, err := hc.Program()
+			fatal(err)
+			out, err := exec.CommandContext(ctx, bin, "server", "stop").CombinedOutput()
 			if err != nil {
-				fatal(fmt.Errorf("hc server stop: %w: %s", err, out))
+				fatal(fmt.Errorf("%s server stop: %w: %s", bin, err, out))
 			}
 		}
 		fatal(os.RemoveAll(dir))
@@ -104,7 +107,7 @@ func main() {
 // private points this process, and every program it starts, at an hc core
 // of the driver's own in dir, and returns its socket. Its runtime directory
 // and the unset bus reach no service manager, so the core the host starts
-// runs detached rather than as the user's revier-hc unit; revier's state
+// runs detached rather than as a revier-hc unit of the user's; revier's state
 // goes there too. It exits when a manager still answers.
 func private(dir string) string {
 	run := filepath.Join(dir, "run")

@@ -76,7 +76,8 @@ The terminal shows the workspace's first terminal. Detach with hc's own key,
 
 The core gives every program it starts the environment of the command that
 started the core, for as long as the core runs. Where systemd runs your
-session, revier starts the core as the user service `revier-hc`, with your
+session, revier starts the core as a user service named `revier-hc-` and a
+short hash of the core's socket, one per hc session, with your
 desktop session's environment, wherever you run revier: a shell's own
 settings, such as an activated virtualenv or a credential, do not reach your
 agents. To give your agents a variable, such as `CLAUDE_CONFIG_DIR`, set it in

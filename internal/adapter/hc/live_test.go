@@ -204,9 +204,9 @@ func TestTheCoreOpenStartsHasNoneOfTheTerminalsOwnEnvironment(t *testing.T) {
 	})
 }
 
-// Where there is a service manager, the core Open starts runs as its service
-// revier-hc, with the socket the host dials and the session it is for, which
-// the manager's environment does not name, so its programs get the
+// Where there is a service manager, the core Open starts runs as the service
+// of the socket the host dials, with that socket and the session it is for,
+// which the manager's environment does not name, so its programs get the
 // manager's environment and none of revier's: a venv or a credential of the
 // shell revier ran in does not reach them. A systemd-run first on PATH stands
 // in for the manager: it records how it was called and runs the command with
@@ -262,10 +262,71 @@ eval exec env -i ` + strings.Join(manager, " ") + ` REVIER_HC_MANAGER=yes $env $
 		t.Fatalf("systemd-run never ran: %v", err)
 	}
 	log := filepath.Join(os.Getenv("REVIER_STATE_HOME"), "hc-server-start.log")
-	want := "--user --quiet --collect --unit=revier-hc --property=Type=forking --property=StandardOutput=null" +
+	want := "--user --quiet --collect --unit=" + hc.CoreUnit(h.Socket) + " --property=Type=forking --property=StandardOutput=null" +
 		" --property=StandardError=append:" + log + " --setenv=HC_SOCKET=" + h.Socket + " --setenv=HC_SESSION=rv -- " + bin + " server start\n"
 	if string(called) != want {
 		t.Errorf("systemd-run %q, want %q", called, want)
+	}
+}
+
+// The core of each socket is a service of its own: while the core of one hc
+// session runs, the first Open on another session's socket starts that
+// session's core, and neither takes the other's service for its own. A
+// systemd-run and a systemctl first on PATH stand in for the manager: a
+// second start of a unit that runs fails, and is-active passes for a unit
+// that runs.
+func TestTheCoreOfEachSocketStartsAsAServiceOfItsOwn(t *testing.T) {
+	h := world(t)
+	other := &hc.Host{Socket: filepath.Join(filepath.Dir(h.Socket), "b.sock")}
+	t.Cleanup(func() { stop(other) })
+	fake, units := t.TempDir(), filepath.Join(t.TempDir(), "units")
+	manager := map[string]string{
+		"systemd-run": `#!/bin/sh
+env=
+while [ "$1" != "--" ]; do
+	case "$1" in
+	--unit=*) unit=${1#--unit=} ;;
+	--setenv=*) env="$env ${1#--setenv=}" ;;
+	esac
+	shift
+done
+shift
+grep -qx "$unit" '` + units + `' 2>/dev/null && exit 1
+echo "$unit" >> '` + units + `'
+exec env $env "$@"
+`,
+		"systemctl": `#!/bin/sh
+for unit; do :; done
+grep -qx "$unit" '` + units + `'
+`,
+	}
+	for name, script := range manager {
+		if err := os.WriteFile(filepath.Join(fake, name), []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
+
+	for i, host := range []*hc.Host{h, other} {
+		t.Setenv("HC_SESSION", "rv"+strconv.Itoa(i))
+		if _, err := host.Open(ctx(t), revier.Realization{Name: "s", Launch: []string{"sh", "-c", "exec sleep 30"}}); err != nil {
+			t.Fatalf("Open on %s: %v", host.Socket, err)
+		}
+	}
+	got, err := os.ReadFile(units)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := hc.CoreUnit(h.Socket) + "\n" + hc.CoreUnit(other.Socket) + "\n"; string(got) != want {
+		t.Errorf("units started = %q, want one per socket, %q", got, want)
+	}
+	first, err := h.CorePID(ctx(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := other.CorePID(ctx(t))
+	if err != nil || second == first {
+		t.Errorf("the second socket's core = %d, %v; want a core of its own, not %d", second, err, first)
 	}
 }
 

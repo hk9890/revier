@@ -31,9 +31,9 @@ Each section is also the text of its release on the
   core gives every program it runs the environment of the command that
   started it, so an activated virtualenv or a credential of the shell you
   first ran revier in reached every agent until the core stopped. Where
-  systemd runs your session, revier now starts the core as the user service
-  `revier-hc`, with your desktop session's environment, as it starts its
-  kitty. A variable your agents need, such as `CLAUDE_CONFIG_DIR`, now comes
+  systemd runs your session, revier now starts the core as a user service
+  named `revier-hc-` and a short hash of the core's socket, one per hc
+  session, with your desktop session's environment, as it starts its kitty. A variable your agents need, such as `CLAUDE_CONFIG_DIR`, now comes
   from the session: set it with `systemctl --user set-environment`.
 - **Action required: revier no longer runs workspaces in herdr.** Name
   `kitty` or `hc` in `[hosts] runtime` in place of `herdr`. A command
@@ -57,7 +57,8 @@ Each section is also the text of its release on the
   shows the kitty runtime, as before, and kitty
   shows hc where kitty and a display are, else nothing shows it. `view = ["none"]` shows nothing: revier opens and lists
   your workspaces and focuses none. A view that cannot show the runtime in
-  use stops with an error, and `revier doctor` reports an unknown name.
+  use stops with an error, and `revier doctor` reports an unknown name. With
+  `runtime = ["none"]`, revier ignores the view.
   `revier status` prints the view on a `view` line, between `runtime` and
   `window`.
 - A name in `[hosts]` that revier does not know now stops with

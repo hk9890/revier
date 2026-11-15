@@ -3,6 +3,7 @@ package hc
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -275,10 +276,16 @@ func keeps(vars map[string]string) error {
 // CLI waits as long for one it starts.
 const startWait = 15 * time.Second
 
-// coreUnit is the service the user's service manager runs the core as. One
-// name for it makes a second start while it runs fail, so two presses at once
-// start one core, and names it to stop.
-const coreUnit = "revier-hc"
+// coreUnit is the service the user's service manager runs the core on socket
+// as: revier-hc- and the first 8 hex digits of the socket path's SHA-256. One
+// name per socket makes a second start while it runs fail, so two presses at
+// once start one core, and names it to stop. The core of another socket, as
+// another hc session's, is a unit of another name: this socket's start
+// neither fails on it nor takes it for its own.
+func coreUnit(socket string) string {
+	sum := sha256.Sum256([]byte(socket))
+	return "revier-hc-" + hex.EncodeToString(sum[:4])
+}
 
 // startCore starts the core with "hc server start", which waits for the core
 // to answer, and returns a session with it. What the start says on stderr is
@@ -293,7 +300,7 @@ const coreUnit = "revier-hc"
 // detached, in a session of its own with no terminal to write to, and with
 // coreEnv.
 func (h *Host) startCore(ctx context.Context) (*session, error) {
-	bin, err := program()
+	bin, err := Program()
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +316,7 @@ func (h *Host) startCore(ctx context.Context) (*session, error) {
 		_ = stderr.Close()
 	}()
 	service := userunit.Unit{
-		Name:       coreUnit,
+		Name:       coreUnit(h.socket()),
 		Properties: []string{"Type=forking", "StandardOutput=null", "StandardError=append:" + stderr.Name()},
 		Env:        []string{"HC_SOCKET=" + h.socket()},
 	}

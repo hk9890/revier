@@ -68,7 +68,7 @@ func (h *Host) root() string {
 // core: Open starts one. It never runs hc itself: every hc command starts a
 // core when none runs.
 func (h *Host) Probe(ctx context.Context) error {
-	if _, err := program(); err != nil {
+	if _, err := Program(); err != nil {
 		return err
 	}
 	s, err := h.dial(ctx, false)
@@ -82,11 +82,11 @@ func (h *Host) Probe(ctx context.Context) error {
 	return nil
 }
 
-// program is the hc binary on PATH: herdr-core, else an hc that is a link to
+// Program is the hc binary on PATH: herdr-core, else an hc that is a link to
 // a file named herdr-core, as hc's install makes. Any other hc is not
-// herdr-core: hc is also the name of Holochain's CLI. It is looked up and
-// never run.
-func program() (string, error) {
+// herdr-core: hc is also the name of Holochain's CLI. It is found by its name
+// and its link, never by running it.
+func Program() (string, error) {
 	if _, err := exec.LookPath("herdr-core"); err == nil {
 		return "herdr-core", nil
 	}

@@ -30,7 +30,7 @@ user's projects and state. `hcp` runs a command on a private hc core: its own
 config, state, runtime directory and socket, and no session bus. Any `hc`
 command starts a core when none answers its socket, so run every `hc` and
 every `./bin/revier` through `hcp`. revier starts a core as the unit
-`revier-hc` of the user's service manager; under `hcp` it reaches no manager
+`revier-hc-<socket hash>` of the user's service manager; under `hcp` it reaches no manager
 and starts the core detached. Set all of it, every time, in the one shell
 that runs the recipes below. `REVIER_SSH_CONFIG` points the remote screen's
 "new" (alt+r, then alt+n) and the check for this machine at a scratch ssh
@@ -329,7 +329,7 @@ from `wctl`. The view windows open in the user's workspace kitty, as in the
 kitty recipe above, and each runs `hc attach` of one terminal:
 
 ```bash
-hcp setsid hc server start </dev/null >/dev/null 2>&1   # first: a revier that finds no core starts revier-hc in the user's manager
+hcp setsid hc server start </dev/null >/dev/null 2>&1   # first: a revier that finds no core starts a revier-hc-* unit in the user's manager
 hcr() { HC_SOCKET=$C/s.sock "$@"; }
 printf '[hosts]\nruntime = ["hc"]\nwindow = ["gnome"]\n' > "$S/config.toml"
 hcr ./bin/revier open demo                                # one kitty OS window titled home, a tab per tab
