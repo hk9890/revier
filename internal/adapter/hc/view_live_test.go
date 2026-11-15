@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hk9890/revier/internal/adapter/hc"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/session"
@@ -35,22 +34,6 @@ func workspace(t *testing.T) core.Project {
 		}}},
 		{Name: "notes", Runtime: &revier.Realization{Inside: "home", Launch: sleep}},
 	}})
-}
-
-// listing is the instance's panels as hc lists them, in its order.
-func listing(t *testing.T, h *hc.Host, ref revier.TargetRef) []revier.Panel {
-	t.Helper()
-	instances, err := h.Instances(ctx(t))
-	if err != nil {
-		t.Fatalf("Instances: %v", err)
-	}
-	for _, in := range instances {
-		if in.Ref == ref {
-			return in.Panels
-		}
-	}
-	t.Fatalf("no instance %s: %+v", ref.ID, instances)
-	return nil
 }
 
 func ids(panels []revier.Panel) []revier.PanelID {

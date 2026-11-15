@@ -168,11 +168,6 @@ func TestABindingDoesNotOutliveItsCore(t *testing.T) {
 	}
 }
 
-func press(ctx context.Context, c *core.Core, p core.Project, name revier.TargetName) (core.Result, error) {
-	_, res, err := c.ActivateWaiting(ctx, p, name, nil)
-	return res, err
-}
-
 // A tab the listing holds can end before its focus: its view window ends
 // with its terminal, so the focus fails. The press is made once more, finds
 // the tab gone and opens it again; that tab's command now exits at once,

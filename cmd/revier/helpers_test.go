@@ -304,3 +304,21 @@ func termApp(t *testing.T, text, kittyConf string) (*app, string) {
 	}
 	return &app{cfg: cfg, core: &core.Core{}, out: &bytes.Buffer{}}, dir
 }
+
+// kittyOnPath puts a kitty and a kitten first on PATH that are never run,
+// and sets a display or none: what the kitty view probes for.
+func kittyOnPath(t *testing.T, display bool) {
+	t.Helper()
+	bin := t.TempDir()
+	for _, name := range []string{"kitty", "kitten"} {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", bin)
+	t.Setenv("DISPLAY", "")
+	t.Setenv("WAYLAND_DISPLAY", "")
+	if display {
+		t.Setenv("WAYLAND_DISPLAY", "wayland-0")
+	}
+}

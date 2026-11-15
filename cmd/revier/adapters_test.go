@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"maps"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -130,24 +128,6 @@ func TestEveryAdapterIsInItsDefaultOrder(t *testing.T) {
 		}
 	}
 	check("window", slices.Sorted(maps.Keys(windowAdapters())), defaultWindowOrder)
-}
-
-// kittyOnPath puts a kitty and a kitten first on PATH that are never run,
-// and sets a display or none: what the kitty view probes for.
-func kittyOnPath(t *testing.T, display bool) {
-	t.Helper()
-	bin := t.TempDir()
-	for _, name := range []string{"kitty", "kitten"} {
-		if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	t.Setenv("PATH", bin)
-	t.Setenv("DISPLAY", "")
-	t.Setenv("WAYLAND_DISPLAY", "")
-	if display {
-		t.Setenv("WAYLAND_DISPLAY", "wayland-0")
-	}
 }
 
 // A runtime that draws its own instances is its own view, and with no list

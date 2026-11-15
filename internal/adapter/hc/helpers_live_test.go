@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hk9890/revier/internal/adapter/hc"
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -112,4 +113,25 @@ func waitFor(t *testing.T, h *hc.Host, ok func([]revier.Instance) bool) []revier
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+}
+
+func press(ctx context.Context, c *core.Core, p core.Project, name revier.TargetName) (core.Result, error) {
+	_, res, err := c.ActivateWaiting(ctx, p, name, nil)
+	return res, err
+}
+
+// listing is the instance's panels as hc lists them, in its order.
+func listing(t *testing.T, h *hc.Host, ref revier.TargetRef) []revier.Panel {
+	t.Helper()
+	instances, err := h.Instances(ctx(t))
+	if err != nil {
+		t.Fatalf("Instances: %v", err)
+	}
+	for _, in := range instances {
+		if in.Ref == ref {
+			return in.Panels
+		}
+	}
+	t.Fatalf("no instance %s: %+v", ref.ID, instances)
+	return nil
 }

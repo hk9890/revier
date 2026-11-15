@@ -15,7 +15,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/hk9890/revier/internal/adapter/kitty"
@@ -29,24 +28,6 @@ func fixture(t *testing.T) []byte {
 		t.Fatalf("read fixture: %v", err)
 	}
 	return b
-}
-
-// recorder collects calls; the host queries sockets concurrently.
-type recorder struct {
-	mu    sync.Mutex
-	calls []call
-}
-
-func (r *recorder) add(socket string, args []string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.calls = append(r.calls, call{socket, args})
-}
-
-func (r *recorder) all() []call {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return append([]call(nil), r.calls...)
 }
 
 // host returns a Host whose kitten answers from the fixture on every socket

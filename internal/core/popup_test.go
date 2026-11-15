@@ -46,7 +46,7 @@ func TestRaisePopupRaisesThePopupByItsClassAlone(t *testing.T) {
 	popup := wm.AddInstance(revier.Instance{Title: "revier", Class: core.PopupClass, PID: 1001})
 	c := &core.Core{Runtime: rt, View: rt, Window: wm, Self: func(revier.Panel) bool { return true }}
 
-	if err := c.RaisePopup(context.Background()); err != nil {
+	if err := c.RaisePopup(t.Context()); err != nil {
 		t.Fatalf("RaisePopup: %v", err)
 	}
 	if !slices.Equal(wm.Focuses, []revier.TargetRef{popup}) {
@@ -60,12 +60,12 @@ func TestRaisePopupRaisesThePopupByItsClassAlone(t *testing.T) {
 // With no window host there is nothing to raise the popup by, and with no
 // popup open nothing to raise: both are refused, and nothing is focused.
 func TestRaisePopupIsRefusedWithNothingToRaise(t *testing.T) {
-	if err := (&core.Core{}).RaisePopup(context.Background()); !errors.Is(err, core.ErrNoPopupHost) {
+	if err := (&core.Core{}).RaisePopup(t.Context()); !errors.Is(err, core.ErrNoPopupHost) {
 		t.Errorf("no window host: err = %v, want ErrNoPopupHost", err)
 	}
 	wm := hosttest.New("wm")
 	wm.Add("session:demo", "kitty")
-	if err := (&core.Core{Window: wm}).RaisePopup(context.Background()); err == nil || len(wm.Focuses) != 0 {
+	if err := (&core.Core{Window: wm}).RaisePopup(t.Context()); err == nil || len(wm.Focuses) != 0 {
 		t.Errorf("no popup: err = %v, focuses = %v; want a refusal and nothing focused", err, wm.Focuses)
 	}
 }
@@ -300,7 +300,7 @@ func TestPopupSwitchesNothingWhenItIsNotFocused(t *testing.T) {
 	sw := &switches{}
 	c := &core.Core{Window: wm, SwitchPopup: sw.switchPopup}
 
-	if _, err := c.Popup(context.Background(), popupArgv); err != nil {
+	if _, err := c.Popup(t.Context(), popupArgv); err != nil {
 		t.Fatalf("Popup: %v", err)
 	}
 	if sw.calls != 0 || !slices.Equal(wm.Focuses, []revier.TargetRef{open}) {
@@ -322,7 +322,7 @@ func TestPopupRaisesAFocusedPopupThatTakesNoSwitch(t *testing.T) {
 		"no surface listens on": {Window: wm, SwitchPopup: refused.switchPopup},
 	} {
 		wm.Focuses = nil
-		ref, err := c.Popup(context.Background(), popupArgv)
+		ref, err := c.Popup(t.Context(), popupArgv)
 		if err != nil || ref != open {
 			t.Fatalf("%s: Popup = %v, %v; want the open popup and no error", name, ref, err)
 		}
@@ -351,7 +351,7 @@ func TestPopupOpensOverAFocusedTerminalOfTheUsersOwn(t *testing.T) {
 		wm.Workarea = 5120
 		sw := &switches{}
 		c := &core.Core{Window: wm, Runtime: rt, View: rt, SwitchPopup: sw.switchPopup}
-		if _, err := c.Popup(context.Background(), popupArgv); err != nil {
+		if _, err := c.Popup(t.Context(), popupArgv); err != nil {
 			t.Fatalf("%s: Popup: %v", name, err)
 		}
 		if sw.calls != 0 || len(rt.Sent) != 0 || len(wm.Opened) != 1 {
