@@ -18,9 +18,8 @@ import (
 // world gives the test a private hc: its config, state, runtime directory and
 // socket in a scratch directory, set in this process's environment, which
 // the core Open starts takes. The user's own core and service manager are
-// never reached. A
-// terminal's shell is sh, not the user's: their shell's startup files would
-// run in it. No core runs yet; the test's first Open starts it, and the
+// never reached. A terminal's shell is sh, not the user's: their shell's
+// startup files would run in it. No core runs yet; the test's first Open starts it, and the
 // cleanup stops it and its holder.
 func world(t *testing.T) *hc.Host {
 	t.Helper()

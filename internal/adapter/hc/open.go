@@ -67,8 +67,8 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	// The core starts each program on its own PATH, which can differ from
 	// this process's: the core runs as a service of the user's service
 	// manager, with the manager's PATH, or was started by hand. So the core
-	// is started before a program is checked, and a core started here stays up when a
-	// program is not on its PATH. /proc shows the environment the core was
+	// is started before a program is checked, and a core started here stays
+	// up when a program is not on its PATH. /proc shows the environment the core was
 	// started with: after "hc server restart" the core sets the environment
 	// it saved, which /proc does not show, so the check can then use a stale
 	// PATH.
@@ -230,6 +230,11 @@ func (h *Host) startCore(ctx context.Context) (*session, error) {
 		Name:       coreUnit,
 		Properties: []string{"Type=forking", "StandardOutput=null", "StandardError=append:" + stderr.Name()},
 		Env:        []string{"HC_SOCKET=" + h.socket()},
+	}
+	// The manager's environment names no session: the core is told the
+	// session this host's socket is for.
+	if session := os.Getenv("HC_SESSION"); session != "" {
+		service.Env = append(service.Env, "HC_SESSION="+session)
 	}
 	detached := func(ctx context.Context) error {
 		cmd := exec.CommandContext(ctx, bin, "server", "start")

@@ -272,14 +272,14 @@ command without it addresses their real sessions.
 Any `hc` command starts a core when none answers its socket, so set the
 scratch directory before the first one. A private `XDG_RUNTIME_DIR` also keeps
 the core off systemd. revier starts a core as the unit `revier-hc` of the
-user's service manager: run revier on a private core only with
-`env -u DBUS_SESSION_BUS_ADDRESS` and the private `XDG_RUNTIME_DIR`, so it
-reaches no manager and starts the core detached. Keep the directory short: a socket path over 107 bytes
-cannot be bound.
+user's service manager: run revier on a private core only through `hcp`,
+whose private `XDG_RUNTIME_DIR` and unset `DBUS_SESSION_BUS_ADDRESS` reach no
+manager, so revier starts the core detached. Keep the directory short: a
+socket path over 107 bytes cannot be bound.
 
 ```bash
 C=$(mktemp -d /tmp/hc.XXXX); mkdir -m 700 "$C/run"
-hcp() { env -u HC_TERMINAL_ID -u HC_TERMINAL_SOCKET -u HC_SESSION SHELL=/bin/sh XDG_CONFIG_HOME=$C XDG_STATE_HOME=$C XDG_RUNTIME_DIR=$C/run HC_SOCKET=$C/s.sock "$@"; }
+hcp() { env -u DBUS_SESSION_BUS_ADDRESS -u HC_TERMINAL_ID -u HC_TERMINAL_SOCKET -u HC_SESSION SHELL=/bin/sh XDG_CONFIG_HOME=$C XDG_STATE_HOME=$C XDG_RUNTIME_DIR=$C/run HC_SOCKET=$C/s.sock "$@"; }
 hcp setsid hc server start </dev/null >/dev/null 2>&1
 hcp hc run --bg --label revier.instance=0a1b2c3d4e5f6a7b --label revier.name=demo sleep 300
 hcp hc get t1 --json | jq .labels                     # the labels Instances groups by; `hc ls` leaves them out

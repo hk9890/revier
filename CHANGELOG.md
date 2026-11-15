@@ -14,7 +14,8 @@ Each section is also the text of its release on the
   first ran revier in reached every agent until the core stopped. Where
   systemd runs your session, revier now starts the core as the user service
   `revier-hc`, with your desktop session's environment, as it starts its
-  kitty.
+  kitty. A variable your agents need, such as `CLAUDE_CONFIG_DIR`, now comes
+  from the session: set it with `systemctl --user set-environment`.
 - **Action required: revier no longer runs workspaces in herdr.** Name
   `kitty`, `tmux` or `hc` in `[hosts] runtime` in place of `herdr`. A command
   that reaches `herdr` in that list stops with `the herdr runtime was removed;

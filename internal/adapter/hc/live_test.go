@@ -205,7 +205,8 @@ func TestTheCoreOpenStartsHasNoneOfTheTerminalsOwnEnvironment(t *testing.T) {
 }
 
 // Where there is a service manager, the core Open starts runs as its service
-// revier-hc, with the socket the host dials, so its programs get the
+// revier-hc, with the socket the host dials and the session it is for, which
+// the manager's environment does not name, so its programs get the
 // manager's environment and none of revier's: a venv or a credential of the
 // shell revier ran in does not reach them. A systemd-run first on PATH stands
 // in for the manager: it records how it was called and runs the command with
@@ -246,6 +247,7 @@ eval exec env -i ` + strings.Join(manager, " ") + ` REVIER_HC_MANAGER=yes $env $
 	}
 	t.Setenv("PATH", fake+":"+os.Getenv("PATH"))
 	t.Setenv("REVIER_HC_LEAK", "yes")
+	t.Setenv("HC_SESSION", "rv")
 
 	out := filepath.Join(t.TempDir(), "env")
 	if _, err := h.Open(ctx(t), revier.Realization{Name: "env", Launch: []string{"sh", "-c", "env > " + out + "; exec sleep 30"}}); err != nil {
@@ -261,7 +263,7 @@ eval exec env -i ` + strings.Join(manager, " ") + ` REVIER_HC_MANAGER=yes $env $
 	}
 	log := filepath.Join(os.Getenv("REVIER_STATE_HOME"), "hc-server-start.log")
 	want := "--user --quiet --collect --unit=revier-hc --property=Type=forking --property=StandardOutput=null" +
-		" --property=StandardError=append:" + log + " --setenv=HC_SOCKET=" + h.Socket + " -- " + bin + " server start\n"
+		" --property=StandardError=append:" + log + " --setenv=HC_SOCKET=" + h.Socket + " --setenv=HC_SESSION=rv -- " + bin + " server start\n"
 	if string(called) != want {
 		t.Errorf("systemd-run %q, want %q", called, want)
 	}
