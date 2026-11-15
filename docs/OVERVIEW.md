@@ -9,7 +9,7 @@ A findability map: where things live, and how to search for them.
 | `pkg/revier/` | The ports and every type that crosses them, the project model included. Public, because out-of-tree adapters import it. |
 | `internal/core/` | All policy: resolution, matching, run-or-raise, toggle-back, survey. |
 | `internal/app/` | The use cases that cross stores, written once for both surfaces: create, link and rename a project, run an action, save a session. |
-| `internal/adapter/<tool>/` | One tool each. No policy. `kitty` (runtime, the view of itself and of hc, and the terminal keys), `hc` (runtime, with tabs as labels; opt-in, a prototype), `gnome` (window and key binder), `proc` (what a link on another machine started here, a process's parent on this machine, and the agent session variables a server must not hand on), `claude` (probe, and the assistant launcher), `opencode` and `execprobe` (probes), `ssh` (remote). |
+| `internal/adapter/<tool>/` | One tool each. No policy. `kitty` (runtime, the view of itself and of hc, and the terminal keys), `hc` (runtime, with tabs as labels; opt-in, a prototype), `gnome` (window, key binder and window rules), `proc` (what a link on another machine started here, a process's parent on this machine, and the agent session variables a server must not hand on), `claude` (probe, and the assistant launcher), `opencode` and `execprobe` (probes), `ssh` (remote). |
 | `internal/panelstart/` | What the hc host and the core say about a panel whose command does not start: not on the PATH the runtime starts it with, or ended at once. |
 | `internal/config/` | TOML loading and the validation that rejects a project before a keypress can fail on it; the template `revier new` writes. |
 | `internal/state/` | What revier learned at runtime: the last project, and hand-attached instances. |
@@ -26,8 +26,8 @@ A findability map: where things live, and how to search for them.
 | `internal/record/` | The state record `revier state` replays: what each operation did, failed or not, and what each surface's survey saw, never pruned. |
 | `internal/runlog/` | The record of every `revier each`: each project's output and a summary, under the state root. |
 | `internal/sshconfig/` | The hosts `~/.ssh/config` names, for the remote screen's "new", and the `HostName` that tells this machine apart. |
-| `internal/hosttest/` | The fake host, view, probe, key binder, terminal keys and remote that layers L2 and L4 run against. |
-| `internal/testenv/` | The scratch configuration, state, ssh configuration and kitty configuration a test binary runs in, in place of the user's own; the empty PATH of a test that must start no tool; the short socket name of a live test. |
+| `internal/hosttest/` | The fake host, view, probe, key binder, terminal keys, window rules and remote that layers L2 and L4 run against. |
+| `internal/testenv/` | The scratch configuration, state, ssh configuration, kitty configuration and XDG configuration directory a test binary runs in, in place of the user's own; the empty PATH of a test that must start no tool; the short socket name of a live test. |
 | `internal/popupswitch/` | The socket the popup's surface listens on in the runtime directory, and the second press of the desktop's key that tells it there to switch its list. |
 | `internal/tui/` | The TUI surface: the project list, the pane, the dialogs and the config screen. |
 | `internal/theme/` | Every colour and glyph the TUI draws with, named by role. |
@@ -45,6 +45,7 @@ A findability map: where things live, and how to search for them.
 - `Remote`: `pkg/revier/remote.go`
 - `KeyBinder`: `pkg/revier/keys.go`
 - `TermKeys`: `pkg/revier/termkeys.go`
+- `WindowRules`: `pkg/revier/windowrules.go`
 
 What each port is: [docs/design/architecture.md](design/architecture.md#ports).
 

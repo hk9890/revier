@@ -15,11 +15,11 @@ behind one of the ports below.
          config ───────▶│     core     │  match, run-or-raise, toggle-back
                         └──────┬───────┘
                                │
-  ┌─────────┬─────────┬────────┴───┬────────────┬──────────┬──────────┐
-  │         │         │            │            │          │          │
-  Runtime   View      Window       AgentProbe   Remote     KeyBinder  TermKeys
-  │         │         │            │            │          │          │
-  kitty     kitty     gnome        claude       ssh        gnome      kitty
+  ┌─────────┬─────────┬────────┴───┬────────────┬──────────┬──────────┬──────────┐
+  │         │         │            │            │          │          │          │
+  Runtime   View      Window       AgentProbe   Remote     KeyBinder  TermKeys   WindowRules
+  │         │         │            │            │          │          │          │
+  kitty     kitty     gnome        claude       ssh        gnome      kitty      gnome
   hc                  hyprland*    opencode
                                    aider*
 
@@ -37,6 +37,7 @@ behind one of the ports below.
 | **Remote** | What does the revier on that machine know about these projects? | ssh. Another transport would be a second one; a second revier is not needed. |
 | **KeyBinder** | Which keyboard shortcuts does the desktop hold? | Another desktop's shortcut store. A shortcut store is not a **Window host** (D26). |
 | **TermKeys** | Which keys does the terminal's configuration hold for revier? | Another terminal's configuration. |
+| **WindowRules** | Which rules does the window host apply to a window as it appears? | Another compositor's window rules. |
 
 **Runtime** and **View** are the two halves of a terminal: one runs programs,
 the other draws them (D176). kitty does both, and hc only the first, so each
@@ -115,6 +116,10 @@ and one include of it in the terminal's own configuration (D147). It is not
 displaces one of theirs; a terminal key opens a tab beside the window it was
 pressed in. It is not the **View** either: the view is the terminal's remote
 control, this is its configuration file.
+
+**WindowRules** reads and writes the window host's placement rules, of which
+revier owns the popup's (D189). It is not the window **Host**: the host acts
+on a window that exists, a rule on a window before it is drawn.
 
 Three things that look like ports and are not:
 

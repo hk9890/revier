@@ -114,7 +114,8 @@ harness's layout breaks on its next layout. Only colour passes from the screen
 to the surface, so what an agent printed cannot repaint the surface that shows
 it.
 
-The popup is the surface in a window revier places and run-or-raises (D76).
+The popup is the surface in a window revier places and run-or-raises (D76),
+sized by the window host's rules before it is drawn (D189).
 Leaving it hides it, and the next press raises it as Esc left it (D86, D169). A cold start on
 every press — a terminal, the TUI, and a first survey of every linked host —
 is too slow for the one keystroke the product promises. A full shutdown is the
