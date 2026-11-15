@@ -9,38 +9,55 @@ set -eu
 
 id="${1:?usage: scripts/lease-desktop <lease-id>}"
 cd "$(dirname "$0")/.."
-cfg=$(werft --json leases | jq -re --arg id "$id" '.[] | select(.id == $id) | .ssh_config')
-guest() { ssh -F "$cfg" "$id" "$@"; }
+cfg=$(werft --json leases | jq -r --arg id "$id" '.[] | select(.id == $id) | .ssh_config')
+[ -n "$cfg" ] || { echo "lease-desktop: no lease $id in werft --json leases" >&2; exit 1; }
+work=$(mktemp -d)
+trap 'ssh -F "$cfg" -o ControlPath="$work/ssh" -O exit "$id" 2>/dev/null; rm -rf "$work"' EXIT
+guest() { ssh -F "$cfg" -o ControlMaster=auto -o ControlPath="$work/ssh" -o ControlPersist=60 "$id" "$@"; }
 hc_version=$(sed -n 's/^ *HC_VERSION: //p' .github/workflows/ci.yml)
 hc_sha256=$(sed -n 's/^ *HC_SHA256: //p' .github/workflows/ci.yml)
+wctl_version=v23
+ext=window-control@carlo9890.github.io
 
-guest 'sudo -n apt-get update -qq && sudo -n DEBIAN_FRONTEND=noninteractive apt-get install -y -qq kitty jq gnome-text-editor hyperfine curl unzip git >/dev/null'
+guest 'sudo -n apt-get -o DPkg::Lock::Timeout=300 -qq update && sudo -n DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 -qq install -y kitty jq gnome-text-editor hyperfine curl unzip >/dev/null'
 guest "mkdir -p ~/.local/bin && curl -fsSL -o /tmp/hc.tar.gz https://releases.herdr.dev/core/$hc_version/herdr-core-linux-x86_64.tar.gz && echo '$hc_sha256  /tmp/hc.tar.gz' | sha256sum -c --quiet - && tar -xzf /tmp/hc.tar.gz -C ~/.local/bin herdr-core && ln -sf herdr-core ~/.local/bin/hc"
-guest 'printf "[daemon]\nAutomaticLoginEnable=true\nAutomaticLogin=%s\n" "$USER" | sudo -n tee /etc/gdm3/custom.conf >/dev/null'
+guest 'f=/etc/gdm3/custom.conf; sudo -n sed -i "/^AutomaticLogin/d" $f && if grep -q "^\[daemon\]" $f; then sudo -n sed -i "/^\[daemon\]/a AutomaticLoginEnable=true\nAutomaticLogin=$USER" $f; else printf "[daemon]\nAutomaticLoginEnable=true\nAutomaticLogin=%s\n" "$USER" | sudo -n tee -a $f >/dev/null; fi'
 guest 'cat > ~/session.sh' <<'E'
+# The logged-in GNOME session's environment, for a command that ssh started.
 export XDG_RUNTIME_DIR=/run/user/$(id -u)
 export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
-export WAYLAND_DISPLAY=wayland-0 XDG_CURRENT_DESKTOP=ubuntu:GNOME XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP=ubuntu:GNOME XDG_SESSION_TYPE=wayland
+WAYLAND_DISPLAY=$(systemctl --user show-environment 2>/dev/null | sed -n 's/^WAYLAND_DISPLAY=//p')
+export WAYLAND_DISPLAY
 export PATH=$HOME/.local/bin:$PATH
+# The socket of the workspace kitty that answers.
+kitty_socket() { for s in "$XDG_RUNTIME_DIR"/revier-kitty-*; do kitten @ --to "unix:$s" ls >/dev/null 2>&1 && echo "unix:$s"; done; }
+# Returns once GNOME Shell answers on the session bus, after a login or reboot.
+gnome_wait() { until gdbus call --session -d org.gnome.Shell -o /org/gnome/Shell -m org.freedesktop.DBus.Peer.Ping >/dev/null 2>&1; do sleep 2; . ~/session.sh; done; }
 E
 
-guest 'mkdir -p ~/.local/share/fonts ~/.local/bin && curl -fsSL -o /tmp/font.zip https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip && unzip -qo /tmp/font.zip -d ~/.local/share/fonts/JetBrainsMono && fc-cache -f >/dev/null'
-guest 'rm -rf /tmp/gwc && git clone -q --depth 1 https://github.com/carlo9890/gnome-window-control.git /tmp/gwc && bash /tmp/gwc/install-wctl.sh --download >/dev/null'
-guest 'ext=~/.local/share/gnome-shell/extensions/window-control@carlo9890.github.io && mkdir -p "${ext%/*}" && rm -rf "$ext" && cp -r /tmp/gwc/window-control@carlo9890.github.io "$ext" && glib-compile-schemas "$ext/schemas"'
+guest 'mkdir -p ~/.local/share/fonts && curl -fsSL -o /tmp/font.zip https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip && unzip -qo /tmp/font.zip -d ~/.local/share/fonts/JetBrainsMono && fc-cache -f >/dev/null'
+guest "curl -fsSL https://github.com/carlo9890/gnome-window-control/releases/download/$wctl_version/install-wctl.sh | WCTL_VERSION=$wctl_version bash >/dev/null"
+guest "d=~/.local/share/gnome-shell/extensions/$ext && curl -fsSL -o /tmp/ext.zip https://github.com/carlo9890/gnome-window-control/releases/download/$wctl_version/${ext}_$wctl_version.zip && rm -rf \$d && mkdir -p \$d && unzip -qo /tmp/ext.zip -d \$d && glib-compile-schemas \$d/schemas"
 
-# GNOME reads its extension list once, at login: log in, enable wctl's
-# extension, and log in again.
+# GNOME reads its extension list once, at login: log in, add wctl's extension
+# to the list, and log in again. A login waits for a gnome-shell other than
+# the one the restart ends. On a new lease a restart of gdm3 can stop at the
+# greeter, so a login restarts it up to three times.
 login() {
-	guest 'sudo -n systemctl restart gdm3'
-	for _ in $(seq 60); do
-		guest '. ./session.sh; gdbus call --session -d org.gnome.Shell -o /org/gnome/Shell -m org.freedesktop.DBus.Peer.Ping' >/dev/null 2>&1 && return
-		sleep 2
+	for _ in 1 2 3; do
+		old=$(guest 'pgrep -xo gnome-shell || true')
+		guest 'sudo -n systemctl restart gdm3'
+		for _ in $(seq 30); do
+			guest "new=\$(pgrep -xo gnome-shell) && [ \"\$new\" != '$old' ] && . ./session.sh && [ -n \"\$WAYLAND_DISPLAY\" ] && gdbus call --session -d org.gnome.Shell -o /org/gnome/Shell -m org.freedesktop.DBus.Peer.Ping" >/dev/null 2>&1 && return
+			sleep 2
+		done
 	done
 	echo "lease-desktop: GNOME did not log in" >&2
 	exit 1
 }
 login
-guest '. ./session.sh; gsettings set org.gnome.shell disable-user-extensions false && gsettings set org.gnome.shell enabled-extensions "[\"window-control@carlo9890.github.io\"]"'
+guest ". ./session.sh; gsettings set org.gnome.shell disable-user-extensions false && l=\$(gsettings get org.gnome.shell enabled-extensions) && case \$l in *$ext*) ;; '@as []') gsettings set org.gnome.shell enabled-extensions \"['$ext']\" ;; *) gsettings set org.gnome.shell enabled-extensions \"\${l%]}, '$ext']\" ;; esac"
 login
 for _ in $(seq 30); do
 	guest '. ./session.sh; wctl list >/dev/null' 2>/dev/null && break
@@ -48,5 +65,5 @@ for _ in $(seq 30); do
 done
 guest '. ./session.sh; wctl list >/dev/null'
 
-scp -q -F "$cfg" bin/revier "$id":.local/bin/revier
-guest '. ./session.sh; revier keys install --force >/dev/null && revier version'
+scp -q -F "$cfg" -o ControlPath="$work/ssh" bin/revier "$id":.local/bin/revier.new
+guest 'mv .local/bin/revier.new .local/bin/revier && . ./session.sh && revier keys install --force >/dev/null && revier version'

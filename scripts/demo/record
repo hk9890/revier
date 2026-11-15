@@ -9,10 +9,11 @@ id="${1:?usage: scripts/demo/record <lease-id> [output dir]}"
 out=$(realpath -m "${2:-.github/assets}")
 mkdir -p "$out"
 dir=$(cd "$(dirname "$0")" && pwd)
+read -r vm cfg <<EOF
+$(werft --json leases | jq -r --arg id "$id" '.[] | select(.id == $id) | "\(.domain) \(.ssh_config)"')
+EOF
+[ -n "$cfg" ] || { echo "record: no lease $id in werft --json leases" >&2; exit 1; }
 work=$(mktemp -d)
-lease=$(werft --json leases | jq -ce --arg id "$id" '.[] | select(.id == $id)')
-vm=$(echo "$lease" | jq -r .domain)
-cfg=$(echo "$lease" | jq -r .ssh_config)
 virsh() { command virsh -c qemu:///system "$@"; }
 guest() { ssh -F "$cfg" -o ControlMaster=auto -o ControlPath="$work/ssh" -o ControlPersist=120 "$id" "$@"; }
 trap 'guest "sh /tmp/rvdemo/teardown.sh"; rm -rf "$work"' EXIT

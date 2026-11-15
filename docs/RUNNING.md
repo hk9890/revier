@@ -291,40 +291,48 @@ Call the Skill tool with `werft:werft` for the lease flow.
 - Run `mise run build`, then `scripts/lease-desktop <lease-id>`. It logs GNOME
   in, installs kitty, `wctl`, hc and the tools below, puts `./bin/revier` on
   the lease's PATH and runs `revier keys install` there.
-- Start each ssh command that reaches the desktop with `. ./session.sh;`: it
-  sets the GNOME session's environment.
 - Run revier and hc in the lease without `REVIER_CONFIG_HOME` or `hcp`: its
   configuration, state and hc core are scratch already.
-- After a rebuild, copy `./bin/revier` in again:
-  `scp -F <ssh_config> bin/revier <lease-id>:.local/bin/revier`.
+- Write each block below to a file under `hako-private/`, copy it in with
+  `scp -F <ssh_config> <file> <lease-id>:`, and run it in one ssh call:
+  `ssh -F <ssh_config> <lease-id> 'sh ./<file>'`. A variable then lives
+  across its lines, and the block's quotes need no escaping.
+- Start a block that reaches the desktop with `. ./session.sh`: it sets the
+  GNOME session's environment and defines `kitty_socket` and `gnome_wait`.
+- After a rebuild, run `scripts/lease-desktop <lease-id>` again: it replaces
+  `revier` in the lease, also while the popup runs it.
 - Send a key the way the user presses it to the lease's `domain`, which
   `werft --json leases` prints: `virsh -c qemu:///system send-key <domain> KEY_LEFTALT KEY_SPACE`.
 
-- Write the demo project of the scratch configuration recipe in the lease as
-  `~/.config/revier/projects/demo.toml`, with `path` set to the lease's `$HOME`.
-- Run each line below in the lease, the kitty host first:
+Write the demo project of the scratch configuration recipe in the lease as
+`~/.config/revier/projects/demo.toml`, with `path` set to the lease's `$HOME`.
+Then verify the kitty host:
 
 ```bash
+. ./session.sh
 printf '[hosts]\nruntime = ["kitty"]\nwindow = ["gnome"]\n' > ~/.config/revier/config.toml   # gnome raises the OS window
 revier open demo                                  # a kitty OS window titled home
 wctl focused --json | jq .title                   # home
-for s in "$XDG_RUNTIME_DIR"/revier-kitty-*; do kitten @ --to "unix:$s" ls >/dev/null 2>&1 && W=unix:$s; done   # the workspace kitty that answers
+W=$(kitty_socket)
 kitten @ --to "$W" ls | jq '.[] | select(.wm_name=="home") | .tabs[].windows[] | {id, title, user_vars}'
 revier go agent -p demo; revier go agent -p demo  # the agent tab, and back to home
-sh -lc 'revier go home -p demo'                   # a binding's command, in the login shell the desktop runs it in
+env PATH=/usr/bin:/bin sh -lc 'revier go agent -p demo'; wctl focused --json | jq .title   # home: the login shell the desktop runs a key in finds revier
 hyperfine --warmup 3 -N 'revier go home -p demo'  # the keypress budget
-kitten @ --to "$W" close-window --match id:<id>   # once per id the ls above printed
+for id in $(kitten @ --to "$W" ls | jq '.[] | select(.wm_name=="home") | .tabs[].windows[].id'); do kitten @ --to "$W" close-window --match id:$id; done
 ```
 
 Then the kitty view over hc. Each view window runs `hc attach` of one
 terminal:
 
 ```bash
+. ./session.sh
 printf '[hosts]\nruntime = ["hc"]\nwindow = ["gnome"]\n' > ~/.config/revier/config.toml
 revier open demo                                  # one kitty OS window titled home, a tab per tab
+W=$(kitty_socket)
 kitten @ --to "$W" ls | jq '.[] | select(.wm_name=="home") | .tabs[].windows[] | {id, user_vars}'   # REVIER_VIEW_PANEL names each terminal
 revier go agent -p demo; revier go agent -p demo  # the agent tab, and back to home
-kitten @ --to "$W" close-window --match id:<id>   # every id above: the terminals run on
+for id in $(kitten @ --to "$W" ls | jq '.[] | select(.wm_name=="home") | .tabs[].windows[].id'); do kitten @ --to "$W" close-window --match id:$id; done
+hc ls --json | jq '.terminals | length'           # 2: the terminals run on
 revier open demo                                  # the window again, over the same terminals
 revier shutdown --force                           # the terminals end, and their windows with them
 ```
@@ -335,13 +343,21 @@ process; the pids are the kitty entries in `wctl list --json`. A kitty that
 `kitty.conf` puts on `listen_on unix:@kitty` is at `--to unix:@kitty-<pid>`;
 revier does not look for it.
 
-To drive save and restore across a real reboot, run each line in the lease:
+To drive save and restore across a real reboot, run the first block, reboot
+with `ssh -F <ssh_config> <lease-id> 'sudo -n systemctl reboot'`, wait for ssh
+as the werft skill says, then run the second:
 
 ```bash
-revier session save --name before-reboot   # what is open now
-sudo -n systemctl reboot                   # wait for ssh as the werft skill says; GNOME logs in again by itself
-revier session restore                     # the newest whole save
-wctl focused --json | jq .title            # home
+. ./session.sh
+revier open demo                                  # something to save
+revier session save --name before-reboot
+```
+
+```bash
+. ./session.sh
+gnome_wait                                        # GNOME logs in by itself, after ssh answers
+revier session restore before-reboot
+wctl focused --json | jq .title                   # home
 ```
 
 ## Verify a keybinding without pressing it
