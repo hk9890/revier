@@ -174,6 +174,9 @@ func TestARestoreShowsARunningWorkspaceNoViewShows(t *testing.T) {
 	if shown, _ := view.Showing(res.Ref); !slices.Equal(shown, panelIDs(t, rt, res.Ref)) {
 		t.Errorf("view shows %v, want every live panel", shown)
 	}
+	if cur, _ := view.FocusedPanel(t.Context(), res.Ref); cur != rt.Tabs[0].Panel {
+		t.Errorf("current panel %s, want the active agent tab's %s, as a press opens the window again", cur, rt.Tabs[0].Panel)
+	}
 }
 
 // A press on a tab whose instance no view shows opens the view too, and

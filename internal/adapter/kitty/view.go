@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
@@ -126,7 +127,8 @@ func (v *View) workspaces() []string {
 //
 // The keyboard stays where it is while a window of the kitty has it, as
 // OpenTab of the kitty runtime leaves it; the core focuses what a press asks
-// for. A new OS window takes the keyboard as kitty gives it one.
+// for. A new OS window takes the keyboard as kitty gives it one, and ends on
+// its first tab.
 //
 // Two windows of one title make every later raise of the instance fail, so
 // one Show runs at a time across revier's processes, under a lock in
@@ -138,7 +140,7 @@ func (v *View) Show(ctx context.Context, inst revier.Instance, open bool) (bool,
 	if inst.Title == "" {
 		return false, fmt.Errorf("kitty: %s has no title to give its window", inst.Ref.ID)
 	}
-	unlock, err := showLock()
+	unlock, err := showLock(ctx)
 	if err != nil {
 		return false, fmt.Errorf("kitty: show %s: %w", inst.Ref.ID, err)
 	}
@@ -201,6 +203,13 @@ func (v *View) Show(ctx context.Context, inst revier.Instance, open bool) (bool,
 			at.panels[p.ID] = id
 		}
 	}
+	if opened && len(tabsOf(inst.Panels)) > 1 {
+		// Each tab launched took the keyboard, so the last is current: a new
+		// window ends on its first, as a workspace the kitty runtime opens.
+		if _, err := v.kitty.kitten(ctx, socket, "focus-window", "--match", "id:"+strconv.Itoa(anchor)); err != nil {
+			return opened, err
+		}
+	}
 	return opened, nil
 }
 
@@ -209,9 +218,13 @@ func (v *View) Show(ctx context.Context, inst revier.Instance, open bool) (bool,
 // launches, and a file per instance would stay behind for each.
 const showLockName = "kitty-view.lock"
 
+// showLockPoll is how often showLock tries the lock while a Show of another
+// process holds it.
+const showLockPoll = 20 * time.Millisecond
+
 // showLock takes the lock Show runs under, waiting for a Show of another
-// process to end, and returns its release.
-func showLock() (func(), error) {
+// process to end, or for ctx to end, and returns its release.
+func showLock(ctx context.Context) (func(), error) {
 	root, err := state.Root()
 	if err != nil {
 		return nil, err
@@ -223,9 +236,21 @@ func showLock() (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
-		_ = f.Close()
-		return nil, err
+	for {
+		err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, syscall.EWOULDBLOCK) {
+			_ = f.Close()
+			return nil, err
+		}
+		select {
+		case <-ctx.Done():
+			_ = f.Close()
+			return nil, fmt.Errorf("another show holds %s: %w", showLockName, ctx.Err())
+		case <-time.After(showLockPoll):
+		}
 	}
 	return func() {
 		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
@@ -330,8 +355,9 @@ func (v *View) FocusedPanel(ctx context.Context, ref revier.TargetRef) (revier.P
 // attaches, and to the instance of instances that holds it. A window that
 // attaches no panel, as kitty's own, is a zero ref: a tab outside a
 // workspace opens beside it (decisions.md D183). An id that is no window of
-// that kitty, or one passed from no kitty, is the runtime's to look up, as
-// an hc address a script passes is (revier.ErrNoViewPanel).
+// that kitty, one passed from no kitty, and one from a kitty that does not
+// answer, are the runtime's to look up, as an hc address a script passes is
+// (revier.ErrNoViewPanel).
 func (v *View) FindPanel(ctx context.Context, instances []revier.Instance, panel revier.PanelID) (revier.TargetRef, revier.PanelID, error) {
 	socket := v.kitty.here()
 	if socket == "" {
@@ -339,7 +365,7 @@ func (v *View) FindPanel(ctx context.Context, instances []revier.Instance, panel
 	}
 	windows, err := v.kitty.ls(ctx, socket)
 	if err != nil {
-		return revier.TargetRef{}, "", err
+		return revier.TargetRef{}, "", fmt.Errorf("kitty: %s does not answer: %w: %w", socket, err, revier.ErrNoViewPanel)
 	}
 	for _, w := range windows {
 		for _, t := range w.Tabs {

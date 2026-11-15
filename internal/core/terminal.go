@@ -160,6 +160,16 @@ func (c *Core) show(ctx context.Context, ref revier.TargetRef, open bool) (bool,
 	return shower.Show(ctx, instances[i], open)
 }
 
+// showListed is show for an instance a listing of this press holds already,
+// so the runtime is not listed again.
+func (c *Core) showListed(ctx context.Context, inst revier.Instance, open bool) (bool, error) {
+	shower, ok := c.shower(inst.Ref)
+	if !ok {
+		return false, nil
+	}
+	return shower.Show(ctx, inst, open)
+}
+
 // shower is the view that opens windows of its own, when ref is an
 // instance of the runtime it shows.
 func (c *Core) shower(ref revier.TargetRef) (revier.Shower, bool) {
@@ -183,13 +193,20 @@ func (c *Core) shower(ref revier.TargetRef) (revier.Shower, bool) {
 // the window opens again as a launch leaves it, with the active tab current.
 // A press that goes to a panel makes that one current after.
 func (c *Core) raisableShown(ctx context.Context, snap snapshot, failed hostErrs, inst revier.Instance, name revier.TargetName, place string) (revier.TargetRef, error) {
-	opened, err := c.show(ctx, inst.Ref, true)
+	opened, err := c.showListed(ctx, inst, true)
 	if err != nil {
 		return revier.TargetRef{}, fmt.Errorf("%s: show %s: %w", c.View.Name(), name, err)
 	}
 	if !opened {
 		return c.raisable(snap, failed, inst, name)
 	}
+	return c.shownAgain(ctx, inst, name, place)
+}
+
+// shownAgain sets up the OS window a view opened again over the live
+// instance inst, as raisableShown says, and returns it: zero when the window
+// host never lists it, or cannot pair it with inst.
+func (c *Core) shownAgain(ctx context.Context, inst revier.Instance, name revier.TargetName, place string) (revier.TargetRef, error) {
 	slog.Info("view opened again over a live instance", "view", c.View.Name(), "ref", inst.Ref, "target", name)
 	if opener, ok := c.opener(c.terminal()); ok {
 		if own, ok := ownPanel(inst); ok {

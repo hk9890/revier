@@ -10,10 +10,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -286,5 +289,75 @@ func TestAWindowOpenedAgainHasTheActiveTabCurrent(t *testing.T) {
 	}
 	if got := k.panelOf(k.focused[len(k.focused)-1]); got != active {
 		t.Errorf("current panel %s, want the active agent tab's %s, as the launch left it", got, active)
+	}
+}
+
+// activePanel is the hc panel of the current window in the active tab of the
+// OS window with the keyboard.
+func (k *playedKitty) activePanel() string {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	for _, w := range k.windows {
+		if !w.IsFocused {
+			continue
+		}
+		for _, tab := range w.Tabs {
+			if !tab.IsActive {
+				continue
+			}
+			for _, win := range tab.Windows {
+				if win.IsActive {
+					return win.UserVars["REVIER_VIEW_PANEL"]
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// A new window over several tabs ends on its first, as a workspace the kitty
+// runtime opens does: each tab it launches takes the keyboard, so without a
+// focus the last would be current.
+func TestANewWindowEndsOnItsFirstTab(t *testing.T) {
+	k := played(t)
+	v := k.viewOver(t, attaching{})
+	if opened, err := v.Show(t.Context(), demo, true); err != nil || !opened {
+		t.Fatalf("Show = %v, %v; want a window opened", opened, err)
+	}
+	if got := k.activePanel(); got != "t1" {
+		t.Errorf("current panel %s, want t1, of the first tab", got)
+	}
+}
+
+// A key from a kitty that does not answer is hc's to look up: the address
+// alone may name the workspace.
+func TestFindPanelInAKittyThatDoesNotAnswerIsTheRuntimes(t *testing.T) {
+	k := played(t)
+	k.lsErr, k.lsFails = errors.New("kitten @ ls: timed out"), 1
+	v := k.viewOver(t, attaching{})
+	if _, _, err := v.FindPanel(t.Context(), []revier.Instance{demo}, "t1"); !errors.Is(err, revier.ErrNoViewPanel) {
+		t.Errorf("FindPanel = %v, want it hc's to look up", err)
+	}
+}
+
+// A Show waits for the lock another process's Show holds only as long as its
+// context runs, and then fails, opening nothing.
+func TestAShowWaitsForTheLockOnlyWhileItsContextRuns(t *testing.T) {
+	k := played(t)
+	f, err := os.OpenFile(filepath.Join(os.Getenv("REVIER_STATE_HOME"), "kitty-view.lock"), os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+	if opened, err := k.viewOver(t, attaching{}).Show(ctx, demo, true); !errors.Is(err, context.DeadlineExceeded) || opened {
+		t.Errorf("Show = %v, %v; want it failed at its deadline", opened, err)
+	}
+	if n := k.osWindows(demo.Title); n != 0 {
+		t.Errorf("%d OS windows, want none", n)
 	}
 }

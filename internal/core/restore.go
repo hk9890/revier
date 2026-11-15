@@ -173,8 +173,9 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 
 // showRunning has a view that opens windows of its own show the instance of a
 // target the restore found running, as a press would: a view closed since
-// the save comes back over the live terminals and starts nothing, and is not
-// raised, as no step of a restore is (decisions.md D15, D181). A tab's
+// the save comes back over the live terminals with its own tab current, and
+// starts nothing. The window host does not raise it, as no step of a restore
+// is raised (decisions.md D15, D181). A tab's
 // instance is the one it is inside. What fails is logged: the target runs,
 // and the next press shows it.
 func (c *Core) showRunning(ctx context.Context, p Project, name revier.TargetName) {
@@ -210,13 +211,13 @@ func (c *Core) showRunning(ctx context.Context, p Project, name revier.TargetNam
 		return
 	}
 	opened, err := shower.Show(ctx, inst, true)
+	if err == nil && opened {
+		// The window opens again as a press opens it: its own tab current,
+		// and where a launch's goes (decisions.md D186).
+		_, err = c.shownAgain(ctx, inst, name, real.Place)
+	}
 	if err != nil {
 		slog.Warn("restore: show a running target", "project", p.Name, "target", name, "err", err)
-	}
-	// The window is one revier starts, so it goes where a launch's goes
-	// (decisions.md D186).
-	if opened && real.Place != "" && c.bridged(inst) {
-		c.placeShown(ctx, inst.Ref, name, real.Place)
 	}
 }
 
