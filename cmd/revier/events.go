@@ -93,7 +93,7 @@ func cmdEvents(out io.Writer, args []string) error {
 	warnProblems(cfg, projects)
 	ctx, cancel := context.WithTimeout(context.Background(), commandWait)
 	defer cancel()
-	return writeEvents(ctx, out, root, *days, newCore(cfg, nil, nil, nil), projects)
+	return writeEvents(ctx, out, root, *days, newCore(cfg, nil, nil, nil, nil), projects)
 }
 
 // maxDays is the most days of 24 hours a Duration holds. A count past it

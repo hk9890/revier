@@ -185,9 +185,9 @@ func TestTheConfigScreenSwitchesTheRuntime(t *testing.T) {
 	tmux := hosttest.NewRuntime("tmux")
 	var asked []string
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20).
-		WithRuntimes([]string{"tmux", "none"}, func(_ context.Context, want []string) (revier.Runtime, error) {
+		WithRuntimes([]string{"tmux", "none"}, func(_ context.Context, want []string) (revier.Runtime, revier.View, error) {
 			asked = want
-			return tmux, nil
+			return tmux, tmux, nil
 		})
 
 	m, cmd := press(onRuntimeRow(m), "right")
@@ -215,8 +215,8 @@ func TestTheConfigScreenKeepsARuntimeThatDoesNotProbe(t *testing.T) {
 	root := configRoot(t, "")
 	_, _, c, projects := world(t, 1)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20).
-		WithRuntimes([]string{"tmux"}, func(context.Context, []string) (revier.Runtime, error) {
-			return nil, errors.New("tmux: not installed")
+		WithRuntimes([]string{"tmux"}, func(context.Context, []string) (revier.Runtime, revier.View, error) {
+			return nil, nil, errors.New("tmux: not installed")
 		})
 
 	m, cmd := press(onRuntimeRow(m), "right")
@@ -239,12 +239,13 @@ func TestTheConfigScreenStepsPastARuntimeThatDoesNotProbe(t *testing.T) {
 	_, _, c, projects := world(t, 1)
 	var asked [][]string
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20).
-		WithRuntimes([]string{"kitty", "tmux"}, func(_ context.Context, want []string) (revier.Runtime, error) {
+		WithRuntimes([]string{"kitty", "tmux"}, func(_ context.Context, want []string) (revier.Runtime, revier.View, error) {
 			asked = append(asked, want)
 			if len(want) == 1 && want[0] == "kitty" {
-				return nil, errors.New("kitty: no remote control")
+				return nil, nil, errors.New("kitty: no remote control")
 			}
-			return hosttest.NewRuntime(want[0]), nil
+			rt := hosttest.NewRuntime(want[0])
+			return rt, rt, nil
 		})
 
 	m, cmd := press(onRuntimeRow(m), "right")

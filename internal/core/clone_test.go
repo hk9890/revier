@@ -3,6 +3,7 @@ package core_test
 import (
 	"context"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ func configured(t *testing.T) *core.Core {
 	t.Helper()
 	c := &core.Core{
 		Runtime:     hosttest.NewRuntime("rt"),
+		View:        hosttest.NewRuntime("view"),
 		Window:      hosttest.New("wm"),
 		Probes:      []revier.AgentProbe{hosttest.NewResumableProbe("claude", "claude")},
 		Served:      hosttest.New("served"),
@@ -50,12 +52,12 @@ func sameField(a, b reflect.Value) bool {
 	return reflect.DeepEqual(a.Interface(), b.Interface())
 }
 
-func assertKeeps(t *testing.T, was, got *core.Core, changed string) {
+func assertKeeps(t *testing.T, was, got *core.Core, changed ...string) {
 	t.Helper()
 	w, g := reflect.ValueOf(was).Elem(), reflect.ValueOf(got).Elem()
 	for i := range w.NumField() {
 		f := w.Type().Field(i)
-		if !f.IsExported() || f.Name == changed {
+		if !f.IsExported() || slices.Contains(changed, f.Name) {
 			continue
 		}
 		if !sameField(w.Field(i), g.Field(i)) {
@@ -71,5 +73,5 @@ func TestWithLedgerKeepsEveryOtherField(t *testing.T) {
 
 func TestWithRuntimeKeepsEveryOtherField(t *testing.T) {
 	c := configured(t)
-	assertKeeps(t, c, c.WithRuntime(hosttest.NewRuntime("other")), "Runtime")
+	assertKeeps(t, c, c.WithRuntime(hosttest.NewRuntime("other"), hosttest.NewRuntime("other")), "Runtime", "View")
 }

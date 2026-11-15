@@ -26,12 +26,14 @@ func prepared(t *testing.T, p revier.Project) core.Project {
 	return core.PrepareProject(p)
 }
 
-// bareRuntime is a runtime with none of the optional capabilities, and
-// bareWindow a window host with none: the port interface alone is embedded,
-// so the fake's optional methods are not promoted. A test that needs a host
-// without one capability - no PanelWriter, no PanelOpener, no WindowPlacer -
-// wraps the fake in one of these.
+// bareRuntime is a runtime with none of the optional capabilities, bareView a
+// view with none, and bareWindow a window host with none: the port interface
+// alone is embedded, so the fake's optional methods are not promoted. A test
+// that needs a host without one capability - no PanelWriter, no TabOpener, no
+// WindowPlacer - wraps the fake in one of these.
 type bareRuntime struct{ revier.Runtime }
+
+type bareView struct{ revier.View }
 
 type bareWindow struct{ revier.WindowController }
 
@@ -318,6 +320,7 @@ func restored(t *testing.T, c *core.Core, proj revier.Project, resumes []core.Re
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
 	c.Runtime = rt
+	c.View = rt
 	if _, err := pressResuming(context.Background(), c, prepared(t, proj), "home", resumes); err != nil {
 		t.Fatalf("ActivateWaiting: %v", err)
 	}
@@ -356,7 +359,7 @@ func shellPanel(id string) revier.Panel {
 func agentCore(panels ...revier.Panel) (*core.Core, *hosttest.FakeRuntime) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty", panels...)
-	return &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}, rt
+	return &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}, rt
 }
 
 // agentsOf is the agents a survey reports for the one project.
@@ -370,7 +373,7 @@ func agentsOf(t *testing.T, c *core.Core, p core.Project) []revier.AgentView {
 func openWorkspace(t *testing.T, panels ...revier.Panel) (*core.Core, *hosttest.FakeRuntime, core.Project, revier.TargetRef) {
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 	ref := rt.Add("session:revier", "", panels...)
 	return c, rt, prepared(t, agentProject()), ref
 }
@@ -427,7 +430,7 @@ func linked(t *testing.T, agents ...revier.AgentView) (*core.Core, *hosttest.Fak
 	pane := rt.Add("far", "",
 		revier.Panel{ID: "9", Kind: revier.PanelTool, PID: 4242, Title: "fixing the build", Command: []string{"ssh", "-t", "buildbox"}},
 		revier.Panel{ID: "10", Kind: revier.PanelTool, PID: 4250, Command: []string{"ssh", "-t", "buildbox"}})
-	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
+	c := &core.Core{Runtime: rt, View: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
 	return c, rt, remote, pane
 }
 
@@ -453,7 +456,7 @@ func openDesktop(t *testing.T, status revier.Status) (*core.Core, *hosttest.Fake
 	wm := hosttest.New("wm")
 	wm.Add("revier - code", "code")
 	probe := &hosttest.FakeProbe{Harness: "claude", Marker: "claude", State: revier.AgentState{Harness: "claude", Status: status}}
-	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{probe}}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm, Probes: []revier.AgentProbe{probe}}
 	return c, rt, wm, []core.Project{prepared(t, agentProject())}
 }
 
@@ -696,7 +699,7 @@ func degraded(t *testing.T, failing string) (*core.Core, []core.Project) {
 			h.InstancesErr = fail
 		}
 	}
-	return &core.Core{Runtime: rt, Window: wm, Served: served}, []core.Project{prepared(t, project())}
+	return &core.Core{Runtime: rt, View: rt, Window: wm, Served: served}, []core.Project{prepared(t, project())}
 }
 
 // osWindowProject is a workspace and a runtime-only diff target, as a kitty

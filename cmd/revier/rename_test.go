@@ -25,7 +25,7 @@ func renameApp(t *testing.T, rt *hosttest.FakeRuntime) *app {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &app{cfg: cfg, cfgRoot: root, projects: projects, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt}, out: io.Discard}
+	a := &app{cfg: cfg, cfgRoot: root, projects: projects, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt, View: rt}, out: io.Discard}
 	return withState(t, a, &state.State{})
 }
 

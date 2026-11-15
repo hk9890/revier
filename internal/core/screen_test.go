@@ -18,7 +18,7 @@ func TestScreenReadsThePanelThatShowsTheAgent(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	ref := rt.Add("session:demo", "kitty", revier.Panel{ID: "7"})
 	rt.Screens = map[revier.PanelID]string{"7": "what the agent shows"}
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	agent := revier.AgentView{Ref: ref, Panel: "7"}
 
 	for _, scrollback := range []bool{false, true} {
@@ -37,7 +37,7 @@ func TestScreenReadsThePanelThatShowsTheAgent(t *testing.T) {
 // here, which is a normal outcome and no read at all.
 func TestScreenOfAnAgentElsewhereIsNoScreen(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	for name, c := range map[string]*core.Core{"no runtime": {}, "another host's agent": {Runtime: rt}} {
+	for name, c := range map[string]*core.Core{"no runtime": {}, "another host's agent": {Runtime: rt, View: rt}} {
 		agent := revier.AgentView{Ref: revier.TargetRef{Host: "proc", ID: "1"}, Panel: "7"}
 		if _, err := c.Screen(context.Background(), agent, false); !errors.Is(err, core.ErrNoScreen) {
 			t.Errorf("%s: err = %v, want ErrNoScreen", name, err)
@@ -54,7 +54,7 @@ func TestScreenOfAnAgentElsewhereIsNoScreen(t *testing.T) {
 func TestScreenOfAServedAgentNamesTheMachineOfItsPanel(t *testing.T) {
 	served := hosttest.New("proc")
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Served: served}
+	c := &core.Core{Runtime: rt, View: rt, Served: served}
 	for tag, machine := range map[revier.PanelID]string{"box.4242": "box", "box.lan.4242": "box.lan"} {
 		agent := revier.AgentView{Ref: revier.TargetRef{Host: "proc", ID: "session:revier"}, Panel: tag}
 		_, err := c.Screen(context.Background(), agent, false)

@@ -43,11 +43,11 @@ func tabTarget(t revier.Target) bool { return t.Runtime != nil && t.Runtime.Insi
 // tabsHost is the runtime that opens the tabs the realization lists, and nil
 // when it lists none. A runtime that cannot open a tab refuses the target at
 // the keypress, as it refuses a tab.
-func (c *Core) tabsHost(name revier.TargetName, real revier.Realization, host revier.Host) (revier.PanelOpener, error) {
+func (c *Core) tabsHost(name revier.TargetName, real revier.Realization, host revier.Host) (panelOpener, error) {
 	if len(real.Tabs) == 0 {
 		return nil, nil
 	}
-	opener, ok := host.(revier.PanelOpener)
+	opener, ok := c.opener(host)
 	if !ok {
 		return nil, fmt.Errorf("%w: target %q lists tabs, and the %s runtime has no tabs; to open it without them, remove tabs and give it a launch",
 			ErrNoTabs, name, host.Name())
@@ -202,7 +202,7 @@ func (o opening) first(real revier.Realization) revier.Realization {
 // rest opens every tab after the first in the instance, in order, and stops
 // at one that fails. It returns the tabs the instance now holds, the first
 // included, and the first panel of the active tab when that is one it opened.
-func (o opening) rest(ctx context.Context, opener revier.PanelOpener, ref revier.TargetRef) (opened []revier.TargetName, active revier.PanelID, err error) {
+func (o opening) rest(ctx context.Context, opener panelOpener, ref revier.TargetRef) (opened []revier.TargetName, active revier.PanelID, err error) {
 	opened = []revier.TargetName{o.tabs[0].Name}
 	for _, tab := range o.tabs[1:] {
 		panel, err := opener.OpenTab(ctx, ref, *tab.Runtime, o.vars(tab.Name))
@@ -221,7 +221,7 @@ func (o opening) rest(ctx context.Context, opener revier.PanelOpener, ref revier
 // panel when OpenTab returned it. The tab that created the instance has only
 // the instance's ref, so the instance is listed once and the panel found
 // there.
-func (c *Core) focusActive(ctx context.Context, opener revier.PanelOpener, o opening, ref revier.TargetRef, panel revier.PanelID) error {
+func (c *Core) focusActive(ctx context.Context, opener panelOpener, o opening, ref revier.TargetRef, panel revier.PanelID) error {
 	if panel == "" {
 		snap, err := c.answered(ctx, ref.Host)
 		if err != nil {
@@ -259,12 +259,12 @@ func createdTab(in revier.Instance, name revier.TargetName) (revier.PanelID, boo
 
 // tabHost is the runtime that opens the i-th target's tab, when there is one
 // that can.
-func (c *Core) tabHost(p Project, i int) (revier.PanelOpener, error) {
+func (c *Core) tabHost(p Project, i int) (panelOpener, error) {
 	t := p.Targets[i]
 	if c.Runtime == nil {
 		return nil, fmt.Errorf("%w: target %q is a tab, and no runtime is configured", ErrNoHost, t.Name)
 	}
-	opener, ok := c.Runtime.(revier.PanelOpener)
+	opener, ok := c.opener(c.terminal())
 	if !ok {
 		return nil, fmt.Errorf("%w: target %q is inside %q, and the %s runtime has no tabs; to open it as a window of its own, remove inside and give it a name and a match",
 			ErrNoTabs, t.Name, t.Runtime.Inside, c.Runtime.Name())
@@ -520,14 +520,14 @@ func (c *Core) goTabOnce(ctx context.Context, p Project, i int, bound Bindings, 
 // command exited before its focus: the panel is lost. A tab of more panels
 // keeps the others when the first exits, so it opened, and its focus error
 // stands.
-func ended(ctx context.Context, host revier.Host, ref revier.TargetRef, panel revier.PanelID, specs []revier.PanelSpec) bool {
+func ended(ctx context.Context, host revier.Runtime, ref revier.TargetRef, panel revier.PanelID, specs []revier.PanelSpec) bool {
 	return len(specs) == 1 && lost(ctx, host, ref, panel)
 }
 
 // lost reports whether the instance is still listed and no longer holds the
 // panel. An instance that is not listed, or a host that cannot list, failed
 // in another way, and its own error says how.
-func lost(ctx context.Context, host revier.Host, ref revier.TargetRef, panel revier.PanelID) bool {
+func lost(ctx context.Context, host revier.Runtime, ref revier.TargetRef, panel revier.PanelID) bool {
 	instances, err := host.Instances(ctx)
 	if err != nil {
 		return false
@@ -575,7 +575,7 @@ func inTab(resumes []Resume) []AgentOutcome {
 
 // goHomeFromTab is the second press on a tab. A home that holds the tab gets
 // its own first panel back; any other home is an ordinary goTo.
-func (c *Core) goHomeFromTab(ctx context.Context, p Project, snap snapshot, in revier.Instance, bound Bindings, opener revier.PanelOpener) (Result, error) {
+func (c *Core) goHomeFromTab(ctx context.Context, p Project, snap snapshot, in revier.Instance, bound Bindings, opener panelOpener) (Result, error) {
 	home, _ := p.Home()
 	if c.holds(snap, p, home.Name, bound, in) {
 		if panel, ok := ownPanel(in); ok {
@@ -612,7 +612,7 @@ func (c *Core) tabView(snap snapshot, failed hostErrs, p Project, i int, bound B
 		tv.Reason = err.Error()
 		return tv, nil
 	}
-	if _, ok := c.Runtime.(revier.PanelOpener); !ok {
+	if _, ok := c.opener(c.terminal()); !ok {
 		return tv, nil
 	}
 	// The runtime could not list: whether the tab is open is not known,

@@ -15,7 +15,7 @@ import (
 
 func TestATabIsOpenedInItsTargetAndRaised(t *testing.T) {
 	rt, wm, osw := tabHosts(t)
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 
 	res, err := press(context.Background(), c, prepared(t, tabProject()), "tickets")
 	if err != nil {
@@ -49,7 +49,7 @@ func TestATabIsOpenedInItsTargetAndRaised(t *testing.T) {
 // The point of an identity: the second press finds the tab and opens none.
 func TestASecondPressFocusesTheTabItOpened(t *testing.T) {
 	rt, wm, _ := tabHosts(t)
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 	p := prepared(t, tabProject())
 
 	for range 2 {
@@ -68,7 +68,7 @@ func TestASecondPressFocusesTheTabItOpened(t *testing.T) {
 
 func TestATabOpensItsTargetFirst(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 
 	if _, err := press(context.Background(), c, prepared(t, tabProject()), "tickets"); err != nil {
 		t.Fatalf("Go: %v", err)
@@ -86,7 +86,7 @@ func TestATabOpensItsTargetFirst(t *testing.T) {
 func TestATabThatFailsInTheWorkspaceItOpenedReportsTheWorkspace(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.OpenTabErr = errors.New("kitty went away")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 
 	res, err := press(context.Background(), c, prepared(t, tabProject()), "tickets")
 	if err == nil {
@@ -101,7 +101,7 @@ func TestATabThatFailsInTheWorkspaceItOpenedReportsTheWorkspace(t *testing.T) {
 // home, which here is the same window's own first panel.
 func TestAPressOnTheCurrentTabReturnsToHome(t *testing.T) {
 	rt, wm, osw := tabHosts(t)
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 	p := prepared(t, tabProject())
 	if _, err := press(context.Background(), c, p, "tickets"); err != nil {
 		t.Fatalf("Go: %v", err)
@@ -136,7 +136,7 @@ func TestAReturnHomeLandsInTheFirstPanelOfTheMarkedTab(t *testing.T) {
 		t.Fatalf("FocusPanel: %v", err)
 	}
 	rt.SetFocus(ref)
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 
 	res, err := press(context.Background(), c, prepared(t, tabProject()), "tickets")
 	if err != nil {
@@ -152,7 +152,7 @@ func TestAReturnHomeLandsInTheFirstPanelOfTheMarkedTab(t *testing.T) {
 // identified and not guessed at (decisions.md D100).
 func TestAnOpenedInstanceIsMarkedAtItsOwnPanel(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 
 	if _, err := press(context.Background(), c, prepared(t, tabProject()), "home"); err != nil {
 		t.Fatalf("Go: %v", err)
@@ -173,7 +173,7 @@ func TestTheMarkSetOnOpenIsWhereAReturnHomeLands(t *testing.T) {
 	rt.OnOpen = func(revier.Realization) {
 		osw = wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
 	}
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 	p := prepared(t, tabProject())
 
 	res, err := press(context.Background(), c, p, "home")
@@ -239,7 +239,7 @@ func TestAReturnHomeLandsInTheMarkedPanel(t *testing.T) {
 			if err := rt.FocusPanel(context.Background(), ref, "1"); err != nil {
 				t.Fatalf("FocusPanel: %v", err)
 			}
-			c := &core.Core{Runtime: rt, Window: wm}
+			c := &core.Core{Runtime: rt, View: rt, Window: wm}
 
 			res, err := press(context.Background(), c, prepared(t, tabProject()), "tickets")
 			if err != nil {
@@ -258,7 +258,7 @@ func TestAReturnHomeLandsInTheMarkedPanel(t *testing.T) {
 func TestATabOnARuntimeWithoutTabsIsAnError(t *testing.T) {
 	rt := hosttest.NewRuntime("tmux")
 	rt.Add("session:revier", "")
-	c := &core.Core{Runtime: bareRuntime{rt}}
+	c := &core.Core{Runtime: bareRuntime{rt}, View: bareView{rt}}
 	p := prepared(t, tabProject())
 
 	_, err := press(context.Background(), c, p, "tickets")
@@ -287,7 +287,7 @@ func TestATabOnARuntimeWithoutTabsIsAnError(t *testing.T) {
 // instance's agents once.
 func TestTheSurveyReportsAnOpenTabOnce(t *testing.T) {
 	rt, wm, _ := tabHosts(t)
-	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{&hosttest.FakeProbe{
+	c := &core.Core{Runtime: rt, View: rt, Window: wm, Probes: []revier.AgentProbe{&hosttest.FakeProbe{
 		Harness: "claude", State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle},
 	}}}
 	p := prepared(t, tabProject())
@@ -327,7 +327,7 @@ func TestASessionRecordsATabAfterItsInstance(t *testing.T) {
 		agent("1", "abc-123", ""),
 		revier.Panel{ID: "2", Kind: revier.PanelTool, Vars: map[string]string{core.PanelTargetVar: "tickets"}},
 	)
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, proj)})
 	if err != nil {
@@ -351,7 +351,7 @@ func TestAnAgentAddressedByATabIsTheTabsPanel(t *testing.T) {
 		revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "busy", Command: []string{"agent"},
 			Vars: map[string]string{core.PanelTargetVar: "tickets"}},
 	)
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 
 	a, err := c.Agent(context.Background(), prepared(t, tabProject()), "tickets")
 	if err != nil {
@@ -376,7 +376,7 @@ func TestAnAgentAddressedByAPanelTabIsThatTabsAgent(t *testing.T) {
 	} {
 		rt := hosttest.NewRuntime("kitty")
 		rt.Add("session:revier", "kitty", append(tab, agentPanel("3", "busy"), shellPanel("4"))...)
-		c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+		c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 		p := prepared(t, listedTabsProject(""))
 
 		a, err := c.Agent(context.Background(), p, "agent")
@@ -411,7 +411,7 @@ func TestAnAgentAddressedByAPanelTabIsFoundWithoutItsMark(t *testing.T) {
 	rt.Add("session:revier", "kitty",
 		inRuntimeTab(agentPanel("1", "idle"), "7"), inRuntimeTab(marked, "7"),
 		inRuntimeTab(agentPanel("3", "busy"), "8"), inRuntimeTab(shellPanel("4"), "8"))
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 
 	a, err := c.Agent(context.Background(), prepared(t, listedTabsProject("")), "agent")
 	if err != nil || a.Panel.ID != "1" {
@@ -427,7 +427,7 @@ func TestAnAgentInATabNoTargetRecordsStaysWithItsInstance(t *testing.T) {
 	stale := agent("2", "old-7", "")
 	stale.Vars[core.PanelTargetVar] = "notes"
 	rt.Add("session:revier", "kitty", agent("1", "abc-123", ""), stale)
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, tabProject())})
 	if err != nil {
@@ -446,7 +446,7 @@ func TestATabMatchesNoInstanceOnItsOwn(t *testing.T) {
 	rt, wm := hosttest.NewRuntime("kitty"), hosttest.New("wm")
 	stray := rt.Add("htop", "kitty")
 	rt.SetFocus(stray)
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 	p := prepared(t, tabProject())
 
 	if _, found, err := c.ProjectOfFocused(context.Background(), []core.Project{p}); err != nil || found {
@@ -467,7 +467,7 @@ func TestATabTargetsAgentIsRecordedOnceAndNotResumed(t *testing.T) {
 	tabAgent := agent("2", "tab-9", "")
 	tabAgent.Vars[core.PanelTargetVar] = "tickets"
 	rt.Add("session:revier", "kitty", agent("1", "abc-123", ""), tabAgent)
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 	p := prepared(t, tabProject())
 
 	report, err := c.Survey(context.Background(), []core.Project{p})
@@ -493,6 +493,7 @@ func TestATabTargetsAgentIsRecordedOnceAndNotResumed(t *testing.T) {
 	restored := hosttest.NewRuntime("kitty")
 	restored.Add("session:revier", "kitty", agent("1", "abc-123", ""))
 	c.Runtime = restored
+	c.View = restored
 	resumes := []core.Resume{{Harness: "claude", Session: "tab-9", Dir: t.TempDir()}}
 	res, err := pressResuming(context.Background(), c, p, "tickets", resumes)
 	if err != nil {
@@ -522,7 +523,7 @@ func TestATabsAgentIsAddressedThroughTheTab(t *testing.T) {
 	}
 	rt := hosttest.NewRuntime("kitty")
 	rt.Add("session:revier", "kitty", inTab(agentPanel("1", "idle")), inTab(shellPanel("2")), agentPanel("3", "busy"))
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 	p := prepared(t, listedTabsProject(""))
 
 	targets := map[revier.PanelID]revier.TargetName{}

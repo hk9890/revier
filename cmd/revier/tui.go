@@ -41,8 +41,8 @@ func cmdTUI(ctx context.Context, a *app) error {
 	m := tui.New(a.core.WithLedger(ledger.File{Root: a.stateRoot}), a.projects, a.stateRoot, a.cfg, time.Second, th, start).
 		WithAssistant(a.assistant).
 		WithHungEnd(procgroup.KillAll).
-		WithRuntimes(append(slices.Clone(defaultRuntimeOrder), hostNone), func(ctx context.Context, want []string) (revier.Runtime, error) {
-			return selectHost(ctx, "runtime", want, defaultRuntimeOrder, runtimeAdapters())
+		WithRuntimes(append(slices.Clone(defaultRuntimeOrder), hostNone), func(ctx context.Context, want []string) (revier.Runtime, revier.View, error) {
+			return selectTerminal(ctx, a.cfg, "", want)
 		})
 	// The surface's view asks for the terminal modes it runs in: the
 	// alternate screen, and pointer and focus reports (tui.Model.View).

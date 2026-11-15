@@ -153,7 +153,7 @@ func TestGoTogglesBackToHome(t *testing.T) {
 	editorRef := wm.Add("Visual Studio Code", "code")
 	homeRef := rt.Add("session:revier", "kitty")
 	wm.SetFocus(editorRef)
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 
 	res, err := press(context.Background(), c, prepared(t, project()), "editor")
 	if err != nil {
@@ -174,7 +174,7 @@ func TestGoOnHomeDoesNotToggle(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	homeRef := rt.Add("session:revier", "kitty")
 	rt.SetFocus(homeRef)
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 
 	if _, err := press(context.Background(), c, prepared(t, project()), "home"); err != nil {
 		t.Fatalf("Go: %v", err)
@@ -278,7 +278,7 @@ func TestPreparedProjectIsRendered(t *testing.T) {
 func TestSurveyReportsRunningAndAvailability(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty")
-	c := &core.Core{Runtime: rt} // no window host
+	c := &core.Core{Runtime: rt, View: rt} // no window host
 
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
 	if err != nil {
@@ -383,7 +383,7 @@ func TestToggleBackIgnoresOtherHostsIDs(t *testing.T) {
 	wmRef := wm.Add("Some Window", "other")
 	wm.SetFocus(wmRef)
 
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 	p := revier.Project{Name: "revier", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "home", Launch: []string{"x"}, Match: revier.Match{Title: "^session:revier$"}}},
@@ -411,7 +411,7 @@ func TestToggleBackWorksOnRuntimeWhenItIsTheAuthority(t *testing.T) {
 	diffRef := rt.Add("diff:revier", "kitty")
 	rt.SetFocus(diffRef)
 
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	p := revier.Project{Name: "revier", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "home", Launch: []string{"x"}, Match: revier.Match{Title: "^session:revier$"}}},
@@ -437,7 +437,7 @@ func TestAToggleBackNamesHomeAsWhereItLanded(t *testing.T) {
 	homeRef := rt.Add("session:revier", "kitty")
 	diffRef := rt.Add("diff:revier", "kitty")
 	// The ledger records where each press landed.
-	c := &core.Core{Runtime: rt, Ledger: &ledger{}}
+	c := &core.Core{Runtime: rt, View: rt, Ledger: &ledger{}}
 	p := prepared(t, revier.Project{Name: "revier", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "home", Launch: []string{"x"}, Match: revier.Match{Title: "^session:revier$"}}},
@@ -466,7 +466,7 @@ func TestAToggleBackNamesHomeAsWhereItLanded(t *testing.T) {
 // target also raises that window through the window host.
 func TestGoRaisesTheOSWindowOfARuntimeTarget(t *testing.T) {
 	rt, wm, _, diffWm := osWindowHosts()
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 
 	res, err := press(context.Background(), c, prepared(t, osWindowProject()), "diff")
 	if err != nil {
@@ -489,7 +489,7 @@ func TestGoRaisesTheOSWindowOfARuntimeTarget(t *testing.T) {
 func TestToggleBackThroughTheOSWindow(t *testing.T) {
 	rt, wm, homeWm, diffWm := osWindowHosts()
 	wm.SetFocus(diffWm)
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 
 	res, err := press(context.Background(), c, prepared(t, osWindowProject()), "diff")
 	if err != nil {
@@ -510,7 +510,7 @@ func TestToggleBackNeedsTheOSWindowFocused(t *testing.T) {
 	rt, wm, _, diffWm := osWindowHosts()
 	editor := revier.TargetRef{Host: "wm", ID: "3"}
 	wm.SetFocus(editor)
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 
 	res, err := press(context.Background(), c, prepared(t, osWindowProject()), "diff")
 	if err != nil {
@@ -531,7 +531,7 @@ func TestNoBridgeWithoutOSWindows(t *testing.T) {
 	rt, wm, _, diffWm := osWindowHosts()
 	rt.SetCapabilities(revier.Capabilities{})
 	wm.SetFocus(diffWm)
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 
 	res, err := press(context.Background(), c, prepared(t, osWindowProject()), "diff")
 	if err != nil {
@@ -556,7 +556,7 @@ func TestBridgeRejectsAPIDMismatch(t *testing.T) {
 	rt.Add("session:revier", "kitty")
 	other := wm.AddInstance(revier.Instance{Title: "diff:revier", Class: "kitty", PID: 9999})
 	wm.SetFocus(other)
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 
 	_, err := press(context.Background(), c, prepared(t, osWindowProject()), "diff")
 	if !errors.Is(err, core.ErrUnraisable) {
@@ -576,7 +576,7 @@ func TestAnUnidentifiedOSWindowIsNotFocusedInsideTheTerminal(t *testing.T) {
 	for _, title := range []string{"session:revier", "session:setup"} {
 		wm.AddInstance(revier.Instance{Title: title, Class: "kitty", PID: 4242})
 	}
-	c := &core.Core{Runtime: rt, Window: wm, Ledger: bindings("revier", core.Bindings{"home": {Host: "rt", ID: "1"}})}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm, Ledger: bindings("revier", core.Bindings{"home": {Host: "rt", ID: "1"}})}
 
 	_, err := press(context.Background(), c, prepared(t, project()), "home")
 	if !errors.Is(err, core.ErrUnraisable) {
@@ -696,7 +696,7 @@ func TestADetachedRuntimeLaunchBindsNoWindow(t *testing.T) {
 	rt, wm := hosttest.NewRuntime("rt"), hosttest.New("wm")
 	rt.Detached = true
 	wm.Add("h", "kitty")
-	c := &core.Core{Runtime: rt, Window: wm, Ledger: &ledger{}}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm, Ledger: &ledger{}}
 
 	if _, err := press(context.Background(), c, classAndTitle(t), "home"); err != nil {
 		t.Fatalf("ActivateWaiting: %v", err)
@@ -976,7 +976,7 @@ func TestAnUnnamedRuntimeWindowTakesTheWindowManagersTitle(t *testing.T) {
 		Ref:   revier.TargetRef{Host: "wm", ID: "w1"},
 		Title: "session:revier", Class: "kitty", PID: 4242,
 	})
-	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{&hosttest.FakeProbe{
+	c := &core.Core{Runtime: rt, View: rt, Window: wm, Probes: []revier.AgentProbe{&hosttest.FakeProbe{
 		Harness: "claude", Marker: "claude",
 		State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle},
 	}}}
@@ -1003,7 +1003,7 @@ func TestGoRaisesAnUnnamedWindowInsteadOfOpeningASecond(t *testing.T) {
 		Ref:   revier.TargetRef{Host: "wm", ID: "w1"},
 		Title: "session:revier", Class: "kitty", PID: 4242,
 	})
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 
 	if _, err := press(context.Background(), c, prepared(t, project()), "home"); err != nil {
 		t.Fatalf("Go: %v", err)
@@ -1033,7 +1033,7 @@ func TestTwoWindowsOfOneProcessAreLeftUnidentified(t *testing.T) {
 			Title: title, Class: "kitty", PID: 4242,
 		})
 	}
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
 	if err != nil {
@@ -1060,7 +1060,7 @@ func TestANamedSiblingWindowDoesNotHideTheUnnamedOne(t *testing.T) {
 			Title: title, Class: "kitty", PID: 4242,
 		})
 	}
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 
 	if _, err := press(context.Background(), c, prepared(t, project()), "home"); err != nil {
 		t.Fatalf("Go: %v", err)
@@ -1092,7 +1092,7 @@ func TestAnUnlistedNamedSiblingLeavesTheUnnamedOneUnidentified(t *testing.T) {
 				}
 			}
 			wm.AddInstance(revier.Instance{Title: "taskmgr", Class: "kitty", PID: 4242})
-			c := &core.Core{Runtime: rt, Window: wm}
+			c := &core.Core{Runtime: rt, View: rt, Window: wm}
 
 			report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
 			if err != nil {
@@ -1131,7 +1131,7 @@ func TestARuntimeWithoutOSWindowsIsNotIdentified(t *testing.T) {
 		Ref:   revier.TargetRef{Host: "wm", ID: "w1"},
 		Title: "session:revier", Class: "kitty", PID: 4242,
 	})
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
 	if err != nil {
@@ -1284,7 +1284,7 @@ func TestATerminalsNewWindowIsPlacedWhileAnotherHostCannotList(t *testing.T) {
 	}
 	served := hosttest.New("served")
 	served.SetInstancesErr(errors.New("served: down"))
-	c := &core.Core{Runtime: rt, Window: wm, Served: served}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm, Served: served}
 
 	if _, err := press(context.Background(), c, prepared(t, raw), "home"); err != nil {
 		t.Fatalf("Go: %v", err)
@@ -1305,7 +1305,7 @@ func TestATerminalsNewWindowIsRaisedThroughTheWindowHost(t *testing.T) {
 	rt.OnOpen = func(revier.Realization) {
 		osw = wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
 	}
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 
 	if _, err := press(context.Background(), c, prepared(t, project()), "home"); err != nil {
 		t.Fatalf("Go: %v", err)
@@ -1353,7 +1353,7 @@ func openPlaced(t *testing.T, raw revier.Project, target revier.TargetName, plac
 	rt.OnOpen = func(revier.Realization) {
 		osw = wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
 	}
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 	if _, err := press(context.Background(), c, prepared(t, raw), target); err != nil {
 		t.Fatalf("Go(%s): %v", target, err)
 	}

@@ -842,7 +842,7 @@ func TestOpenSaysAPanelWhoseCommandExitsAtOnceExited(t *testing.T) {
 // first time, raises it the second, and toggles home on the third.
 func TestCoreRunOrRaiseAgainstRealTmux(t *testing.T) {
 	h, c := server(t), ctx(t)
-	cr := &core.Core{Runtime: h}
+	cr := &core.Core{Runtime: h, View: h}
 	p := revier.Project{
 		Name: "revier",
 		Targets: []revier.Target{
@@ -940,7 +940,7 @@ func TestCoreSaysATabWhoseCommandEndsAtOnceExited(t *testing.T) {
 					waitGone(t, h, tab)
 				}
 			})
-			cr := &core.Core{Runtime: h}
+			cr := &core.Core{Runtime: h, View: h}
 			p := quickProject(dir, tc.command)
 			if _, err := press(c, cr, p, "home"); err != nil {
 				t.Fatalf("open home: %v", err)
@@ -984,7 +984,7 @@ func TestCoreOpensAgainATabThatEndsAsItIsFocused(t *testing.T) {
 			tab = lastField(out)
 		}
 	})
-	cr := &core.Core{Runtime: h}
+	cr := &core.Core{Runtime: h, View: h}
 	p := quickProject(dir, waitsForRelease)
 	if _, err := press(c, cr, p, "home"); err != nil {
 		t.Fatalf("open home: %v", err)
@@ -1403,7 +1403,7 @@ func TestOneElementLaunchRunsWithoutAShell(t *testing.T) {
 // unrelated window that now holds its old number.
 func TestABindingDoesNotOutliveItsServer(t *testing.T) {
 	h, c := server(t), ctx(t)
-	cr := &core.Core{Runtime: h}
+	cr := &core.Core{Runtime: h, View: h}
 	p := core.PrepareProject(revier.Project{
 		Name: "revier",
 		Targets: []revier.Target{

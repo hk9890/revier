@@ -19,7 +19,7 @@ func TestActivateAgentWaitingFocusesItsTabAndRaisesTheWindow(t *testing.T) {
 	workspace := rt.Add("session:revier", "kitty", shellPanel("1"), agentPanel("2", "idle"), agentPanel("3", "busy"))
 	wm := hosttest.New("wm")
 	osw := wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
-	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 	p := prepared(t, project())
 
 	if _, err := c.ActivateAgentWaiting(context.Background(), p, agentsOf(t, c, p)[1]); err != nil {
@@ -46,7 +46,7 @@ func TestActivateAgentWaitingRaisesTheWindowOfItsOwnProcess(t *testing.T) {
 	wm := hosttest.New("wm")
 	wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 4242})
 	own := wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
-	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 	p := prepared(t, project())
 
 	if _, err := c.ActivateAgentWaiting(context.Background(), p, agentsOf(t, c, p)[0]); err != nil {
@@ -101,7 +101,7 @@ func TestActivateAgentWaitingRefusesAnAgentThatIsGone(t *testing.T) {
 func TestActivateAgentWaitingWithoutTabsFocusesTheInstance(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	ref := rt.Add("session:revier", "kitty", agentPanel("2", "idle"))
-	c := &core.Core{Runtime: bareRuntime{rt}, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+	c := &core.Core{Runtime: bareRuntime{rt}, View: bareView{rt}, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 	p := prepared(t, project())
 
 	if _, err := c.ActivateAgentWaiting(context.Background(), p, agentsOf(t, c, p)[0]); err != nil {
@@ -126,7 +126,7 @@ func TestALinksAgentIsReachedInThePanelThatShowsIt(t *testing.T) {
 	})
 	rt := hosttest.NewRuntime("rt")
 	pane := rt.Add("far", "", revier.Panel{ID: "9", Kind: revier.PanelTool, PID: 4242, Command: []string{"ssh", "-t", "buildbox"}})
-	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
+	c := &core.Core{Runtime: rt, View: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
 	p := linkProject(t)
 
 	agents := agentsOf(t, c, p)

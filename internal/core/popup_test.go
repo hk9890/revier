@@ -22,7 +22,7 @@ func TestRaiseSelfRaisesTheTerminalThisProcessRunsIn(t *testing.T) {
 	wm := hosttest.New("wm")
 	wm.AddInstance(revier.Instance{Title: "session:demo", Class: "kitty", PID: 1001})
 	osw := wm.AddInstance(revier.Instance{Title: "revier", Class: "kitty", PID: 1002})
-	c := &core.Core{Runtime: rt, Window: wm, Self: func(p revier.Panel) bool { return p.ID == "3" }}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm, Self: func(p revier.Panel) bool { return p.ID == "3" }}
 
 	if err := c.RaiseSelf(context.Background()); err != nil {
 		t.Fatalf("RaiseSelf: %v", err)
@@ -44,7 +44,7 @@ func TestRaisePopupRaisesThePopupByItsClassAlone(t *testing.T) {
 	wm := hosttest.New("wm")
 	wm.AddInstance(revier.Instance{Title: "billing", Class: "kitty", PID: 1001})
 	popup := wm.AddInstance(revier.Instance{Title: "revier", Class: core.PopupClass, PID: 1001})
-	c := &core.Core{Runtime: rt, Window: wm, Self: func(revier.Panel) bool { return true }}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm, Self: func(revier.Panel) bool { return true }}
 
 	if err := c.RaisePopup(context.Background()); err != nil {
 		t.Fatalf("RaisePopup: %v", err)
@@ -82,7 +82,7 @@ func TestRaiseSelfRaisesNothingWhereItRunsInNoListedTerminal(t *testing.T) {
 		rt.Add("session:demo", "kitty", shellPanel("1"))
 		wm := hosttest.New("wm")
 		wm.AddInstance(revier.Instance{Title: "session:demo", Class: "kitty", PID: 1001})
-		c := &core.Core{Runtime: rt, Window: wm, Self: self}
+		c := &core.Core{Runtime: rt, View: rt, Window: wm, Self: self}
 
 		if err := c.RaiseSelf(context.Background()); err != nil {
 			t.Errorf("%s: RaiseSelf: %v", name, err)
@@ -159,7 +159,7 @@ func TestARaiseOfAMinimizedPopupIsOnRecord(t *testing.T) {
 		rt.Add("revier", core.PopupClass, revier.Panel{ID: "9", Command: []string{"revier"}})
 		l := &ledger{}
 		sw := &switches{}
-		if _, err := (&core.Core{Window: wm, Runtime: rt, Ledger: l, SwitchPopup: sw.switchPopup}).Popup(context.Background(), popupArgv); err != nil {
+		if _, err := (&core.Core{Window: wm, Runtime: rt, View: rt, Ledger: l, SwitchPopup: sw.switchPopup}).Popup(context.Background(), popupArgv); err != nil {
 			t.Fatalf("Popup: %v", err)
 		}
 		if !slices.Equal(wm.Focuses, []revier.TargetRef{open}) || sw.calls != 0 {
@@ -276,7 +276,7 @@ func TestPopupSwitchesItsListWhenItIsFocusedAlready(t *testing.T) {
 	wm.SetFocus(open)
 	rt := hosttest.NewRuntime("hc")
 	sw := &switches{}
-	c := &core.Core{Window: wm, Runtime: rt, SwitchPopup: sw.switchPopup}
+	c := &core.Core{Window: wm, Runtime: rt, View: rt, SwitchPopup: sw.switchPopup}
 
 	ref, err := c.Popup(context.Background(), popupArgv)
 	if err != nil || ref != open {
@@ -350,7 +350,7 @@ func TestPopupOpensOverAFocusedTerminalOfTheUsersOwn(t *testing.T) {
 		wm, rt, _, _ := surfaceTerminal(panels...)
 		wm.Workarea = 5120
 		sw := &switches{}
-		c := &core.Core{Window: wm, Runtime: rt, SwitchPopup: sw.switchPopup}
+		c := &core.Core{Window: wm, Runtime: rt, View: rt, SwitchPopup: sw.switchPopup}
 		if _, err := c.Popup(context.Background(), popupArgv); err != nil {
 			t.Fatalf("%s: Popup: %v", name, err)
 		}

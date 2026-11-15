@@ -21,7 +21,7 @@ func TestThePopupListensWhereThePressSendsTheSwitch(t *testing.T) {
 		t.Fatal("listenForSwitch: no socket in a runtime directory")
 	}
 	defer func() { _ = ln.Close() }()
-	c := newCore(&config.Config{}, nil, nil, nil)
+	c := newCore(&config.Config{}, nil, nil, nil, nil)
 	if err := c.SwitchPopup(t.Context()); err != nil {
 		t.Fatalf("SwitchPopup: %v", err)
 	}

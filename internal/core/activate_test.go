@@ -66,7 +66,7 @@ func TestActivateWaitingLaunchesWhenNothingIsPending(t *testing.T) {
 func TestActivateAgentWaitingWaitsForAPaneOntoTheHostStillComingUp(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	remote := hosttest.NewRemote("buildbox")
-	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": remote}, Ledger: pendingLaunch("demo", "home")}
+	c := &core.Core{Runtime: rt, View: rt, Remotes: map[string]revier.Remote{"buildbox": remote}, Ledger: pendingLaunch("demo", "home")}
 
 	res, err := c.ActivateAgentWaiting(context.Background(), prepared(t, remoteProject("demo")), revier.AgentView{Panel: "1"})
 	if err != nil {

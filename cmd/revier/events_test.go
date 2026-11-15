@@ -186,7 +186,7 @@ func TestAnAgentTabThatWasNotResumedNamesNoConversation(t *testing.T) {
 			Name: "home", Match: revier.Match{Title: "^home$"}, Tabs: []revier.TargetName{"agent"}}},
 		{Name: "agent", Runtime: &revier.Realization{Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}}}},
 	}})
-	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{p}, stateRoot: root, core: &core.Core{Runtime: rt}}, &state.State{})
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{p}, stateRoot: root, core: &core.Core{Runtime: rt, View: rt}}, &state.State{})
 
 	if err := a.newAgent(context.Background(), "demo", "", "", core.Resume{Session: "abc-123"}); err != nil {
 		t.Fatalf("agent new: %v", err)
@@ -214,7 +214,7 @@ func TestANamedAgentTabIsAnEventThatNamesTheAgent(t *testing.T) {
 		{Name: "agent", Runtime: &revier.Realization{Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}}}},
 	}})
 	p.Agents = []core.NamedAgent{{Name: "dtop", Command: []string{"dtop"}}}
-	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{p}, stateRoot: root, core: &core.Core{Runtime: rt}}, &state.State{})
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{p}, stateRoot: root, core: &core.Core{Runtime: rt, View: rt}}, &state.State{})
 
 	if err := a.newAgent(context.Background(), "demo", "", "", core.Resume{Agent: "dtop"}); err != nil {
 		t.Fatalf("agent new dtop: %v", err)

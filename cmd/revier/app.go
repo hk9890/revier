@@ -53,13 +53,13 @@ func newAppAt(ctx context.Context, out io.Writer, panel string) (*app, error) {
 		return nil, err
 	}
 	assistant := withAssistant(&projects, cfgRoot, stateRoot)
-	rt, win, err := selectHosts(ctx, cfg, panel)
+	rt, view, win, err := selectHosts(ctx, cfg, panel)
 	if err != nil {
 		return nil, err
 	}
 	// No keybinder: probing the desktop costs a process, and only
 	// `revier keys` reads one. cmdKeys selects it when it is needed.
-	c := newCore(cfg, rt, win, nil)
+	c := newCore(cfg, rt, view, win, nil)
 	c.Ledger = ledger.File{Root: stateRoot, Failed: warnState}
 	return &app{
 		cfg: cfg, cfgRoot: cfgRoot, projects: projects, assistant: assistant,

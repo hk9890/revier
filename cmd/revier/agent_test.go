@@ -47,7 +47,7 @@ func agentDesktop(t *testing.T, status revier.Status) (*app, *hosttest.FakeRunti
 		revier.Panel{ID: "4", Kind: revier.PanelShell, Title: "zsh", Tab: "t2"},
 	)
 	probe := &hosttest.FakeProbe{Harness: "claude", Marker: "claude", State: revier.AgentState{Harness: "claude", Status: status}}
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{probe}}
 	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{p}, stateRoot: t.TempDir(), core: c}, &state.State{})
 	return a, rt
 }
@@ -140,7 +140,7 @@ func shellTab(t *testing.T) (*hosttest.FakeRuntime, func(context.Context, io.Wri
 	t.Helper()
 	rt := hosttest.NewRuntime("tmux")
 	rt.Add("home", "", revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "zsh", Command: []string{"zsh"}})
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}, Poll: testPoll}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}, Poll: testPoll}
 	a := withState(t, &app{cfg: &config.Config{}, cfgRoot: t.TempDir(), stateRoot: t.TempDir(), core: c, projects: []core.Project{demoProject(t)}}, &state.State{})
 	return rt, func(_ context.Context, out io.Writer) (*app, error) {
 		a.out = out
@@ -218,7 +218,7 @@ func TestAgentWaitJSONPrintsTheConversation(t *testing.T) {
 		rt := hosttest.NewRuntime("tmux")
 		rt.Add("home", "", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "agent", Command: []string{"agent"}})
 		probe := &hosttest.FakeProbe{Harness: "agent", State: revier.AgentState{Harness: "agent", Status: revier.StatusIdle, Session: session}}
-		c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}, Poll: testPoll}
+		c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{probe}, Poll: testPoll}
 		a := withState(t, &app{cfg: &config.Config{}, cfgRoot: t.TempDir(), stateRoot: t.TempDir(), core: c, projects: []core.Project{demoProject(t)}}, &state.State{})
 		open := func(_ context.Context, out io.Writer) (*app, error) {
 			a.out = out
@@ -252,7 +252,7 @@ func focusedOther(t *testing.T) (*app, *hosttest.FakeRuntime, core.Project, revi
 	rt := hosttest.NewRuntime("tmux")
 	home := rt.Add("home", "")
 	rt.SetFocus(rt.Add("other", ""))
-	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demo, other}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt}}, &state.State{Current: other.Name})
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demo, other}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt, View: rt}}, &state.State{Current: other.Name})
 	return a, rt, demo, home
 }
 

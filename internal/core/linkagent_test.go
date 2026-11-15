@@ -152,7 +152,7 @@ func TestALinksAgentIsAddressedByItsTab(t *testing.T) {
 		Agents: []revier.AgentView{hostAgent("box.4242", revier.StatusIdle), hostAgent("box.4300", revier.StatusRunning)}})
 	rt := hosttest.NewRuntime("rt")
 	pane := rt.Add("far", "", ssh("9", 4242, tab), ssh("10", 4250, tab), ssh("11", 4300, nil), ssh("12", 4310, nil))
-	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
+	c := &core.Core{Runtime: rt, View: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
 	p := linkProject(t)
 
 	a, err := c.Agent(context.Background(), p, "agent")
@@ -190,7 +190,7 @@ func TestALinksAgentInNoTargetHasNoAddress(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("far", "", revier.Panel{ID: "9", Kind: revier.PanelTool, PID: 4242, Command: []string{"ssh", "-t", "buildbox"}})
 	rt.Add("moved away", "", revier.Panel{ID: "11", Kind: revier.PanelTool, PID: 4300, Command: []string{"ssh", "-t", "buildbox"}})
-	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
+	c := &core.Core{Runtime: rt, View: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
 	p := linkProject(t)
 
 	targets := map[revier.PanelID]revier.TargetName{}
@@ -217,7 +217,7 @@ func TestALinksAddressNamesItsDefaultAgent(t *testing.T) {
 		Agents: []revier.AgentView{hostAgent("box.4242", revier.StatusIdle), hostAgent("box.4300", revier.StatusRunning)}})
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("far", "", ssh("9", 4242, map[string]string{revier.PanelAgentVar: "dtop"}), ssh("11", 4300, nil))
-	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
+	c := &core.Core{Runtime: rt, View: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
 
 	a, err := c.Agent(context.Background(), linkProject(t), "")
 	if err != nil || a.Panel.ID != "11" {
@@ -230,7 +230,7 @@ func TestALinksAddressNamesItsDefaultAgent(t *testing.T) {
 // the host: without it the two would be shells of this machine.
 func TestALinksWorkspaceOpensWithTheSSHOfEachPanel(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": hosttest.NewRemote("buildbox")}}
+	c := &core.Core{Runtime: rt, View: rt, Remotes: map[string]revier.Remote{"buildbox": hosttest.NewRemote("buildbox")}}
 	p := linkProject(t)
 
 	res, err := press(context.Background(), c, p, "home")
@@ -253,7 +253,7 @@ func TestALinksWorkspaceOpensWithTheSSHOfEachPanel(t *testing.T) {
 // workspace of two local shells would look like the link and reach no host.
 func TestALinkWithNoRemoteForItsHostOpensNothing(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	if _, err := press(context.Background(), c, linkProject(t), "home"); err == nil || !strings.Contains(err.Error(), "buildbox") {
 		t.Errorf("err = %v, want the host with no remote named", err)
 	}
@@ -268,7 +268,7 @@ func TestALinkWithNoRemoteForItsHostOpensNothing(t *testing.T) {
 // run says the same of both.
 func TestARestoreOfALinkResumesThroughTheSSHOfItsAgentPanel(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": hosttest.NewRemote("buildbox")}}
+	c := &core.Core{Runtime: rt, View: rt, Remotes: map[string]revier.Remote{"buildbox": hosttest.NewRemote("buildbox")}}
 	p := linkProject(t)
 	resumes := []core.Resume{
 		{Session: "abc-123", Dir: "/srv/far/wt", Harness: "claude"},
@@ -322,7 +322,7 @@ func TestTheHostsOwnAgentIsNotTakenForOneHere(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox", revier.ProjectView{Project: revier.Project{Name: "far-there"}, PathExists: true, Agents: []revier.AgentView{theirs}})
 	rt := hosttest.NewRuntime("kitty")
 	rt.Add("far", "", revier.Panel{ID: "3", Kind: revier.PanelTool, PID: 4242})
-	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
+	c := &core.Core{Runtime: rt, View: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
 	p := linkProject(t)
 
 	agents := agentsOf(t, c, p)
@@ -702,7 +702,7 @@ func TestARestoreOfALinkAsksTheHostForItsNamedAgent(t *testing.T) {
 	rt.Add("far", "",
 		revier.Panel{ID: "9", Kind: revier.PanelTool, PID: 4242},
 		revier.Panel{ID: "10", Kind: revier.PanelTool, PID: 4250, Vars: map[string]string{revier.PanelAgentVar: "dtop"}})
-	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
+	c := &core.Core{Runtime: rt, View: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
 	report, err := c.Survey(context.Background(), []core.Project{linkProject(t)})
 	if err != nil {
 		t.Fatal(err)
@@ -715,6 +715,7 @@ func TestARestoreOfALinkAsksTheHostForItsNamedAgent(t *testing.T) {
 
 	fresh := hosttest.NewRuntime("rt")
 	c.Runtime = fresh
+	c.View = fresh
 	if _, err := pressResuming(context.Background(), c, linkProject(t), "home", c.RestorePlan(s, core.Report{})[0].Resumes); err != nil {
 		t.Fatalf("ActivateWaiting: %v", err)
 	}

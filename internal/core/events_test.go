@@ -63,7 +63,7 @@ func TestAToggleBackIsOneEventOfWhereItLanded(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty")
 	diff := rt.Add("diff:revier", "kitty")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	p := prepared(t, revier.Project{Name: "revier", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "home", Launch: []string{"x"}, Match: revier.Match{Title: "^session:revier$"}}},
@@ -109,7 +109,7 @@ func TestAPressThatFailsOrOnlyWaitsIsNoEvent(t *testing.T) {
 func TestAPressOfATabIsAnEventOfTheTab(t *testing.T) {
 	recorded := recording(t)
 	rt, wm, _ := tabHosts(t)
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 	p := prepared(t, tabProject())
 	l := &ledger{}
 
@@ -152,7 +152,7 @@ func TestAPressOfAnAgentIsAGoAgentEventWithItsConversation(t *testing.T) {
 	recorded := recording(t)
 	rt := hosttest.NewRuntime("rt")
 	ref := rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool})
-	c := &core.Core{Runtime: rt, Ledger: &ledger{}}
+	c := &core.Core{Runtime: rt, View: rt, Ledger: &ledger{}}
 	a := revier.AgentView{Panel: "1", Ref: ref, State: revier.AgentState{Harness: "claude", Session: "abc"}}
 
 	if _, err := c.ActivateAgentWaiting(context.Background(), prepared(t, project()), a); err != nil {
@@ -227,7 +227,7 @@ func TestAnAgentFocusedByItsPanelIsAGoAgentEvent(t *testing.T) {
 	recorded := recording(t)
 	rt := hosttest.NewRuntime("rt")
 	ref := rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool})
-	c := &core.Core{Runtime: rt, Ledger: &ledger{}}
+	c := &core.Core{Runtime: rt, View: rt, Ledger: &ledger{}}
 
 	if err := c.FocusAgent(context.Background(), "revier", revier.AgentView{Ref: ref, Panel: "1"}); err != nil {
 		t.Fatalf("FocusAgent: %v", err)

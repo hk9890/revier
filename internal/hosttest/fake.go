@@ -121,16 +121,17 @@ func New(name string) *Fake {
 	return &Fake{name: name}
 }
 
-// NewRuntime returns a fake that satisfies revier.Runtime.
+// NewRuntime returns a fake that satisfies revier.Runtime and revier.View: a
+// test gives it to the core as both, as kitty is both, or as one of them.
 func NewRuntime(name string) *FakeRuntime { return &FakeRuntime{Fake: New(name)} }
 
-// FakeRuntime is a Fake that also reports capabilities.
+// FakeRuntime is a Fake that also reports a view's capabilities.
 type FakeRuntime struct{ *Fake }
 
 func (f *FakeRuntime) Capabilities() revier.Capabilities { return f.caps }
 
-// SetCapabilities changes what the runtime reports, for tests of a runtime
-// whose instances are OS windows.
+// SetCapabilities changes what the view reports, for tests of a view whose
+// instances are OS windows.
 func (f *FakeRuntime) SetCapabilities(c revier.Capabilities) { f.caps = c }
 
 // Sent is one SendText call.
@@ -226,7 +227,7 @@ func liveKind(spec revier.PanelSpec) revier.PanelKind {
 
 // OpenTab adds the tab's panels to the instance, in a tab of their own with
 // vars on each, and records the call.
-// FakeRuntime implements revier.PanelOpener; a runtime without the capability
+// FakeRuntime implements revier.TabOpener; a runtime without the capability
 // is a different double.
 func (f *FakeRuntime) OpenTab(_ context.Context, ref revier.TargetRef, r revier.Realization, vars map[string]string) (revier.PanelID, error) {
 	f.mu.Lock()

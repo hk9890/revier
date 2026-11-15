@@ -32,7 +32,7 @@ func (r enclosingRuntime) Encloses(context.Context) (bool, error) { return r.ins
 func openAttach(t *testing.T, rt enclosingRuntime) (string, []string) {
 	t.Helper()
 	rt.Add("home", "")
-	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t)}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt}}, &state.State{})
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t)}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt, View: rt}}, &state.State{})
 	var execd []string
 	saved := execve
 	execve = func(_ string, argv, _ []string) error {

@@ -381,7 +381,7 @@ func linkOpenHere(t *testing.T) tui.Model {
 	rt := openHere("alpha")
 	rt.Add("session:local", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"})
 	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusAttention))
-	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote},
+	c := &core.Core{Runtime: rt, View: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote},
 		Probes: []revier.AgentProbe{&hosttest.FakeProbe{
 			Harness: "claude", Marker: "claude",
 			State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning},

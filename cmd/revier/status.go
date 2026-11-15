@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/hk9890/revier/internal/core"
-	"github.com/hk9890/revier/pkg/revier"
 )
 
 func cmdStatus(ctx context.Context, a *app, args []string) error {
@@ -24,14 +23,14 @@ func cmdStatus(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 	_, _ = fmt.Fprintf(a.out, "project   %s\npath      %s\n", p.Name, p.Path)
-	_, _ = fmt.Fprintf(a.out, "runtime   %s\nwindow    %s\n", hostName(a.core.Runtime), hostName(a.core.Window))
+	_, _ = fmt.Fprintf(a.out, "runtime   %s\nview      %s\nwindow    %s\n", hostName(a.core.Runtime), hostName(a.core.View), hostName(a.core.Window))
 	if attached := a.core.Ledger.State().Attached[p.Name]; len(attached) > 0 {
 		_, _ = fmt.Fprintf(a.out, "attached  %s\n", core.Count(len(attached), "window"))
 	}
 	return nil
 }
 
-func hostName(h revier.Host) string {
+func hostName(h interface{ Name() string }) string {
 	if h == nil {
 		return "-"
 	}

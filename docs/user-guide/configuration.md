@@ -510,7 +510,14 @@ window  = ["none"]
 | Key | Values | Default |
 |---|---|---|
 | `runtime` | `kitty`, `tmux`, `hc`, `none` | `["kitty", "tmux"]` |
+| `view` | `kitty`, `tmux`, `none` | the runtime's own |
 | `window` | `gnome`, `none` | `["gnome"]` |
+
+The `runtime` runs your workspaces' programs, and the `view` shows them: it
+draws the tabs, focuses a target and tells revier where you are. The kitty
+view shows the kitty runtime and the tmux view the tmux runtime; a view
+works only over the runtime of its name. hc shows nothing, so it has no
+view: revier opens and lists its workspaces, and a press focuses nothing.
 
 A key you leave out uses its default, and revier skips a default host that
 does not work, without a message. `hc` is experimental, and revier uses it

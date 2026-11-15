@@ -277,7 +277,7 @@ func demoDesktop(t *testing.T, st *state.State, open ...string) (*app, *hosttest
 	for _, title := range open {
 		rt.Add(title, "")
 	}
-	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t)}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt}}, st)
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t)}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt, View: rt}}, st)
 	return a, rt
 }
 

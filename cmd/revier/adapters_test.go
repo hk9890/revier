@@ -171,3 +171,48 @@ func TestEveryAdapterIsInItsDefaultOrder(t *testing.T) {
 	}
 	check("window", slices.Sorted(maps.Keys(windowAdapters())), defaultWindowOrder)
 }
+
+// A runtime that draws its own instances is its own view, and with no list
+// it is the one chosen: kitty and tmux show themselves as before. hc draws
+// nothing, so with no list it is shown by no view (decisions.md D178).
+func TestTheDefaultViewIsTheRuntimesOwn(t *testing.T) {
+	for name, rt := range runtimeAdapters() {
+		view, err := selectView(nil, rt)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		own, isView := rt.(revier.View)
+		switch {
+		case isView && view != own:
+			t.Errorf("%s: view %v, want the runtime itself", name, view)
+		case !isView && view != nil:
+			t.Errorf("%s: view %v, want none", name, view)
+		}
+	}
+	if view, err := selectView(nil, nil); view != nil || err != nil {
+		t.Errorf("no runtime: view %v, %v; want none", view, err)
+	}
+}
+
+// A configured view is a preference order: "none" leaves the runtime unshown,
+// and a view that cannot show the runtime is refused by name, as an unknown
+// name is.
+func TestAConfiguredViewIsTriedInOrder(t *testing.T) {
+	adapters := runtimeAdapters()
+	kittyRT, hcRT := adapters["kitty"], adapters["hc"]
+	if view, err := selectView([]string{hostNone}, kittyRT); view != nil || err != nil {
+		t.Errorf("none: view %v, %v; want none", view, err)
+	}
+	if view, err := selectView([]string{"tmux", "kitty"}, kittyRT); err != nil || view != kittyRT.(revier.View) {
+		t.Errorf("tmux, kitty over kitty: view %v, %v; want kitty", view, err)
+	}
+	if _, err := selectView([]string{"kitty"}, hcRT); err == nil || !strings.Contains(err.Error(), "kitty: cannot show the hc runtime") {
+		t.Errorf("kitty over hc: err = %v, want the kitty view refused", err)
+	}
+	if _, err := selectView([]string{"kitty"}, nil); err == nil || !strings.Contains(err.Error(), "no runtime") {
+		t.Errorf("kitty over no runtime: err = %v, want it refused", err)
+	}
+	if _, err := selectView([]string{"ghostty"}, kittyRT); err == nil || err.Error() != `hosts.view: unknown host "ghostty"; known: kitty, tmux, none` {
+		t.Errorf("ghostty: err = %v, want it named unknown", err)
+	}
+}

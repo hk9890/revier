@@ -84,7 +84,11 @@ func TestTmuxHasItsOptionalCapabilities(t *testing.T) {
 	if _, ok := rt.(revier.Encloser); !ok {
 		t.Error("tmux.Host does not implement revier.Encloser")
 	}
-	if _, ok := rt.(revier.PanelOpener); !ok {
-		t.Error("tmux.Host does not implement revier.PanelOpener")
+	if _, ok := rt.(revier.TabOpener); !ok {
+		t.Error("tmux.Host does not implement revier.TabOpener")
+	}
+	var view revier.View = &tmux.Host{}
+	if _, ok := view.(revier.PanelFocuser); !ok {
+		t.Error("tmux.Host does not implement revier.PanelFocuser")
 	}
 }

@@ -171,9 +171,10 @@ Each adapter reports whether it can work in the current environment. An
 adapter the config names and that cannot work is an error, because the user
 asked for it by name. Otherwise the first adapter in the preference list that
 can work is chosen. A prototype adapter stays out of that list, so it runs
-only where the config names it (D174). The view is not selected on its own:
-under kitty it is the same kitty, and under hc it is kitty where kitty can
-work, else none (D178). A terminal key that names a tmux pane narrows the
+only where the config names it (D174). The view is selected after the
+runtime, by a list of its own; left out, it is the runtime's own view, as
+under kitty, then kitty where it can show the runtime, else none, as under
+hc (D178, D185). A terminal key that names a tmux pane narrows the
 runtime list to tmux, because no other runtime holds that pane (D159). With no
 window host the core runs without one, and window-only targets report as
 unavailable rather than failing at the keystroke.

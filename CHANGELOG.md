@@ -29,6 +29,13 @@ Each section is also the text of its release on the
   use hc, kitty or tmux`, and `revier doctor` reports it wherever the list
   names it. With no `runtime` set, revier now tries kitty, then tmux, and
   finds no runtime on a machine that has only herdr.
+- **`[hosts] view` names what shows your workspaces.** Left out, kitty
+  shows the kitty runtime and tmux the tmux runtime, as before, and hc is
+  shown by nothing. `view = ["none"]` shows nothing: revier opens and lists
+  your workspaces and focuses none. A view that cannot show the runtime in
+  use stops with an error, and `revier doctor` reports an unknown name.
+  `revier status` prints the view on a `view` line, between `runtime` and
+  `window`.
 - A name in `[hosts]` that revier does not know now stops with
   `hosts.runtime: unknown host "<name>"; known: ...` (or `hosts.window: ...`),
   in place of `unknown runtime host "<name>"`.

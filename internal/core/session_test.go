@@ -26,7 +26,7 @@ func TestSessionRecordsOnlyWhatIsOpen(t *testing.T) {
 		revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "zsh"},
 		agent("2", "abc-123", "/home/user/dev/github/revier"),
 	)
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}, Ledger: &ledger{st: state.State{Current: "revier"}}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}, Ledger: &ledger{st: state.State{Current: "revier"}}}
 
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())})
 	if err != nil {
@@ -65,7 +65,7 @@ func TestSessionRecordsEveryAgentInOrder(t *testing.T) {
 		agent("3", "", ""),
 		agent("4", "third", "/a/.claude/worktrees/tui"),
 	)
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())})
 	if err != nil {
 		t.Fatal(err)
@@ -94,7 +94,7 @@ func TestSessionRecordsNoAgentWithAShellInTheForeground(t *testing.T) {
 		revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "zsh"},
 		revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "codex"},
 	)
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{Harness: "any"}}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{Harness: "any"}}}
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())})
 	if err != nil {
 		t.Fatal(err)
@@ -115,7 +115,7 @@ func TestSessionRecordsTheHarnessTheProbeRead(t *testing.T) {
 		revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "codex", Vars: map[string]string{core.PanelTargetVar: "tickets"}},
 	)
 	probe := &hosttest.FakeProbe{Harness: "agents", State: revier.AgentState{Harness: "codex", Status: revier.StatusIdle}}
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{probe}}
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, tabProject())})
 	if err != nil {
 		t.Fatal(err)
@@ -139,7 +139,7 @@ func TestSessionRecordsAResumableProbeByItsName(t *testing.T) {
 	rt.Add("session:revier", "kitty", agent("1", "first", "/a"))
 	probe := resumable()
 	probe.State = revier.AgentState{Harness: "claude-code", Status: revier.StatusIdle}
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{probe}}
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())})
 	if err != nil {
 		t.Fatal(err)
@@ -171,7 +171,7 @@ func TestSessionLeavesOutAttachedInstances(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty")
 	stray := rt.Add("some tool nobody declared", "meld")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 
 	attached := map[revier.ProjectName][]revier.TargetRef{"revier": {stray}}
 	c.Ledger = attachments(attached)
@@ -202,7 +202,7 @@ func TestSessionRecordsNoConversationWithoutAResumableProbe(t *testing.T) {
 	rt.Add("session:revier", "kitty", agent("1", "abc-123", "/a"))
 	noConversation := []session.Agent{{Harness: "claude"}}
 
-	plain := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Marker: "claude"}}}
+	plain := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Marker: "claude"}}}
 	report, err := plain.Survey(context.Background(), []core.Project{prepared(t, agentProject())})
 	if err != nil {
 		t.Fatal(err)
@@ -217,7 +217,7 @@ func TestSessionRecordsNoConversationWithoutAResumableProbe(t *testing.T) {
 
 	failing := resumable()
 	failing.SessionErr = errors.New("the harness did not answer")
-	broken := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{failing}}
+	broken := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{failing}}
 	report, err = broken.Survey(context.Background(), []core.Project{prepared(t, agentProject())})
 	if err != nil {
 		t.Fatal(err)
@@ -252,7 +252,7 @@ func TestSessionAsksEachProbeOnceForTheWholeSave(t *testing.T) {
 	other.Targets[0].Runtime.Name = "session:other"
 	other.Targets[0].Runtime.Match = revier.Match{Title: "^session:other$"}
 	probe := resumable()
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{probe}}
 
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject()), prepared(t, other)})
 	if err != nil {
@@ -285,8 +285,8 @@ func TestSessionAsksEachProbeOnceForTheWholeSave(t *testing.T) {
 // is a normal one the command steps over.
 func TestRestorePlanClassifiesEveryRecordedTarget(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	rt.Add("session:revier", "kitty") // home is up; notes is not
-	c := &core.Core{Runtime: rt}      // no window host, so editor has none
+	rt.Add("session:revier", "kitty")      // home is up; notes is not
+	c := &core.Core{Runtime: rt, View: rt} // no window host, so editor has none
 
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, agentProject())})
 	if err != nil {
@@ -360,7 +360,7 @@ func TestResumesSaysWhatBecomesOfEachAgent(t *testing.T) {
 // and drops the recorded agents, and the dry run says the same.
 func TestARestoreOfATargetWithNoTabsDropsItsAgents(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 	p := prepared(t, agentProject())
 	resumes := []core.Resume{{Harness: "claude", Session: "abc-123"}}
 
@@ -437,6 +437,7 @@ func TestRestoreOpensTheAgentsPastTheLayoutAsAgentTabs(t *testing.T) {
 
 	rt := hosttest.NewRuntime("rt")
 	c.Runtime = rt
+	c.View = rt
 	res, err := pressResuming(context.Background(), c, prepared(t, agentProject()), "home", []core.Resume{
 		{Harness: "claude", Session: "declared", Dir: root},
 		{Harness: "claude", Session: "by-hand", Dir: worktree},
@@ -556,7 +557,7 @@ func TestRestoreOpensTheTabAgentNewOpens(t *testing.T) {
 	restoredTab := tabPanels(restored(t, c, agentProject(), []core.Resume{{Harness: "claude"}, r}))[0]
 
 	rt := hosttest.NewRuntime("rt")
-	c = &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c = &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 	rt.Add("session:revier", "")
 	if _, err := newAgent(t, c, prepared(t, agentProject()), "home", core.Resume{Session: "by-hand", Dir: worktree}); err != nil {
 		t.Fatalf("NewAgent: %v", err)
@@ -570,7 +571,7 @@ func TestRestoreOpensTheTabAgentNewOpens(t *testing.T) {
 func TestRestoreKeepsTheWorkspaceWhenAnAgentTabFails(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.OpenTabErr = errors.New("kitty went away")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 
 	res, err := pressResuming(context.Background(), c, prepared(t, agentProject()), "home", []core.Resume{
 		{Harness: "claude", Session: "a"}, {Harness: "claude", Session: "b"}, {Harness: "claude", Session: "c"},
@@ -613,7 +614,7 @@ func TestActivateWaitingReportsWhatBecameOfEachAgent(t *testing.T) {
 // resume into it would leave the flag on every later keypress.
 func TestResumeDoesNotEditTheProject(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 	p := prepared(t, agentProject())
 
 	resumes := []core.Resume{{Harness: "claude", Session: "abc-123", Dir: t.TempDir()}, {Harness: "claude", Session: "def-456"}}
@@ -690,7 +691,7 @@ func TestRestorePlanNamesARefusedTarget(t *testing.T) {
 func TestSessionRecordsTheAgentsOfASharedInstanceOnce(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty", agent("1", "abc-123", "/a"))
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 	proj := agentProject()
 	proj.Targets[1].Runtime.Match = revier.Match{Title: "^session:revier$"}
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, proj)})
@@ -719,7 +720,7 @@ func TestSessionRecordsTheNamedAgentEachPanelRuns(t *testing.T) {
 	marked.Vars[revier.PanelAgentVar] = "dtop"
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty", agent("1", "abc-123", "/a"), marked)
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 	report, err := c.Survey(context.Background(), []core.Project{named(t)})
 	if err != nil {
 		t.Fatal(err)
@@ -740,7 +741,7 @@ func TestSessionRecordsTheNamedAgentEachPanelRuns(t *testing.T) {
 // agent's tab with no mark.
 func TestRestoreOpensANamedAgentInItsOwnTab(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 	res, err := pressResuming(context.Background(), c, named(t), "home", []core.Resume{
 		{Harness: "claude"}, {Harness: "dtop", Agent: "dtop"}, {Harness: "claude"},
 	})
@@ -771,7 +772,7 @@ func TestRestoreOpensANamedAgentInItsOwnTab(t *testing.T) {
 // The agents after it still come back, and the dry run says the same.
 func TestRestoreDropsANamedAgentItsProjectNoLongerDeclares(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 	resumes := []core.Resume{{Harness: "claude"}, {Harness: "claude", Session: "abc-123", Agent: "review"}, {Harness: "dtop", Agent: "dtop"}}
 	want := []core.AgentOutcome{core.AgentEmpty, core.AgentUnknown, core.AgentEmpty}
 	if got := c.Resumes(named(t), "home", resumes); !slices.Equal(got, want) {

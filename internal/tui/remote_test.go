@@ -21,7 +21,7 @@ import (
 func TestALinkNothingHereHoldsSortsBelowTheOpenProjects(t *testing.T) {
 	rt, _, _, local := world(t, 3) // project-02 is open
 	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusAttention))
-	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote},
+	c := &core.Core{Runtime: rt, View: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote},
 		Probes: []revier.AgentProbe{&hosttest.FakeProbe{
 			Harness: "claude", Marker: "claude",
 			State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning},
@@ -138,7 +138,7 @@ func TestEnterOnARemoteProjectOpensThePaneWithoutCloning(t *testing.T) {
 	said.PathExists, said.Agents = false, nil
 	rt := hosttest.NewRuntime("rt")
 	remote := hosttest.NewRemote("buildbox", said)
-	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
+	c := &core.Core{Runtime: rt, View: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
 	m := refreshed(t, c, remoteOnDisk(t, "alpha"), stateWith(t, nil), nil)
 
 	_, cmd := press(m, "enter")

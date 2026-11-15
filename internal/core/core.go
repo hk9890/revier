@@ -1,7 +1,7 @@
 // Package core holds everything that is not tool-specific: matching instances
 // against realizations, choosing which realization wins, run-or-raise, and
-// toggle-back. Adapters implement five methods and hold no policy, so this
-// package is where behaviour is pinned and where most tests point.
+// toggle-back. Adapters implement a few methods per port and hold no policy,
+// so this package is where behaviour is pinned and where most tests point.
 package core
 
 import (
@@ -38,10 +38,14 @@ var (
 )
 
 // Core orchestrates hosts and probes. Runtime may be nil on a machine with no
-// usable terminal host, and Window may be nil on one with no window control;
+// usable terminal, and Window may be nil on one with no window control;
 // targets degrade individually rather than the product failing as a whole.
+// View shows the runtime's instances (decisions.md D176), and is nil where
+// nothing shows them: a press then starts what is missing and focuses
+// nothing, and nothing reports the runtime's focus.
 type Core struct {
 	Runtime revier.Runtime
+	View    revier.View
 	Window  revier.WindowController
 	Probes  []revier.AgentProbe
 
@@ -119,13 +123,13 @@ type Core struct {
 	Poll time.Duration
 }
 
-// WithRuntime is the same core over another runtime host. It is a new core
-// and not a changed field, so a survey still running on the old one reads
-// the host it started with, and the two never share a mutable map: the
-// remotes known so far are copied.
-func (c *Core) WithRuntime(rt revier.Runtime) *Core {
+// WithRuntime is the same core over another runtime and the view that shows
+// it. It is a new core and not a changed field, so a survey still running on
+// the old one reads the runtime it started with, and the two never share a
+// mutable map: the remotes known so far are copied.
+func (c *Core) WithRuntime(rt revier.Runtime, view revier.View) *Core {
 	out := c.clone()
-	out.Runtime = rt
+	out.Runtime, out.View = rt, view
 	return out
 }
 
@@ -147,6 +151,7 @@ func (c *Core) clone() *Core {
 	defer c.seenMu.Unlock()
 	return &Core{
 		Runtime:       c.Runtime,
+		View:          c.View,
 		Window:        c.Window,
 		Probes:        c.Probes,
 		Served:        c.Served,
@@ -173,7 +178,7 @@ func (c *Core) hosts() []revier.Host {
 		out = append(out, c.Window)
 	}
 	if c.Runtime != nil {
-		out = append(out, c.Runtime)
+		out = append(out, c.terminal())
 	}
 	return out
 }
@@ -249,7 +254,7 @@ func (c *Core) resolve(t revier.Target) (revier.Host, revier.Realization, revier
 	}
 	runtime, hasRuntime := revier.Host(nil), false
 	if c.Runtime != nil && t.Runtime != nil {
-		runtime, hasRuntime = c.Runtime, true
+		runtime, hasRuntime = c.terminal(), true
 	}
 
 	switch {
@@ -353,7 +358,7 @@ func (c *Core) answered(ctx context.Context, hosts ...string) (snapshot, error) 
 }
 
 // nameOf is the host's name, or empty for no host.
-func nameOf(h revier.Host) string {
+func nameOf(h interface{ Name() string }) string {
 	if h == nil {
 		return ""
 	}
@@ -430,7 +435,7 @@ func (c *Core) listing(ctx context.Context) (snapshot, hostErrs) {
 // at (D63). A named window the window host does not list could
 // be the one left over, and its title would then be lent to the wrong window.
 func (c *Core) identify(s snapshot) {
-	if c.Runtime == nil || c.Window == nil || !c.Runtime.Capabilities().OSWindows {
+	if c.Runtime == nil || c.Window == nil || !c.osWindows() {
 		return
 	}
 	runtimes, windows := s[c.Runtime.Name()], s[c.Window.Name()]
@@ -1091,7 +1096,7 @@ func (c *Core) classOK(p Project, i int, w revier.Instance) bool {
 }
 
 // osWindowOf finds the window-host instance that is the OS window of a runtime
-// instance. Only a runtime that reports OSWindows takes part: it gives each
+// instance. Only a runtime whose view reports OSWindows takes part: it gives each
 // instance the title a window host reports for the same window, so the two
 // listings describe one window from two sides. The pid is a filter on top -
 // every OS window of one kitty process shares it - never the identity.
@@ -1124,7 +1129,7 @@ func (c *Core) osWindowOf(snap snapshot, inst revier.Instance) (revier.Instance,
 // as soon as two runtime instances answer to it, because a guess here would
 // attach a project to the wrong terminal.
 func (c *Core) runtimeOf(instances []revier.Instance, w revier.Instance) (revier.Instance, bool) {
-	if c.Runtime == nil || c.Window == nil || !c.Runtime.Capabilities().OSWindows ||
+	if c.Runtime == nil || c.Window == nil || !c.osWindows() ||
 		w.Ref.Host != c.Window.Name() || w.Title == "" {
 		return revier.Instance{}, false
 	}
@@ -1170,9 +1175,9 @@ func (c *Core) attachment(instances []revier.Instance, ref revier.TargetRef) []r
 }
 
 // bridged reports whether inst lives in an OS window the window host raises:
-// it is the runtime's, and the runtime reports OSWindows.
+// it is the runtime's, and its view reports OSWindows.
 func (c *Core) bridged(inst revier.Instance) bool {
-	return c.Window != nil && c.Runtime != nil && inst.Ref.Host == c.Runtime.Name() && c.Runtime.Capabilities().OSWindows
+	return c.Window != nil && c.Runtime != nil && inst.Ref.Host == c.Runtime.Name() && c.osWindows()
 }
 
 // Focus activates a ref on the host that produced it and raises the OS window
@@ -1227,7 +1232,7 @@ func (c *Core) focusAuthority() revier.Host {
 		return c.Window
 	}
 	if c.Runtime != nil {
-		return c.Runtime
+		return c.terminal()
 	}
 	return nil
 }

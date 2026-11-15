@@ -59,7 +59,7 @@ func unsaidWorld(t *testing.T, width, height int, agents ...shownAgent) (tui.Mod
 			Name: "session:duo", Launch: []string{"x"}, Match: revier.Match{Title: "^session:duo$"}}},
 	}}})
 	rt.Add("session:duo", "kitty", panels...)
-	c := &core.Core{Runtime: rt, Probes: probes}
+	c := &core.Core{Runtime: rt, View: rt, Probes: probes}
 	return resize(refreshed(t, c, projects, stateWith(t, nil), nil), width, height), rt, fakes
 }
 
@@ -360,7 +360,7 @@ func TestALinksAgentIsMirroredFromItsPanelHere(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusIdle))
 	rt := openHere("alpha")
 	rt.Screens = map[revier.PanelID]string{"9": "the far agent's screen"}
-	c := &core.Core{Runtime: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
+	c := &core.Core{Runtime: rt, View: rt, Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}
 	m := resize(refreshed(t, c, remoteOnDisk(t, "alpha"), stateWith(t, nil), nil), 140, 30).Mirrored()
 	if body := pane(m); !strings.Contains(body, "the far agent's screen") {
 		t.Errorf("pane = %q, want the screen of the panel here that shows the link's agent", body)
@@ -462,7 +462,7 @@ func TestClicksOnTwoProjectsRowsAreNotADoubleClick(t *testing.T) {
 				Name: "session:" + name, Launch: []string{"x"}, Match: revier.Match{Title: "^session:" + name + "$"}}},
 		}})
 	}
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
 	m := resize(refreshed(t, c, core.Prepare(raw), stateWith(t, nil), nil), 140, 30)
 
 	x, y := paneCell(t, m, "alpha work")

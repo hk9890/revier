@@ -91,7 +91,8 @@ terminal window called `session:demo`, and `agent`, a tab in it with Claude
 Code beside a shell. Your shared `editor` is the third target.
 
 Run `revier status` to check which hosts revier found: the `runtime` line
-names the terminal host, the `window` line gnome, and `-` means none.
+names the terminal host, the `view` line what shows it, the `window` line
+gnome, and `-` means none.
 
 ## Open it
 

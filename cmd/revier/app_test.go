@@ -37,7 +37,7 @@ func TestAToggleBackPinsHomeNotThePressedTarget(t *testing.T) {
 	rt := hosttest.NewRuntime("tmux")
 	homeRef := rt.Add("home", "")
 	diffRef := rt.Add("diff", "")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	p, root := demoProject(t), t.TempDir()
 
 	rt.SetFocus(diffRef)

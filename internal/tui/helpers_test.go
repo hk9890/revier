@@ -38,7 +38,7 @@ func world(t *testing.T, n int) (*hosttest.FakeRuntime, *hosttest.Fake, *core.Co
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
 	wm := hosttest.New("wm")
-	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{&hosttest.FakeProbe{
+	c := &core.Core{Runtime: rt, View: rt, Window: wm, Probes: []revier.AgentProbe{&hosttest.FakeProbe{
 		Harness: "claude", Marker: "claude",
 		State: revier.AgentState{Harness: "claude", Status: revier.StatusAttention, Activity: "needs a decision"},
 	}}}
@@ -300,7 +300,7 @@ const longActivity = "Reading internal/tui/detail.go and working out why the act
 func longWorld(t *testing.T, path string) (*core.Core, []core.Project) {
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{
 		Harness: "claude", Marker: "claude",
 		State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning, Activity: longActivity},
 	}}}
@@ -526,7 +526,7 @@ func listedSurface(t *testing.T, width, height int, agents ...listed) (tui.Model
 				Name: "session:" + name, Launch: []string{"x"}, Match: revier.Match{Title: "^session:" + name + "$"}}}}})
 		rt.Add("session:"+name, "kitty", panels[name]...)
 	}
-	c := &core.Core{Runtime: rt, Probes: probes}
+	c := &core.Core{Runtime: rt, View: rt, Probes: probes}
 	return resize(refreshed(t, c, core.Prepare(raw), stateWith(t, nil), nil), width, height), rt, fakes
 }
 
@@ -730,7 +730,7 @@ func projectSurfaceOver(t *testing.T, shared, body string, rt *hosttest.FakeRunt
 		t.Fatal(err)
 	}
 	stateRoot := stateWith(t, nil)
-	m, _ := clocked(tui.NewWithoutWaits(&core.Core{Runtime: rt}, projects, stateRoot, cfg, time.Second, theme.Default(), ""))
+	m, _ := clocked(tui.NewWithoutWaits(&core.Core{Runtime: rt, View: rt}, projects, stateRoot, cfg, time.Second, theme.Default(), ""))
 	next, _ := m.Update(m.Survey()())
 	return resize(next.(tui.Model), 140, 60), file, stateRoot
 }

@@ -1008,8 +1008,8 @@ process owns many windows.
 ### D178 — the runtimes are kitty and hc, the one view is kitty, and three setups work
 
 kitty shown by the same kitty is the setup of before and installs nothing
-more. hc is shown by kitty where kitty can work and by no view otherwise, so
-`[hosts]` names a runtime and never a view. With no view, revier lists, reads,
+more. hc is shown by kitty where kitty can work and by no view otherwise
+(D185). With no view, revier lists, reads,
 prompts and attaches, and focuses nothing: over ssh that is all a terminal
 needs. Under hc revier reads no kitty but the view's, so a terminal attached
 by hand in a kitty of the user's own is its window alone (D95). Rejected: a
@@ -1073,3 +1073,13 @@ fake view that reports the focus and tabs the core asks for, and tmux is
 removed with that move, not before. The kitty view needs a display, so it is
 tested on recorded output and by hand. Accepted: focus over a real view, and
 a read's history, which hc does not give, lose their headless test.
+
+### D185 — `[hosts]` names a view as it names a runtime, and the default follows the runtime
+
+Extends D178. With a default alone, a user could not keep hc unshown on a
+machine where kitty works, nor say which view a headless test runs over. So
+the view is a preference list of its own, read as the runtime's is: a view
+named that cannot show the selected runtime is an error, and `none` shows
+nothing. Left out, the view is the runtime's own when it draws itself, then
+kitty where it can show the runtime, else none, so a kitty user's setup is
+the one of before.

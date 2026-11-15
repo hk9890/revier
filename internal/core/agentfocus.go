@@ -75,7 +75,7 @@ func (c *Core) focusPanel(ctx context.Context, snap snapshot, failed hostErrs, r
 	if err := c.focus(ctx, ref); err != nil {
 		return err
 	}
-	if opener, ok := c.Runtime.(revier.PanelOpener); ok && ref.Host == c.Runtime.Name() {
+	if opener, ok := c.opener(c.terminal()); ok && ref.Host == c.Runtime.Name() {
 		if err := opener.FocusPanel(ctx, ref, panel); err != nil {
 			return fmt.Errorf("%s: focus %s: %w", c.Runtime.Name(), name, err)
 		}

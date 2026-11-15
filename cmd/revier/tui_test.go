@@ -226,7 +226,7 @@ func TestThePipedTableHasTheBoundOfList(t *testing.T) {
 	rt := &boundedRuntime{FakeRuntime: hosttest.NewRuntime("tmux")}
 	a := tuiApp(t.TempDir())
 	a.stateRoot = t.TempDir()
-	a.core = &core.Core{Runtime: rt}
+	a.core = &core.Core{Runtime: rt, View: rt}
 	withState(t, a, &state.State{})
 
 	ctx, cancel := context.WithTimeout(context.Background(), commandWait)

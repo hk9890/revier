@@ -374,7 +374,7 @@ name = "notes"
 	if err != nil {
 		t.Fatal(err)
 	}
-	return resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 120, 20), file
+	return resize(refreshed(t, &core.Core{Runtime: rt, View: rt}, projects, stateWith(t, nil), nil), 120, 20), file
 }
 
 // alt+del on a target of config.toml is refused: it is every project's.

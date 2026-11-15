@@ -365,7 +365,8 @@ func TestShutdownLeavesOpenWhatAHostThatWentPlanned(t *testing.T) {
 	c, _, wm, projects := openDesktop(t, revier.StatusIdle)
 	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
 
-	out, _ := c.WithRuntime(hosttest.NewRuntime("other")).Shutdown(context.Background(), plan, 0, reading(projects))
+	other := hosttest.NewRuntime("other")
+	out, _ := c.WithRuntime(other, other).Shutdown(context.Background(), plan, 0, reading(projects))
 	if closed, open, _ := out.Counts(); closed != 1 || open != 2 || len(wm.Closed) != 1 {
 		t.Errorf("counts = %d closed, %d open, window host closed %v; want the editor closed and both workspaces left", closed, open, wm.Closed)
 	}
@@ -381,7 +382,7 @@ func TestShutdownClosesATabWithItsWorkspaceOrAlone(t *testing.T) {
 		revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "taskmgr-ui", Vars: map[string]string{core.PanelTargetVar: "tickets"}},
 	)
 	probe := &hosttest.FakeProbe{Harness: "claude", Marker: "claude"}
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{probe}}
 	projects := []core.Project{prepared(t, tabProject())}
 	report := survey(t, c, projects, nil)
 
@@ -415,7 +416,7 @@ func TestClosePlanClosesATabAlone(t *testing.T) {
 		agent("1", "", ""),
 		revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "taskmgr-ui", Vars: map[string]string{core.PanelTargetVar: "tickets"}},
 	)
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	projects := []core.Project{prepared(t, tabProject())}
 
 	plan := c.ClosePlan(survey(t, c, projects, nil), "revier", core.CloseRow{Target: "tickets"})
@@ -436,7 +437,7 @@ func groupTab(t *testing.T, status revier.Status) (*core.Core, *hosttest.FakeRun
 	sibling.Tab = "t2"
 	rt.Add("session:revier", "kitty", home, marked, sibling)
 	probe := &hosttest.FakeProbe{Harness: "claude", Marker: "claude", State: revier.AgentState{Harness: "claude", Status: status}}
-	return &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}, rt, []core.Project{prepared(t, tabProject())}
+	return &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{probe}}, rt, []core.Project{prepared(t, tabProject())}
 }
 
 // A tab target covers every panel of its tab: its step holds the agent in
@@ -496,6 +497,7 @@ func (k keepsPanel) ClosePanel(ctx context.Context, ref revier.TargetRef, panel 
 func TestATabIsClosedOnlyWhenNoPanelOfItIsListed(t *testing.T) {
 	c, rt, projects := groupTab(t, revier.StatusIdle)
 	c.Runtime = keepsPanel{rt, "3"}
+	c.View = keepsPanel{rt, "3"}
 	plan := c.ClosePlan(survey(t, c, projects, nil), "revier", core.CloseRow{Target: "tickets"})
 
 	out, _ := c.Shutdown(context.Background(), plan, 0, reading(projects))
@@ -521,7 +523,7 @@ func addedTab(t *testing.T) (*core.Core, *hosttest.FakeRuntime, []core.Project) 
 	beside := revier.Panel{ID: "4", Kind: revier.PanelShell, Title: "zsh", Tab: "t2"}
 	rt.Add("session:revier", "kitty", shell, declared, added, beside)
 	probe := &hosttest.FakeProbe{Harness: "claude", Marker: "claude", State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle}}
-	return &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}, rt, []core.Project{prepared(t, agentProject())}
+	return &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{probe}}, rt, []core.Project{prepared(t, agentProject())}
 }
 
 // agentOn is the agent view of a panel.
@@ -608,7 +610,8 @@ func TestClosePlanClosesAnAttachedWindow(t *testing.T) {
 func TestClosePlanOfWhatIsNotOpenIsEmpty(t *testing.T) {
 	c, _, _, _ := openDesktop(t, revier.StatusIdle)
 	projects := []core.Project{prepared(t, agentProject())}
-	c.Runtime = hosttest.NewRuntime("rt")
+	empty := hosttest.NewRuntime("rt")
+	c.Runtime, c.View = empty, empty
 	report := survey(t, c, projects, nil)
 
 	for _, row := range []core.CloseRow{{Target: "home"}, {Target: "nothing"}, {Agent: revier.TargetRef{Host: "rt", ID: "1"}, Panel: "2"}} {
@@ -808,7 +811,7 @@ func TestShutdownOrdersItsOwnStepLastFromTheRecheck(t *testing.T) {
 func TestACoreOverAnotherRuntimeStillClosesItsOwnStepLast(t *testing.T) {
 	c, rt, _, projects := openDesktop(t, revier.StatusIdle)
 	c.Self = func(p revier.Panel) bool { return p.ID == "1" }
-	c = c.WithRuntime(rt)
+	c = c.WithRuntime(rt, rt)
 	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
 
 	out, err := c.Shutdown(context.Background(), plan, 0, reading(projects))
@@ -983,7 +986,8 @@ func TestAForcedCloseClosesTheTabTheRecheckReadAgain(t *testing.T) {
 // desktop had been closed.
 func TestAShutdownThatClosesNothingSavesNothing(t *testing.T) {
 	c, _, wm, projects := openDesktop(t, revier.StatusIdle)
-	c.Runtime = bareRuntime{hosttest.NewRuntime("rt")}
+	bare := hosttest.NewRuntime("rt")
+	c.Runtime, c.View = bareRuntime{bare}, bareView{bare}
 	c.Window = closeless{wm}
 	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
 	if len(plan) == 0 {
@@ -1027,7 +1031,7 @@ func TestAnAgentClosesAloneWhenTheInstanceNamesNoOwnPanel(t *testing.T) {
 		marked("3", "t2", revier.Panel{Kind: revier.PanelShell, Title: "zsh"}),
 	)
 	probe := &hosttest.FakeProbe{Harness: "claude", Marker: "claude", State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle}}
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{probe}}
 	projects := []core.Project{prepared(t, tabProject())}
 
 	a := agentOn(t, survey(t, c, projects, nil), "2")
@@ -1064,6 +1068,7 @@ func TestShutdownRechecksOnItsOwnBudgetAfterASlowPlan(t *testing.T) {
 	c, rt, wm, projects := openDesktop(t, revier.StatusIdle)
 	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
 	c.Runtime = ctxRuntime{rt}
+	c.View = ctxRuntime{rt}
 
 	spent, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 	defer cancel()

@@ -78,7 +78,7 @@ func TestATabKeepsTheWorkspaceItOpenedAndCouldNotFocus(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	rt.FocusErr = errors.New("no such window")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 
 	res, err := press(context.Background(), c, prepared(t, tabProject()), "tickets")
 	if !errors.Is(err, rt.FocusErr) {

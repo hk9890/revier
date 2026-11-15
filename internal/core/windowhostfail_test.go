@@ -38,7 +38,7 @@ func assertHostSilence(t *testing.T, err error, rt *hosttest.FakeRuntime, wm *ho
 func TestPressNamesTheWindowHostThatDidNotAnswer(t *testing.T) {
 	rt, wm, _, _ := osWindowHosts()
 	wm.SetInstancesErr(errors.New("wctl timed out"))
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 
 	_, err := press(context.Background(), c, prepared(t, osWindowProject()), "diff")
 	assertHostSilence(t, err, rt, wm)
@@ -47,7 +47,7 @@ func TestPressNamesTheWindowHostThatDidNotAnswer(t *testing.T) {
 func TestTabPressNamesTheWindowHostThatDidNotAnswer(t *testing.T) {
 	rt, wm, _, _ := osWindowHosts()
 	wm.SetInstancesErr(errors.New("wctl timed out"))
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 
 	_, err := press(context.Background(), c, prepared(t, tabProject()), "tickets")
 	assertHostSilence(t, err, rt, wm)
@@ -59,7 +59,7 @@ func TestTabPressNamesTheWindowHostThatDidNotAnswer(t *testing.T) {
 func TestNewAgentNamesTheWindowHostThatDidNotAnswer(t *testing.T) {
 	rt, wm, _, _ := osWindowHosts()
 	wm.SetInstancesErr(errors.New("wctl timed out"))
-	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm, Probes: []revier.AgentProbe{resumable()}}
 
 	_, err := newAgent(t, c, prepared(t, agentProject()), "home", core.Resume{})
 	assertHostSilence(t, err, rt, wm)
@@ -75,7 +75,7 @@ func TestGoingToAnAgentNamesTheWindowHostThatDidNotAnswer(t *testing.T) {
 	wm := hosttest.New("wm")
 	wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
 	wm.SetInstancesErr(errors.New("wctl timed out"))
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 
 	err := c.FocusAgent(context.Background(), "revier", revier.AgentView{Ref: ref, Panel: "2"})
 	assertHostSilence(t, err, rt, wm)

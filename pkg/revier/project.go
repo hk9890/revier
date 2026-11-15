@@ -167,7 +167,7 @@ type Realization struct {
 
 	// Inside names another target of the project, and makes this one a tab
 	// of that target's instance rather than an instance of its own. Runtime
-	// realizations only, on a runtime that implements PanelOpener. The tab
+	// realizations only, on a runtime that implements TabOpener. The tab
 	// runs Launch or holds Panels, one of the two. It is found by the
 	// target's name, which revier sets on it, so Match and Name are not used
 	// (decisions.md D64).
@@ -185,7 +185,7 @@ type Realization struct {
 	Active TargetName `toml:"active" json:"active,omitempty"`
 }
 
-// PanelSpecs is what a runtime host runs for the realization: its panels, or
+// PanelSpecs is what a runtime runs for the realization: its panels, or
 // Launch in Dir as the one panel.
 func (r Realization) PanelSpecs() []PanelSpec {
 	if len(r.Panels) == 0 {

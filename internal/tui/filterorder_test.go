@@ -16,7 +16,7 @@ import (
 func named(t *testing.T, names ...string) (*hosttest.FakeRuntime, *core.Core, []core.Project) {
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Window: hosttest.New("wm")}
+	c := &core.Core{Runtime: rt, View: rt, Window: hosttest.New("wm")}
 	var raw []revier.Project
 	for _, name := range names {
 		raw = append(raw, revier.Project{Name: revier.ProjectName(name), Path: "/p/" + name, Targets: []revier.Target{

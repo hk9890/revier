@@ -122,7 +122,7 @@ func TestSurveyThroughAScriptProbe(t *testing.T) {
 		revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "x", Command: []string{"aider"}},
 		revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "y", Command: []string{"goose"}},
 	)
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{good, broken}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{good, broken}}
 	p := core.PrepareProject(revier.Project{Name: "p", Targets: []revier.Target{{Name: "home", Home: true,
 		Runtime: &revier.Realization{Name: "session:p", Launch: []string{"x"}, Match: revier.Match{Title: "^session:p$"}}}}})
 	report, err := c.Survey(context.Background(), []core.Project{p})

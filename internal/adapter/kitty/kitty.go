@@ -1,6 +1,8 @@
-// Package kitty implements a Runtime host over kitty's remote control.
+// Package kitty implements a Runtime and the View that shows it over kitty's
+// remote control: the same kitty processes run the programs and draw them, so
+// a kitty window id names a runtime panel directly (decisions.md D176, D178).
 //
-// kitty is the terminal this machine actually uses; tmux is the runtime host
+// kitty is the terminal this machine actually uses; tmux is the runtime
 // that exists for headless testing. An instance is a kitty OS window, and the
 // kitty windows inside it, across all of its tabs, are the panels a probe
 // reads.
@@ -33,7 +35,7 @@
 //   - `kitten @ focus-window` focuses inside kitty but does not raise the OS
 //     window under GNOME on Wayland: the compositor refuses a focus request
 //     that did not come from user input. Raising is the window host's job,
-//     which the core arranges because Capabilities reports OSWindows.
+//     which the core arranges because the view's Capabilities report OSWindows.
 //
 // Layout is built with `kitten @ launch` sequences, never `kitty --session`:
 // a session file handed to a running kitty starts a new process, not a new
@@ -955,7 +957,7 @@ func (h *Host) active(ctx context.Context, ref revier.TargetRef) (socket string,
 // agents by. The vars become user vars of every window of the tab, which ls
 // reports back as the panel's Vars.
 //
-// The keyboard stays where it is, which is what revier.PanelOpener asks.
+// The keyboard stays where it is, which is what revier.TabOpener asks.
 // While an OS window of this kitty holds it, every launch carries
 // --keep-focus: kitty would otherwise put the keyboard in the new window when
 // the tab opens in the focused OS window. While none does, a launch moves no

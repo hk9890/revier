@@ -145,7 +145,7 @@ func declared(layout []revier.PanelSpec, kind revier.PanelKind) (revier.PanelSpe
 func (c *Core) agentTabs(host revier.Host, p Project, layout []revier.PanelSpec, resumes []Resume) ([]revier.Realization, []AgentOutcome) {
 	tabs := make([]revier.Realization, len(resumes))
 	outcomes := make([]AgentOutcome, len(resumes))
-	_, opens := host.(revier.PanelOpener)
+	_, opens := c.opener(host)
 	for n, r := range resumes {
 		if !opens {
 			outcomes[n] = AgentDropped
@@ -165,7 +165,7 @@ func (c *Core) agentTabs(host revier.Host, p Project, layout []revier.PanelSpec,
 // agent it names is not running anywhere.
 func (c *Core) addAgents(ctx context.Context, host revier.Host, p Project, layout []revier.PanelSpec, ref revier.TargetRef, resumes []Resume) ([]AgentOutcome, error) {
 	tabs, outcomes := c.agentTabs(host, p, layout, resumes)
-	opener, ok := host.(revier.PanelOpener)
+	opener, ok := c.opener(host)
 	if !ok {
 		return outcomes, nil
 	}
@@ -307,7 +307,7 @@ func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.
 	}
 	instances := snap[c.Runtime.Name()]
 	var ref revier.TargetRef
-	if finder, ok := c.Runtime.(revier.PanelFinder); ok {
+	if finder, ok := c.finder(); ok {
 		var err error
 		if ref, err = finder.FindPanel(instances, panel); err != nil {
 			return Workspace{}, fmt.Errorf("%s: find panel %s: %w", c.Runtime.Name(), panel, err)
@@ -454,7 +454,7 @@ func (c *Core) NewAgent(ctx context.Context, w Workspace, r Resume) (AgentOutcom
 // what a script asks for, whose user is typing in another window. Nothing is
 // focused and nothing is raised, so a workspace whose OS window cannot be
 // raised takes the tab too; which tab that workspace shows afterwards is its
-// runtime's (PanelOpener). The panel is the new agent's, which is all the
+// view's (PanelFocuser). The panel is the new agent's, which is all the
 // caller has to find it by (decisions.md D118).
 func (c *Core) AddAgent(ctx context.Context, w Workspace, r Resume) (revier.PanelID, AgentOutcome, error) {
 	return c.newAgent(ctx, w, r, false)
@@ -530,7 +530,7 @@ func (c *Core) NewShell(ctx context.Context, w Workspace, dir string) error {
 // its agent and shell panels are read from.
 type tabRuntime struct {
 	host   revier.Host
-	opener revier.PanelOpener
+	opener panelOpener
 	real   revier.Realization
 	layout []revier.PanelSpec
 }
@@ -544,7 +544,7 @@ func (c *Core) tabRuntime(w Workspace) (tabRuntime, error) {
 	if err != nil {
 		return tabRuntime{}, err
 	}
-	opener, ok := host.(revier.PanelOpener)
+	opener, ok := c.opener(host)
 	if !ok {
 		return tabRuntime{}, fmt.Errorf("%s: %w", host.Name(), ErrNoTabsToOpen)
 	}

@@ -23,7 +23,7 @@ func listApp(t *testing.T) *app {
 	rt := hosttest.NewRuntime("tmux")
 	rt.Add("home", "", revier.Panel{ID: "7", Title: "claude busy Dtop authentication options"})
 	tm := core.PrepareProject(revier.Project{Name: "tm", Path: "/x/task-manager", GitURL: "git@github.com:o/taskmgr.git"})
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
 	return withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t), tm}, stateRoot: t.TempDir(), core: c}, &state.State{})
 }
 

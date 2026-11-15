@@ -32,8 +32,10 @@ const (
 	panelLabel    = "revier.panel"
 )
 
-// Host is an hc Runtime. Socket selects the core's socket; an empty Socket
-// uses the one hc's own CLI would use from this environment.
+// Host is an hc Runtime, and no View: hc keeps no focus and draws nothing,
+// so a terminal is put on an instance by attaching it (decisions.md D176).
+// Socket selects the core's socket; an empty Socket uses the one hc's own CLI
+// would use from this environment.
 type Host struct {
 	Socket string
 
@@ -48,10 +50,6 @@ func (h *Host) root() string {
 		return h.procRoot
 	}
 	return "/proc"
-}
-
-func (h *Host) Capabilities() revier.Capabilities {
-	return revier.Capabilities{}
 }
 
 // Probe reports hc usable when herdr-core is on PATH and the core, when one
@@ -193,16 +191,6 @@ func kindOf(argv []string) revier.PanelKind {
 		return revier.PanelShell
 	}
 	return revier.PanelTool
-}
-
-// Focus does nothing: hc keeps no focus, and knows of no terminal that shows
-// one of its terminals. A terminal is put on an instance by attaching it.
-func (h *Host) Focus(context.Context, revier.TargetRef) error { return nil }
-
-// Focused is no instance: hc keeps no focus to report, so a second press
-// does not return home.
-func (h *Host) Focused(context.Context) (revier.TargetRef, error) {
-	return revier.TargetRef{}, nil
 }
 
 // ref is an instance ref taken apart: the core that made it, and the

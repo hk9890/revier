@@ -132,7 +132,7 @@ func TestNewAgentResumesOnlyTheHarnessTheAgentPanelRuns(t *testing.T) {
 	proj := agentProject()
 	proj.Targets[3].Runtime.Panels[1] = revier.PanelSpec{Kind: revier.PanelAgent, Title: "opencode", Command: []string{"opencode"}}
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable(), &hosttest.FakeProbe{Harness: "opencode", Marker: "opencode"}}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable(), &hosttest.FakeProbe{Harness: "opencode", Marker: "opencode"}}}
 	rt.Add("session:revier", "")
 
 	outcome, err := newAgent(t, c, prepared(t, proj), "home", core.Resume{Session: "abc-123"})
@@ -151,7 +151,7 @@ func TestNewAgentResumesOnlyTheHarnessTheAgentPanelRuns(t *testing.T) {
 // with no agent panel has no tab to give. Neither opens anything.
 func TestNewAgentRefusesWhatItCannotOpenIn(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 	p := prepared(t, agentProject())
 
 	if _, err := c.AgentWorkspace(context.Background(), p, "home"); !errors.Is(err, core.ErrNotOpen) || !strings.Contains(err.Error(), "revier go home -p revier opens it") {
@@ -171,7 +171,7 @@ func TestNewAgentRefusesWhatItCannotOpenIn(t *testing.T) {
 // workspace.
 func TestNewAgentNeedsARuntimeWithTabs(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: bareRuntime{rt}, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: bareRuntime{rt}, View: bareView{rt}, Probes: []revier.AgentProbe{resumable()}}
 	rt.Add("session:revier", "")
 
 	_, err := newAgent(t, c, prepared(t, agentProject()), "home", core.Resume{})
@@ -206,7 +206,7 @@ func TestNewShellOpensTheDeclaredShellInTheOpenWorkspace(t *testing.T) {
 // target's directory.
 func TestNewShellFallsBackToTheRuntimesShell(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	rt.Add("notes:revier", "")
 	p := prepared(t, agentProject())
 	w, err := c.AgentWorkspace(context.Background(), p, "notes")
@@ -225,7 +225,7 @@ func TestNewShellFallsBackToTheRuntimesShell(t *testing.T) {
 
 func TestNewShellNeedsARuntimeWithTabs(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: bareRuntime{rt}}
+	c := &core.Core{Runtime: bareRuntime{rt}, View: bareView{rt}}
 	rt.Add("session:revier", "")
 	w, err := c.AgentWorkspace(context.Background(), prepared(t, agentProject()), "home")
 	if err != nil {
@@ -242,7 +242,7 @@ func TestNewShellNeedsARuntimeWithTabs(t *testing.T) {
 func TestAnAgentTabOfALinkIsTheSSHPanelWithTheResume(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	ref := rt.Add("far", "")
-	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": hosttest.NewRemote("buildbox")}}
+	c := &core.Core{Runtime: rt, View: rt, Remotes: map[string]revier.Remote{"buildbox": hosttest.NewRemote("buildbox")}}
 	w, err := c.AgentWorkspace(context.Background(), linkProject(t), "home")
 	if err != nil {
 		t.Fatalf("AgentWorkspace: %v", err)
@@ -301,7 +301,7 @@ func TestAShellTabOfALinkIsTheSSHPanel(t *testing.T) {
 func twoWorkspaces(t *testing.T, revierPanels, otherPanels []revier.Panel) (*core.Core, *hosttest.FakeRuntime, []core.Project, revier.TargetRef, revier.TargetRef) {
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	other := agentProject()
 	other.Name, other.Path = "other", "/home/user/dev/other"
 	other.Targets[0].Runtime.Name, other.Targets[0].Runtime.Match.Title = "session:other", "^session:other$"
@@ -335,7 +335,7 @@ func TestPanelOwnerTakesTheTargetThatDeclaresAnAgent(t *testing.T) {
 	proj.Targets[1].Runtime = &plain
 	proj.Targets[0], proj.Targets[1] = proj.Targets[1], proj.Targets[0]
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 	ref := rt.Add("session:revier", "", revier.Panel{ID: "5"})
 
 	w, err := c.PanelOwner(context.Background(), []core.Project{prepared(t, proj)}, "5")
@@ -360,7 +360,7 @@ func TestPanelOwnerRefusesAnIDTwoWorkspacesHold(t *testing.T) {
 	}
 }
 
-// finding is a runtime that says which instance a panel id means, as kitty
+// finding is a view that says which instance a panel id means, as kitty
 // does from the process the command was started in.
 type finding struct {
 	*hosttest.FakeRuntime
@@ -371,20 +371,35 @@ func (f finding) FindPanel([]revier.Instance, revier.PanelID) (revier.TargetRef,
 	return f.ref, nil
 }
 
+// The id a terminal key passes is the view's, so the view's finder maps it:
+// a finder on the runtime alone is not asked (decisions.md D176).
+func TestPanelOwnerAsksTheViewWhichInstanceAnIDMeans(t *testing.T) {
+	_, rt, projects, _, other := twoWorkspaces(t, []revier.Panel{{ID: "1"}}, []revier.Panel{{ID: "1"}})
+
+	c := &core.Core{Runtime: rt, View: finding{hosttest.NewRuntime("rt"), other}}
+	if w, err := c.PanelOwner(t.Context(), projects, "1"); err != nil || w.Ref != other {
+		t.Errorf("owner = %+v, %v, want %+v the view found", w.Ref, err, other)
+	}
+	c = &core.Core{Runtime: finding{rt, other}}
+	if _, err := c.PanelOwner(t.Context(), projects, "1"); !errors.Is(err, core.ErrAmbiguous) {
+		t.Errorf("err = %v, want ErrAmbiguous: with no view nothing maps the id", err)
+	}
+}
+
 // A runtime that says which instance an id means decides between two
 // workspaces holding it; one that finds nothing is named.
 func TestPanelOwnerTakesTheInstanceTheRuntimeFinds(t *testing.T) {
 	_, rt, projects, _, other := twoWorkspaces(t, []revier.Panel{{ID: "1"}}, []revier.Panel{{ID: "1"}})
 
-	c := &core.Core{Runtime: finding{rt, other}}
+	c := &core.Core{Runtime: finding{rt, other}, View: finding{rt, other}}
 	if w, err := c.PanelOwner(context.Background(), projects, "1"); err != nil || w.Project.Name != "other" || w.Ref != other {
 		t.Errorf("owner = %s %+v, %v, want other %+v", w.Project.Name, w.Ref, err, other)
 	}
-	c = &core.Core{Runtime: finding{rt, revier.TargetRef{}}}
+	c = &core.Core{Runtime: finding{rt, revier.TargetRef{}}, View: finding{rt, revier.TargetRef{}}}
 	if _, err := c.PanelOwner(context.Background(), projects, "1"); !errors.Is(err, core.ErrNoPanel) {
 		t.Errorf("nothing found: err = %v, want ErrNoPanel", err)
 	}
-	c = &core.Core{Runtime: finding{rt, rt.Add("a kitty window of no project", "")}}
+	c = &core.Core{Runtime: finding{rt, rt.Add("a kitty window of no project", "")}, View: finding{rt, rt.Add("a kitty window of no project", "")}}
 	if _, err := c.PanelOwner(context.Background(), projects, "1"); !errors.Is(err, core.ErrNoWorkspace) {
 		t.Errorf("found in no workspace: err = %v, want ErrNoWorkspace", err)
 	}
@@ -612,7 +627,7 @@ func TestAgentTargetIsTheTargetDeclaringAnAgent(t *testing.T) {
 // window is an "is ready" notice, not the window.
 func TestNewAgentRaisesTheOSWindow(t *testing.T) {
 	rt, wm, homeWm, _ := osWindowHosts()
-	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm, Probes: []revier.AgentProbe{resumable()}}
 
 	if _, err := newAgent(t, c, prepared(t, agentProject()), "home", core.Resume{}); err != nil {
 		t.Fatalf("NewAgent: %v", err)
@@ -627,7 +642,7 @@ func TestNewAgentRaisesTheOSWindow(t *testing.T) {
 // (decisions.md D63).
 func TestNewAgentOpensNothingItCannotRaise(t *testing.T) {
 	rt, _, _, _ := osWindowHosts()
-	c := &core.Core{Runtime: rt, Window: hosttest.New("wm"), Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Window: hosttest.New("wm"), Probes: []revier.AgentProbe{resumable()}}
 
 	outcome, err := newAgent(t, c, prepared(t, agentProject()), "home", core.Resume{})
 	if !errors.Is(err, core.ErrUnraisable) || outcome != core.AgentNotAdded {

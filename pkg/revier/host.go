@@ -5,10 +5,10 @@ import (
 	"errors"
 )
 
-// Host provides instances of targets. A terminal or multiplexer provides them
-// as panes and windows; a compositor provides them as OS windows. The core asks
-// the same questions of both, which is why run-or-raise is one mechanism rather
-// than two.
+// Host provides instances of targets. A compositor provides them as OS
+// windows, and the process host of a link's panels as processes. The core
+// asks a terminal, its Runtime and its View together, the same questions it
+// asks a Host, which is why run-or-raise is one mechanism rather than two.
 //
 // An adapter holds no policy. Matching, template rendering, choosing between
 // realizations, and toggle-back all live in the core, so two adapters cannot
@@ -39,11 +39,46 @@ type Host interface {
 	Focused(ctx context.Context) (TargetRef, error)
 }
 
-// Runtime hosts the terminal side: panes, layouts, and the panels an AgentProbe
-// reads. It is the only host whose instances carry panels.
+// Runtime runs a terminal's programs: its instances, their panels, and the
+// panels an AgentProbe reads. It is the only port whose instances carry
+// panels. It starts and lists, and shows nothing: focusing an instance or a
+// tab is the View's (decisions.md D176).
 type Runtime interface {
-	Host
+	Name() string
+
+	// Probe reports whether this runtime is usable in the current
+	// environment, as Host.Probe does.
+	Probe(ctx context.Context) error
+
+	// Instances lists every instance the runtime runs, each with its panels.
+	// It is the hot path, as Host.Instances is.
+	Instances(ctx context.Context) ([]Instance, error)
+
+	// Open starts an instance from an already-rendered realization.
+	Open(ctx context.Context, r Realization) (TargetRef, error)
+}
+
+// View shows a Runtime's instances: it focuses one and reports which one has
+// the focus. Every call takes and returns the runtime's refs and panel ids, so
+// no id of the view's own reaches the core (decisions.md D176). A runtime that
+// draws its own instances, as kitty does, is its own view.
+type View interface {
+	Name() string
+
+	// Probe reports whether this view is usable in the current environment,
+	// as Host.Probe does.
+	Probe(ctx context.Context) error
+
+	// Capabilities says what the view's windows are.
 	Capabilities() Capabilities
+
+	// Focus makes the runtime instance ref names the view's current one.
+	Focus(ctx context.Context, ref TargetRef) error
+
+	// Focused reports the runtime instance the view shows current. It is
+	// authoritative only for a view that owns OS focus, so the core prefers
+	// a WindowController's answer when one is configured.
+	Focused(ctx context.Context) (TargetRef, error)
 }
 
 // WindowController hosts foreign OS windows. It adds nothing to Host; the named
@@ -52,14 +87,15 @@ type WindowController interface {
 	Host
 }
 
-// Capabilities describes what a runtime can do.
+// Capabilities describes what a view's windows are.
 type Capabilities struct {
-	// OSWindows reports that every instance is an OS window, and that the
-	// host gives it the same title a WindowController reports for it. The
-	// core then treats the two listings as one window seen from two sides:
-	// it raises the OS window through the window host, which a terminal on
-	// Wayland cannot do for itself, and it judges toggle-back for a runtime
-	// target by OS focus. A multiplexer inside a terminal cannot claim this.
+	// OSWindows reports that every instance the view shows is an OS window,
+	// and that the view gives it the same title a WindowController reports
+	// for it. The core then treats the two listings as one window seen from
+	// two sides: it raises the OS window through the window host, which a
+	// terminal on Wayland cannot do for itself, and it judges toggle-back for
+	// a runtime target by OS focus (decisions.md D177). A multiplexer inside
+	// a terminal cannot claim this.
 	OSWindows bool
 }
 
@@ -143,29 +179,36 @@ type PanelReader interface {
 // logs once per panel as INFO and not as a failure (decisions.md D172).
 var ErrPanelGone = errors.New("the panel is not open")
 
-// PanelOpener is an optional capability of a Runtime, detected by type
+// TabOpener is an optional capability of a Runtime, detected by type
 // assertion. A runtime that implements it can open a tab in an instance it
-// already holds and focus one panel of it, which is how a target declared
-// inside another is reached (decisions.md D64). A target that declares Inside
-// on a runtime that does not implement it is refused at the keypress, naming
-// the runtime.
+// already holds, which is how a target declared inside another is reached
+// (decisions.md D64). A target that declares Inside on a runtime that does
+// not implement it is refused at the keypress, naming the runtime.
 //
 // Which tab belongs to which target is the core's decision. The runtime only
 // sets vars on the panels it opens and reports them back in Panel.Vars.
-type PanelOpener interface {
+type TabOpener interface {
 	// OpenTab opens a new tab of the instance, after the ones it holds, and
 	// returns its first panel. The tab runs r.Launch, or holds r.Panels with
 	// every later panel split into the first, each panel started in its Dir,
 	// and r.Launch in r.Dir. vars are set on every panel of the tab, so the
-	// tab is found while any of them is open. An OpenTab that fails closes what it opened, so no half-built tab runs an agent the
-	// core names as not added. It is a tab target's tab (decisions.md D64),
-	// the agent tab of `revier agent new` and a restore (D145), and each tab
-	// after the first of a target that lists its tabs (D126).
+	// tab is found while any of them is open. An OpenTab that fails closes
+	// what it opened, so no half-built tab runs an agent the core names as
+	// not added. It is a tab target's tab (decisions.md D64), the agent tab
+	// of `revier agent new` and a restore (D145), and each tab after the
+	// first of a target that lists its tabs (D126).
 	//
-	// The keyboard focus stays where it was: going to the tab is FocusPanel's,
-	// and a tab a script opens is gone to by nobody (D118).
+	// The keyboard focus stays where it was: going to the tab is the view's
+	// FocusPanel, and a tab a script opens is gone to by nobody (D118).
 	OpenTab(ctx context.Context, ref TargetRef, r Realization, vars map[string]string) (PanelID, error)
+}
 
+// PanelFocuser is an optional capability of a View, detected by type
+// assertion. A view that implements it can make one panel of an instance
+// current and say which one is, which is how a press reaches a tab. A view
+// that does not leaves the tab where it is, and a second press on a tab does
+// not go home.
+type PanelFocuser interface {
 	// FocusPanel makes the panel current inside its instance, switching tab
 	// when it has to. Raising the OS window is not part of it.
 	FocusPanel(ctx context.Context, ref TargetRef, panel PanelID) error
@@ -174,23 +217,24 @@ type PanelOpener interface {
 	FocusedPanel(ctx context.Context, ref TargetRef) (PanelID, error)
 }
 
-// PanelFinder is an optional capability of a Runtime, detected by type
+// PanelFinder is an optional capability of a View, detected by type
 // assertion. FindPanel reports which of the instances the runtime just listed
 // holds a panel id as the calling process names it, and a zero ref when none
-// does. It exists because a panel id can be one runtime process's: a kitty
-// window id is, and the id a kitty key passes means a window of the kitty the
-// key was pressed in, which only the runtime can tell from the environment it
-// started the command with (decisions.md D145). It is handed the listing rather
-// than taking its own, so a key press lists the runtime once. A runtime whose
-// ids are unique needs no finder.
+// does. It exists because the id a terminal key passes is the view's: a kitty
+// window id is one kitty process's, and means a window of the kitty the key
+// was pressed in, which only the view can tell from the environment it
+// started the command with (decisions.md D145, D176). It is handed the
+// runtime's listing rather than taking its own, so a key press lists the
+// runtime once. A view whose ids are the runtime's, and unique, needs no
+// finder.
 type PanelFinder interface {
 	FindPanel(instances []Instance, panel PanelID) (TargetRef, error)
 }
 
-// Closer is an optional capability of a Host, detected by type assertion. A
-// host that implements it can close an instance it holds, which is how
-// `revier shutdown` ends a workspace or a window (decisions.md D78). A host
-// that does not leaves its instances open, and the shutdown names them.
+// Closer is an optional capability of a Host or a Runtime, detected by type
+// assertion. A host that implements it can close an instance it holds, which
+// is how `revier shutdown` ends a workspace or a window (decisions.md D78). A
+// host that does not leaves its instances open, and the shutdown names them.
 //
 // A close is the polite one the tool offers: an application may keep its
 // window open to ask about unsaved work. Whether it is gone is read from the

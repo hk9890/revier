@@ -411,7 +411,7 @@ func TestClicksOnAnAgentsRowsUnderTwoProjectsAreNotADoubleClick(t *testing.T) {
 				Name: "session:shared", Launch: []string{"x"}, Match: revier.Match{Title: "^session:shared$"}}},
 		}})
 	}
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
 	m, now := clocked(switched(resize(refreshed(t, c, core.Prepare(raw), stateWith(t, nil), nil), 120, 20)))
 	if rows := listedRows(m); len(rows) != 2 {
 		t.Fatalf("rows = %q, want the agent under each project", rows)

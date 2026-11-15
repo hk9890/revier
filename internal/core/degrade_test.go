@@ -80,7 +80,7 @@ func TestATabGoesWhileTheWindowHostCannotList(t *testing.T) {
 	rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool})
 	wm := hosttest.New("wm")
 	wm.InstancesErr = errors.New("went away")
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 	p := prepared(t, tabProject())
 
 	if _, err := press(context.Background(), c, p, "tickets"); err != nil {
@@ -99,7 +99,7 @@ func TestATabGoesWhileTheWindowHostCannotList(t *testing.T) {
 func TestATabOfARuntimeThatCannotListIsUnknown(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.InstancesErr = errors.New("went away")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, tabProject())})
 	if err != nil {

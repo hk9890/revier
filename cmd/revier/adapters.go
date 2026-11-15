@@ -108,8 +108,22 @@ const hostNone = "none"
 // user asked for these by name, and silently falling back to an adapter they
 // did not list would hide a broken setup. With no list configured the defaults
 // are searched and finding nothing is survivable.
-func selectHosts(ctx context.Context, cfg *config.Config, panel string) (revier.Runtime, revier.WindowController, error) {
-	want, defaults := cfg.Hosts.Runtime, defaultRuntimeOrder
+func selectHosts(ctx context.Context, cfg *config.Config, panel string) (revier.Runtime, revier.View, revier.WindowController, error) {
+	rt, view, err := selectTerminal(ctx, cfg, panel, cfg.Hosts.Runtime)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	win, err := selectHost(ctx, "window", cfg.Hosts.Window, defaultWindowOrder, windowAdapters())
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return rt, view, win, nil
+}
+
+// selectTerminal picks the runtime of the want list, or of the defaults when
+// it is empty, and the view [hosts] names for it.
+func selectTerminal(ctx context.Context, cfg *config.Config, panel string, want []string) (revier.Runtime, revier.View, error) {
+	defaults := defaultRuntimeOrder
 	if tmux.IsPane(panel) {
 		want, defaults = atTmuxPane(want), atTmuxPane(defaults)
 	}
@@ -117,11 +131,65 @@ func selectHosts(ctx context.Context, cfg *config.Config, panel string) (revier.
 	if err != nil {
 		return nil, nil, err
 	}
-	win, err := selectHost(ctx, "window", cfg.Hosts.Window, defaultWindowOrder, windowAdapters())
+	view, err := selectView(cfg.Hosts.View, rt)
 	if err != nil {
 		return nil, nil, err
 	}
-	return rt, win, nil
+	return rt, view, nil
+}
+
+// views are the compiled-in views. Each is, so far, the runtime of its name
+// drawing its own instances, so it shows that runtime and no other: hc has
+// no view yet (decisions.md D176, D178).
+var views = []string{"kitty", "tmux"}
+
+// defaultViewOrder is the views tried when config names none: the runtime's
+// own, when it is one, and then kitty.
+func defaultViewOrder(rt revier.Runtime) []string {
+	if _, ok := rt.(revier.View); ok && rt.Name() != "kitty" {
+		return []string{rt.Name(), "kitty"}
+	}
+	return []string{"kitty"}
+}
+
+// selectView picks the view that shows rt. A configured list is a preference
+// order, as selectHost reads one, and a view it names that cannot show rt is
+// an error; among the defaults such a view is passed over, and finding none
+// leaves the runtime unshown. A view shows a runtime when it is that runtime:
+// the runtime was probed already, so the view is not probed again.
+func selectView(want []string, rt revier.Runtime) (revier.View, error) {
+	shows := func(name string) (revier.View, bool) {
+		view, ok := rt.(revier.View)
+		return view, ok && rt.Name() == name
+	}
+	if len(want) == 0 {
+		if rt == nil {
+			return nil, nil
+		}
+		for _, name := range defaultViewOrder(rt) {
+			if view, ok := shows(name); ok {
+				return view, nil
+			}
+		}
+		return nil, nil
+	}
+	var errs []error
+	for _, name := range want {
+		switch {
+		case name == hostNone:
+			return nil, nil
+		case !slices.Contains(views, name):
+			return nil, fmt.Errorf("hosts.view: %w", unknownHost("view", name, views))
+		case rt == nil:
+			errs = append(errs, fmt.Errorf("%s: no runtime is selected to show", name))
+			continue
+		}
+		if view, ok := shows(name); ok {
+			return view, nil
+		}
+		errs = append(errs, fmt.Errorf("%s: cannot show the %s runtime", name, rt.Name()))
+	}
+	return nil, fmt.Errorf("no configured view is usable: %w", errors.Join(errs...))
 }
 
 // atTmuxPane narrows a runtime list to tmux for a key pressed in a tmux pane,
@@ -155,14 +223,21 @@ func hostProblems(cfg *config.Config) []error {
 		}
 	}
 	check("runtime", cfg.Hosts.Runtime, slices.Sorted(maps.Keys(runtimeAdapters())))
+	check("view", cfg.Hosts.View, views)
 	check("window", cfg.Hosts.Window, slices.Sorted(maps.Keys(windowAdapters())))
 	return errs
+}
+
+// probed is an adapter that selectHost can try: a runtime or a window host.
+type probed interface {
+	Name() string
+	Probe(ctx context.Context) error
 }
 
 // selectHost picks one host of a kind, "runtime" or "window". Finding none
 // among the defaults is survivable: without a runtime the window-only targets
 // still work, and without a window host they report unavailable.
-func selectHost[H revier.Host](ctx context.Context, kind string, want, defaults []string, adapters map[string]H) (H, error) {
+func selectHost[H probed](ctx context.Context, kind string, want, defaults []string, adapters map[string]H) (H, error) {
 	var none H
 	if len(want) > 0 {
 		var errs []error
@@ -243,8 +318,8 @@ func termKeyWriter() revier.TermKeyWriter { return kitty.TermKeyWriter{} }
 // and reported on the projects that live there rather than refusing to start.
 func sshRemote(host string) revier.Remote { return ssh.New(host) }
 
-func newCore(cfg *config.Config, rt revier.Runtime, win revier.WindowController, keys revier.KeyBinder) *core.Core {
-	return &core.Core{Runtime: rt, Window: win, Served: servedProcesses(), Self: proc.RunsUnder(), Run: runTargetCommand, SwitchPopup: switchPopup, Probes: probes(cfg), KeyBinder: keys, NewRemote: sshRemote}
+func newCore(cfg *config.Config, rt revier.Runtime, view revier.View, win revier.WindowController, keys revier.KeyBinder) *core.Core {
+	return &core.Core{Runtime: rt, View: view, Window: win, Served: servedProcesses(), Self: proc.RunsUnder(), Run: runTargetCommand, SwitchPopup: switchPopup, Probes: probes(cfg), KeyBinder: keys, NewRemote: sshRemote}
 }
 
 // switchPopup tells the popup's surface to switch its list, over the socket

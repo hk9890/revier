@@ -67,7 +67,7 @@ func TestTabAtAPanelOutsideAWorkspaceRunsTheAgentTheKeyAsksFor(t *testing.T) {
 		{"name": "claude", "command": []any{"claude"}},
 		{"name": "dtop", "command": []any{"dtop", "--fast"}},
 	}}
-	a := withState(t, &app{cfg: cfg, projects: []core.Project{demoProject(t)}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt}}, &state.State{})
+	a := withState(t, &app{cfg: cfg, projects: []core.Project{demoProject(t)}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt, View: rt}}, &state.State{})
 
 	if err := a.newAgent(context.Background(), "", "3", "", core.Resume{Agent: "dtop"}); err != nil {
 		t.Fatalf("agent new dtop --panel 3: %v", err)
@@ -86,7 +86,7 @@ func TestTabAtAPanelOutsideAWorkspaceRunsTheAgentTheKeyAsksFor(t *testing.T) {
 func TestTabAtAPanelOutsideAWorkspaceSaysItDidNotResume(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.Add("a kitty window of no project", "", revier.Panel{ID: "3", Dir: t.TempDir()})
-	a := withState(t, &app{projects: []core.Project{demoProject(t)}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt}}, &state.State{})
+	a := withState(t, &app{projects: []core.Project{demoProject(t)}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt, View: rt}}, &state.State{})
 	ctx := context.Background()
 	for _, outside := range []core.Outside{core.OutsideTab, core.OutsideNone, core.OutsideAgent} {
 		a.cfg = &config.Config{Terminal: config.Terminal{Outside: outside}, Agents: []map[string]any{{"name": "claude", "command": []any{"claude"}}}}

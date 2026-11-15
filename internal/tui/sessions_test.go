@@ -153,7 +153,7 @@ func TestTheSessionPaneShowsTheRestorePlan(t *testing.T) {
 // it resumes, and the directory where that is not the project's own.
 func TestAPlannedResumeShowsItsConversation(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.NewResumableProbe("claude", "claude")}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.NewResumableProbe("claude", "claude")}}
 	worktree := t.TempDir()
 	projects := core.Prepare([]revier.Project{{Name: "work", Path: "/p/work", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{

@@ -110,7 +110,7 @@ func TestTheRuleCountsEveryAgentByState(t *testing.T) {
 	// are empty here, and the line covers them.
 	idle := &hosttest.FakeProbe{Harness: "claude", Marker: "claude",
 		State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle, Activity: "waiting for a prompt"}}
-	rest := refreshed(t, &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{idle}}, projects, stateWith(t, nil), nil)
+	rest := refreshed(t, &core.Core{Runtime: rt, View: rt, Window: wm, Probes: []revier.AgentProbe{idle}}, projects, stateWith(t, nil), nil)
 	quiet := ruleLine(rest)
 	if !strings.Contains(quiet, glyphs.Idle+" 1") {
 		t.Fatalf("rule = %q, want one idle agent counted", quiet)
@@ -778,7 +778,7 @@ func TestASecondPressDuringALaunchDoesNotLaunchAgain(t *testing.T) {
 // attached window having closed.
 func TestARefreshWithoutAWindowHostKeepsWindowRefs(t *testing.T) {
 	rt, _, _, projects := world(t, 1)
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	window := revier.TargetRef{Host: "gnome", ID: "42"}
 	root := stateWith(t, map[revier.ProjectName][]revier.TargetRef{"project-00": {window}})
 	st, _ := state.Load(root)
@@ -1101,7 +1101,7 @@ func TestABareLetterFiltersRatherThanRunningATarget(t *testing.T) {
 	}}
 	projects := core.Prepare(raw)
 	rt, wm := hosttest.NewRuntime("rt"), hosttest.New("wm")
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 	m := refreshed(t, c, projects, stateWith(t, nil), nil)
 
 	// The command a keystroke returns is the input's own cursor blink, so the
@@ -1544,7 +1544,7 @@ func countedWorld(t *testing.T, path string, statuses []revier.Status) tui.Model
 			Name: "session:duo", Launch: []string{"x"}, Match: revier.Match{Title: "^session:duo$"}}},
 	}}})
 	rt.Add("session:duo", "kitty", panels...)
-	c := &core.Core{Runtime: rt, Probes: probes}
+	c := &core.Core{Runtime: rt, View: rt, Probes: probes}
 	return resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20)
 }
 

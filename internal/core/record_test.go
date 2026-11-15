@@ -25,7 +25,7 @@ func TestReplayOfSurveysIsWhatEachSurveyFound(t *testing.T) {
 	rt, wm := hosttest.NewRuntime("rt"), hosttest.New("wm")
 	probe := &hosttest.FakeProbe{Harness: "claude", Marker: "claude", State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle}}
 	l := &ledger{}
-	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{probe}, Ledger: l}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm, Probes: []revier.AgentProbe{probe}, Ledger: l}
 	p := prepared(t, project())
 	projects := []core.Project{p}
 	observer := record.NewObserver()
@@ -91,7 +91,7 @@ func TestAFailedGoIsRecordedWithItsError(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.OpenErr = errors.New("kitty: no socket")
 	l := &ledger{}
-	c := &core.Core{Runtime: rt, Ledger: l}
+	c := &core.Core{Runtime: rt, View: rt, Ledger: l}
 	if _, err := press(context.Background(), c, prepared(t, project()), "home"); err == nil {
 		t.Fatal("press succeeded, want the open's error")
 	}

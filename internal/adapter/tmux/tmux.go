@@ -1,4 +1,5 @@
-// Package tmux implements a Runtime host over tmux.
+// Package tmux implements a Runtime over tmux, and the View that shows it:
+// tmux draws its own sessions, windows and current pane (decisions.md D176).
 //
 // It exists first among the runtime adapters because it is the one that can be
 // driven with no display at all: `tmux -L <socket>` starts a private server,

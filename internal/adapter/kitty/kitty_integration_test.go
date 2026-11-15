@@ -967,7 +967,7 @@ func TestReadPanelReadsTheWindowsScreenWithItsColours(t *testing.T) {
 // as user vars, and runs the launch argv in the directory given.
 func TestOpenTabLaunchesATabWithItsVars(t *testing.T) {
 	h, rec := host(t, "unix:@kitty-4000")
-	var opener revier.PanelOpener = h
+	var opener revier.TabOpener = h
 	panel, err := opener.OpenTab(context.Background(), revier.TargetRef{Host: "kitty", ID: "@kitty-4000/2"},
 		revier.Realization{Launch: []string{"taskmgr-ui"}, Dir: "/p"}, map[string]string{"revier_target": "tickets"})
 	if err != nil {

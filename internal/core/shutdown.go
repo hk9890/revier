@@ -394,7 +394,12 @@ func (c *Core) closer(ref revier.TargetRef) (revier.Closer, bool) {
 	if !ok {
 		return nil, false
 	}
-	closer, ok := h.(revier.Closer)
+	var closer revier.Closer
+	if t, isTerminal := h.(terminal); isTerminal {
+		closer, ok = t.Runtime.(revier.Closer)
+	} else {
+		closer, ok = h.(revier.Closer)
+	}
 	return closer, ok
 }
 

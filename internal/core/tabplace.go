@@ -185,7 +185,7 @@ func (c *Core) tabOutside(ctx context.Context, w Workspace, req TabRequest) erro
 	if outside.Outside == OutsideNone {
 		return nil
 	}
-	opener, ok := c.Runtime.(revier.PanelOpener)
+	opener, ok := c.opener(c.terminal())
 	if !ok {
 		return fmt.Errorf("%s: %w", c.Runtime.Name(), ErrNoTabsToOpen)
 	}
