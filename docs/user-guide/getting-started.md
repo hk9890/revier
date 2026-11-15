@@ -9,7 +9,7 @@ full-screen view in a terminal. [Concepts](concepts.md) explains the rest.
 ## What you need
 
 - Linux, `x64` or `arm64`.
-- kitty, tmux or herdr. revier opens your workspaces in it.
+- kitty or tmux. revier opens your workspaces in it.
 - Claude Code, in the version
   [Claude Code](integrations/claude-code.md#what-you-need) names, as `claude`
   on your `PATH`. The project that `revier new` writes runs it in its agent
@@ -55,8 +55,6 @@ proves the archive matches them.
   it, revier still opens workspaces, but cannot reach your own kitty windows.
 - **tmux**: nothing to set in tmux. When kitty is also installed, tell revier
   to use tmux; see [tmux](integrations/tmux.md).
-- **herdr**: when kitty or tmux is also installed, tell revier to use herdr;
-  see [herdr](integrations/herdr.md).
 - **Ghostty**: revier cannot drive it; run tmux in it, as
   [Ghostty](integrations/ghostty.md) shows.
 
@@ -99,9 +97,9 @@ names the terminal host, the `window` line gnome, and `-` means none.
 
 Run `revier open`. revier opens the workspace with the `agent` tab. Run it
 again, and revier raises the same window instead of a second one. This is
-run-or-raise. From another directory, run `revier open demo`. On tmux, herdr or
+run-or-raise. From another directory, run `revier open demo`. On tmux or
 hc, `revier open --attach` puts your terminal on the workspace. In a pane of the
-same tmux or herdr server, it switches that pane to the workspace and
+same tmux server, it switches that pane to the workspace and
 attaches nothing, because the server does not attach to itself.
 
 ## Install the desktop keys

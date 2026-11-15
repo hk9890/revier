@@ -46,18 +46,14 @@ func openAttach(t *testing.T, rt enclosingRuntime) (string, []string) {
 
 // In a pane of the server that holds the workspace, the focus has put the
 // pane on it already, and an attach would nest the server in itself, which
-// tmux and herdr refuse. The command says what it focused and execs nothing.
+// tmux refuses. The command says what it focused and execs nothing.
 func TestOpenAttachInAPaneOfTheServerExecsNothing(t *testing.T) {
-	for _, name := range []string{"herdr", "tmux"} {
-		t.Run(name, func(t *testing.T) {
-			out, execd := openAttach(t, enclosingRuntime{FakeRuntime: hosttest.NewRuntime(name), argv: []string{"sh"}, inside: true})
-			if execd != nil {
-				t.Errorf("exec'd %q, want nothing", execd)
-			}
-			if !strings.HasPrefix(out, "demo: home ("+name+"/") {
-				t.Errorf("output = %q, want the focused workspace named", out)
-			}
-		})
+	out, execd := openAttach(t, enclosingRuntime{FakeRuntime: hosttest.NewRuntime("tmux"), argv: []string{"sh"}, inside: true})
+	if execd != nil {
+		t.Errorf("exec'd %q, want nothing", execd)
+	}
+	if !strings.HasPrefix(out, "demo: home (tmux/") {
+		t.Errorf("output = %q, want the focused workspace named", out)
 	}
 }
 

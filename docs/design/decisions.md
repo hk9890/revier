@@ -699,30 +699,14 @@ The surface then quits, the popup too, so the next press is a cold start
 (D86) that opens on a start dialog: restore, pick another session, or start
 fresh. Any open clears the record: the user has started again.
 
-### D142 — a herdr instance is a workspace, named by a token revier leaves on it
-
-One herdr server holds every workspace, as a tmux server holds every session
-(D70): a workspace is an instance, its tabs are tabs, its panes are panels. A
-user renames a workspace in herdr freely, so the title is a token revier sets,
-and the label where there is none.
-
-### D143 — herdr's own agent detection reaches a probe as panel vars
-
-Extends D119. herdr names the agent in each of its panes and its state, for
-more harnesses than revier has probes for. The host passes both on as panel
-vars, as kitty passes a harness's user vars, so the host still names no agent.
-The herdr probe reads them after the Claude probe (D57) and after every probe
-a configuration declares, so a probe written for a harness runs on herdr too.
-
 ### D144 — revier trusts the programs that run as its user
 
 A panel's vars, title and command come from programs that run as the user,
-and any of them can set a var a probe reads, such as herdr's agent name on a
-kitty or tmux panel.
+and any of them can set a var a probe reads.
 revier takes them as they are: such a program can already do worse than show
 an agent that is not there, and a shutdown it holds back gives way to
-`--force`. A host keeps a tool's own report (D143), such as herdr's agent
-detection, apart from what any client can set, where the tool keeps them apart.
+`--force`. A host keeps a tool's own report apart from what any client can
+set, where the tool keeps them apart.
 
 ### D145 — a project has named agents beside its default one, and an agent tab is a launcher
 
@@ -833,9 +817,9 @@ revier lists the projects; ssh's own failures are told apart by exit 255.
 `<project>:<target>:<panel>` names an agent once: the target names the process
 a panel id is unique in, which D75 carried as a ref no one types. The bare
 `<project>:<panel>` failed when two kitty processes held one project; it is
-gone, as a herdr panel id holds a colon. `<project>` and `<project>:<target>`
-stay for the default agent (D145). The survey labels each agent, an open tab
-first, so a surface prints what `revier agent` resolves; a link's agent goes
+gone. `<project>` and `<project>:<target>` stay for the default agent (D145).
+The survey labels each agent, an open tab first, so a surface prints what
+`revier agent` resolves; a link's agent goes
 through the target here that shows it (D84). An agent no target holds - a
 link's tab moved away, a terminal attached by hand (D95) - has no address.
 
@@ -994,4 +978,14 @@ close kills each terminal, as hc offers no polite close.
 A prototype runtime is registered but left out of the default runtime order,
 so selection tries it only where the config's `[hosts]` names it. A prototype
 must not take over a machine that merely has its tool installed: a user of
-kitty, tmux or herdr who also installs hc keeps the runtime they had.
+kitty or tmux who also installs hc keeps the runtime they had.
+
+### D175 — revier builds on hc, and the herdr runtime and its probe are gone
+
+Replaces D142, D143. hc comes from herdr's makers as the headless core of a
+terminal runtime, and the runtime revier moves to, opted into while it is a
+prototype (D174).
+Keeping herdr as well kept a second host and a second probe for the same
+makers' product, pinned and tracked weekly, for what hc gives. A config that
+names herdr is refused with what to name instead, not taken as an unknown host.
+herdr's interface may come back later as a view over hc, not as a runtime.

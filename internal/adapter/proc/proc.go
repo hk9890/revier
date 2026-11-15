@@ -13,15 +13,11 @@
 //
 // The package is also the one reader of a process's parent and terminal on
 // this machine: Parent, which the kitty host walks a window's processes with,
-// ParentIn, which the herdr host finds a pane's process with, Foreground and
-// ForegroundIn, which the tmux and herdr hosts read a pane's command with,
-// Scan, the one read of every process's environment, which this host and the
-// herdr host share, EnvIn, the one variable the herdr and hc hosts read of
-// a server's environment, PeerPID and ServerPATH, the server behind their
-// socket and the PATH it starts a program with, RunsUnder, the panels a
-// shutdown closes last, and AgentSessionVars, TerminalVars, CommandVars,
-// WithoutAgentSession, Without and Cleared, what the herdr and hc hosts keep
-// from the programs their server starts.
+// Foreground, which the tmux host reads a pane's command with, PeerPID and
+// ServerPATH, the hc core behind its socket and the PATH it starts a program
+// with, RunsUnder, the panels a shutdown closes last, and AgentSessionVars,
+// TerminalVars, CommandVars, WithoutAgentSession, Without and Cleared, what
+// the hc host keeps from the programs its core starts.
 package proc
 
 import (
@@ -54,12 +50,6 @@ const (
 	// and a shell carry it empty, so a name inherited from the environment
 	// `revier agent exec` ran in does not mark them.
 	AgentVar = "REVIER_AGENT"
-
-	// HerdrOpenVar marks the first shell of a workspace the herdr host
-	// creates, with a value no other Open uses. It is named here, not in the
-	// herdr host, so that the hc host can name it among what a program must
-	// not inherit.
-	HerdrOpenVar = "REVIER_HERDR_OPEN"
 )
 
 // AgentSessionVars name what Claude Code sets in the environment of each
@@ -94,22 +84,23 @@ func WithoutAgentSession(env []string) []string {
 
 // TerminalVars name what a terminal or a multiplexer sets in each program it
 // runs. A server started inside one hands them to every program it starts,
-// which then acts on a kitty window, a tmux pane or an hc terminal that is not
-// its own. herdr's own are not here: the herdr host's server sets them itself.
-// hc's are: hc sets its own in each of its terminals over the env a run gives.
+// which then acts on a kitty window, a tmux pane, a herdr pane or an hc
+// terminal that is not its own. hc's are here too: hc sets its own in each of
+// its terminals over the env a run gives.
 var TerminalVars = []string{
 	"KITTY_WINDOW_ID", "KITTY_LISTEN_ON", "KITTY_PID", "KITTY_PUBLIC_KEY", "KITTY_INSTALLATION_DIR",
 	"KITTY_SHELL_INTEGRATION", "WINDOWID",
 	"TMUX", "TMUX_PANE",
 	"ZELLIJ", "ZELLIJ_SESSION_NAME", "ZELLIJ_PANE_ID",
 	"STY", "WEZTERM_PANE",
+	"HERDR_ENV", "HERDR_SESSION", "HERDR_SOCKET_PATH", "HERDR_WORKSPACE_ID", "HERDR_TAB_ID", "HERDR_PANE_ID",
 	"HC_TERMINAL_ID", "HC_TERMINAL_SOCKET", "HC_SCOPE",
 }
 
 // CommandVars name what a revier command sets in what it starts. A server
 // started under one hands them to every program it starts, and this host
 // then lists that program under a tag that is not its own.
-var CommandVars = []string{TagVar, WorkspaceVar, AgentVar, HerdrOpenVar}
+var CommandVars = []string{TagVar, WorkspaceVar, AgentVar}
 
 // Without is env without the variables names name. env itself is left as it
 // was.
@@ -158,7 +149,7 @@ type process struct {
 // Instances reads /proc once. A process of another user refuses the read of
 // its environment and is passed over, as is one that ended meanwhile.
 func (h *Host) Instances(context.Context) ([]revier.Instance, error) {
-	scanned, err := Scan(h.root(), TagVar, WorkspaceVar, AgentVar)
+	scanned, err := scan(h.root(), TagVar, WorkspaceVar, AgentVar)
 	if err != nil {
 		return nil, fmt.Errorf("proc: %w", err)
 	}
@@ -314,12 +305,12 @@ func statFields(stat []byte) []string {
 	return strings.Fields(string(stat[bytes.LastIndexByte(stat, ')')+1:]))
 }
 
-// Scan reads the environment of every process in the /proc tree at root once,
+// scan reads the environment of every process in the /proc tree at root once,
 // and returns by pid each process whose environment sets key to a value, with
 // key and those of more that it sets.
 // A process of another user refuses the read of its environment and is passed
 // over, as is one that ended meanwhile.
-func Scan(root, key string, more ...string) (map[int]map[string]string, error) {
+func scan(root, key string, more ...string) (map[int]map[string]string, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return nil, err
@@ -350,12 +341,8 @@ func Scan(root, key string, more ...string) (map[int]map[string]string, error) {
 }
 
 // Parent reads a process's parent from this machine's /proc.
-func Parent(pid int) (int, bool) { return ParentIn("/proc", pid) }
-
-// ParentIn reads a process's parent from the /proc tree at root, which a test
-// replaces.
-func ParentIn(root string, pid int) (int, bool) {
-	stat, err := os.ReadFile(filepath.Join(root, strconv.Itoa(pid), "stat"))
+func Parent(pid int) (int, bool) {
+	stat, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
 	if err != nil {
 		return 0, false
 	}
@@ -454,12 +441,8 @@ func DirIn(root string, pids ...int) string {
 // Foreground reads the foreground process of the terminal pid runs in: the
 // leader of the terminal's foreground process group, and its argv. That is
 // the process tmux names in pane_current_command, so the two agree.
-func Foreground(pid int) (int, []string, bool) { return ForegroundIn("/proc", pid) }
-
-// ForegroundIn is Foreground from the /proc tree at root, which a test
-// replaces.
-func ForegroundIn(root string, pid int) (int, []string, bool) {
-	stat, err := os.ReadFile(filepath.Join(root, strconv.Itoa(pid), "stat"))
+func Foreground(pid int) (int, []string, bool) {
+	stat, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
 	if err != nil {
 		return 0, nil, false
 	}
@@ -472,7 +455,7 @@ func ForegroundIn(root string, pid int) (int, []string, bool) {
 	if err != nil || fg <= 0 {
 		return 0, nil, false
 	}
-	cmdline, err := os.ReadFile(filepath.Join(root, strconv.Itoa(fg), "cmdline"))
+	cmdline, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(fg), "cmdline"))
 	// A process that cleared its argv reads as NULs alone, and names no
 	// program.
 	args := strings.TrimRight(string(cmdline), "\x00")

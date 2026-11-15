@@ -52,7 +52,7 @@ revier sees such a window, not what runs in it.
 
 ## What does not work
 
-- `ghostty` in `[hosts]`: revier stops with "unknown runtime host".
+- `ghostty` in `[hosts]`: revier stops with `unknown host "ghostty"`.
 - Agents that run in Ghostty outside tmux.
 - Raising the Ghostty window that shows a session: revier switches the
   session in it, and the window stays where it is.

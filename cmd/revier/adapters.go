@@ -12,7 +12,6 @@ import (
 	"github.com/hk9890/revier/internal/adapter/execprobe"
 	"github.com/hk9890/revier/internal/adapter/gnome"
 	"github.com/hk9890/revier/internal/adapter/hc"
-	"github.com/hk9890/revier/internal/adapter/herdr"
 	"github.com/hk9890/revier/internal/adapter/kitty"
 	"github.com/hk9890/revier/internal/adapter/opencode"
 	"github.com/hk9890/revier/internal/adapter/proc"
@@ -30,7 +29,6 @@ func runtimeAdapters() map[string]revier.Runtime {
 	return map[string]revier.Runtime{
 		"kitty": &kitty.Host{},
 		"tmux":  &tmux.Host{},
-		"herdr": &herdr.Host{},
 		"hc":    &hc.Host{},
 	}
 }
@@ -45,20 +43,19 @@ func windowAdapters() map[string]revier.WindowController {
 }
 
 // probes lists the Claude probe, then the ones config declares as
-// subprocesses, then the probes that know less than a probe a user wrote:
-// herdr's, which takes herdr's word for an agent and knows no harness itself,
-// and opencode's, which knows no state.
+// subprocesses, then opencode's, which knows less than a probe a user wrote:
+// it knows no state.
 func probes(cfg *config.Config) []revier.AgentProbe {
 	out := []revier.AgentProbe{&claude.Probe{}}
 	for _, pr := range cfg.Probes {
 		out = append(out, execprobe.New(pr.Name, pr.Exec))
 	}
-	return append(out, &herdr.Probe{}, &opencode.Probe{})
+	return append(out, &opencode.Probe{})
 }
 
 // preference order used when config names none.
 var (
-	defaultRuntimeOrder = []string{"kitty", "tmux", "herdr"}
+	defaultRuntimeOrder = []string{"kitty", "tmux"}
 	defaultWindowOrder  = []string{"gnome"}
 )
 
@@ -67,6 +64,34 @@ var (
 // outside the default order only when config names it. hc is a prototype, and
 // must not take over a machine that has it installed (decisions.md D174).
 var optInRuntimes = []string{"hc"}
+
+// runtimeRemoved answers a config that still names a runtime an earlier
+// release had, so that its user learns what to name instead of "unknown host".
+type runtimeRemoved struct{ name, use string }
+
+func (e runtimeRemoved) Error() string {
+	return fmt.Sprintf("the %s runtime was removed; use %s", e.name, e.use)
+}
+
+// removedRuntimes are the runtimes an earlier release had (decisions.md D175).
+var removedRuntimes = []string{"herdr"}
+
+// unknownHost is the error for a name in [hosts] that none of the adapters
+// carries; it names theirs, and hostNone, as the names to use.
+func unknownHost(kind, name string, adapters []string) error {
+	if kind == "runtime" && slices.Contains(removedRuntimes, name) {
+		return runtimeRemoved{name: name, use: orList(adapters)}
+	}
+	return fmt.Errorf("unknown host %q; known: %s", name, strings.Join(slices.Concat(adapters, []string{hostNone}), ", "))
+}
+
+// orList joins names as "a, b or c".
+func orList(names []string) string {
+	if len(names) < 2 {
+		return strings.Join(names, "")
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " or " + names[len(names)-1]
+}
 
 // hostNone disables a host class. Listing it is how a machine that HAS a usable
 // adapter runs without one anyway - a test that must not touch the desktop, or
@@ -121,11 +146,10 @@ func atTmuxPane(order []string) []string {
 // does reach stops every command but doctor; doctor reads these instead.
 func hostProblems(cfg *config.Config) []error {
 	var errs []error
-	check := func(kind string, want, known []string) {
-		known = append(known, hostNone)
+	check := func(kind string, want, adapters []string) {
 		for _, name := range want {
-			if !slices.Contains(known, name) {
-				errs = append(errs, fmt.Errorf("hosts.%s: unknown host %q; known: %s", kind, name, strings.Join(known, ", ")))
+			if name != hostNone && !slices.Contains(adapters, name) {
+				errs = append(errs, fmt.Errorf("hosts.%s: %w", kind, unknownHost(kind, name, adapters)))
 			}
 		}
 	}
@@ -147,7 +171,7 @@ func selectHost[H revier.Host](ctx context.Context, kind string, want, defaults 
 			}
 			h, ok := adapters[name]
 			if !ok {
-				return none, fmt.Errorf("unknown %s host %q", kind, name)
+				return none, fmt.Errorf("hosts.%s: %w", kind, unknownHost(kind, name, slices.Sorted(maps.Keys(adapters))))
 			}
 			if err := h.Probe(ctx); err != nil {
 				errs = append(errs, fmt.Errorf("%s: %w", name, err))

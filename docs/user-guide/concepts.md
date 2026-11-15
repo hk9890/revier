@@ -26,13 +26,12 @@ command left it. See [Which kind to declare](#which-kind-to-declare).
 
 revier drives two kinds of program, called hosts:
 
-- **The runtime host** runs terminals: kitty, tmux or herdr, or the
-  experimental hc. It opens the workspace and its tabs, and lets a probe read
-  each panel.
+- **The runtime host** runs terminals: kitty or tmux, or the experimental
+  hc. It opens the workspace and its tabs, and lets a probe read each panel.
 - **The window host** manages desktop windows: GNOME, through `wctl`. It opens
   and raises window targets, and tells which window has the focus.
 
-revier uses the first host of each kind it finds: kitty, tmux, then herdr, and GNOME
+revier uses the first host of each kind it finds: kitty, then tmux, and GNOME
 ([Hosts](configuration.md#hosts)). There is no daemon: each keypress is one
 revier process.
 
@@ -123,9 +122,8 @@ The fields of each kind are in [Targets](configuration.md#targets) and
 ## Home, tabs and panels
 
 Each project has one home target: the workspace you return to. In kitty it is
-an OS window. In tmux it is a session. In herdr it is a workspace. A
-workspace holds tabs, and a tab holds panels. A panel is one pane: an agent,
-a shell or another tool.
+an OS window. In tmux it is a session. A workspace holds tabs, and a tab
+holds panels. A panel is one pane: an agent, a shell or another tool.
 
 ## Agents
 
@@ -146,7 +144,7 @@ other screen that lists agents.
 
 A program that no probe knows is not an agent, and revier does not list it.
 revier reads [Claude Code](integrations/claude-code.md) with nothing to
-install. Outside herdr, opencode is always `unknown`. To read another harness, write a
+install. opencode is always `unknown`. To read another harness, write a
 [probe](extending/probes.md).
 
 ## Attached windows

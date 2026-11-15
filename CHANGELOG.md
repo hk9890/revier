@@ -6,6 +6,18 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## Unreleased
+
+- **Action required: revier no longer runs workspaces in herdr.** Name
+  `kitty`, `tmux` or `hc` in `[hosts] runtime` in place of `herdr`. A command
+  that reaches `herdr` in that list stops with `the herdr runtime was removed;
+  use hc, kitty or tmux`, and `revier doctor` reports it wherever the list
+  names it. With no `runtime` set, revier now tries kitty, then tmux, and
+  finds no runtime on a machine that has only herdr.
+- A name in `[hosts]` that revier does not know now stops with
+  `hosts.runtime: unknown host "<name>"; known: ...` (or `hosts.window: ...`),
+  in place of `unknown runtime host "<name>"`.
+
 ## v0.27.0
 
 - **A Claude Code agent's row shows its context tokens and the minutes left

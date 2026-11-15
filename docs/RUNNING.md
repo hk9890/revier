@@ -267,23 +267,6 @@ tmux -L revier-drive show-options -s -v @revier-focus   # the session Focus left
 `-L revier-drive` is what keeps this off the user's default server. A tmux
 command without it addresses their real sessions.
 
-## Run a private herdr server
-
-Start herdr with its config, state and socket in a scratch directory. The
-user's herdr is at `~/.config/herdr/herdr.sock`; every command below names the
-scratch socket instead. Keep the directory short: a socket path over 107 bytes
-cannot be bound. Give the panes `sh`: a pane runs `$SHELL`, and the user's
-shell startup files can attach their tmux.
-
-```bash
-D=$(mktemp -d /tmp/hd.XXXX)
-hd() { env -u HERDR_ENV -u HERDR_SESSION -u HERDR_CONFIG_PATH SHELL=/bin/sh XDG_CONFIG_HOME=$D XDG_STATE_HOME=$D HERDR_SOCKET_PATH=$D/s.sock "$@"; }
-hd setsid herdr server </dev/null >/dev/null 2>&1 &   # headless, no client attaches
-hd herdr workspace create --label demo --no-focus
-hd herdr api snapshot | jq .                          # what Instances reads, in one request
-hd herdr server stop; rm -rf "$D"
-```
-
 ## Run a private hc core
 
 Any `hc` command starts a core when none answers its socket, so set the

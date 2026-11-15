@@ -38,22 +38,7 @@ jobs:
       - name: L3 adapter parsing
         run: CGO_ENABLED=1 go test -race -tags=integration ./...
 
-      # herdr is pinned, unlike tmux: it is pre-1.0 and the host checks its
-      # release, not its API's protocol, so a new release is taken on purpose,
-      # with new fixtures (herdr-latest.yml runs the latest one weekly). The
-      # digest is the one GitHub lists for the release asset.
-      - name: Install herdr
-        env:
-          HERDR_VERSION: v0.9.5
-          HERDR_SHA256: 14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d
-        run: |
-          mkdir -p "$RUNNER_TEMP/herdr"
-          curl -fsSL -o "$RUNNER_TEMP/herdr/herdr" "https://github.com/herdrdev/herdr/releases/download/$HERDR_VERSION/herdr-linux-x86_64"
-          echo "$HERDR_SHA256  $RUNNER_TEMP/herdr/herdr" | sha256sum -c -
-          chmod +x "$RUNNER_TEMP/herdr/herdr"
-          echo "$RUNNER_TEMP/herdr" >> "$GITHUB_PATH"
-
-      # hc (herdr-core) is pinned as herdr is: it is pre-1.0, and a new release
+      # hc (herdr-core) is pinned, unlike tmux: it is pre-1.0, and a new release
       # is taken on purpose, with new fixtures. The URL and digest are the
       # linux-x86_64 entry of the release's manifest.json on releases.herdr.dev.
       - name: Install hc
@@ -68,13 +53,12 @@ jobs:
           ln -s herdr-core "$RUNNER_TEMP/hc/hc"
           echo "$RUNNER_TEMP/hc" >> "$GITHUB_PATH"
 
-      # ubuntu-latest ships tmux and sh; herdr and hc come from the steps
-      # above. Every tmux, herdr or hc test starts a private server on its own
-      # socket and stops it in cleanup.
+      # ubuntu-latest ships tmux and sh; hc comes from the step above. Every
+      # tmux or hc test starts a private server on its own socket and stops it
+      # in cleanup.
       - name: L4 live
         run: |
           tmux -V
-          herdr --version
           hc --version
           CGO_ENABLED=1 go test -race -tags=live -timeout=300s ./...
 
