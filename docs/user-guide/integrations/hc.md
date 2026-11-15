@@ -33,8 +33,7 @@ changes until you name hc.
    runtime = ["hc"]
    ```
 
-3. Run `revier doctor`. Its last line says `runtime hc is shown by the kitty
-   view`.
+3. Run `revier doctor`. It says `runtime hc is shown by the kitty view`.
 
 Your project files stay as they are. A press opens the workspace in a kitty
 window of its title, with its tabs in their order, the active tab current,

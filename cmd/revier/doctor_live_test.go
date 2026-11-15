@@ -1,6 +1,6 @@
 //go:build live
 
-// Layer L4 for `revier doctor`: scripts named systemd-run and loginctl first
+// Layer L4 for `revier doctor`: scripts named systemd-run, systemctl and loginctl first
 // on PATH say whether the user lingers. No service manager is reached, and
 // the kitty and hc on PATH are never run.
 package main
@@ -32,6 +32,7 @@ func TestDoctorSaysTheHcCoreEndsAtTheLastLogout(t *testing.T) {
 		for name, body := range map[string]string{
 			"herdr-core":  "exit 1",
 			"systemd-run": "exit 0",
+			"systemctl":   "exit 0",
 			"loginctl":    "echo " + c.linger,
 		} {
 			if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {

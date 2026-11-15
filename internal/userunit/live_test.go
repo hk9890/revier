@@ -1,6 +1,6 @@
 //go:build live
 
-// Layer L4: systemd-run, systemctl and the program are real processes,
+// Layer L4: systemd-run, systemctl, loginctl and the program are real processes,
 // scripts first on PATH that record how they were called. No service manager
 // is reached.
 package userunit_test
@@ -109,21 +109,24 @@ func TestRunNamesTheCommandThatFailed(t *testing.T) {
 }
 
 // A unit outlives the user's last session only where the user lingers, as
-// loginctl says. Where Start would start the program detached, or loginctl
-// says nothing it knows, the answer is unknown.
+// loginctl says. Where Start would start the program detached, as with no
+// service manager that answers, or loginctl says nothing it knows, the
+// answer is unknown.
 func TestAUnitOutlivesTheLastSessionWhereTheUserLingers(t *testing.T) {
 	for _, tc := range []struct {
 		name           string
 		systemdRun     bool
+		systemctl      string // the exit status of show-environment
 		loginctl       string // the script's body; "" for none on PATH
 		lingers, known bool
 	}{
-		{"lingers", true, "echo yes", true, true},
-		{"does not linger", true, "echo no", false, true},
-		{"no systemd-run", false, "echo no", false, false},
-		{"no loginctl", true, "", false, false},
-		{"loginctl fails", true, "exit 1", false, false},
-		{"loginctl says something else", true, "echo maybe", false, false},
+		{"lingers", true, "0", "echo yes", true, true},
+		{"does not linger", true, "0", "echo no", false, true},
+		{"no systemd-run", false, "0", "echo no", false, false},
+		{"no service manager", true, "1", "echo no", false, false},
+		{"no loginctl", true, "0", "", false, false},
+		{"loginctl fails", true, "0", "exit 1", false, false},
+		{"loginctl says something else", true, "0", "echo maybe", false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			bin, argv := t.TempDir(), filepath.Join(t.TempDir(), "argv")
@@ -135,6 +138,7 @@ func TestAUnitOutlivesTheLastSessionWhereTheUserLingers(t *testing.T) {
 			if tc.systemdRun {
 				write("systemd-run", "exit 0")
 			}
+			write("systemctl", "exit "+tc.systemctl)
 			if tc.loginctl != "" {
 				write("loginctl", "echo \"$@\" > '"+argv+"'\n"+tc.loginctl)
 			}

@@ -56,9 +56,13 @@ func Start(ctx context.Context, u Unit, argv []string, detached func(context.Con
 // Outlives reports whether a unit Start starts outlives the user's last
 // login session: the service manager stops with that session, and every unit
 // in it, unless the user lingers. known is false where Start would start the
-// program detached, as with no systemd-run, and where loginctl cannot say.
+// program detached, as with no systemd-run or no service manager that
+// answers, and where loginctl cannot say.
 func Outlives(ctx context.Context) (lingers, known bool) {
 	if _, err := exec.LookPath("systemd-run"); err != nil {
+		return false, false
+	}
+	if exec.CommandContext(ctx, "systemctl", "--user", "--quiet", "show-environment").Run() != nil {
 		return false, false
 	}
 	out, err := exec.CommandContext(ctx, "loginctl", "show-user", strconv.Itoa(os.Getuid()), "--property=Linger", "--value").Output()
