@@ -87,7 +87,7 @@ you start yourself with `hc server start` takes your shell's environment.
 Without systemd, a core revier starts takes the environment of the revier
 command, without the variables of the terminal, the multiplexer, the Claude
 Code session or the revier command it ran in, such as `KITTY_WINDOW_ID`,
-`TMUX` or `CLAUDE_CODE_SESSION_ID`. hc cannot remove a
+`TMUX` (a tmux you run revier in) or `CLAUDE_CODE_SESSION_ID`. hc cannot remove a
 variable, so revier sets them empty in each program: the Claude Code
 session's always, and each of the others only when the core holds it, since
 an empty one reads as set. A core that `hc server restart` restarted keeps
@@ -119,5 +119,7 @@ environment, start it yourself with `hc server start`.
 - Terminals on a machine hc added are not listed. hc still asks each such
   machine on every listing, and one that does not answer slows the listing
   by up to 3 s.
+- A panel's `title` is not shown: the terminal's title is the one its
+  program sets.
 - A terminal you attach to by hand in a kitty of your own is not the
   workspace's window: a press opens the workspace's own window beside it.

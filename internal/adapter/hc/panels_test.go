@@ -291,8 +291,8 @@ func TestARefOfAnotherCoreIsRefused(t *testing.T) {
 	if _, err := h.ReadPanel(t.Context(), other, "t1", false); err == nil {
 		t.Error("ReadPanel passed")
 	}
-	if err := h.ClosePanel(t.Context(), revier.TargetRef{Host: "tmux", ID: "$1"}, "t1"); err == nil {
-		t.Error("ClosePanel of a tmux ref passed")
+	if err := h.ClosePanel(t.Context(), revier.TargetRef{Host: "kitty", ID: "1"}, "t1"); err == nil {
+		t.Error("ClosePanel of a kitty ref passed")
 	}
 	if calls := c.called(); slices.ContainsFunc(calls, func(m string) bool { return m != "hello" }) {
 		t.Errorf("hc asked %q, want hellos alone", calls)

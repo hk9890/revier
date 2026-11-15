@@ -8,6 +8,18 @@ Each section is also the text of its release on the
 
 ## Unreleased
 
+- **Action required: revier no longer runs workspaces in tmux.** Name
+  `kitty` or `hc` in `[hosts] runtime` in place of `tmux`, and remove `tmux`
+  from `[hosts] view`. A command that reaches `tmux` there stops with `the
+  tmux runtime was removed; use hc or kitty` (or `the tmux view was removed;
+  use kitty`), and `revier doctor` reports it wherever the list names it.
+  With no `runtime` set, revier now tries kitty alone. Close what runs in
+  tmux with `revier shutdown` before you switch, and reopen it with `revier
+  session restore`. Remove the tmux keys that ran `revier agent new --panel`
+  and `revier shell new --panel`. Over ssh, or with no display, run hc with
+  `view = ["none"]` and `revier open --attach`; Ghostty works the same way.
+- **The config screen (alt+c) offers hc as a runtime host**, beside kitty and
+  `none`.
 - **Action required: the trigger key no longer switches a revier you run in
   a terminal of your own.** With that terminal focused, the key opens or
   raises the popup. Where the trigger key is alt+space, click `agents` in
@@ -24,11 +36,11 @@ Each section is also the text of its release on the
   kitty. A variable your agents need, such as `CLAUDE_CONFIG_DIR`, now comes
   from the session: set it with `systemctl --user set-environment`.
 - **Action required: revier no longer runs workspaces in herdr.** Name
-  `kitty`, `tmux` or `hc` in `[hosts] runtime` in place of `herdr`. A command
+  `kitty` or `hc` in `[hosts] runtime` in place of `herdr`. A command
   that reaches `herdr` in that list stops with `the herdr runtime was removed;
-  use hc, kitty or tmux`, and `revier doctor` reports it wherever the list
-  names it. With no `runtime` set, revier now tries kitty, then tmux, and
-  finds no runtime on a machine that has only herdr.
+  use hc or kitty`, and `revier doctor` reports it wherever the list
+  names it. With no `runtime` set, revier finds no runtime on a machine that
+  has only herdr.
 - **Under hc, your workspaces open in kitty, and your agents outlive it.**
   With `runtime = ["hc"]` under `[hosts]`, a press opens the workspace in a
   kitty window with its tabs, the active tab current, and its agent and shell
@@ -41,7 +53,7 @@ Each section is also the text of its release on the
   setting, kitty runs your workspaces as before. Images are gone once a
   window opens again, and a program with a lot of output lags in its window.
 - **`[hosts] view` names what shows your workspaces.** Left out, kitty
-  shows the kitty runtime and tmux the tmux runtime, as before, and kitty
+  shows the kitty runtime, as before, and kitty
   shows hc where kitty and a display are, else nothing shows it. `view = ["none"]` shows nothing: revier opens and lists
   your workspaces and focuses none. A view that cannot show the runtime in
   use stops with an error, and `revier doctor` reports an unknown name.

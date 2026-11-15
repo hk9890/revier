@@ -1,8 +1,6 @@
-# tmux is deliberately NOT pinned here. It is the substrate the
-# live test layer drives, and the point of that layer is to run against whatever
-# version is installed: pinning tmux would have hidden the format-output
-# difference between 3.4 and 3.7 that CI caught and a pinned local build never
-# would. Tests skip when a substrate is absent (docs/TESTING.md).
+# hc, the substrate the live test layer drives, is not a mise tool: CI pins
+# it (.github/workflows/ci.yml), and a test skips when it is absent
+# (docs/TESTING.md).
 [tools]
 go = "1.27.2"
 "go:gotest.tools/gotestsum" = "1.13.0"
@@ -77,7 +75,7 @@ run = "gotestsum --format pkgname-and-test-fails -- -race -tags=integration ./..
 CGO_ENABLED = "1"
 
 [tasks."test:live"]
-description = "L4 real processes, headless: tmux and hc on private sockets, and shell scripts. A test skips when its tool is not installed."
+description = "L4 real processes, headless: hc on private sockets, and shell scripts. A test skips when its tool is not installed."
 run = "gotestsum --format pkgname-and-test-fails -- -race -tags=live -timeout=120s ./..."
 [tasks."test:live".env]
 CGO_ENABLED = "1"

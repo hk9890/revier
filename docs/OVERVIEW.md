@@ -9,8 +9,8 @@ A findability map: where things live, and how to search for them.
 | `pkg/revier/` | The ports and every type that crosses them, the project model included. Public, because out-of-tree adapters import it. |
 | `internal/core/` | All policy: resolution, matching, run-or-raise, toggle-back, survey. |
 | `internal/app/` | The use cases that cross stores, written once for both surfaces: create, link and rename a project, run an action, save a session. |
-| `internal/adapter/<tool>/` | One tool each. No policy. `kitty` and `tmux` (runtime, and the view of itself; `kitty` also the view over hc and the terminal keys), `hc` (runtime, with tabs as labels; opt-in, a prototype), `gnome` (window and key binder), `proc` (what a link on another machine started here, a process's parent on this machine, and the agent session variables a server must not hand on), `claude` (probe, and the assistant launcher), `opencode` and `execprobe` (probes), `ssh` (remote). |
-| `internal/panelstart/` | What the tmux and hc hosts and the core say about a panel whose command does not start: not on the PATH the runtime starts it with, or ended at once. |
+| `internal/adapter/<tool>/` | One tool each. No policy. `kitty` (runtime, the view of itself and of hc, and the terminal keys), `hc` (runtime, with tabs as labels; opt-in, a prototype), `gnome` (window and key binder), `proc` (what a link on another machine started here, a process's parent on this machine, and the agent session variables a server must not hand on), `claude` (probe, and the assistant launcher), `opencode` and `execprobe` (probes), `ssh` (remote). |
+| `internal/panelstart/` | What the hc host and the core say about a panel whose command does not start: not on the PATH the runtime starts it with, or ended at once. |
 | `internal/config/` | TOML loading and the validation that rejects a project before a keypress can fail on it; the template `revier new` writes. |
 | `internal/state/` | What revier learned at runtime: the last project, and hand-attached instances. |
 | `internal/ledger/` | The state file and the event file as the core reads and writes them, and the state record's line for each change a state write made: the one caller of the state lock. |
@@ -32,7 +32,7 @@ A findability map: where things live, and how to search for them.
 | `internal/tui/` | The TUI surface: the project list, the pane, the dialogs and the config screen. |
 | `internal/theme/` | Every colour and glyph the TUI draws with, named by role. |
 | `internal/build/` | The version, commit and date that `.goreleaser.yaml` and `.mise.toml` stamp in by ldflags. |
-| `scripts/drive/` | Manual headless driver. |
+| `scripts/drive/` | Manual headless driver, on an hc core of its own. |
 | `scripts/release-notes` | One version's `CHANGELOG.md` section, the text of its GitHub release. |
 | `scripts/demo/` | The README's clips, `.github/assets/*.webp`: the recording scripts run here, `guest/` on a VM's GNOME desktop. |
 | `docs/user-guide/` | The [user guide](user-guide/README.md). The package carries its reference pages (`configuration.md`, `extending/`) into the binary, which `revier assist --reference` prints. |

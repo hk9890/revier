@@ -503,7 +503,7 @@ func (f *Fake) Open(_ context.Context, r revier.Realization) (revier.TargetRef, 
 		return revier.TargetRef{}, fmt.Errorf("%s: realization has no launch argv and no panels", f.name)
 	}
 	// Honour the invariant every real host must honour: what Open creates,
-	// this realization's Match finds. Name wins when set, as it does for tmux;
+	// this realization's Match finds. Name wins when set, as it does for hc;
 	// otherwise the match patterns describe the instance.
 	title := literal(r.Match.Title)
 	if r.Name != "" {

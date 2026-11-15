@@ -341,16 +341,17 @@ func TestDoctorAdvisesALinkTargetTheRemoteTable(t *testing.T) {
 // doctor reports it, in any position: after a host that works and after
 // none too, where host selection never reaches it.
 func TestDoctorReportsAnUnknownHostName(t *testing.T) {
-	configRoot(t, "[hosts]\nruntime = [\"none\", \"ghostty\", \"herdr\"]\nview = [\"none\", \"ghostty\"]\nwindow = [\"sway\"]\n", map[string]string{"sound.toml": sound})
+	configRoot(t, "[hosts]\nruntime = [\"none\", \"ghostty\", \"herdr\", \"tmux\"]\nview = [\"none\", \"ghostty\"]\nwindow = [\"sway\"]\n", map[string]string{"sound.toml": sound})
 
 	var out strings.Builder
 	if err := cmdDoctor(&out, nil); !errors.As(err, new(problemsFound)) {
 		t.Fatalf("err = %v, want the silent non-zero end", err)
 	}
 	for _, want := range []string{
-		`hosts.runtime unknown host "ghostty"; known: hc, kitty, tmux, none`,
-		`hosts.runtime the herdr runtime was removed; use hc, kitty or tmux`,
-		`hosts.view    unknown host "ghostty"; known: kitty, tmux, none`,
+		`hosts.runtime unknown host "ghostty"; known: hc, kitty, none`,
+		`hosts.runtime the herdr runtime was removed; use hc or kitty`,
+		`hosts.runtime the tmux runtime was removed; use hc or kitty`,
+		`hosts.view    unknown host "ghostty"; known: kitty, none`,
 		`hosts.window  unknown host "sway"; known: gnome, none`,
 		"1 project, 1 file with problems",
 	} {

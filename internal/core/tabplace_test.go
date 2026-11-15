@@ -62,7 +62,7 @@ func placeTab(t *testing.T, c *core.Core, projects []core.Project, req core.TabR
 // window and the last project both answer other. It returns demo's home.
 func focusedOther(t *testing.T) (*core.Core, *hosttest.FakeRuntime, []core.Project, revier.TargetRef) {
 	t.Helper()
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	home := rt.Add("demo", "")
 	rt.SetFocus(rt.Add("other", ""))
 	c := &core.Core{Runtime: rt, View: rt, Ledger: &ledger{st: state.State{Current: "other"}}}
@@ -133,7 +133,7 @@ func TestPlaceTabTakesTheTargetAfterTheColonElseTheKindsTarget(t *testing.T) {
 			Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}, {Kind: revier.PanelShell}}}},
 		{Name: "side", Runtime: &revier.Realization{Name: "side", Match: revier.Match{Title: "^side$"}}},
 	}})
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	home, side := rt.Add("demo", ""), rt.Add("side", "")
 	c := &core.Core{Runtime: rt, View: rt}
 	projects := []core.Project{demo}
@@ -157,7 +157,7 @@ func TestPlaceTabShellRefusesAProjectWithNoHome(t *testing.T) {
 	homeless := prepared(t, revier.Project{Name: "homeless", Path: t.TempDir(), Targets: []revier.Target{
 		{Name: "side", Runtime: &revier.Realization{Name: "side", Match: revier.Match{Title: "^side$"}}},
 	}})
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	rt.Add("side", "")
 	c := &core.Core{Runtime: rt, View: rt}
 	req := core.TabRequest{Kind: revier.PanelShell, Project: "homeless"}
@@ -187,7 +187,7 @@ func TestPlaceTabOfARemoteProjectOpensHereAndDropsDir(t *testing.T) {
 			Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}, {Kind: revier.PanelShell}}}},
 	}})
 	remote := hosttest.NewRemote("buildbox")
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	pane := rt.Add("far", "", revier.Panel{ID: "%7", Kind: revier.PanelTool})
 	c := &core.Core{Runtime: rt, View: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
 	projects := []core.Project{placeProject(t, "demo"), far}

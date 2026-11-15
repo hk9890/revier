@@ -42,8 +42,8 @@ territory.
 **Open a project and its tools**
 
 - **Search and open a workspace.** Type to fuzzy-filter the project list,
-  then press Enter. revier opens the project's workspace as a kitty window or
-  a tmux session, with its tabs, or raises it if it is open. From a shell,
+  then press Enter. revier opens the project's workspace as a kitty window,
+  with its tabs, or raises it if it is open. From a shell,
   run `revier open demo`.
   See [Tabs](docs/user-guide/configuration.md#tabs).
 - **One key per tool.** Give the editor, the ticket viewer or any other
@@ -92,9 +92,9 @@ territory.
 
 Early, but usable. Linux only.
 
-- **Terminals:** kitty and tmux, and hc as an experiment, shown in kitty, whose
-  agents outlive the kitty window. Ghostty works
-  through tmux.
+- **Terminals:** kitty, and hc as an experiment, shown in kitty, whose
+  agents outlive the kitty window, or with no display, as over ssh. Ghostty
+  works through hc.
 - **Desktop:** GNOME, for window targets and desktop keys.
 - **Agents:** Claude Code 2.1.212 or newer reports its state; opencode reports
   none. An external probe adds any other tool.
@@ -146,7 +146,7 @@ revier                         # every project, its agent state, its targets
 The [user guide](docs/user-guide/README.md) covers the rest: getting started,
 the concepts, the TUI and every key, projects, agents, projects on another
 machine, the configuration reference, every command, troubleshooting,
-statuses and agent probes, and how to set revier up with kitty, tmux,
+statuses and agent probes, and how to set revier up with kitty,
 hc, Ghostty, GNOME, Claude Code and opencode.
 
 ## Building

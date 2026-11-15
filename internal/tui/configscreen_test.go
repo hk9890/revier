@@ -182,12 +182,12 @@ func TestTheConfigScreenWritesTheTriggerKey(t *testing.T) {
 func TestTheConfigScreenSwitchesTheRuntime(t *testing.T) {
 	root := configRoot(t, "")
 	_, _, c, projects := world(t, 1)
-	tmux := hosttest.NewRuntime("tmux")
+	hc := hosttest.NewRuntime("hc")
 	var asked []string
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20).
-		WithRuntimes([]string{"tmux", "none"}, func(_ context.Context, want []string) (revier.Runtime, revier.View, error) {
+		WithRuntimes([]string{"hc", "none"}, func(_ context.Context, want []string) (revier.Runtime, revier.View, error) {
 			asked = want
-			return tmux, tmux, nil
+			return hc, hc, nil
 		})
 
 	m, cmd := press(onRuntimeRow(m), "right")
@@ -198,13 +198,13 @@ func TestTheConfigScreenSwitchesTheRuntime(t *testing.T) {
 		t.Errorf("config.toml = %q before the probe answered, want it untouched", got)
 	}
 	m = run(m, cmd)
-	if len(asked) != 1 || asked[0] != "tmux" {
-		t.Errorf("probed %v, want [tmux]", asked)
+	if len(asked) != 1 || asked[0] != "hc" {
+		t.Errorf("probed %v, want [hc]", asked)
 	}
-	if got, want := fileText(t, config.File(root)), "[hosts]\nruntime = [\"tmux\"]\n"; got != want {
+	if got, want := fileText(t, config.File(root)), "[hosts]\nruntime = [\"hc\"]\n"; got != want {
 		t.Errorf("config.toml = %q, want %q", got, want)
 	}
-	if !strings.Contains(screen(m), "in use: tmux") {
+	if !strings.Contains(screen(m), "in use: hc") {
 		t.Errorf("config screen does not show the new runtime:\n%s", screen(m))
 	}
 }
@@ -215,8 +215,8 @@ func TestTheConfigScreenKeepsARuntimeThatDoesNotProbe(t *testing.T) {
 	root := configRoot(t, "")
 	_, _, c, projects := world(t, 1)
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20).
-		WithRuntimes([]string{"tmux"}, func(context.Context, []string) (revier.Runtime, revier.View, error) {
-			return nil, nil, errors.New("tmux: not installed")
+		WithRuntimes([]string{"hc"}, func(context.Context, []string) (revier.Runtime, revier.View, error) {
+			return nil, nil, errors.New("hc: not installed")
 		})
 
 	m, cmd := press(onRuntimeRow(m), "right")
@@ -239,7 +239,7 @@ func TestTheConfigScreenStepsPastARuntimeThatDoesNotProbe(t *testing.T) {
 	_, _, c, projects := world(t, 1)
 	var asked [][]string
 	m := resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20).
-		WithRuntimes([]string{"kitty", "tmux"}, func(_ context.Context, want []string) (revier.Runtime, revier.View, error) {
+		WithRuntimes([]string{"kitty", "hc"}, func(_ context.Context, want []string) (revier.Runtime, revier.View, error) {
 			asked = append(asked, want)
 			if len(want) == 1 && want[0] == "kitty" {
 				return nil, nil, errors.New("kitty: no remote control")
@@ -252,13 +252,13 @@ func TestTheConfigScreenStepsPastARuntimeThatDoesNotProbe(t *testing.T) {
 	m = run(m, cmd)
 	m, cmd = press(m, "right")
 	m = run(m, cmd)
-	if !strings.Contains(screen(m), "in use: tmux") {
-		t.Errorf("config screen does not show tmux in use:\n%s", screen(m))
+	if !strings.Contains(screen(m), "in use: hc") {
+		t.Errorf("config screen does not show hc in use:\n%s", screen(m))
 	}
-	if len(asked) != 2 || asked[1][0] != "tmux" {
-		t.Fatalf("probed %v, want kitty and then tmux", asked)
+	if len(asked) != 2 || asked[1][0] != "hc" {
+		t.Fatalf("probed %v, want kitty and then hc", asked)
 	}
-	if got, want := fileText(t, config.File(root)), "[hosts]\nruntime = [\"tmux\"]\n"; got != want {
+	if got, want := fileText(t, config.File(root)), "[hosts]\nruntime = [\"hc\"]\n"; got != want {
 		t.Errorf("config.toml = %q, want %q", got, want)
 	}
 }

@@ -1,7 +1,7 @@
 //go:build live
 
-// Layer L4 for `revier shutdown`: close what a real tmux server holds, and
-// save the session first, with no window host.
+// Layer L4 for `revier shutdown`: close what a real hc core runs, and save
+// the session first, with no window host.
 package main
 
 import (
@@ -21,6 +21,7 @@ import (
 func agentStatus(t *testing.T, status string) {
 	t.Helper()
 	fileConversation(t, "abc-123")
+	running(t, "work", "claude")
 	for _, pid := range agentPanes(t) {
 		body := `{"pid": ` + pid + `, "kind": "interactive", "sessionId": "abc-123", "status": "` + status + `"}`
 		if err := os.WriteFile(filepath.Join(sessionsDir, pid+".json"), []byte(body), 0o644); err != nil {
@@ -136,8 +137,8 @@ func TestShutdownOfOneProjectLeavesTheOther(t *testing.T) {
 	}
 }
 
-// Only the agents: the agent's pane closes and the workspace stays with its
-// shell.
+// Only the agents: the agent's terminal closes and the workspace stays with
+// its shell.
 func TestShutdownAgentsKeepsTheWorkspace(t *testing.T) {
 	work(t)
 	agentStatus(t, "idle")

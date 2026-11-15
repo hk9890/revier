@@ -223,7 +223,7 @@ func (r *boundedRuntime) Instances(ctx context.Context) ([]revier.Instance, erro
 // `revier | grep` prints the table under the bound `revier list` has: a
 // linked host whose remote revier hangs must not block the pipe for good.
 func TestThePipedTableHasTheBoundOfList(t *testing.T) {
-	rt := &boundedRuntime{FakeRuntime: hosttest.NewRuntime("tmux")}
+	rt := &boundedRuntime{FakeRuntime: hosttest.NewRuntime("hc")}
 	a := tuiApp(t.TempDir())
 	a.stateRoot = t.TempDir()
 	a.core = &core.Core{Runtime: rt, View: rt}

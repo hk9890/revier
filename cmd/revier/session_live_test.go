@@ -1,7 +1,8 @@
 //go:build live
 
 // Layer L4 for `revier session`: save the desktop, lose it the way a reboot
-// does, and restore it - against a real tmux server, with no window host.
+// does, and restore it - against a real hc core, shown in a fake view, with no
+// window host.
 //
 // This is the layer that can prove the feature at all. L2 pins the policy
 // against a fake, but "the workspace came back, with its agent on the
@@ -20,24 +21,21 @@ import (
 	"github.com/hk9890/revier/internal/config"
 )
 
-// markConversation makes the fake claude list the agent's pane as holding a
-// filed conversation, by the pid tmux reports for that pane - the pid Claude
-// Code lists for its own process when it is the pane's command.
+// markConversation makes the fake claude list the agent's terminal as
+// holding a filed conversation, by the pid hc reports for that terminal's
+// foreground process - the pid Claude Code lists for its own process when it
+// is the terminal's command.
 func markConversation(t *testing.T, id string) {
 	t.Helper()
 	fileConversation(t, id)
-	out := tmuxRun(t, "list-panes", "-a", "-F", "#{pane_pid} #{pane_current_command}")
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-		pid, cmd, ok := strings.Cut(line, " ")
-		if ok && cmd == "claude" {
-			session := `{"pid": ` + pid + `, "kind": "interactive", "sessionId": "` + id + `", "status": "idle"}`
-			if err := os.WriteFile(filepath.Join(sessionsDir, pid+".json"), []byte(session), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			return
-		}
+	pids := agentPanes(t)
+	if len(pids) == 0 {
+		t.Fatal("no terminal is running the agent")
 	}
-	t.Fatalf("no pane is running the agent:\n%s", out)
+	session := `{"pid": ` + pids[0] + `, "kind": "interactive", "sessionId": "` + id + `", "status": "idle"}`
+	if err := os.WriteFile(filepath.Join(sessionsDir, pids[0]+".json"), []byte(session), 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // listConversation makes the fake claude list the process pid as holding the
@@ -102,15 +100,15 @@ func TestSessionSaveThenRestoreAfterAReboot(t *testing.T) {
 // Every agent is recorded, with its conversation and directory, and every one
 // comes back on its conversation in the directory it worked in: the declared
 // agent in the workspace's layout, and each agent opened beside it in a tab of
-// its own, a window of the workspace's session (decisions.md D145).
-func TestSessionRestoreOnTmuxBringsBackEveryAgent(t *testing.T) {
+// its own, the terminals of a tab's token (decisions.md D145, D179).
+func TestSessionRestoreOnHcBringsBackEveryAgent(t *testing.T) {
 	args := work(t)
 	agent := strings.TrimSuffix(args, ".args")
 	worktree, other := t.TempDir(), t.TempDir()
 
-	// Two more agents, opened by hand in the workspace's window.
-	for _, dir := range []string{other, other} {
-		tmuxRun(t, "split-window", "-t", "work", "-c", dir, "bash", "-c", `exec -a claude bash "$0" "$@"`, agent)
+	// Two more agents, each in a tab of its own.
+	for range 2 {
+		capture(t, "agent", "new", "-p", "work", "--dir", other, "--no-focus")
 	}
 	var pids []string
 	eventually(t, "three agent panes", func() bool {
@@ -148,11 +146,9 @@ func TestSessionRestoreOnTmuxBringsBackEveryAgent(t *testing.T) {
 	if !slices.Equal(started, want) {
 		t.Errorf("agents started as %q, want %q", started, want)
 	}
-	if n := len(agentPanes(t)); n != 3 {
-		t.Errorf("the workspace came back with %d agents, want 3", n)
-	}
-	if windows := strings.Count(tmuxRun(t, "list-windows", "-t", "work"), "\n"); windows != 3 {
-		t.Errorf("the workspace has %d windows, want its layout and a tab for each of the two", windows)
+	eventually(t, "the workspace back with 3 agents", func() bool { return len(agentPanes(t)) == 3 })
+	if n := len(tabs(instance(t, "work"))); n != 3 {
+		t.Errorf("the workspace has %d tabs, want its layout and a tab for each of the two", n)
 	}
 }
 

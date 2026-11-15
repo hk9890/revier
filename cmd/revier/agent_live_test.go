@@ -1,7 +1,7 @@
 //go:build live
 
-// Layer L4 for `revier agent`: wait and prompt against real tmux panes, with
-// no window host. The agent is a stand-in that reports its state the way Claude
+// Layer L4 for `revier agent`: wait and prompt against real hc terminals,
+// with no window host. The agent is a stand-in that reports its state the way Claude
 // Code does, by rewriting its file in the sessions directory the fake claude
 // lists, and runs under the name claude so the Claude probe claims it.
 package main
@@ -9,6 +9,7 @@ package main
 import (
 	"errors"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,13 +67,16 @@ func TestAgentPromptRefusals(t *testing.T) {
 	}
 }
 
-// wedgedTmux points revier at a tmux that never answers: it is on PATH, so it
-// is selected, and every call to it hangs. It stands in for a server that
-// stopped responding, which no host call times out on by itself.
-func wedgedTmux(t *testing.T) {
+// wedgedCore points revier at an hc core that never answers: a socket that
+// accepts every connection and says nothing on it, with hc on PATH, so hc is
+// selected and every call to it hangs. It stands in for a core that stopped
+// responding, which no host call times out on by itself.
+func wedgedCore(t *testing.T) {
 	t.Helper()
-	onPath(t, "tmux", "exec sleep 10")
-	root := configRoot(t, "[hosts]\nruntime = [\"tmux\"]\nwindow = [\"none\"]\n", map[string]string{
+	onPath(t, "herdr-core", "exit 1")
+	sock := listen(t, func(conn net.Conn) { t.Cleanup(func() { _ = conn.Close() }) })
+	t.Setenv("HC_SOCKET", sock)
+	root := configRoot(t, "[hosts]\nruntime = [\"hc\"]\nview = [\"none\"]\nwindow = [\"none\"]\n", map[string]string{
 		"demo.toml": strings.ReplaceAll(projectTOML, "%PATH%", t.TempDir()),
 	})
 	t.Setenv("REVIER_STATE_HOME", filepath.Join(root, "state"))
@@ -82,7 +86,7 @@ func wedgedTmux(t *testing.T) {
 // never answers the lookup still ends the wait on time, with the timeout's
 // status.
 func TestAgentWaitTimesOutOnAHostThatNeverAnswers(t *testing.T) {
-	wedgedTmux(t)
+	wedgedCore(t)
 	start := time.Now()
 	err := run(io.Discard, []string{"agent", "wait", "demo", "--until", "idle", "--timeout", "0.3"})
 	if !errors.Is(err, errWaitTimeout) {
@@ -96,7 +100,7 @@ func TestAgentWaitTimesOutOnAHostThatNeverAnswers(t *testing.T) {
 // A prompt has a bound of its own, so a host that never answers fails it
 // rather than holding the script that called it for good.
 func TestAgentPromptGivesUpOnAHostThatNeverAnswers(t *testing.T) {
-	wedgedTmux(t)
+	wedgedCore(t)
 	old := promptWait
 	promptWait = 300 * time.Millisecond
 	t.Cleanup(func() { promptWait = old })

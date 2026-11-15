@@ -283,8 +283,8 @@ func TestANewShellWhoseShellEndedBeforeItsFocusSaysItExited(t *testing.T) {
 var errPaneGone = errors.New("can't find pane")
 
 // endingTab is a runtime whose tab commands exit as soon as they start, as
-// `true` does on tmux: the tab's panel is gone when the core focuses it, and
-// the focus fails.
+// `true` does: the tab's panel is gone when the core focuses it, and the
+// focus fails.
 type endingTab struct{ *hosttest.FakeRuntime }
 
 func (e endingTab) FocusPanel(ctx context.Context, ref revier.TargetRef, panel revier.PanelID) error {
@@ -296,7 +296,7 @@ func (e endingTab) FocusPanel(ctx context.Context, ref revier.TargetRef, panel r
 // exited, under the tab's opening: the focus failure names neither the panel
 // nor its command.
 func TestATabWhoseCommandEndedBeforeItsFocusSaysItExited(t *testing.T) {
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	rt.Add("session:revier", "", revier.Panel{ID: "1", Kind: revier.PanelTool})
 	c := &core.Core{Runtime: endingTab{rt}, View: endingTab{rt}}
 	proj := tabProject()
@@ -304,7 +304,7 @@ func TestATabWhoseCommandEndedBeforeItsFocusSaysItExited(t *testing.T) {
 		Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelTool, Command: []string{"true"}}}}})
 
 	_, err := press(context.Background(), c, prepared(t, proj), "quick")
-	want := `tmux: open tab quick: the tool panel's command "true" exited as soon as it started`
+	want := `hc: open tab quick: the tool panel's command "true" exited as soon as it started`
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
 	}
@@ -314,7 +314,7 @@ func TestATabWhoseCommandEndedBeforeItsFocusSaysItExited(t *testing.T) {
 // runtime whose home already holds that tab, as panel "2".
 func quickTab(t *testing.T) (*hosttest.FakeRuntime, core.Project) {
 	t.Helper()
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	rt.Add("session:revier", "",
 		revier.Panel{ID: "1", Kind: revier.PanelTool, Tab: "t1"},
 		revier.Panel{ID: "2", Kind: revier.PanelTool, Tab: "t2", Vars: map[string]string{core.PanelTargetVar: "quick"}})
@@ -358,7 +358,7 @@ func TestATabThatEndsBeforeItsFocusAndAgainSaysItExited(t *testing.T) {
 	c := &core.Core{Runtime: endingTab{rt}, View: endingTab{rt}}
 
 	_, err := press(context.Background(), c, p, "quick")
-	want := `tmux: open tab quick: the tool panel's command "true" exited as soon as it started`
+	want := `hc: open tab quick: the tool panel's command "true" exited as soon as it started`
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
 	}
@@ -384,7 +384,7 @@ func TestATabThatStaysButCannotBeFocusedKeepsItsError(t *testing.T) {
 // second. The first pass focused the instance, so the press made again would
 // read as one made on the tab, which goes home: it does not.
 func TestATabThatLosesItsFirstPanelAtItsFocusLandsOnTheRest(t *testing.T) {
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	ref := rt.Add("session:revier", "",
 		revier.Panel{ID: "1", Kind: revier.PanelTool, Tab: "t1"},
 		revier.Panel{ID: "2", Kind: revier.PanelTool, Tab: "t2", Vars: map[string]string{core.PanelTargetVar: "quick"}},
@@ -441,7 +441,7 @@ func TestAPlainTabWhoseFocusFailsWhileItsShellRunsReportsTheFocus(t *testing.T) 
 // A tab of two panels whose first command exited still holds the second, so
 // it opened: the focus failure stands, and the tab is not called gone.
 func TestATabWhoseFirstCommandEndedBesideAnotherReportsTheFocus(t *testing.T) {
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	rt.Add("session:revier", "", revier.Panel{ID: "1", Kind: revier.PanelTool})
 	c := &core.Core{Runtime: endingTab{rt}, View: endingTab{rt}}
 	proj := tabProject()

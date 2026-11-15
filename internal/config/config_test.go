@@ -520,7 +520,7 @@ func TestLoadReadsConfigAndProjects(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "config.toml", `
 [hosts]
-runtime = ["tmux"]
+runtime = ["hc"]
 window = ["gnome"]
 
 [[action]]
@@ -537,7 +537,7 @@ run = ["wl-copy", "{{.Path}}"]
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if len(cfg.Hosts.Runtime) != 1 || cfg.Hosts.Runtime[0] != "tmux" {
+	if len(cfg.Hosts.Runtime) != 1 || cfg.Hosts.Runtime[0] != "hc" {
 		t.Errorf("hosts.runtime = %v", cfg.Hosts.Runtime)
 	}
 	if len(cfg.Actions) != 1 || cfg.Actions[0].Key != "ctrl-y" {

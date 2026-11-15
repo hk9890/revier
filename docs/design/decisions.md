@@ -48,8 +48,8 @@ is an app-mode window.
 ### D14 — targets are logical, realizations are per host
 
 Replaces the earlier model of three ports and a project as a set of OS windows.
-A binding is to a name: "diff viewer" is a Meld window on a desktop and a pane
-in tmux. Matching, templates and toggle-back are the core's, so two adapters
+A binding is to a name: "diff viewer" is a Meld window on a desktop and a
+panel in a terminal. Matching, templates and toggle-back are the core's, so two adapters
 cannot disagree.
 
 ### D15 — `Open` produces what `Match` finds, and the core focuses after it
@@ -204,20 +204,12 @@ directly. A poll that recurs logs each cause of a failure once until it
 recovers, and a slow run once a minute, so a host down for an hour does not
 bury the operations, whether it fails one way or three in turn.
 
-### D70 — a tmux instance is a session, and its windows are tabs
-
-One session held every workspace as a window, so a window was both an instance
-and the only thing a tab could be, and two terminals attached to two workspaces
-shared the session's current window and switched each other. A session per
-instance gives tmux the shape of a kitty OS window: `OpenTab` adds a window,
-and `attach-session` reaches one workspace.
-
 ### D74 — an agent is reached by making its tab current
 
 `Focus` on the instance and `FocusPanel` already reach a tab target, so going
 to an agent is those two and a raise, and needs no new capability of the view.
-The instance comes first: on tmux its focus is what switches a terminal
-showing another session.
+The instance comes first: its focus is what brings up the window the tab is
+seen in.
 
 ### D75 — an agent is named by its instance and its panel
 
@@ -374,8 +366,7 @@ A tab opened with a panel group holds panels that carry no target mark, so
 closing the one panel the target is found by left the others on screen while
 the shutdown said "closed". A close step now carries every panel of the tab
 and closes each through `PanelCloser`; the tab ends with its last panel, so no
-close-a-tab capability is needed and tmux never kills a window linked into
-other sessions. The step's busy check covers every panel it carries. An
+close-a-tab capability is needed. The step's busy check covers every panel it carries. An
 agent's step closes its tab the same way, except the workspace's own tab,
 where the shell the layout declares beside the agent stays.
 
@@ -838,15 +829,6 @@ enter no other worktree. An agent tab now starts where the project's agent tab
 starts, unless the key or the command names a directory; a second agent in the
 same worktree takes `--dir`.
 
-### D159 — a key pressed in a tmux pane reaches tmux, whichever runtime comes first
-
-Extends D148. One process has one runtime, the first of the list that works,
-and on a desktop that is kitty, which holds no tmux pane: the tmux key failed
-wherever kitty was installed. A tmux pane id says which runtime holds it, so a
-key given one takes tmux wherever the list names tmux before `none`.
-Rejected: choosing tmux wherever `$TMUX` is set, which moves every command run
-in a tmux pane, and a panel no runtime holds taken as outside a workspace.
-
 ### D160 — a tab asked for from a directory in no project fails
 
 `revier agent new` and `revier shell new` without `-p` or `--panel` take the
@@ -974,7 +956,7 @@ close kills each terminal, as hc offers no polite close.
 A prototype runtime is registered but left out of the default runtime order,
 so selection tries it only where the config's `[hosts]` names it. A prototype
 must not take over a machine that merely has its tool installed: a user of
-kitty or tmux who also installs hc keeps the runtime they had.
+kitty who also installs hc keeps the runtime they had.
 
 ### D175 — revier builds on hc, and the herdr runtime and its probe are gone
 
@@ -1065,15 +1047,15 @@ tab beside the window, in the directory D153 reads, and revier lists neither:
 no project holds them. Rejected: an hc terminal under a mark the survey skips,
 which keeps a program running that nothing shows or reaches.
 
-### D184 — hc is the headless substrate, and tmux goes once the live tests run on it
+### D184 — hc is the headless substrate, and tmux is gone
 
 The core's and the CLI's live tests and the hand driver need a runtime with no
-display, and tmux is today's, with tabs and focus of its own. hc runs headless
-with no view, so those tests move to a real hc on private sockets beside a
-fake view that reports the focus and tabs the core asks for, and tmux is
-removed with that move, not before. The kitty view needs a display, so it is
-tested on recorded output and by hand. Accepted: focus over a real view, and
-a read's history, which hc does not give, lose their headless test.
+display: a real hc on private sockets, beside a fake view that reports the
+focus and tabs the core asks for. tmux was that runtime, and a second runtime
+kept for tests alone is a host maintained for nobody, so it is removed, and a
+config that names it is refused with what to name instead, as herdr is (D175).
+The kitty view needs a display: it is tested on recorded output and by hand.
+Accepted: focus over a real view, and a read's history, lose a headless test.
 
 ### D185 — `[hosts]` names a view as it names a runtime, and the default follows the runtime
 

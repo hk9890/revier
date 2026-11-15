@@ -39,7 +39,7 @@ func agentDesktop(t *testing.T, status revier.Status) (*app, *hosttest.FakeRunti
 		{Name: "agent", Runtime: &revier.Realization{
 			Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}, {Kind: revier.PanelShell}}}},
 	}})
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	rt.Add("home", "",
 		revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "zsh", Tab: "t1"},
 		revier.Panel{ID: "2", Kind: revier.PanelAgent, Title: "claude", Tab: "t1"},
@@ -138,7 +138,7 @@ const testPoll = 10 * time.Millisecond
 // open makes the app on it, for agentWait. Its core reads every testPoll.
 func shellTab(t *testing.T) (*hosttest.FakeRuntime, func(context.Context, io.Writer) (*app, error)) {
 	t.Helper()
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	rt.Add("home", "", revier.Panel{ID: "1", Kind: revier.PanelShell, Title: "zsh", Command: []string{"zsh"}})
 	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}, Poll: testPoll}
 	a := withState(t, &app{cfg: &config.Config{}, cfgRoot: t.TempDir(), stateRoot: t.TempDir(), core: c, projects: []core.Project{demoProject(t)}}, &state.State{})
@@ -215,7 +215,7 @@ func TestAgentWaitOnAProjectWithNoAgentFailsAtOnce(t *testing.T) {
 // read.
 func TestAgentWaitJSONPrintsTheConversation(t *testing.T) {
 	for _, session := range []revier.SessionID{"abc-123", ""} {
-		rt := hosttest.NewRuntime("tmux")
+		rt := hosttest.NewRuntime("hc")
 		rt.Add("home", "", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "agent", Command: []string{"agent"}})
 		probe := &hosttest.FakeProbe{Harness: "agent", State: revier.AgentState{Harness: "agent", Status: revier.StatusIdle, Session: session}}
 		c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{probe}, Poll: testPoll}
@@ -249,7 +249,7 @@ func focusedOther(t *testing.T) (*app, *hosttest.FakeRuntime, core.Project, revi
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "other", Launch: []string{"x"}, Match: revier.Match{Title: "^other$"}}},
 	}})
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	home := rt.Add("home", "")
 	rt.SetFocus(rt.Add("other", ""))
 	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demo, other}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt, View: rt}}, &state.State{Current: other.Name})

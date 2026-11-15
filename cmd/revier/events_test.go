@@ -179,7 +179,7 @@ func TestEventsPrintsTheLocalOnesWhenAHostDoesNotAnswer(t *testing.T) {
 func TestAnAgentTabThatWasNotResumedNamesNoConversation(t *testing.T) {
 	root := t.TempDir()
 	recordingTo(t, root)
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	rt.Add("home", "", revier.Panel{ID: "%1", Kind: revier.PanelTool})
 	p := core.PrepareProject(revier.Project{Name: "demo", Path: t.TempDir(), Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
@@ -206,7 +206,7 @@ func TestAnAgentTabThatWasNotResumedNamesNoConversation(t *testing.T) {
 func TestANamedAgentTabIsAnEventThatNamesTheAgent(t *testing.T) {
 	root := t.TempDir()
 	recordingTo(t, root)
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	rt.Add("home", "", revier.Panel{ID: "%1", Kind: revier.PanelTool})
 	p := core.PrepareProject(revier.Project{Name: "demo", Path: t.TempDir(), Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{

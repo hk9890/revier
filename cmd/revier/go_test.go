@@ -15,7 +15,7 @@ import (
 // instance to name.
 func TestGoNamesTheCommandItRan(t *testing.T) {
 	ran := 0
-	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Run: func(context.Context, []string, string) error {
+	c := &core.Core{Runtime: hosttest.NewRuntime("hc"), Run: func(context.Context, []string, string) error {
 		ran++
 		return nil
 	}}

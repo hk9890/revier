@@ -1,9 +1,10 @@
-// Command drive runs the core by hand against a private tmux server.
+// Command drive runs the core by hand against a private hc core.
 //
 // It drives the core with no configuration: it builds a project in memory,
 // runs run-or-raise against it, and prints the survey as JSON. Everything
-// happens on a tmux socket of its own, so it never touches the user's tmux
-// sessions and never opens a window on any display.
+// happens on an hc core of its own, in a directory of its own, so it never
+// touches the user's hc core or service manager and never opens a window on
+// any display: there is no view, as over ssh.
 //
 // Usage:
 //
@@ -18,24 +19,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
-	"github.com/hk9890/revier/internal/adapter/tmux"
+	"github.com/hk9890/revier/internal/adapter/hc"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/pkg/revier"
 )
-
-// socket keeps every run of this program on one private server, so state
-// survives between invocations and `kill` has something to remove.
-const socket = "revier-drive"
 
 func demoProject() revier.Project {
 	sleep := []string{"sh", "-c", "sleep 3600"}
 	return revier.Project{
 		Name: "demo",
-		Path: "/tmp/demo",
+		Path: os.TempDir(),
 		Targets: []revier.Target{
 			{Name: "home", Key: "ctrl-shift-h", Home: true, Runtime: &revier.Realization{
 				Name: "home", Launch: sleep, Match: revier.Match{Title: "^home$"},
@@ -60,8 +59,10 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	host := &tmux.Host{Socket: socket}
-	c := &core.Core{Runtime: host, View: host}
+	dir := filepath.Join(os.TempDir(), fmt.Sprintf("revier-drive-%d", os.Getuid()))
+	sock := private(dir)
+	host := &hc.Host{Socket: sock}
+	c := &core.Core{Runtime: host}
 	project := core.PrepareProject(demoProject())
 
 	switch os.Args[1] {
@@ -82,14 +83,46 @@ func main() {
 		fmt.Printf("focused %s (%s) on %s\n", res.Ref.Title, res.Ref.ID, res.Ref.Host)
 
 	case "kill":
-		// Errors are expected when no server is running.
-		_ = exec.Command("tmux", "-L", socket, "kill-server").Run()
-		fmt.Println("server killed")
+		// hc's own CLI starts a core when none answers, so it is asked to
+		// stop only one that does.
+		if conn, err := net.Dial("unix", sock); err == nil {
+			_ = conn.Close()
+			out, err := exec.CommandContext(ctx, "hc", "server", "stop").CombinedOutput()
+			if err != nil {
+				fatal(fmt.Errorf("hc server stop: %w: %s", err, out))
+			}
+		}
+		fatal(os.RemoveAll(dir))
+		fmt.Println("core stopped")
 
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n", os.Args[1])
 		os.Exit(2)
 	}
+}
+
+// private points this process, and every program it starts, at an hc core
+// of the driver's own in dir, and returns its socket. Its runtime directory
+// and the unset bus reach no service manager, so the core the host starts
+// runs detached rather than as the user's revier-hc unit; revier's state
+// goes there too. It exits when a manager still answers.
+func private(dir string) string {
+	run := filepath.Join(dir, "run")
+	fatal(os.MkdirAll(run, 0o700))
+	sock := filepath.Join(dir, "s.sock")
+	for name, value := range map[string]string{
+		"XDG_CONFIG_HOME": dir, "XDG_STATE_HOME": dir, "XDG_RUNTIME_DIR": run,
+		"HC_SOCKET": sock, "SHELL": "/bin/sh", "REVIER_STATE_HOME": filepath.Join(dir, "revier"),
+	} {
+		fatal(os.Setenv(name, value))
+	}
+	for _, name := range []string{"DBUS_SESSION_BUS_ADDRESS", "HC_SESSION", "HC_TERMINAL_ID", "HC_TERMINAL_SOCKET", "HC_SCOPE"} {
+		fatal(os.Unsetenv(name))
+	}
+	if exec.Command("systemctl", "--user", "--quiet", "show-environment").Run() == nil {
+		fatal(fmt.Errorf("systemctl --user still reaches a service manager; the core would start in the user's own"))
+	}
+	return sock
 }
 
 func fatal(err error) {

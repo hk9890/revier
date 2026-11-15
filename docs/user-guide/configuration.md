@@ -97,7 +97,7 @@ host on this machine reports that it is unavailable.
 |---|---|---|---|
 | `launch` | list of strings | both | The command revier runs when `match` finds nothing. An argv list, not a shell string. Required, except on a runtime part with `tabs`, and on a tab with `panels`. |
 | `match` | inline table | both | How revier finds an open instance. Required, except on a tab. |
-| `name` | string | runtime; required, except on a tab | The name of the instance revier opens: the kitty OS window title, the tmux session name. `match` must find this name. |
+| `name` | string | runtime; required, except on a tab | The name of the instance revier opens: the kitty OS window title, the name of the hc workspace. `match` must find this name. |
 | `dir` | string | both | The directory `launch` and the panels start in. Default: the project's `path`. |
 | `place` | string | both | Where a new window goes: x, y, width, height as `wctl place` reads them, for example `"right top 75% 100%"`. Needs GNOME. Applies on launch only. A rule of the Window Control extension for the same window must name the same position, or the window jumps from the rule's position to this one. |
 | `inside` | string | runtime | Makes the target a tab of the named target. See [Tabs](#tabs). |
@@ -217,8 +217,8 @@ project cannot share a key. A target named `popup` or `picker` cannot have a key
 
 ### Tabs
 
-`inside` opens the target as a tab of another target's instance: a kitty tab
-or a tmux window. `tabs` on the outer target opens a new instance
+`inside` opens the target as a tab of another target's instance: a kitty tab,
+or hc terminals that kitty shows as one. `tabs` on the outer target opens a new instance
 with those tabs.
 
 ```toml
@@ -503,33 +503,32 @@ works.
 
 ```toml
 [hosts]
-runtime = ["tmux"]
+runtime = ["hc"]
 window  = ["none"]
 ```
 
 | Key | Values | Default |
 |---|---|---|
-| `runtime` | `kitty`, `tmux`, `hc`, `none` | `["kitty", "tmux"]` |
-| `view` | `kitty`, `tmux`, `none` | the runtime's own; for `hc`, `kitty` where it works |
+| `runtime` | `kitty`, `hc`, `none` | `["kitty"]` |
+| `view` | `kitty`, `none` | the runtime's own; for `hc`, `kitty` where it works |
 | `window` | `gnome`, `none` | `["gnome"]` |
 
 The `runtime` runs your workspaces' programs, and the `view` shows them: it
 draws the tabs, focuses a target and tells revier where you are. The kitty
-view shows the kitty runtime and the tmux view the tmux runtime. hc shows
+view shows the kitty runtime. hc shows
 nothing itself, so the kitty view shows it, in kitty windows that attach to
 hc's terminals; it works where kitty is installed and a display is set
 ([hc](integrations/hc.md)). With no view, revier opens and lists the
-workspaces, and a press focuses nothing. The tmux view shows only tmux.
+workspaces, and a press focuses nothing.
 
 A key you leave out uses its default, and revier skips a default host that
 does not work, without a message. `hc` is experimental, and revier uses it
 only where you name it. A list you write is strict: revier tries the names in
 order and stops at the first that works, or at `none`, which turns that kind
 off. When it reaches an unknown name first, or no name works, every
-command that opens, raises or lists stops with an error. One exception:
-`revier agent new --panel` and `revier shell new --panel` with a tmux pane id
-use tmux wherever `runtime` names it before `none`, so a tmux key works where
-kitty is the runtime of everything else. `revier doctor`
+command that opens, raises or lists stops with an error. tmux and herdr are
+no longer runtimes: a list that names one stops with what to name instead.
+`revier doctor`
 reports every unknown name, wherever it is in the list; it does not check
 whether a host works.
 

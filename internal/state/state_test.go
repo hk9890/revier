@@ -205,7 +205,7 @@ func TestPruneKeepsRefsOnHostsItDidNotAsk(t *testing.T) {
 	s.Attach("p", window)
 	s.Bind("p", "editor", window)
 
-	if len(s.Prune([]string{"tmux"}, nil, s)) > 0 {
+	if len(s.Prune([]string{"hc"}, nil, s)) > 0 {
 		t.Error("Prune reported a change for refs on a host it did not ask")
 	}
 	if len(s.Attached["p"]) != 1 || s.Bound["p"]["editor"] != window {

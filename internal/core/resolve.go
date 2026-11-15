@@ -95,8 +95,8 @@ func (d noProjectAt) Unwrap() error { return ErrNoProject }
 
 // projectAt returns the project whose path contains dir, preferring the
 // longest match so a project nested inside another wins. It compares the paths
-// with every symlink resolved: a shell keeps the path through a link, a tmux
-// window starts in the one behind it. Where that finds none, it compares them
+// with every symlink resolved: a shell keeps the path through a link, a
+// program started in it reads the one behind it. Where that finds none, it compares them
 // as text, which still places a directory that does not exist yet.
 func projectAt(projects []Project, dir string) (Project, bool) {
 	if p, ok := projectContaining(projects, fsutil.RealPath(dir), fsutil.RealPath); ok {

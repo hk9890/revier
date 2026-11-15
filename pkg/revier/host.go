@@ -24,8 +24,8 @@ type Host interface {
 	// Instances lists everything this host currently holds.
 	//
 	// This is the hot path. The TUI calls it on every refresh, so an
-	// implementation issues one bulk query - `kitten @ ls`, `tmux list-panes
-	// -a -F`, `wctl list --json` - never one call per project.
+	// implementation issues one bulk query - `kitten @ ls`, hc's
+	// `terminal.list`, `wctl list --json` - never one call per project.
 	Instances(ctx context.Context) ([]Instance, error)
 
 	// Open creates an instance from an already-rendered realization.
@@ -99,8 +99,8 @@ type Capabilities struct {
 	OSWindows bool
 }
 
-// Instance is one live thing a host holds: a kitty OS window, a tmux session, a
-// Meld window. Panels is populated by runtime hosts only. Minimized is set
+// Instance is one live thing a host holds: a kitty OS window, the hc
+// terminals of one workspace, a Meld window. Panels is populated by runtime hosts only. Minimized is set
 // only by a window host that can tell a minimized window apart; any other host
 // leaves it false.
 type Instance struct {
@@ -294,23 +294,12 @@ type PanelCloser interface {
 
 // Attacher is an optional capability of a Runtime, detected by type
 // assertion. A runtime that implements it can put the calling terminal onto
-// one of its instances, which is how `revier open --attach` ends: a tmux
-// session is attached to. A runtime whose instances are OS windows of their
+// one of its instances, which is how `revier open --attach` ends: an hc
+// terminal is attached to. A runtime whose instances are OS windows of their
 // own has nothing to attach to, and does not implement it.
 //
 // AttachCommand returns the argv that does it, for the caller to exec in the
 // terminal it holds; the runtime never takes over a terminal itself.
 type Attacher interface {
 	AttachCommand(ref TargetRef) ([]string, error)
-}
-
-// Encloser is an optional capability of an Attacher, detected by type
-// assertion. Encloses reports whether the calling process runs in a pane of
-// the server AttachCommand attaches to. There the focus has already put the
-// pane's own terminal on the instance, and the attach would only nest the
-// server in itself, which tmux refuses; so `revier open --attach`
-// prints what it focused instead. An Attacher that does not implement it is
-// attached to wherever the command runs.
-type Encloser interface {
-	Encloses(ctx context.Context) (bool, error)
 }

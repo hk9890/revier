@@ -66,7 +66,7 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 	if *attach {
-		if err := a.attach(ctx, ref); err != nil {
+		if err := a.attach(ref); err != nil {
 			return err
 		}
 	}
@@ -80,31 +80,17 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 // terminal. Only a runtime that can attach a terminal offers it; a runtime
 // whose instances are windows of their own has been raised already, and
 // there is nothing to become.
-//
-// It returns nil, having exec'd nothing, only in a pane of the server it would
-// attach to: the focus has put that pane's terminal on the instance already,
-// and the attach would nest the server in itself. A check that fails attaches.
-func (a *app) attach(ctx context.Context, ref revier.TargetRef) error {
+func (a *app) attach(ref revier.TargetRef) error {
 	att, ok := a.core.Runtime.(revier.Attacher)
 	if !ok {
 		name := "none"
 		if a.core.Runtime != nil {
 			name = a.core.Runtime.Name()
 		}
-		return fmt.Errorf("--attach: the %s runtime cannot put a terminal on a workspace; it takes tmux or hc", name)
+		return fmt.Errorf("--attach: the %s runtime cannot put a terminal on a workspace; it takes hc", name)
 	}
 	if ref.IsZero() {
 		return errors.New("--attach: the workspace has not come up yet, so there is nothing to attach to")
-	}
-	if enc, ok := att.(revier.Encloser); ok {
-		inside, err := enc.Encloses(ctx)
-		if err != nil {
-			// The check only spares a refusal; it must not cost the attach.
-			slog.Warn("attach", "err", err)
-		}
-		if inside {
-			return nil
-		}
 	}
 	argv, err := att.AttachCommand(ref)
 	if err != nil {

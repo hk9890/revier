@@ -1121,8 +1121,8 @@ func TestWithNoWindowHostAnUnnamedWindowStaysUnidentified(t *testing.T) {
 	}
 }
 
-// A runtime that does not own OS windows - tmux - is untouched by this: its
-// instances are panes, and a pane has no window manager title.
+// A view that does not own OS windows is untouched by this: its instances
+// have no window manager title.
 func TestARuntimeWithoutOSWindowsIsNotIdentified(t *testing.T) {
 	rt := hosttest.NewRuntime("rt") // no OSWindows capability
 	rt.AddInstance(revier.Instance{Ref: revier.TargetRef{Host: "rt", ID: "1"}, PID: 4242})

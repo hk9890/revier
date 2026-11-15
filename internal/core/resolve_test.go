@@ -113,8 +113,8 @@ func TestProjectForADirectoryInNoProjectFailsWithoutAway(t *testing.T) {
 }
 
 // A directory is in the project whose path differs from it only by a
-// symlink, on either side: a shell keeps the path through the link, a tmux
-// window starts in the directory behind it.
+// symlink, on either side: a shell keeps the path through the link, a
+// program started in it reads the directory behind it.
 func TestProjectForADirectoryIsInAProjectThroughASymlink(t *testing.T) {
 	behind := t.TempDir()
 	sub := filepath.Join(behind, "sub")

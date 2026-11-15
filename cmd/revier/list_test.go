@@ -20,7 +20,7 @@ import (
 // a closed project in task-manager whose repository is taskmgr.
 func listApp(t *testing.T) *app {
 	t.Helper()
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	rt.Add("home", "", revier.Panel{ID: "7", Title: "claude busy Dtop authentication options"})
 	tm := core.PrepareProject(revier.Project{Name: "tm", Path: "/x/task-manager", GitURL: "git@github.com:o/taskmgr.git"})
 	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
@@ -174,7 +174,7 @@ func TestListAgentsListsTheSurveyedAgents(t *testing.T) {
 // is the way it is: a refusal and a missing host are both unavailable, and
 // only the mark tells the user which of the two to go and fix.
 func TestTheTargetsColumnMarksWhyEachTargetIsTheWayItIs(t *testing.T) {
-	running := revier.TargetRef{Host: "tmux", ID: "%1", Title: "home"}
+	running := revier.TargetRef{Host: "hc", ID: "%1", Title: "home"}
 	cases := []struct {
 		name string
 		t    revier.TargetView
@@ -182,7 +182,7 @@ func TestTheTargetsColumnMarksWhyEachTargetIsTheWayItIs(t *testing.T) {
 	}{
 		{"refused by its configuration", revier.TargetView{Name: "a", Reason: "bad match"}, "!a"},
 		{"no host can realize it", revier.TargetView{Name: "a"}, "xa"},
-		{"its host could not list", revier.TargetView{Name: "a", Available: true, Unknown: "tmux: no server"}, "?a"},
+		{"its host could not list", revier.TargetView{Name: "a", Available: true, Unknown: "hc: no server"}, "?a"},
 		{"running", revier.TargetView{Name: "a", Available: true, Ref: running}, "*a"},
 		{"closed", revier.TargetView{Name: "a", Available: true}, " a"},
 		{"attached, named by its title", revier.TargetView{Available: true, Attached: true, Ref: running}, "*(home)"},

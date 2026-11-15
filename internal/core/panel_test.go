@@ -30,8 +30,7 @@ func TestATabIsOpenedInItsTargetAndRaised(t *testing.T) {
 	if len(rt.PanelFocuses) != 1 || rt.PanelFocuses[0] != rt.Tabs[0].Panel {
 		t.Errorf("panel focuses = %v, want the new tab", rt.PanelFocuses)
 	}
-	// On tmux, focusing the workspace is what switches a terminal showing
-	// another session to the tab.
+	// The workspace is focused, which brings its window up with the tab.
 	if len(rt.Focuses) != 1 || rt.Focuses[0] != rt.Tabs[0].Ref {
 		t.Errorf("runtime focuses = %v, want the workspace %v", rt.Focuses, rt.Tabs[0].Ref)
 	}
@@ -256,7 +255,7 @@ func TestAReturnHomeLandsInTheMarkedPanel(t *testing.T) {
 }
 
 func TestATabOnARuntimeWithoutTabsIsAnError(t *testing.T) {
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	rt.Add("session:revier", "")
 	c := &core.Core{Runtime: bareRuntime{rt}, View: bareView{rt}}
 	p := prepared(t, tabProject())
@@ -265,7 +264,7 @@ func TestATabOnARuntimeWithoutTabsIsAnError(t *testing.T) {
 	if !errors.Is(err, core.ErrNoTabs) {
 		t.Fatalf("err = %v, want ErrNoTabs", err)
 	}
-	for _, want := range []string{`"tickets"`, `"home"`, "tmux"} {
+	for _, want := range []string{`"tickets"`, `"home"`, "hc"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not name %s", err, want)
 		}

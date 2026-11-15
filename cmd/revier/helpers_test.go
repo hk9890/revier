@@ -273,7 +273,7 @@ func dispatched(t *testing.T) []string {
 // runtime, and the app over state st.
 func demoDesktop(t *testing.T, st *state.State, open ...string) (*app, *hosttest.FakeRuntime) {
 	t.Helper()
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	for _, title := range open {
 		rt.Add(title, "")
 	}

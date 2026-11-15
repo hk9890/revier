@@ -11,8 +11,7 @@ import (
 )
 
 // An agent on this machine is reached by its tab: its instance is focused, the
-// tab becomes current and the OS window holding it is raised. On tmux the
-// instance's focus is what switches a terminal showing another session.
+// tab becomes current and the OS window holding it is raised.
 func TestActivateAgentWaitingFocusesItsTabAndRaisesTheWindow(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.SetCapabilities(revier.Capabilities{OSWindows: true})

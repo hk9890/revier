@@ -1,6 +1,5 @@
 // Package panelstart words what revier says about a panel whose command does
-// not start, so that the tmux and hc hosts and the core say it the same
-// way: a program not on the PATH the runtime starts it with, a command the
+// not start, so that the hc host and the core say it the same way: a program not on the PATH the runtime starts it with, a command the
 // runtime could not start, or a command that exited as soon as it started.
 package panelstart
 
@@ -15,20 +14,13 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// Startable refuses panels whose program is not on this process's PATH,
-// which is the one tmux starts a pane with (a pane takes the PATH of the
-// client that asks for it), before it starts any of them. The runtime starts
-// it anyway, the pane closes at once, and what the runtime reports names
-// neither the panel nor its command. A program named by a path is left to the
-// runtime: it is read against the panel's directory, not this one.
-func Startable(panels []revier.PanelSpec) error {
-	_, err := CommandsOn(panels, os.Getenv("PATH"))
-	return err
-}
-
 // CommandsOn is each panel's command with its program as the file on path,
-// the PATH the runtime starts it with, or nil for a panel with no command, and
-// refuses panels as Startable does. A program named by a path is kept as written.
+// the PATH the runtime starts it with, or nil for a panel with no command. It
+// refuses panels whose program is not on path before any of them starts: the
+// runtime would start it anyway, the panel would close at once, and what the
+// runtime reports names neither the panel nor its command. A program named by
+// a path is kept as written and left to the runtime: it is read against the
+// panel's directory, not this one.
 func CommandsOn(panels []revier.PanelSpec, path string) ([][]string, error) {
 	commands := make([][]string, len(panels))
 	for i, p := range panels {

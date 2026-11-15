@@ -4,8 +4,8 @@
 // It also implements the View of a runtime that draws nothing, hc, in
 // view.go: kitty windows that attach that runtime's panels (D180).
 //
-// kitty is the terminal this machine actually uses; tmux is the runtime
-// that exists for headless testing. An instance is a kitty OS window, and the
+// kitty is the terminal this machine actually uses; hc is the runtime that
+// headless tests run on. An instance is a kitty OS window, and the
 // kitty windows inside it, across all of its tabs, are the panels a probe
 // reads.
 //

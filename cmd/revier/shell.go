@@ -20,9 +20,7 @@ usage:
   revier shell exec -p <project> [--tag <tag>] [--dir <path>]
 
   --panel    the open workspace that holds this panel; kitty's
-             @active-kitty-window-id is the window a key was pressed in,
-             and tmux's #{pane_id} the pane, which takes tmux as the
-             runtime wherever the runtime list names it before none
+             @active-kitty-window-id is the window a key was pressed in
   --dir      start the shell here, not where the target's shell starts;
              with --panel, the default is the directory the runtime
              reports for that panel
@@ -82,7 +80,7 @@ func cmdShellNew(out io.Writer, args []string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), commandWait)
 	defer cancel()
-	a, err := newAppAt(ctx, out, *panel)
+	a, err := newApp(ctx, out)
 	if err != nil {
 		return err
 	}

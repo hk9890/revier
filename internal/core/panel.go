@@ -493,8 +493,8 @@ func (c *Core) goTabOnce(ctx context.Context, p Project, i int, bound Bindings, 
 		res.Launched = true
 	}
 	// An instance this press opened was focused by its goTo. One that was there
-	// is focused before its tab: on tmux, focusing the session is what brings
-	// a terminal showing another session to the tab.
+	// is focused before its tab: a tab is seen only in its instance's window,
+	// and focusing the instance is what brings that window up.
 	if !opened {
 		if err := c.focus(ctx, in.Ref); err != nil {
 			return Result{}, err

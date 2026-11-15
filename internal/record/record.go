@@ -81,8 +81,8 @@ const (
 )
 
 // Line is one line of the record. Machine is the linked host a line is
-// about, empty for this machine; Host is the revier host (kitty, gnome,
-// tmux) and Ref the instance on it. Pid and Cmd are the log's, so a line
+// about, empty for this machine; Host is the revier host (kitty, gnome, hc)
+// and Ref the instance on it. Pid and Cmd are the log's, so a line
 // joins with the log of the process that wrote it.
 type Line struct {
 	Time     time.Time          `json:"time"`

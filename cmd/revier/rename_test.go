@@ -37,7 +37,7 @@ func exists(t *testing.T, path string) bool {
 
 // `revier rename a b` moves the file, and says where it is now.
 func TestRenameMovesTheProjectFile(t *testing.T) {
-	a := renameApp(t, hosttest.NewRuntime("tmux"))
+	a := renameApp(t, hosttest.NewRuntime("hc"))
 	out := output(t, a, func() error { return cmdRename(context.Background(), a, []string{"a", "b"}) })
 	b, old := exists(t, filepath.Join(a.cfgRoot, "projects", "b.toml")), exists(t, filepath.Join(a.cfgRoot, "projects", "a.toml"))
 	if !b || old {
@@ -60,20 +60,20 @@ func TestRenameIsRefused(t *testing.T) {
 		want string
 	}{
 		{"running", "b", func() *hosttest.FakeRuntime {
-			rt := hosttest.NewRuntime("tmux")
+			rt := hosttest.NewRuntime("hc")
 			rt.Add("home", "")
 			return rt
 		}, nil, "a is running; close its targets before renaming it"},
 		{"host unknown", "b", func() *hosttest.FakeRuntime {
-			rt := hosttest.NewRuntime("tmux")
+			rt := hosttest.NewRuntime("hc")
 			rt.SetInstancesErr(errors.New("no server"))
 			return rt
 		}, nil, "wait for the host before renaming it"},
-		{"coming up", "b", func() *hosttest.FakeRuntime { return hosttest.NewRuntime("tmux") },
+		{"coming up", "b", func() *hosttest.FakeRuntime { return hosttest.NewRuntime("hc") },
 			&state.State{Launch: &state.Launch{Project: "a", Target: "home", At: time.Now()}},
 			"a is coming up; wait for its window before renaming it"},
-		{"a space in the name", "b c", func() *hosttest.FakeRuntime { return hosttest.NewRuntime("tmux") }, nil, "contains whitespace"},
-		{"a slash in the name", "b/c", func() *hosttest.FakeRuntime { return hosttest.NewRuntime("tmux") }, nil, "contains '/'"},
+		{"a space in the name", "b c", func() *hosttest.FakeRuntime { return hosttest.NewRuntime("hc") }, nil, "contains whitespace"},
+		{"a slash in the name", "b/c", func() *hosttest.FakeRuntime { return hosttest.NewRuntime("hc") }, nil, "contains '/'"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a := renameApp(t, tc.rt())
@@ -95,7 +95,7 @@ func TestRenameIsRefused(t *testing.T) {
 // A name no project has is named back, and so is the built-in assistant,
 // which has no file to move.
 func TestRenameNamesWhatItCannotFind(t *testing.T) {
-	a := renameApp(t, hosttest.NewRuntime("tmux"))
+	a := renameApp(t, hosttest.NewRuntime("hc"))
 	if err := cmdRename(context.Background(), a, []string{"nope", "b"}); err == nil || !strings.Contains(err.Error(), `no project named "nope"`) {
 		t.Errorf("err = %v, want no project named nope", err)
 	}

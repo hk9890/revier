@@ -18,7 +18,7 @@ import (
 // `revier list a b` is those projects alone, in the order asked, which is
 // how a revier on another machine is asked about the projects there.
 func TestListNamedProjectsIsThoseAlone(t *testing.T) {
-	c := &core.Core{Runtime: hosttest.NewRuntime("tmux")}
+	c := &core.Core{Runtime: hosttest.NewRuntime("hc")}
 	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t), remoteProject(t)}, stateRoot: t.TempDir(), core: c}, &state.State{})
 
 	out := output(t, a, func() error { return cmdList(context.Background(), a, []string{"--json", "far"}) })
@@ -32,7 +32,7 @@ func TestListNamedProjectsIsThoseAlone(t *testing.T) {
 }
 
 func TestListRefusesANameItDoesNotKnow(t *testing.T) {
-	c := &core.Core{Runtime: hosttest.NewRuntime("tmux")}
+	c := &core.Core{Runtime: hosttest.NewRuntime("hc")}
 	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t)}, stateRoot: t.TempDir(), core: c}, &state.State{})
 
 	err := cmdList(context.Background(), a, []string{"--json", "nope"})
@@ -47,7 +47,7 @@ func TestListRefusesANameItDoesNotKnow(t *testing.T) {
 func TestListTableShowsTheHostAndAnUnreachableOne(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox")
 	remote.Err = errors.New("buildbox: connection refused")
-	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Remotes: map[string]revier.Remote{"buildbox": remote}}
+	c := &core.Core{Runtime: hosttest.NewRuntime("hc"), Remotes: map[string]revier.Remote{"buildbox": remote}}
 	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{remoteProject(t)}, stateRoot: t.TempDir(), core: c}, &state.State{})
 
 	out := output(t, a, func() error { return cmdList(context.Background(), a, nil) })
@@ -110,12 +110,12 @@ func TestTabAtAPanelOutsideAWorkspaceSaysItDidNotResume(t *testing.T) {
 // kitty window has been raised already, and there is nothing to become.
 func TestAttachRefusesARuntimeThatCannotAttach(t *testing.T) {
 	a := &app{core: &core.Core{Runtime: hosttest.NewRuntime("kitty")}}
-	err := a.attach(context.Background(), revier.TargetRef{Host: "kitty", ID: "1"})
-	if err == nil || !strings.Contains(err.Error(), "kitty") || !strings.Contains(err.Error(), "tmux") {
-		t.Errorf("err = %v, want the runtime named and tmux suggested", err)
+	err := a.attach(revier.TargetRef{Host: "kitty", ID: "1"})
+	if err == nil || !strings.Contains(err.Error(), "kitty") || !strings.Contains(err.Error(), "takes hc") {
+		t.Errorf("err = %v, want the runtime named and hc suggested", err)
 	}
 	a = &app{core: &core.Core{}}
-	if err := a.attach(context.Background(), revier.TargetRef{}); err == nil {
+	if err := a.attach(revier.TargetRef{}); err == nil {
 		t.Error("want a refusal with no runtime")
 	}
 }

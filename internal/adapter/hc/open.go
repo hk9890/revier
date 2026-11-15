@@ -40,8 +40,7 @@ import (
 // terminals all exited is never seen to be closed, and hc would hold their
 // records and screens for a day.
 //
-// An instance that fails is closed whole, as tmux kills a session that fails:
-// left open, it would be matched.
+// An instance that fails is closed whole: left open, it would be matched.
 func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
 	if r.Name == "" || !utf8.ValidString(r.Name) {
 		return revier.TargetRef{}, fmt.Errorf("hc: realization has no name to give the instance")

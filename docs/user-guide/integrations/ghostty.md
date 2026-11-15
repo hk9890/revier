@@ -1,13 +1,13 @@
 # Ghostty
 
 revier has no Ghostty host: it cannot open a workspace as a Ghostty window or
-see into one. Use tmux inside Ghostty instead. revier then opens each
-workspace as a tmux session, you show it in a Ghostty window, and revier sees
-every agent through tmux.
+see into one. Run your workspaces in hc instead, with no view, and put a
+Ghostty window on one with `revier open --attach`. revier sees every agent
+through hc.
 
 ## What you need
 
-- tmux. See [tmux](tmux.md).
+- hc. See [hc](hc.md).
 - For window targets and desktop keys: GNOME with `wctl`. See
   [GNOME](gnome.md).
 - For the popup: kitty. Without kitty, the trigger key does nothing and shows
@@ -15,23 +15,18 @@ every agent through tmux.
 
 ## Set it up
 
-1. Name tmux as the runtime host, as [tmux](tmux.md#set-it-up) step 1
-   shows.
+1. Name hc as the runtime host, and no view, in
+   `~/.config/revier/config.toml`
+   (see [`[hosts]`](../configuration.md#hosts)):
 
-2. In a Ghostty window, run `revier open demo --attach`. The window is now a
-   tmux client on the project's session.
-3. Keep exactly one Ghostty window attached. When you choose a project in
-   the TUI or press its key, revier switches this client to the project's
-   session. With two attached clients, a desktop key switches neither.
-4. On GNOME, so that a desktop key knows the project of a focused Ghostty
-   window, let tmux set the window title. revier puts the workspace's name in
-   the tmux option `@revier-name` of each session it opens. Add to
-   `~/.tmux.conf`:
+   ```toml
+   [hosts]
+   runtime = ["hc"]
+   view    = ["none"]
+   ```
 
-   ```
-   set -g set-titles on
-   set -g set-titles-string '#{?@revier-name,#{@revier-name},#S}'
-   ```
+2. In a Ghostty window, run `revier open demo --attach`. The window now shows
+   the workspace's first terminal. Detach with hc's own key, `ctrl+\`.
 
 ## A Ghostty window as a target
 
@@ -53,8 +48,8 @@ revier sees such a window, not what runs in it.
 ## What does not work
 
 - `ghostty` in `[hosts]`: revier stops with `unknown host "ghostty"`.
-- Agents that run in Ghostty outside tmux.
-- Raising the Ghostty window that shows a session: revier switches the
-  session in it, and the window stays where it is.
-- `revier agent new --panel` from a Ghostty key. Use a tmux key, as
-  [tmux](tmux.md) shows.
+- Agents that run in Ghostty outside hc.
+- Raising or switching the Ghostty window: with no view, a press focuses
+  nothing. Attach the window to another terminal with `hc attach`.
+- Tabs: the window shows one terminal at a time.
+- `revier agent new --panel` from a Ghostty key.

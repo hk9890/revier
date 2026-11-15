@@ -106,7 +106,7 @@ func TestReadWithNoLogIsNothing(t *testing.T) {
 func TestFieldsKeepTheFileOrder(t *testing.T) {
 	root := t.TempDir()
 	writeLog(t, root, readNow,
-		`{"time":"2026-10-30T09:00:00Z","level":"ERROR","msg":"bind","pid":3,"ref":{"host":"tmux","id":"%1"},"duration_ms":12,"err":"a\nb"}`+"\n")
+		`{"time":"2026-10-30T09:00:00Z","level":"ERROR","msg":"bind","pid":3,"ref":{"host":"hc","id":"t1"},"duration_ms":12,"err":"a\nb"}`+"\n")
 	lines, _, err := logging.Read(root, readNow)
 	if err != nil || len(lines) != 1 {
 		t.Fatalf("Read = %v, %v", lines, err)
@@ -116,7 +116,7 @@ func TestFieldsKeepTheFileOrder(t *testing.T) {
 		{Key: "level", Value: "ERROR"},
 		{Key: "msg", Value: "bind"},
 		{Key: "pid", Value: "3"},
-		{Key: "ref", Value: `{"host":"tmux","id":"%1"}`},
+		{Key: "ref", Value: `{"host":"hc","id":"t1"}`},
 		{Key: "duration_ms", Value: "12"},
 		{Key: "err", Value: "a\nb"},
 	}

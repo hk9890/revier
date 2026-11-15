@@ -589,8 +589,8 @@ func (c *Core) locate(snap snapshot, p Project, i int, host revier.Host, m revie
 // is to survive a title the rule no longer matches (decisions.md D21): an
 // editor window is bound while its title still says the file it opened with.
 // A target that declares no class is trusted as before, and so is a runtime
-// binding: a runtime id is never handed back out, because the kitty, tmux
-// and hc hosts put the process or the server that assigned it into it.
+// binding: a runtime id is never handed back out, because the kitty and hc
+// hosts put the process or the core that assigned it into it.
 func (c *Core) bindingHolds(p Project, i int, host revier.Host, inst revier.Instance) bool {
 	if c.Window == nil || host.Name() != c.Window.Name() {
 		return true
@@ -1249,14 +1249,14 @@ func (c *Core) focusAuthority() revier.Host {
 // somewhere: strictly worse than a keypress that does nothing surprising.
 //
 // So only the focus authority's answer counts, and only about its own ids.
-// Ids are host-scoped - a GNOME window id and a tmux pane id are unrelated
-// numbers - so comparing across hosts is meaningless, and a runtime's "current
-// pane" says nothing about OS focus: a tmux session can be current while the
-// user is looking at the editor.
+// Ids are host-scoped - a GNOME window id and an hc address are unrelated -
+// so comparing across hosts is meaningless, and a view's current instance
+// says nothing about OS focus: a view can show one current while the user is
+// looking at the editor.
 //
 // A runtime instance is therefore judged through the OS window that holds it,
-// when the runtime can name one (osWindowOf). A multiplexer cannot, and for it
-// toggle-back does not fire on a machine that has a window host.
+// when its view can name one (osWindowOf). A view that cannot, and no view,
+// leave toggle-back unfired on a machine that has a window host.
 func (c *Core) focusedOn(ctx context.Context, snap snapshot, inst revier.Instance) bool {
 	auth := c.focusAuthority()
 	if auth == nil || inst.Ref.ID == "" {

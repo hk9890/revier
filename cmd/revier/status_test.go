@@ -17,7 +17,7 @@ func TestStatusNamesTheView(t *testing.T) {
 	if err := cmdStatus(t.Context(), a, []string{"-p", "demo"}); err != nil {
 		t.Fatal(err)
 	}
-	if want := "runtime   tmux\nview      tmux\nwindow    -\n"; !strings.Contains(out.String(), want) {
+	if want := "runtime   hc\nview      hc\nwindow    -\n"; !strings.Contains(out.String(), want) {
 		t.Errorf("status:\n%s\nwant it to hold:\n%s", out.String(), want)
 	}
 

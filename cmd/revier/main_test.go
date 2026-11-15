@@ -19,7 +19,7 @@ import (
 // so a tool's 3 cannot pass for the no-project status that the desktop
 // binding turns into the picker.
 func TestAToolFailureIsPrintedWithRevierStatus(t *testing.T) {
-	err := fmt.Errorf("tmux: open home: tmux new-window: %w: no server running", &exec.ExitError{})
+	err := fmt.Errorf("hc: open home: terminal.run: %w: no core running", &exec.ExitError{})
 	if status, say := outcome(err); status != 1 || !say {
 		t.Errorf("outcome = %d, %v; want 1, with the message printed", status, say)
 	}

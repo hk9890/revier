@@ -317,7 +317,7 @@ func (e problemsFound) Error() string {
 func shownBy(cfg *config.Config) string {
 	ctx, cancel := context.WithTimeout(context.Background(), commandWait)
 	defer cancel()
-	rt, view, err := selectTerminal(ctx, cfg, "", cfg.Hosts.Runtime)
+	rt, view, err := selectTerminal(ctx, cfg, cfg.Hosts.Runtime)
 	if err != nil || rt == nil {
 		return ""
 	}
