@@ -185,7 +185,7 @@ variable revier sets, because a title or a position is not one. Every panel of
 the tab carries it: the first panel of a tab that holds panels is the agent,
 and a mark on that panel alone ended with the agent, so the key opened a second
 tab. The tab is the first panel that carries the mark, and a second press on
-its key goes home from any panel of it. `PanelOpener` is optional, and a
+its key goes home from any panel of it. `TabOpener` is optional, and a
 runtime without it refuses; it does not open a window the user did not choose.
 
 ### D68 — the agent of a tab that runs a launch is recorded under the tab, and not resumed
@@ -741,7 +741,7 @@ write, as in D26.
 A terminal key is pressed in any window of the terminal, and most of those are
 no project's. Refusing there made the user's terminal lose its own new-tab key,
 so the core opens a plain tab of the runtime's own shell beside the window, or
-nothing where config says so, through `PanelOpener` (D145: no second
+nothing where config says so, through `TabOpener` (D145: no second
 capability). Only that case is decided: every other failure is returned, and
 the key's own fallback to the terminal's new tab is for revier failing.
 

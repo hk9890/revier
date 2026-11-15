@@ -1,7 +1,6 @@
 package core_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/hk9890/revier/internal/core"
@@ -107,7 +106,7 @@ func TestWithNoViewATabOpensAndIsNotFocused(t *testing.T) {
 	rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool})
 	c := &core.Core{Runtime: rt}
 
-	if _, err := press(context.Background(), c, prepared(t, splitProject()), "tickets"); err != nil {
+	if _, err := press(t.Context(), c, prepared(t, splitProject()), "tickets"); err != nil {
 		t.Fatalf("press: %v", err)
 	}
 	if len(rt.Tabs) != 1 || len(rt.PanelFocuses) != 0 {

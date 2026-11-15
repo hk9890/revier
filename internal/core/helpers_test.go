@@ -71,8 +71,9 @@ func project() revier.Project {
 	}
 }
 
-// osWindowHosts builds a runtime that reports OSWindows and a window host that
-// sees the same two windows, and returns the window host's refs for them.
+// osWindowHosts builds a runtime, its own view reporting OSWindows, and a
+// window host that sees the same two windows, and returns the window host's
+// refs for them.
 func osWindowHosts() (*hosttest.FakeRuntime, *hosttest.Fake, revier.TargetRef, revier.TargetRef) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.SetCapabilities(revier.Capabilities{OSWindows: true})

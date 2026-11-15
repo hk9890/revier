@@ -174,7 +174,7 @@ func TestEveryAdapterIsInItsDefaultOrder(t *testing.T) {
 
 // A runtime that draws its own instances is its own view, and with no list
 // it is the one chosen: kitty and tmux show themselves as before. hc draws
-// nothing, so with no list it is shown by no view (decisions.md D178).
+// nothing, so with no list it is shown by no view (decisions.md D185).
 func TestTheDefaultViewIsTheRuntimesOwn(t *testing.T) {
 	for name, rt := range runtimeAdapters() {
 		view, err := selectView(nil, rt)

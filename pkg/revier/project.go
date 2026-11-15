@@ -151,7 +151,7 @@ type Realization struct {
 	// and reports back as Panel.Vars. No project file sets them: the core
 	// fills them, as it fills Dir, so that a panel revier opened is
 	// identified later by the mark rather than guessed at. They are what
-	// PanelOpener.OpenTab takes for a tab, on the panels of the instance's
+	// TabOpener.OpenTab takes for a tab, on the panels of the instance's
 	// own tab, or of the first tab it opens with.
 	// A window host has no panels and ignores them.
 	Vars map[string]string `toml:"-" json:"vars,omitempty"`

@@ -61,7 +61,7 @@ func main() {
 	defer cancel()
 
 	host := &tmux.Host{Socket: socket}
-	c := &core.Core{Runtime: host}
+	c := &core.Core{Runtime: host, View: host}
 	project := core.PrepareProject(demoProject())
 
 	switch os.Args[1] {
