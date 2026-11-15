@@ -172,9 +172,9 @@ func decodeMatch(raw json.RawMessage, rule *revier.WindowRule) bool {
 	for key, value := range match {
 		switch key {
 		case "class":
-			ok = ok && json.Unmarshal(value, &rule.Class) == nil
+			ok = json.Unmarshal(value, &rule.Class) == nil && ok
 		case "min_width":
-			ok = ok && json.Unmarshal(value, &rule.MinWidth) == nil
+			ok = json.Unmarshal(value, &rule.MinWidth) == nil && ok
 		default:
 			ok = false
 		}
