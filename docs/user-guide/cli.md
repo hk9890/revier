@@ -36,8 +36,7 @@ in full.
 | `revier agent close` | End one agent: close its tab, or in the workspace's own tab its panel alone. |
 | `revier session save` / `restore` / `list` | Record the open projects, open them again, list the saves. See [Save and restore sessions](projects.md#save-and-restore-sessions). |
 | `revier shutdown` | Save the session, then close what is open. After a full shutdown the next TUI start offers the restore. |
-| `revier keys status` / `install` / `uninstall` | Show, claim or release the desktop keys. |
-| `revier term status` / `install` / `uninstall` | Show, write or remove the terminal keys in your terminal's configuration. See [kitty](integrations/kitty.md#add-tabs-from-a-kitty-key). |
+| `revier setup status` / `install` / `uninstall` | Show, write or remove what revier puts in this machine's configuration: the desktop keys, the terminal keys, and the popup's window rules. |
 | `revier status` | The project revier finds here (directory, focused window, last project), and the hosts it uses. |
 | `revier doctor` | Every configuration problem, and its fix. |
 | `revier assist` | Start Claude Code, briefed on your revier configuration. See [Agents](agents.md#let-an-agent-configure-revier). |
@@ -54,7 +53,7 @@ run them by hand.
 ## Output
 
 Commands print tables for a person. `revier list`, `revier session list`,
-`revier state`, `revier agent wait`, the `revier keys` and the `revier term` commands take `--json` for a script. `revier events` always
+`revier state`, `revier agent wait`, the `revier setup` commands take `--json` for a script. `revier events` always
 prints JSON. Warnings and errors go to stderr, so stdout stays clean.
 
 The TARGETS column of `revier list` marks each target: `*` open, `x` no host
@@ -69,7 +68,7 @@ doctor` says why), `?` its host did not answer.
 | `1` | Failure. `revier doctor` also exits `1` when a file has a problem, and `revier shutdown` when a target is still open or ctrl+c left a step. |
 | `2` | `revier agent wait` timed out. |
 | `3` | No project found: not from the directory, the focused window or the last project. For `revier agent new` and `revier shell new` without `-p` or `--panel`: the directory is in no project. |
-| `4` | `revier keys install` or `uninstall`, or `revier term install` or `uninstall`: some key is not as asked. |
+| `4` | `revier setup install` or `uninstall`: some key or rule is not as asked. |
 | `5` | `revier each`: the command failed in at least one project. |
 | `6` | `revier assist`: `claude` is not on `PATH`. |
 | other | `revier run` passes on the action's own exit status. |

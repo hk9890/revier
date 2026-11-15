@@ -16,11 +16,11 @@ own, shown in no view, or a werft lease, whose desktop is its own
 ([Drive the desktop on a werft lease](#drive-the-desktop-on-a-werft-lease)).
 Nothing here reaches the user's display, hc core or service manager.
 
-`revier keys install`, `revier term install` and their `uninstall` rewrite the
-user's desktop and kitty configuration, the kitty one often a link into a
-dotfiles repository. On this machine, leave them to the user, except `term` on
-a scratch kitty directory; `keys status`, `term status` and `--dry-run` read
-only. In a lease, run them.
+`revier setup install` and `revier setup uninstall` rewrite the user's
+desktop keys, kitty configuration and window rules, the last two often links
+into a dotfiles repository. Leave them to the user, except on the scratch
+files of [Verify the setup without the user's desktop](#verify-the-setup-without-the-users-desktop);
+`setup status` and `--dry-run` read only. In a lease, run them.
 
 Run `mise run build` first. The recipes call `./bin/revier`, and a fresh
 worktree has none.
@@ -290,7 +290,7 @@ Call the Skill tool with `werft:werft` for the lease flow.
   GNOME.
 - Run `mise run build`, then `scripts/lease-desktop <lease-id>`. It logs GNOME
   in, installs kitty, `wctl`, hc and the tools below, puts `./bin/revier` on
-  the lease's PATH and runs `revier keys install` there.
+  the lease's PATH and runs `revier setup install` there.
 - Run revier and hc in the lease without `REVIER_CONFIG_HOME` or `hcp`: its
   configuration, state and hc core are scratch already.
 - Write each block below to a file under `hako-private/`, copy it in with
@@ -362,25 +362,31 @@ wctl focused --json | jq .title                   # home
 
 ## Verify a keybinding without pressing it
 
-A binding is a command. Run `./bin/revier keys status --json` to print the one
+A binding is a command. Run `./bin/revier setup status --json` to print the one
 each key would carry; it reads and never binds. Run the command itself, or
 press the key, on a lease, as
 [Drive the desktop on a werft lease](#drive-the-desktop-on-a-werft-lease) says.
 
-## Verify the terminal keys without the user's kitty
+## Verify the setup without the user's desktop
 
-Run `revier term install` and `revier term uninstall` on a scratch kitty
-directory, with `$S` from the scratch configuration recipe:
+Run `revier setup install` and `revier setup uninstall` on scratch files, with
+`$S` from the scratch configuration recipe. Set all three variables in the
+same shell, every time: `XDG_CURRENT_DESKTOP=none` makes the desktop keys a
+skipped part, and `XDG_CONFIG_HOME` moves wctl's rules file, which the
+extension then does not read.
 
 ```bash
-export KITTY_CONFIG_DIRECTORY=$S/kitty; mkdir -p "$KITTY_CONFIG_DIRECTORY"
+export XDG_CURRENT_DESKTOP=none XDG_CONFIG_HOME=$S/xdg KITTY_CONFIG_DIRECTORY=$S/kitty
+mkdir -p "$KITTY_CONFIG_DIRECTORY"
 printf 'map ctrl+shift+t new_tab\n' > "$KITTY_CONFIG_DIRECTORY/kitty.conf"
-./bin/revier term install       # writes $S/kitty/revier.conf and the include
-./bin/revier term status        # each key written; ctrl+shift+t shadowed by kitty.conf:3
-./bin/revier term uninstall     # kitty.conf as it was
+wctl rules path                  # must name $S/xdg/gnome-window-control/rules.json
+./bin/revier setup install       # desktop keys skipped; revier.conf, the include, 3 popup rules
+./bin/revier setup status        # each key written; ctrl+shift+t shadowed by kitty.conf:3
+wctl rules list --json           # revier's rules first
+./bin/revier setup uninstall     # kitty.conf and the rules file as they were
 ```
 
-To try a generated map, run `revier term install` in a lease, as
+To try a generated map, run `revier setup install` in a lease, as
 [Drive the desktop on a werft lease](#drive-the-desktop-on-a-werft-lease) says,
 and press the key in the lease's kitty.
 

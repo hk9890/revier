@@ -288,7 +288,7 @@ key = "ctrl+shift+y"
 	}
 }
 
-// A key `revier term install` refuses, because the desktop holds its chord, is
+// A key `revier setup install` refuses, because the desktop holds its chord, is
 // never pressed in the terminal, so doctor does not report its agent.
 func TestDoctorLeavesOutAKeyTermInstallRefuses(t *testing.T) {
 	configRoot(t, `

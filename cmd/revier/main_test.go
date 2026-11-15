@@ -25,11 +25,11 @@ func TestAToolFailureIsPrintedWithRevierStatus(t *testing.T) {
 	}
 }
 
-// `revier keys install` that left keys behind ends with its own status, 4,
+// `revier setup install` that left keys behind ends with its own status, 4,
 // and says nothing more: the plan it printed has already named every key.
 func TestAnIncompleteKeysInstallEndsWithStatusFourAndNoMoreWords(t *testing.T) {
-	if status, say := outcome(fmt.Errorf("install: %w", errKeysIncomplete)); status != exitKeysIncomplete || say {
-		t.Errorf("outcome = %d, %v; want %d, silent", status, say, exitKeysIncomplete)
+	if status, say := outcome(fmt.Errorf("install: %w", errSetupIncomplete)); status != exitSetupIncomplete || say {
+		t.Errorf("outcome = %d, %v; want %d, silent", status, say, exitSetupIncomplete)
 	}
 }
 
@@ -66,21 +66,18 @@ func TestAnExtraArgumentIsRefused(t *testing.T) {
 
 // A subcommand refuses an argument it takes no place for, as a command does:
 // `revier session save before-reboot` would otherwise save an unnamed session.
-// The app has no key binder and a scratch kitty directory, so nothing here
+// The app has no key binder, no window rules and a scratch kitty directory, so nothing here
 // reaches the desktop or the user's terminal.
 func TestASubcommandRefusesAnExtraArgument(t *testing.T) {
 	a, _ := termApp(t, "", "")
 	a.stateRoot = t.TempDir()
 	ctx := context.Background()
 	for name, call := range map[string]func() error{
-		"session save":   func() error { return cmdSessionSave(ctx, a, []string{"before-reboot"}) },
-		"session list":   func() error { return cmdSessionList(a, []string{"extra"}) },
-		"keys status":    func() error { return cmdKeysStatus(ctx, a, []string{"extra"}) },
-		"keys install":   func() error { return cmdKeysApply(ctx, a, "install", []string{"extra"}) },
-		"keys uninstall": func() error { return cmdKeysApply(ctx, a, "uninstall", []string{"extra"}) },
-		"term status":    func() error { return cmdTermStatus(ctx, a, []string{"extra"}) },
-		"term install":   func() error { return cmdTermApply(ctx, a, "install", []string{"extra"}) },
-		"term uninstall": func() error { return cmdTermApply(ctx, a, "uninstall", []string{"extra"}) },
+		"session save":    func() error { return cmdSessionSave(ctx, a, []string{"before-reboot"}) },
+		"session list":    func() error { return cmdSessionList(a, []string{"extra"}) },
+		"setup status":    func() error { return cmdSetup(ctx, a, []string{"status", "extra"}) },
+		"setup install":   func() error { return cmdSetup(ctx, a, []string{"install", "extra"}) },
+		"setup uninstall": func() error { return cmdSetup(ctx, a, []string{"uninstall", "extra"}) },
 	} {
 		if err := call(); err == nil || !strings.Contains(err.Error(), "usage: revier "+name) {
 			t.Errorf("revier %s extra: err = %v, want the usage", name, err)

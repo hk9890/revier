@@ -66,4 +66,4 @@ done
 guest '. ./session.sh; wctl list >/dev/null'
 
 scp -q -F "$cfg" -o ControlPath="$work/ssh" bin/revier "$id":.local/bin/revier.new
-guest 'mv .local/bin/revier.new .local/bin/revier && . ./session.sh && revier keys install --force >/dev/null && revier version'
+guest 'mv .local/bin/revier.new .local/bin/revier && . ./session.sh && revier setup install --force >/dev/null && revier version'

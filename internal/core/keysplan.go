@@ -11,7 +11,7 @@ import (
 )
 
 // ErrKeyConflict means the projects disagree about a key, so no plan can be
-// made. `revier keys status` reports a disagreement and carries on, because it
+// made. `revier setup status` reports a disagreement and carries on, because it
 // is a diagnostic; installing one is a coin flip, so this refuses.
 var ErrKeyConflict = errors.New("the projects disagree about a key")
 
@@ -138,7 +138,7 @@ func bindingLabel(target string) string { return "revier: " + target }
 // changes nothing.
 //
 // It refuses when the projects disagree about a key, because installing either
-// spelling of a disagreement is a guess. `revier keys status` reports the same
+// spelling of a disagreement is a guess. `revier setup status` reports the same
 // disagreement and carries on; that is the difference between a report and a
 // change.
 func (c *Core) PlanInstallKeys(ctx context.Context, projects []Project, trigger Chord) (KeyPlan, error) {
@@ -261,7 +261,7 @@ func conflicts(report KeyReport) error {
 		return nil
 	}
 	sort.Strings(named)
-	return fmt.Errorf("%w: %s. `revier keys status` shows which projects ask for what",
+	return fmt.Errorf("%w: %s. `revier setup status` shows which projects ask for what",
 		ErrKeyConflict, joinAnd(named))
 }
 
@@ -458,7 +458,7 @@ func ownHolder(holders []revier.Binding) (revier.Binding, bool) {
 // Without force, a step that would take a chord from something else is left
 // undone rather than failing the run: a machine where three keys are free and
 // one is a desktop default should get three keys. The caller reports what was
-// skipped, and `revier keys status` shows the half state afterwards.
+// skipped, and `revier setup status` shows the half state afterwards.
 //
 // A step that fails does not stop the ones after it. Each chord is independent,
 // and stopping would leave the reason for the stop hidden behind the first

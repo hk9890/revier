@@ -265,13 +265,13 @@ func keyBinders() map[string]revier.KeyBinder {
 
 // keyWriters are the desktops whose shortcuts revier can change. A writer is a
 // separate type from the reader in the same adapter, so that the reader stays
-// read-only and `revier keys status` cannot reach a write through it.
+// read-only and `revier setup status` cannot reach a write through it.
 func keyWriters() map[string]revier.KeyBinder {
 	return map[string]revier.KeyBinder{"gnome": &gnome.Writer{}}
 }
 
 // selectKeyBinder picks the desktop to read shortcuts from. Finding none is
-// survivable: every other command works, and `revier keys` says so.
+// survivable: every other command works, and `revier setup` says so.
 func selectKeyBinder(ctx context.Context, binders map[string]revier.KeyBinder) revier.KeyBinder {
 	for _, name := range defaultWindowOrder {
 		b, ok := binders[name].(interface {
@@ -298,7 +298,7 @@ func selectKeyWriter(ctx context.Context, binders map[string]revier.KeyBinder) r
 // termKeys is the terminal whose keys revier writes, and termKeyWriter the
 // same terminal behind the type that writes. kitty is the one there is, and
 // its configuration directory is there to read on any machine, so nothing is
-// probed. As with the desktop's keys, `revier term status` is given only the
+// probed. As with the desktop's keys, `revier setup status` is given only the
 // reader.
 func termKeys() revier.TermKeys { return kitty.TermKeys{} }
 

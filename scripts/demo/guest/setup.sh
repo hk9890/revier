@@ -17,7 +17,7 @@ for path in $(gsettings get $media custom-keybindings | tr -d "[],'"); do
 	*"revier popup"*) trigger=$path ;;
 	esac
 done
-[ -n "$trigger" ] || { echo "no desktop key runs revier popup: run revier keys install in the VM" >&2; exit 1; }
+[ -n "$trigger" ] || { echo "no desktop key runs revier popup: run revier setup install in the VM" >&2; exit 1; }
 background=org.gnome.desktop.background
 quoted() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
 saved() { echo "gsettings set $(quoted "$1") $2 $(quoted "$(gsettings get "$1" "$2")")"; }

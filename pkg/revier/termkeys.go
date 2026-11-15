@@ -56,7 +56,7 @@ type TermKeyState struct {
 
 // TermKeys reads the keys a terminal holds for revier.
 //
-// It is read-only, as KeyBinder is: `revier term status` is given it, and a
+// It is read-only, as KeyBinder is: `revier setup status` is given it, and a
 // status command has to be one that cannot change the user's configuration.
 // Writing is TermKeyWriter, which an implementation keeps behind a separate
 // type.

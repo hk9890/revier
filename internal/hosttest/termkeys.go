@@ -8,7 +8,7 @@ import (
 )
 
 // FakeTermKeys is an in-memory TermKeys: a terminal configuration a test
-// sets up and reads back, so layer L2 drives `revier term` with no files.
+// sets up and reads back, so layer L2 drives `revier setup` with no files.
 type FakeTermKeys struct {
 	State revier.TermKeyState
 	// ReadErr makes Read fail, for the error path.

@@ -75,18 +75,16 @@ usage:
                                 format, and neither starts anything; --exec
                                 becomes the agent, as the built-in project
                                 revier-config-assistant runs it
-  revier keys status [--json]   the desktop chords revier wants, and who holds them
-  revier keys install [--force] [-n] [--json]
-                                claim the chords; --force takes one something
-                                else holds; -n prints the plan and changes nothing
-  revier keys uninstall [-n] [--json]
-                                release the chords revier holds
-  revier term status [--json]   the terminal keys revier wants, and what the
-                                terminal's configuration holds of them
-  revier term install [-n] [--json]
-                                write them into the terminal's configuration
-  revier term uninstall [-n] [--json]
-                                remove what revier wrote there
+  revier setup status [--json]  what revier wants in this machine's
+                                configuration - the desktop keys, the terminal
+                                keys and the popup's window rules - and what
+                                holds each now
+  revier setup install [--force] [-n] [--json]
+                                write all of it; --force takes a key or a rule
+                                something else holds; -n prints the plan and
+                                changes nothing
+  revier setup uninstall [-n] [--json]
+                                remove what revier wrote
   revier agent wait <agent> --until <status> [--timeout s] [--json]
                                 block until an agent reaches a status
   revier agent prompt <agent> <text>
@@ -156,10 +154,10 @@ flags:
 // --picker`, which a desktop key runs, opens the popup instead.
 const exitNoProject = 3
 
-// exitKeysIncomplete is returned when `revier keys install` ran and the
-// desktop is not fully what was asked for. Every reason is already printed
-// against the key it belongs to, so this status carries no message of its own.
-const exitKeysIncomplete = 4
+// exitSetupIncomplete is returned when `revier setup install` ran and the
+// machine is not fully what was asked for. Every reason is already printed
+// against the part it belongs to, so this status carries no message of its own.
+const exitSetupIncomplete = 4
 
 // exitTimeout is returned when `revier agent wait` gave up. It is not 1, so a
 // script can tell a wait that ran out of time from one that failed.
@@ -257,10 +255,10 @@ func outcome(err error) (status int, say bool) {
 	// failure.
 	case errors.Is(err, core.ErrNoProject):
 		return exitNoProject, true
-	// The keys command has already said, key by key, what did not happen. A
+	// The setup command has already said, part by part, what did not happen. A
 	// line here would repeat the summary it just printed.
-	case errors.Is(err, errKeysIncomplete):
-		return exitKeysIncomplete, false
+	case errors.Is(err, errSetupIncomplete):
+		return exitSetupIncomplete, false
 	case errors.Is(err, errWaitTimeout):
 		return exitTimeout, true
 	// `revier each` has already named every project it failed in.
@@ -384,10 +382,8 @@ func run(out io.Writer, args []string) error {
 		return cmdStatus(ctx, a, args)
 	case "session":
 		return cmdSession(ctx, a, args)
-	case "keys":
-		return cmdKeys(ctx, a, args)
-	case "term":
-		return cmdTerm(ctx, a, args)
+	case "setup":
+		return cmdSetup(ctx, a, args)
 	case "shutdown":
 		return cmdShutdown(ctx, a, args)
 	default:
@@ -402,8 +398,7 @@ var familyUsage = map[string]string{
 	"agent":   agentUsage,
 	"shell":   shellUsage,
 	"session": sessionUsage,
-	"keys":    keysUsage,
-	"term":    termUsage,
+	"setup":   setupUsage,
 	"each":    eachUsage,
 	"events":  eventsUsage,
 	"state":   stateUsage,
@@ -440,12 +435,12 @@ func commandHelp(cmd string) string {
 // anywhere before `--`, which is what the flag parser reads it as. A first
 // argument of help counts only where nothing names a project, a target or an
 // action: in a family, and in link, whose first argument is a host. Given
-// nothing, session, keys and term answer with their usage too, before the app
+// nothing, session and setup answer with their usage too, before the app
 // their dispatch builds; agent and shell answer it themselves.
 func asksHelp(cmd string, args []string) bool {
 	_, family := familyUsage[cmd]
 	if len(args) == 0 {
-		return cmd == "session" || cmd == "keys" || cmd == "term"
+		return cmd == "session" || cmd == "setup"
 	}
 	if args[0] == "help" && (family || cmd == "link") {
 		return true

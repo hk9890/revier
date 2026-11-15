@@ -40,3 +40,15 @@ func (h *Host) Decode(raw []byte, active func() (int, bool)) ([]revier.Instance,
 }
 
 func (h *Host) DecodeFocused(raw []byte) (revier.TargetRef, error) { return h.decodeFocused(raw) }
+
+// SetRunner replaces wctl for the rules reader and writer.
+func (r *Rules) SetRunner(fn func(ctx context.Context, args ...string) ([]byte, error)) {
+	r.run = fn
+}
+
+// RulesReadOnly exposes the guard between Rules and the rules subcommands
+// that write.
+func RulesReadOnly(args []string) error { return ruleCommand(readRuleCommands, args) }
+
+// DecodeRules exposes the parser of `wctl rules list --json`.
+func DecodeRules(raw []byte) ([]revier.WindowRule, error) { return decodeRules(raw) }

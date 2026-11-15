@@ -27,11 +27,6 @@ const PopupEnv = "REVIER_POPUP"
 var ErrNoPopupHost = errors.New("no window host that can place the popup")
 
 const (
-	// popupWidth is the width of a centred popup, in the workarea's logical
-	// pixels. It is fixed, so that on a wide screen the popup stays one spot
-	// to read, and it holds the detail pane's 100 columns. A workarea
-	// narrower than it gets a popup that fills it. The height is always 100%.
-	popupWidth = 1800
 	// popupPoll is how often the popup's launch asks for its window. Faster
 	// than BindPoll, because the wait is between a keypress and a window that
 	// moves into place as soon as it is found.
@@ -242,11 +237,36 @@ func popupWindow(windows []revier.Instance) (revier.Instance, bool) {
 	return revier.Instance{}, false
 }
 
-// popupGeometry centres the popup at popupWidth when the workarea holds it,
-// and fills the workarea when it does not.
+// popupTier is one size of the popup: the place it gets on a screen at
+// least minWidth logical pixels wide.
+type popupTier struct {
+	minWidth int
+	place    string
+}
+
+// popupTiers are the popup's sizes, widest screen first; the last holds on
+// any screen. The height is always 100%. On a very wide screen the width is
+// fixed, so that the popup stays one spot to read, and it holds the detail
+// pane's 100 columns. On a 29 inch wide screen it is most of the screen, and
+// on a laptop all of it.
+//
+// revier places the popup it launched by them, against the workarea, and
+// writes them as the window host's rules, which place it against the
+// monitor before its first frame (decisions.md D189). The two agree but on
+// a screen whose dock takes it across a tier's width.
+var popupTiers = []popupTier{
+	{minWidth: 3400, place: "center top 1800 100%"},
+	{minWidth: 2200, place: "center top 75% 100%"},
+	{minWidth: 0, place: "left top 100% 100%"},
+}
+
+// popupGeometry is the place of the first tier the workarea is wide enough
+// for.
 func popupGeometry(workareaWidth int) string {
-	if workareaWidth < popupWidth {
-		return "left top 100% 100%"
+	for _, t := range popupTiers {
+		if workareaWidth >= t.minWidth {
+			return t.place
+		}
 	}
-	return fmt.Sprintf("center top %d 100%%", popupWidth)
+	return popupTiers[len(popupTiers)-1].place
 }

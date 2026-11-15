@@ -85,7 +85,8 @@ doc reads what it already did.
 | `close: nothing open`, `close: held open` | an `INFO` line when del in the TUI found nothing of the project open here, or what is open of it held open by another project, `by`. The footer says so, and no `ERROR` line is written |
 | `close: plan dropped` | the plan of a del, for its `project` and `target`, came after a screen opened, a close started or the popup was raised, and nothing was asked |
 | `popup: launched`, `popup: raise`, `popup: switch`, `popup: hide` | the popup key launched the popup, with `over`, the window it was pressed over, and `place`; raised it, with `minimized`; was handed to the surface it was pressed over; or Esc hid it. A `WARN` `popup: switch`, `popup: focused window` or `popup: mark the raise` with `err` is a step of the key that failed; the key went on. `popup hide after go` and `popup hide, quitting instead` are `WARN`s of a hide that failed: after a Go the popup stays, otherwise it quits |
-| `action`, `clone`, `each project`, `agent new`, `shell new`, `go agent`, `agent focus`, `attach`, `focus attached`, `keys install`, `keys uninstall` | the operation named |
+| `action`, `clone`, `each project`, `agent new`, `shell new`, `go agent`, `agent focus`, `attach`, `focus attached` | the operation named |
+| `setup install: keys`, `setup install: term`, `setup install: rules`, and the same three of `setup uninstall` | a part of `revier setup` changed something: each desktop key's `step`; the terminal's `file` and `include`; the rules' `action`. An `ERROR` line carries the `err` the run printed |
 | `config written`, `project created`, `project file written`, `project deleted`, `runtime switched` | the file or setting changed |
 
 ## The event file

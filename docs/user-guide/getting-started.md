@@ -102,32 +102,41 @@ run-or-raise. From another directory, run `revier open demo`. On hc,
 
 ## Install the desktop keys
 
-revier writes its keys into GNOME's keyboard shortcuts. See what an install
-changes first:
+`revier setup install` writes revier's keys into GNOME's keyboard shortcuts,
+its terminal keys into kitty, and the rules that size the popup's window. See
+what an install changes first:
 
 ```
-$ revier keys install --dry-run
-=== revier keys install ===
+$ revier setup install --dry-run
+=== revier setup install ===
 
   dry run: nothing is changed
 
+desktop keys:
   - Alt+Space     revier: popup   skipped: org.gnome.desktop.wm.keybindings activate-window-menu holds it
   > Ctrl+Shift+O  revier: editor  would be created
 
   keybindings: 1 of 2 would be installed
   1 key is held by something else. --force takes it.
+
+terminal keys:
+  ...
+
+popup rules:
+  > 3 rules would be written first
 ```
 
 `revier: popup` is the **trigger key**. It opens the popup: the TUI in a
 kitty window of its own. On a stock GNOME, the window menu holds Alt+Space.
 Do one of these:
 
-- Run `revier keys install --force`. revier takes Alt+Space, and the plan
+- Run `revier setup install --force`. revier takes Alt+Space, and the plan
   prints how to give it back.
 - Set `trigger_key` in [`[ui]`](configuration.md#ui) to a free key, then run
-  `revier keys install`.
+  `revier setup install`.
 
-`revier keys uninstall` removes only what revier wrote.
+`revier setup uninstall` removes only what revier wrote. Run `revier setup
+install` again after you change a key in a project or in `config.toml`.
 
 ## Go to a target and back
 

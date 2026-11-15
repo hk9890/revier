@@ -218,17 +218,19 @@ func TestTakePopupHiddenTakesItOnce(t *testing.T) {
 }
 
 // With no popup open, the terminal is launched, and its window is placed and
-// raised. Height is always 100%. Width is a fixed 1800 px, centred, where the
-// workarea holds it, and 100% where it does not.
+// raised. Height is always 100%. Width is a fixed 1800 px, centred, on a very
+// wide workarea, 75% on a 29 inch wide screen, and 100% on a laptop.
 func TestPopupLaunchesAndPlacesByTheWorkarea(t *testing.T) {
 	cases := []struct {
 		width int
 		want  []string
 	}{
 		{width: 5120, want: []string{"center", "top", "1800", "100%"}},
-		{width: 1920, want: []string{"center", "top", "1800", "100%"}},
-		{width: 1800, want: []string{"center", "top", "1800", "100%"}},
-		{width: 1799, want: []string{"left", "top", "100%", "100%"}},
+		{width: 3400, want: []string{"center", "top", "1800", "100%"}},
+		{width: 3399, want: []string{"center", "top", "75%", "100%"}},
+		{width: 2560, want: []string{"center", "top", "75%", "100%"}},
+		{width: 2200, want: []string{"center", "top", "75%", "100%"}},
+		{width: 2199, want: []string{"left", "top", "100%", "100%"}},
 		{width: 1440, want: []string{"left", "top", "100%", "100%"}},
 	}
 	for _, tc := range cases {

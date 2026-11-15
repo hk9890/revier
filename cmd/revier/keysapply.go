@@ -1,11 +1,8 @@
 package main
 
 import (
-	"context"
-	"flag"
 	"fmt"
 	"io"
-	"log/slog"
 	"strings"
 	"text/tabwriter"
 	"unicode"
@@ -13,85 +10,6 @@ import (
 
 	"github.com/hk9890/revier/internal/core"
 )
-
-// cmdKeysApply is install and uninstall. They differ in the plan they build
-// and in nothing else, so they share the run: build the plan, print it, apply
-// it unless this is a dry run, print what happened.
-func cmdKeysApply(ctx context.Context, a *app, sub string, args []string) error {
-	fs := flag.NewFlagSet("keys "+sub, flag.ContinueOnError)
-	force := fs.Bool("force", false, "take a key something else holds")
-	var dryRun bool
-	fs.BoolVar(&dryRun, "dry-run", false, "print what would happen and change nothing")
-	fs.BoolVar(&dryRun, "n", false, "print what would happen and change nothing (shorthand)")
-	asJSON := fs.Bool("json", false, "emit the plan as JSON")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) > 0 {
-		if sub == "uninstall" {
-			return fmt.Errorf("usage: revier keys uninstall [-n] [--json]")
-		}
-		return fmt.Errorf("usage: revier keys install [--force] [-n] [--json]")
-	}
-	if sub == "uninstall" && *force {
-		// Nothing to force: uninstall removes what revier wrote and never
-		// touches anything else, so there is no key it could be asked to take.
-		return fmt.Errorf("keys uninstall takes no --force: it removes only revier's own shortcuts")
-	}
-
-	trigger, err := a.cfg.TriggerKey()
-	if err != nil {
-		return err
-	}
-
-	plan, err := buildPlan(ctx, a, sub, trigger)
-	if err != nil {
-		return err
-	}
-	if !dryRun {
-		plan = a.core.ApplyKeys(ctx, plan, *force)
-		for _, s := range plan.Steps {
-			if s.Err != "" {
-				slog.Error("keys "+sub, "step", s)
-			} else if s.Done {
-				slog.Info("keys "+sub, "step", s)
-			}
-		}
-	}
-
-	if *asJSON {
-		if err := a.printJSON(plan); err != nil {
-			return err
-		}
-	} else {
-		printPlan(a.out, plan, sub, dryRun, *force)
-	}
-
-	// A skipped key and a failed one are both reasons the desktop is not what
-	// was asked for, so the status says so and a script can see it. The status
-	// is the same either way: a caller reading JSON is the one most likely to
-	// be a script, so it is the last one that should have to parse the plan to
-	// find out the run was incomplete.
-	for _, s := range plan.Steps {
-		if s.Err != "" || (s.Action.Blocked() && !*force) {
-			return errKeysIncomplete
-		}
-	}
-	return nil
-}
-
-// errKeysIncomplete means the command ran and the desktop is not fully what
-// was asked for. It carries no message: every reason has already been printed
-// against the key it belongs to.
-var errKeysIncomplete = fmt.Errorf("some keys were not installed")
-
-func buildPlan(ctx context.Context, a *app, sub string, trigger core.Chord) (core.KeyPlan, error) {
-	if sub == "uninstall" {
-		return a.core.PlanUninstallKeys(ctx, a.projects, trigger)
-	}
-	return a.core.PlanInstallKeys(ctx, a.projects, trigger)
-}
 
 // acts reports whether the step changes the desktop on this run. A dry run has
 // no Done to read, so it is worked out the same way the run itself works it
@@ -180,10 +98,6 @@ func heldBy(s core.KeyStep) string {
 }
 
 func printPlan(w io.Writer, plan core.KeyPlan, sub string, dryRun, force bool) {
-	_, _ = fmt.Fprintf(w, "=== revier keys %s ===\n\n", sub)
-	if dryRun {
-		_, _ = fmt.Fprint(w, "  dry run: nothing is changed\n\n")
-	}
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	for _, s := range plan.Steps {
@@ -257,7 +171,7 @@ func printSummary(w io.Writer, plan core.KeyPlan, sub string, dryRun, force bool
 			blocked, plural(blocked, "key is", "keys are"), plural(blocked, "it", "them"))
 	}
 	if settled == total && !dryRun {
-		_, _ = fmt.Fprintln(w, "  `revier keys uninstall` gives them back.")
+		_, _ = fmt.Fprintln(w, "  `revier setup uninstall` gives them back.")
 	}
 }
 

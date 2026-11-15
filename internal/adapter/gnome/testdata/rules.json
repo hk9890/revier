@@ -1,0 +1,39 @@
+[
+  {
+    "match": {
+      "class": "revier-popup",
+      "min_width": 3400
+    },
+    "place": [
+      "center",
+      "top",
+      "1800",
+      "100%"
+    ],
+    "overlay": true
+  },
+  {
+    "match": {
+      "class": "revier-popup"
+    },
+    "place": [
+      "left",
+      "top",
+      "100%",
+      "100%"
+    ],
+    "overlay": true
+  },
+  {
+    "match": {
+      "class": "code"
+    },
+    "tile": "left"
+  },
+  {
+    "match": {
+      "class": "revier-popup"
+    },
+    "overlay": true
+  }
+]

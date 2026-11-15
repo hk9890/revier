@@ -68,11 +68,15 @@ that did not focus after `Open` passed L2 and failed L4.
     (`config.Root`, `state.Root`, `sshconfig.Path`).
   - `testenv.Run` does not set the variable of another tool. Set it with
     `t.Setenv` in each test that reaches that tool's path.
-  - The one exception: `testenv.Run` sets `KITTY_CONFIG_DIRECTORY` too,
-    because `revier term` writes kitty's configuration and the user's kitty
-    directory can be a link into a dotfiles repository. Still set it with
-    `t.Setenv` in each test that reads or writes it; give a package whose
-    code reaches `kitty.ConfigDir` the `TestMain` above.
+  - The two exceptions: `testenv.Run` sets `KITTY_CONFIG_DIRECTORY` and
+    `XDG_CONFIG_HOME` too, because `revier setup` writes kitty's
+    configuration and wctl's rules file, and either can be a link into a
+    dotfiles repository. Still set `KITTY_CONFIG_DIRECTORY` with `t.Setenv`
+    in each test that reads or writes it; give a package whose code reaches
+    `kitty.ConfigDir` the `TestMain` above.
+  - Give `revier setup` in a `cmd/revier` test fake stores through
+    `app.stores`, as `termOnly` in its `helpers_test.go` does: the default
+    probes this machine and writes its desktop keys.
 - Call `testenv.NoTools(t)` in a test that must start no tool, such as git or
   mise, rather than setting PATH inline.
 - Give a new test the context `t.Context()` returns, not

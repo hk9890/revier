@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -209,7 +210,7 @@ var dispatchers = map[string]string{
 	"cmdAgent":   "agent",
 	"cmdShell":   "shell",
 	"cmdSession": "session",
-	"cmdKeys":    "keys",
+	"cmdSetup":   "setup",
 	"cmdEach":    "each",
 }
 
@@ -302,7 +303,17 @@ func termApp(t *testing.T, text, kittyConf string) (*app, string) {
 	if err := os.WriteFile(filepath.Join(dir, "kitty.conf"), []byte(kittyConf), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return &app{cfg: cfg, core: &core.Core{}, out: &bytes.Buffer{}}, dir
+	return &app{cfg: cfg, core: &core.Core{}, out: &bytes.Buffer{}, stores: termOnly}, dir
+}
+
+// termOnly gives `revier setup` the kitty configuration a test points
+// KITTY_CONFIG_DIRECTORY at, and no desktop and no window rules, so no test
+// reaches the user's desktop.
+func termOnly(_ context.Context, write bool) setupStores {
+	if write {
+		return setupStores{term: termKeyWriter()}
+	}
+	return setupStores{term: termKeys()}
 }
 
 // kittyOnPath puts a kitty and a kitten first on PATH that are never run,

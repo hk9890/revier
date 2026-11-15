@@ -8,6 +8,7 @@ package gnome_test
 
 import (
 	"context"
+	"reflect"
 	"slices"
 	"testing"
 
@@ -82,7 +83,26 @@ func TestDecodeFocused(t *testing.T) {
 	}
 }
 
-// The version document of wctl 0.16.0, recorded: the host takes it as usable,
+// The listing of wctl 0.23.0, recorded from a scratch file: revier's two
+// rules, a rule that tiles, and the overlay rule the guide had users write by
+// hand.
+func TestDecodeRulesReadsTheRecordedListing(t *testing.T) {
+	got, err := gnome.DecodeRules(read(t, "rules.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []revier.WindowRule{
+		{Class: "revier-popup", MinWidth: 3400, Place: []string{"center", "top", "1800", "100%"}, Overlay: true},
+		{Class: "revier-popup", Place: []string{"left", "top", "100%", "100%"}, Overlay: true},
+		{Class: "code", Other: true},
+		{Class: "revier-popup", Overlay: true},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("rules =\n%+v\nwant\n%+v", got, want)
+	}
+}
+
+// The version document of wctl 0.23.0, recorded: the host takes it as usable,
 // and reads that the extension minimizes and activates without the animation.
 func TestProbeReadsTheRecordedVersion(t *testing.T) {
 	onGNOME(t)
