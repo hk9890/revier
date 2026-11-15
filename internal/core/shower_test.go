@@ -1,6 +1,7 @@
 package core_test
 
 import (
+	"context"
 	"slices"
 	"testing"
 
@@ -261,5 +262,70 @@ func TestAKeyInAViewWindowReachesTheRuntimePanelBehindIt(t *testing.T) {
 	}
 	if len(view.Beside) != 1 || view.Beside[0].Panel != "8" || view.Beside[0].Spec.Kind != revier.PanelShell || view.Beside[0].Spec.Dir != dir {
 		t.Errorf("beside = %+v, want a plain shell beside window 8 in %s", view.Beside, dir)
+	}
+}
+
+// osWindowView is FakeView whose windows are OS windows the window host wm
+// lists by the instance's title, as the kitty view's are under GNOME.
+type osWindowView struct {
+	*hosttest.FakeView
+	wm      *hosttest.Fake
+	windows map[string]revier.TargetRef
+}
+
+func (v *osWindowView) Capabilities() revier.Capabilities {
+	return revier.Capabilities{OSWindows: true}
+}
+
+func (v *osWindowView) Show(ctx context.Context, inst revier.Instance, open bool) (bool, error) {
+	opened, err := v.FakeView.Show(ctx, inst, open)
+	if opened {
+		v.windows[inst.Ref.ID] = v.wm.AddInstance(revier.Instance{Title: inst.Title, Class: "kitty"})
+	}
+	return opened, err
+}
+
+func (v *osWindowView) closeWindow(ref revier.TargetRef) {
+	v.CloseWindow(ref)
+	v.wm.Remove(v.windows[ref.ID])
+	delete(v.windows, ref.ID)
+}
+
+// A view window that opens again over a live workspace is a window revier
+// starts, so it goes where the home target places a launch's, whether a
+// press on home, a press on a tab or a restore opened it (decisions.md D24,
+// D186).
+func TestAViewWindowOpenedAgainGoesWhereALaunchGoes(t *testing.T) {
+	proj := viewedProject()
+	proj.Targets[0].Runtime.Place = "right top 75% 100%"
+	want := []string{"right", "top", "75%", "100%"}
+	for _, again := range []string{"home", "agent", "restore"} {
+		t.Run(again, func(t *testing.T) {
+			rt, wm := hosttest.NewRuntime("hc"), hosttest.New("wm")
+			view := &osWindowView{FakeView: hosttest.NewView("kitty"), wm: wm, windows: map[string]revier.TargetRef{}}
+			c := &core.Core{Runtime: rt, View: view, Window: wm}
+			projects := []core.Project{prepared(t, proj)}
+			res, err := press(t.Context(), c, projects[0], "home")
+			if err != nil {
+				t.Fatalf("press: %v", err)
+			}
+			if got := wm.Placements[view.windows[res.Ref.ID].ID]; !slices.Equal(got, want) {
+				t.Fatalf("launch placed %v, want %v", got, want)
+			}
+			view.closeWindow(res.Ref)
+
+			if again == "restore" {
+				c.Ledger = &ledger{}
+				s := session.Session{Projects: []session.Project{{Name: "revier", Targets: []session.Target{{Name: "home"}}}}}
+				if _, back := c.Restore(t.Context(), s, survey(t, c, projects, nil), projects, core.RestoreOpts{}); back != nil {
+					t.Fatalf("restore: %v", back)
+				}
+			} else if _, err := press(t.Context(), c, projects[0], revier.TargetName(again)); err != nil {
+				t.Fatalf("press %s: %v", again, err)
+			}
+			if got := wm.Placements[view.windows[res.Ref.ID].ID]; !slices.Equal(got, want) {
+				t.Errorf("window opened again placed %v, want %v", got, want)
+			}
+		})
 	}
 }

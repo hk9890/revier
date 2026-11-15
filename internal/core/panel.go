@@ -465,7 +465,7 @@ func (c *Core) goTabOnce(ctx context.Context, p Project, i int, bound Bindings, 
 
 	var osw revier.TargetRef
 	if !opened {
-		if osw, err = c.raisableShown(ctx, snap, unlisted, in, t.Name); err != nil {
+		if osw, err = c.raisableShown(ctx, snap, unlisted, in, t.Name, c.placeOf(p, t.Runtime.Inside)); err != nil {
 			return Result{}, err
 		}
 	}

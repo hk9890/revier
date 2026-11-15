@@ -191,7 +191,7 @@ func (c *Core) showRunning(ctx context.Context, p Project, name revier.TargetNam
 			return
 		}
 	}
-	host, _, m, err := c.resolveAt(p, i)
+	host, real, m, err := c.resolveAt(p, i)
 	if err != nil {
 		return
 	}
@@ -202,8 +202,14 @@ func (c *Core) showRunning(ctx context.Context, p Project, name revier.TargetNam
 	if !found {
 		return
 	}
-	if _, err := c.show(ctx, inst.Ref, true); err != nil {
+	opened, err := c.show(ctx, inst.Ref, true)
+	if err != nil {
 		slog.Warn("restore: show a running target", "project", p.Name, "target", name, "err", err)
+	}
+	// The window is one revier starts, so it goes where a launch's goes
+	// (decisions.md D186).
+	if opened && real.Place != "" && c.bridged(inst) {
+		c.placeShown(ctx, inst.Ref, name, real.Place)
 	}
 }
 

@@ -129,8 +129,10 @@ func (c *Core) show(ctx context.Context, ref revier.TargetRef, open bool) (bool,
 // that opens its own windows first opens one where none shows it, and the OS
 // window is then the new one, which the window host lists only after a
 // wait. A new window it never lists is not raised, as a launch's is not
-// (raiseNew).
-func (c *Core) raisableShown(ctx context.Context, snap snapshot, failed hostErrs, inst revier.Instance, name revier.TargetName) (revier.TargetRef, error) {
+// (raiseNew). place is where the instance's target puts a window it starts,
+// "" for none: the window opened now is one revier starts, so it goes there
+// as a launch's does (decisions.md D24, D186).
+func (c *Core) raisableShown(ctx context.Context, snap snapshot, failed hostErrs, inst revier.Instance, name revier.TargetName, place string) (revier.TargetRef, error) {
 	opened, err := c.show(ctx, inst.Ref, true)
 	if err != nil {
 		return revier.TargetRef{}, fmt.Errorf("%s: show %s: %w", c.View.Name(), name, err)
@@ -142,11 +144,36 @@ func (c *Core) raisableShown(ctx context.Context, snap snapshot, failed hostErrs
 	if !c.bridged(inst) {
 		return revier.TargetRef{}, nil
 	}
-	osw, ok := c.windowOfNew(ctx, inst.Ref)
+	return c.placeShown(ctx, inst.Ref, name, place), nil
+}
+
+// placeShown waits for the OS window a view opened again over the live
+// instance ref, puts it where place says, and returns it: zero when the
+// window host never lists it.
+func (c *Core) placeShown(ctx context.Context, ref revier.TargetRef, name revier.TargetName, place string) revier.TargetRef {
+	osw, ok := c.windowOfNew(ctx, ref)
 	if !ok {
-		slog.Warn("raise: the window host never listed the new window", "ref", inst.Ref, "target", name)
+		slog.Warn("raise: the window host never listed the new window", "ref", ref, "target", name)
+		return osw
 	}
-	return osw, nil
+	if placer, can := c.Window.(revier.WindowPlacer); can && place != "" {
+		c.placeOn(ctx, placer, osw, place)
+	}
+	return osw
+}
+
+// placeOf is where the project's target name puts a window it starts, and ""
+// when it names no place or does not resolve.
+func (c *Core) placeOf(p Project, name revier.TargetName) string {
+	i, ok := p.index(name)
+	if !ok {
+		return ""
+	}
+	_, real, _, err := c.resolveAt(p, i)
+	if err != nil {
+		return ""
+	}
+	return real.Place
 }
 
 // finder is the view's map from the panel id a terminal key passes to the

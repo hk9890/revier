@@ -790,7 +790,7 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 			return c.goTo(ctx, p, home.Name, bound)
 		}
 	}
-	osw, err := c.raisableShown(ctx, snap, failed, inst, name)
+	osw, err := c.raisableShown(ctx, snap, failed, inst, name, real.Place)
 	if err != nil {
 		return Result{}, err
 	}
@@ -1199,7 +1199,7 @@ func (c *Core) Focus(ctx context.Context, ref revier.TargetRef) error {
 		return c.focus(ctx, ref)
 	}
 	name := revier.TargetName(ref.Title)
-	osw, err := c.raisableShown(ctx, snap, failed, inst, name)
+	osw, err := c.raisableShown(ctx, snap, failed, inst, name, "")
 	if err != nil {
 		return err
 	}

@@ -160,7 +160,8 @@ type Realization struct {
 	// width, height - in the window host's own vocabulary of pixels and
 	// workarea-relative words: "right top 75% 100%". It applies to a launch
 	// and never to a raise, because moving a window the user has already put
-	// somewhere is not revier's business (decisions.md D24).
+	// somewhere is not revier's business (decisions.md D24). A view window
+	// that opens again over a live instance is placed as a launch's (D186).
 	//
 	// A window host that cannot place windows ignores it.
 	Place string `toml:"place" json:"place,omitempty"`

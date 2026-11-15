@@ -238,6 +238,10 @@ go run ./scripts/drive survey       # the view both renderers read, as JSON
 go run ./scripts/drive kill         # stop the private core and remove its directory
 ```
 
+Expect one WARN on the first `go`, `the service manager did not start the
+unit; starting it detached`: the driver's environment reaches no service
+manager, so the core starts detached, as it should.
+
 Run `kill` when you finish. The core persists between invocations on purpose,
 so a stale one skews the next session's first result.
 

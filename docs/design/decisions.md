@@ -1066,3 +1066,12 @@ named that cannot show the selected runtime is an error, and `none` shows
 nothing. Left out, the view is the runtime's own when it draws itself, then
 kitty where it can show the runtime, else none, so a kitty user's setup is
 the one of before.
+
+### D186 — a view window that opens again over a live instance is placed as a launch's
+
+Extends D24 and D181. Under hc the window a view opens over running terminals
+is one revier starts, though nothing was launched, so the instance's target
+places it once, as a launch: a closed kitty comes back where the workspace
+always opens. A raise of a window that shows the instance still moves nothing.
+An agent reached from the TUI names no target, so a window it opens again is
+not placed.

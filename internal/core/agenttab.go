@@ -577,7 +577,7 @@ func (c *Core) openTab(ctx context.Context, w Workspace, t tabRuntime, tab revie
 	if focus {
 		inst, _ := byRef(w.snap, w.Ref)
 		var err error
-		if osw, err = c.raisableShown(ctx, w.snap, w.failed, inst, w.Target); err != nil {
+		if osw, err = c.raisableShown(ctx, w.snap, w.failed, inst, w.Target, t.real.Place); err != nil {
 			return "", err
 		}
 	}

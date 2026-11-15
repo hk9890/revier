@@ -157,7 +157,8 @@ policy:
 - **A view that is gone.** Under hc the runtime outlives the view, so
   run-or-raise on a live instance that no view shows opens a view over its
   terminals and starts nothing, as a restore that finds it running does
-  (D181).
+  (D181). That window is one revier starts, so it is placed as a launch's
+  (D186).
 - **The popup's second press.** The popup's surface listens on a socket of its
   own, and the press finds the popup through the window host, by its class.
   No runtime is asked, so the popup works under every runtime (D182).

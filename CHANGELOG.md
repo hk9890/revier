@@ -47,7 +47,8 @@ Each section is also the text of its release on the
   side by side. Targets with `inside`, `revier agent new`, `revier shell new`,
   the kitty keys, a second press that goes home and `revier session restore`
   work as on kitty. Closing kitty ends no agent: the next press opens the
-  window again over the running agents and starts nothing. With no kitty or
+  window again over the running agents, where `place` puts a new one, and
+  starts nothing. With no kitty or
   no display, as over ssh, nothing shows hc, and `revier open --attach`
   reaches a workspace. `revier doctor` says which view shows hc. Without the
   setting, kitty runs your workspaces as before. Images are gone once a

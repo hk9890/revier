@@ -49,8 +49,8 @@ runtime does not read hc's terminals.
 
 - Each kitty window runs hc's attach of one terminal. Closing a window, a tab
   or the whole kitty ends no program. The next press on the workspace opens
-  its window again over the running terminals, and `revier session restore`
-  does too.
+  its window again over the running terminals, where the workspace's `place`
+  puts it, and `revier session restore` does too.
 - To end a program, close it in revier: `revier shutdown`, `revier agent
   close`, or exit the program. Its window then closes.
 - `revier agent new --no-focus` from a script adds the tab to the window
