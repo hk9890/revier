@@ -46,7 +46,7 @@ func TestRulesNeedAnExtensionThatReadsEveryKeyRevierWrites(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			w := &wctl{reply: versionReply(tc.doc, 0)}
-			err := w.rules().Probe(context.Background())
+			err := w.rules().Probe(t.Context())
 			if (err == nil) != tc.usable {
 				t.Errorf("Probe = %v, want usable %v", err, tc.usable)
 			}
@@ -59,7 +59,7 @@ func TestRulesNeedAnExtensionThatReadsEveryKeyRevierWrites(t *testing.T) {
 func TestTheWriterAsksWctlForTheRuleAsWritten(t *testing.T) {
 	w := &wctl{}
 	r := w.rules()
-	ctx := context.Background()
+	ctx := t.Context()
 	if err := r.Add(ctx, 0, revier.WindowRule{Class: "revier-popup", MinWidth: 3400, Place: []string{"center", "top", "1800", "100%"}, Overlay: true}); err != nil {
 		t.Fatal(err)
 	}

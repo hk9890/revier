@@ -114,7 +114,7 @@ type Core struct {
 
 	// TermKeys reads the keys the terminal holds for revier: the second key
 	// store, beside the desktop's (decisions.md D147). Nil leaves `revier
-	// term` with no terminal.
+	// setup` with no terminal.
 	TermKeys revier.TermKeys
 
 	// WindowRules reads the window host's placement rules, the popup's among

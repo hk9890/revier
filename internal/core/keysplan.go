@@ -229,7 +229,7 @@ func (c *Core) PlanUninstallKeys(ctx context.Context, projects []Project, trigge
 	return plan, nil
 }
 
-// keyState is the one read both plans start from: the report `keys status`
+// keyState is the one read both plans start from: the report `setup status`
 // prints, plus the bindings behind it, because a plan acts on the shortcuts
 // themselves and not on their labels.
 //
