@@ -1076,3 +1076,13 @@ places it once, as a launch: a closed kitty comes back where the workspace
 always opens. A raise of a window that shows the instance still moves nothing.
 An agent reached from the TUI names no target, so a window it opens again is
 not placed.
+
+### D187 — a kitty panel carries the window's program status unread, and a probe reads it
+
+Extends D119, D144. kitty 0.50 keeps the OSC 7501 records each program in a
+window sends, and the listing revier already takes reports them, so the panel
+carries them as a var and a probe that needs them starts no kitten of its own.
+The records name a program, not an agent: rsync sends them too. So the host
+neither filters nor maps them, and drops a user var of the same name. Rejected:
+the socket to the probe, which hands it all of kitty's remote control; a
+built-in mapping, until a second agent sends the records.

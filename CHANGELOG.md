@@ -63,6 +63,9 @@ Each section is also the text of its release on the
 - A name in `[hosts]` that revier does not know now stops with
   `hosts.runtime: unknown host "<name>"; known: ...` (or `hosts.window: ...`),
   in place of `unknown runtime host "<name>"`.
+- **A probe in kitty 0.50 or later reads the state a program reported with
+  OSC 7501**, in the `kitty_program_status` var of the panel it gets on
+  stdin. It no longer needs to ask kitty itself.
 
 ## v0.27.0
 
