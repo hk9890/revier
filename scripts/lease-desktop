@@ -1,0 +1,51 @@
+#!/bin/sh
+# Turns a werft lease of ubuntu-26-04 into a desktop revier can drive: GNOME
+# logs in by itself; kitty, jq, hyperfine, GNOME Text Editor, the JetBrainsMono
+# Nerd Font, wctl and hc at the version CI pins are installed; ./bin/revier is
+# on PATH and its desktop keys are claimed, also where GNOME holds them. Leaves
+# ~/session.sh in the lease: source it in each ssh command that reaches the
+# desktop.
+set -eu
+
+id="${1:?usage: scripts/lease-desktop <lease-id>}"
+cfg=$(werft --json leases | jq -re --arg id "$id" '.[] | select(.id == $id) | .ssh_config')
+guest() { ssh -F "$cfg" "$id" "$@"; }
+hc_version=$(sed -n 's/^ *HC_VERSION: //p' .github/workflows/ci.yml)
+hc_sha256=$(sed -n 's/^ *HC_SHA256: //p' .github/workflows/ci.yml)
+
+guest 'sudo -n apt-get update -qq && sudo -n DEBIAN_FRONTEND=noninteractive apt-get install -y -qq kitty jq gnome-text-editor hyperfine curl unzip git >/dev/null'
+guest "mkdir -p ~/.local/bin && curl -fsSL -o /tmp/hc.tar.gz https://releases.herdr.dev/core/$hc_version/herdr-core-linux-x86_64.tar.gz && echo '$hc_sha256  /tmp/hc.tar.gz' | sha256sum -c --quiet - && tar -xzf /tmp/hc.tar.gz -C ~/.local/bin herdr-core && ln -sf herdr-core ~/.local/bin/hc"
+guest 'printf "[daemon]\nAutomaticLoginEnable=true\nAutomaticLogin=%s\n" "$USER" | sudo -n tee /etc/gdm3/custom.conf >/dev/null'
+guest 'cat > ~/session.sh' <<'E'
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
+export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+export WAYLAND_DISPLAY=wayland-0 XDG_CURRENT_DESKTOP=ubuntu:GNOME XDG_SESSION_TYPE=wayland
+export PATH=$HOME/.local/bin:$PATH
+E
+
+guest 'mkdir -p ~/.local/share/fonts ~/.local/bin && curl -fsSL -o /tmp/font.zip https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip && unzip -qo /tmp/font.zip -d ~/.local/share/fonts/JetBrainsMono && fc-cache -f >/dev/null'
+guest 'rm -rf /tmp/gwc && git clone -q --depth 1 https://github.com/carlo9890/gnome-window-control.git /tmp/gwc && bash /tmp/gwc/install-wctl.sh --download >/dev/null'
+guest 'ext=~/.local/share/gnome-shell/extensions/window-control@carlo9890.github.io && mkdir -p "${ext%/*}" && rm -rf "$ext" && cp -r /tmp/gwc/window-control@carlo9890.github.io "$ext" && glib-compile-schemas "$ext/schemas"'
+
+# GNOME reads its extension list once, at login: log in, enable wctl's
+# extension, and log in again.
+login() {
+	guest 'sudo -n systemctl restart gdm3'
+	for _ in $(seq 60); do
+		guest '. ./session.sh; gdbus call --session -d org.gnome.Shell -o /org/gnome/Shell -m org.freedesktop.DBus.Peer.Ping' >/dev/null 2>&1 && return
+		sleep 2
+	done
+	echo "lease-desktop: GNOME did not log in" >&2
+	exit 1
+}
+login
+guest '. ./session.sh; gsettings set org.gnome.shell disable-user-extensions false && gsettings set org.gnome.shell enabled-extensions "[\"window-control@carlo9890.github.io\"]"'
+login
+for _ in $(seq 30); do
+	guest '. ./session.sh; wctl list >/dev/null' 2>/dev/null && break
+	sleep 2
+done
+guest '. ./session.sh; wctl list >/dev/null'
+
+scp -q -F "$cfg" bin/revier "$id":.local/bin/revier
+guest '. ./session.sh; revier keys install --force >/dev/null && revier version'

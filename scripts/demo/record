@@ -1,24 +1,27 @@
 #!/bin/sh
-# Records the README's feature clips on a libvirt VM with a logged-in GNOME
-# desktop. Keys go in with virsh send-key, GNOME's own screencast records each
+# Records the README's feature clips on a werft lease that scripts/lease-desktop
+# prepared. Keys go in with virsh send-key, GNOME's own screencast records each
 # clip at 30 fps, and compose.py lays the pressed keys over it. Nothing runs on
-# this desktop. <vm> is the libvirt domain, reachable as `ssh <vm>`.
+# this desktop.
 set -eu
 
-vm="${1:?usage: scripts/demo/record <vm> [output dir]}"
+id="${1:?usage: scripts/demo/record <lease-id> [output dir]}"
 out=$(realpath -m "${2:-.github/assets}")
 mkdir -p "$out"
 dir=$(cd "$(dirname "$0")" && pwd)
 work=$(mktemp -d)
+lease=$(werft --json leases | jq -ce --arg id "$id" '.[] | select(.id == $id)')
+vm=$(echo "$lease" | jq -r .domain)
+cfg=$(echo "$lease" | jq -r .ssh_config)
 virsh() { command virsh -c qemu:///system "$@"; }
-guest() { ssh -o ControlMaster=auto -o ControlPath="$work/ssh" -o ControlPersist=120 "$vm" "$@"; }
+guest() { ssh -F "$cfg" -o ControlMaster=auto -o ControlPath="$work/ssh" -o ControlPersist=120 "$id" "$@"; }
 trap 'guest "sh /tmp/rvdemo/teardown.sh"; rm -rf "$work"' EXIT
 
 go build -ldflags "-X github.com/hk9890/revier/internal/build.Version=$(git describe --tags --abbrev=0)" \
 	-o "$work/revier" ./cmd/revier
 guest 'test -f /tmp/rvdemo/teardown.sh && sh /tmp/rvdemo/teardown.sh; mkdir -p /tmp/rvdemo/bin /tmp/rvdemo/clips'
-scp -q -o ControlPath="$work/ssh" "$dir"/guest/* "$vm":/tmp/rvdemo/
-scp -q -o ControlPath="$work/ssh" "$work/revier" "$vm":/tmp/rvdemo/bin/
+scp -q -F "$cfg" -o ControlPath="$work/ssh" "$dir"/guest/* "$id":/tmp/rvdemo/
+scp -q -F "$cfg" -o ControlPath="$work/ssh" "$work/revier" "$id":/tmp/rvdemo/bin/
 guest 'sh /tmp/rvdemo/setup.sh'
 
 send() { virsh send-key "$vm" --holdtime 60 "$@" >/dev/null; }
@@ -42,7 +45,7 @@ stop() {
 	sleep "$1"
 	mark end
 	guest 'cd /tmp/rvdemo/clips; pid=$(cat recorder.pid); kill $pid; while kill -0 $pid 2>/dev/null; do sleep 0.1; done'
-	scp -q -o ControlPath="$work/ssh" "$vm:/tmp/rvdemo/clips/$clip.webm" "$work/"
+	scp -q -F "$cfg" -o ControlPath="$work/ssh" "$id:/tmp/rvdemo/clips/$clip.webm" "$work/"
 }
 
 # Start the popup once, so the clips show it warm, then put billing in front.

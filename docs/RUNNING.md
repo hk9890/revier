@@ -12,13 +12,16 @@ session.** A stray `Open` steals focus mid-sentence, and a stray `Focus` moves
 a window the user is reading.
 
 Every recipe below runs on a private substrate instead: an hc core of its
-own, shown in no view. Nothing here attaches a client, reaches a display, or
-reaches the user's own hc core or service manager.
+own, shown in no view. Nothing here attaches a client, reaches the user's
+display, or reaches the user's own hc core or service manager. A check that
+needs a desktop runs on a werft lease's:
+[Drive the desktop on a werft lease](#drive-the-desktop-on-a-werft-lease).
 
 `revier keys install`, `revier term install` and their `uninstall` rewrite the
 user's desktop and kitty configuration, the kitty one often a link into a
-dotfiles repository. Leave them to the user, except `term` on a scratch kitty
-directory; `keys status`, `term status` and `--dry-run` read only.
+dotfiles repository. On this machine, leave them to the user, except `term` on
+a scratch kitty directory; `keys status`, `term status` and `--dry-run` read
+only. In a lease, run them.
 
 Run `mise run build` first. The recipes call `./bin/revier`, and a fresh
 worktree has none.
@@ -257,15 +260,16 @@ and restore). It drives a libvirt VM's GNOME desktop with `virsh send-key` and
 records it with GNOME's own screencast, so nothing reaches this desktop:
 
 ```bash
-scripts/demo/record <vm>          # builds revier, writes .github/assets/*.webp
-scripts/demo/record <vm> /tmp/x   # anywhere else, to compare first
+scripts/demo/record <lease-id>          # builds revier, writes .github/assets/*.webp
+scripts/demo/record <lease-id> /tmp/x   # anywhere else, to compare first
 ```
 
-- Give it a VM on `qemu:///system` whose domain name answers `ssh <vm>`.
-  Start it with `virsh -c qemu:///system start <vm>`.
-- Log in to the VM's desktop once first: the keys go to a GNOME session.
-- The VM needs kitty, `wctl`, GNOME Text Editor, and `revier keys install`
-  run once: the script finds the trigger key by its `revier popup` command.
+- Give it a new lease that `scripts/lease-desktop` prepared, as
+  [Drive the desktop on a werft lease](#drive-the-desktop-on-a-werft-lease)
+  says, but in tier `full`: the clips take kitty's theme, font and window
+  frame from the user's setup, which a `plain` lease lacks. A lease that ran
+  other checks first keeps their workspace kitty, and the popup shows their
+  projects.
 - This machine needs ffmpeg with libwebp, `python3-pil` for `/usr/bin/python3`,
   and the JetBrainsMono Nerd Font, which draws the keycaps.
 - The recording uses a scratch configuration and fake agents. The script
@@ -274,44 +278,57 @@ scripts/demo/record <vm> /tmp/x   # anywhere else, to compare first
 - Open each clip in a browser before you commit: ffmpeg cannot decode an
   animated WebP.
 
-## When a screen is unavoidable
+## Drive the desktop on a werft lease
 
-Only the GNOME host and kitty's `Open` and `Focus` need the user's live
-session. Exhaust the substrates above first, then hand the user a specific
-command and say what to look for, rather than running it yourself:
+The GNOME host, kitty's `Open` and `Focus`, the kitty view over hc, the
+desktop keys and a real reboot need a GNOME session. Drive them on a werft
+lease, a disposable VM.
+
+Call the Skill tool with `werft:werft` for the lease flow.
+**Local delta:**
+
+- Lease `ubuntu-26-04` in tier `plain` with `--memory 4096`: its image ships
+  GNOME.
+- Run `mise run build`, then `scripts/lease-desktop <lease-id>`. It logs GNOME
+  in, installs kitty, `wctl`, hc and the tools below, puts `./bin/revier` on
+  the lease's PATH and runs `revier keys install` there.
+- Start each ssh command that reaches the desktop with `. ./session.sh;`: it
+  sets the GNOME session's environment.
+- Run revier and hc in the lease without `REVIER_CONFIG_HOME` or `hcp`: its
+  configuration, state and hc core are scratch already.
+- After a rebuild, copy `./bin/revier` in again:
+  `scp -F <ssh_config> bin/revier <lease-id>:.local/bin/revier`.
+- Send a key the way the user presses it to the lease's `domain`, which
+  `werft --json leases` prints: `virsh -c qemu:///system send-key <domain> KEY_LEFTALT KEY_SPACE`.
+
+Verify on the demo project of the scratch configuration recipe. Write it in
+the lease as `~/.config/revier/projects/demo.toml`, with `path` set to the
+lease's `$HOME`. Then run, each line in the lease, the kitty host first:
 
 ```bash
-wctl list --json | jq '.[] | {id, title, wm_class}'   # read-only, safe to run
-kitten @ ls | jq '.[] | {id, wm_name, is_focused}'    # read-only, safe to run
-```
-
-`wctl list` and `kitten @ ls` read and never activate. Any `wctl activate`,
-`revier open`, or `revier go` against a real host moves the user's focus, so it
-belongs in a command they run, not one you run for them.
-
-When the user has handed over the screen, verify the kitty host on the scratch
-project. Its OS window is named after the home realization, `home`, so first
-check that no window of the user's, in any kitty, is titled `home`; the
-command below prints nothing then. The last lines close the windows it opened:
-
-```bash
-wctl list --json | jq '.[] | select(.title=="home") | {id, wm_class}'   # must print nothing
-export REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state   # $S from the recipe above
-printf '[hosts]\nruntime = ["kitty"]\nwindow = ["gnome"]\n' > "$S/config.toml"   # gnome raises the OS window
-./bin/revier open demo                                    # a kitty OS window titled home
+printf '[hosts]\nruntime = ["kitty"]\nwindow = ["gnome"]\n' > ~/.config/revier/config.toml   # gnome raises the OS window
+revier open demo                                  # a kitty OS window titled home
+wctl focused --json | jq .title                   # home
 for s in "$XDG_RUNTIME_DIR"/revier-kitty-*; do kitten @ --to "unix:$s" ls >/dev/null 2>&1 && W=unix:$s; done   # the workspace kitty that answers
 kitten @ --to "$W" ls | jq '.[] | select(.wm_name=="home") | .tabs[].windows[] | {id, title, user_vars}'
-wctl focused --json | jq .title                           # home
-./bin/revier go agent -p demo; ./bin/revier go agent -p demo   # the agent tab, and back to home
-kitten @ --to "$W" close-window --match id:<id>           # once per id the ls above printed
-printf '[hosts]\nruntime = ["hc"]\nview = ["none"]\nwindow = ["none"]\n' > "$S/config.toml"   # back to the private substrate
+revier go agent -p demo; revier go agent -p demo  # the agent tab, and back to home
+sh -lc 'revier go home -p demo'                   # a binding's command, in the login shell the desktop runs it in
+hyperfine --warmup 3 -N 'revier go home -p demo'  # the keypress budget
+kitten @ --to "$W" close-window --match id:<id>   # once per id the ls above printed
 ```
 
-The scratch workspace opens in the user's own workspace kitty, the service
-`revier-kitty`, which keeps running after the recipe. revier starts it when
-none runs. It has the session's environment, not `$S`, so a kitty key pressed
-in the scratch workspace runs revier on the user's real configuration: do not
-press one.
+Then the kitty view over hc. Each view window runs `hc attach` of one
+terminal:
+
+```bash
+printf '[hosts]\nruntime = ["hc"]\nwindow = ["gnome"]\n' > ~/.config/revier/config.toml
+revier open demo                                  # one kitty OS window titled home, a tab per tab
+kitten @ --to "$W" ls | jq '.[] | select(.wm_name=="home") | .tabs[].windows[] | {id, user_vars}'   # REVIER_VIEW_PANEL names each terminal
+revier go agent -p demo; revier go agent -p demo  # the agent tab, and back to home
+kitten @ --to "$W" close-window --match id:<id>   # every id above: the terminals run on
+revier open demo                                  # the window again, over the same terminals
+revier shutdown --force                           # the terminals end, and their windows with them
+```
 
 A `kitten @` command without `--to` addresses the socket of the kitty it runs
 inside. Pass `--to unix:$XDG_RUNTIME_DIR/kitty-<pid>` to reach another
@@ -319,44 +336,17 @@ process; the pids are the kitty entries in `wctl list --json`. A kitty that
 `kitty.conf` puts on `listen_on unix:@kitty` is at `--to unix:@kitty-<pid>`;
 revier does not look for it.
 
-To verify the kitty view over hc, hand the user the same scratch project on
-the private hc core of
-[Drive the CLI](#drive-the-cli-against-a-scratch-configuration), started
-first. Run revier
-with that core's `HC_SOCKET` alone, not through `hcp`: `hcp`'s runtime
-directory and unset bus hide the display from kitty and the window manager
-from `wctl`. The view windows open in the user's workspace kitty, as in the
-kitty recipe above, and each runs `hc attach` of one terminal:
-
-```bash
-hcp setsid hc server start </dev/null >/dev/null 2>&1   # first: a revier that finds no core starts a revier-hc-* unit in the user's manager
-hcr() { HC_SOCKET=$C/s.sock "$@"; }
-printf '[hosts]\nruntime = ["hc"]\nwindow = ["gnome"]\n' > "$S/config.toml"
-hcr ./bin/revier open demo                                # one kitty OS window titled home, a tab per tab
-for s in "$XDG_RUNTIME_DIR"/revier-kitty-*; do kitten @ --to "unix:$s" ls >/dev/null 2>&1 && W=unix:$s; done
-kitten @ --to "$W" ls | jq '.[] | select(.wm_name=="home") | .tabs[].windows[] | {id, user_vars}'   # REVIER_VIEW_PANEL names each terminal
-hcr ./bin/revier go agent -p demo; hcr ./bin/revier go agent -p demo   # the agent tab, and back to home
-kitten @ --to "$W" close-window --match id:<id>           # every id above: the terminals run on
-hcr ./bin/revier open demo                                # the window again, over the same terminals
-hcr ./bin/revier shutdown --force                         # the terminals end, and their windows with them
-hcp hc server stop
-printf '[hosts]\nruntime = ["hc"]\nview = ["none"]\nwindow = ["none"]\n' > "$S/config.toml"   # back to the private substrate
-```
-
-To check a binding's command as the desktop runs it, hand the user the same
-scratch project in the login shell the binding uses:
-
-```bash
-sh -lc './bin/revier go agent -p demo'; wctl focused --json | jq .title   # home, on the agent tab
-sh -lc './bin/revier go agent -p demo'; wctl focused --json | jq .title   # home, back from the agent tab
-hyperfine --warmup 3 -N './bin/revier go home -p demo'                     # the keypress budget
-```
+To drive save and restore across a real reboot, run `revier session save` in
+the lease, then `sudo -n systemctl reboot`. Wait for ssh as the werft skill
+says: GNOME logs in again by itself. Then run `revier session restore`, and
+`wctl focused --json | jq .title` prints `home`.
 
 ## Verify a keybinding without pressing it
 
 A binding is a command. Run `./bin/revier keys status --json` to print the one
-each key would carry; it reads and never binds. Running the command itself is
-the user's step, under [When a screen is unavoidable](#when-a-screen-is-unavoidable).
+each key would carry; it reads and never binds. Run the command itself, or
+press the key, on a lease, as
+[Drive the desktop on a werft lease](#drive-the-desktop-on-a-werft-lease) says.
 
 ## Verify the terminal keys without the user's kitty
 
@@ -371,8 +361,9 @@ printf 'map ctrl+shift+t new_tab\n' > "$KITTY_CONFIG_DIRECTORY/kitty.conf"
 ./bin/revier term uninstall     # kitty.conf as it was
 ```
 
-To try a generated map, hand the user its `sh -c` line from
-`$S/kitty/revier.conf`, under [When a screen is unavoidable](#when-a-screen-is-unavoidable).
+To try a generated map, run `revier term install` in a lease, as
+[Drive the desktop on a werft lease](#drive-the-desktop-on-a-werft-lease) says,
+and press the key in the lease's kitty.
 
 ## Clean up
 
