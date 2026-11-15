@@ -494,3 +494,43 @@ func TestDoctorWarnsWhenLinksShareARemoteProject(t *testing.T) {
 		t.Errorf("%d warnings, want 1: only the two links to far on farbox:\n%s", n, out.String())
 	}
 }
+
+// Under hc, which draws nothing, doctor says which view shows it on this
+// machine: kitty where kitty and a display are, none where they are not, as
+// over ssh (decisions.md D185). The kitty and hc on PATH are never run.
+func TestDoctorSaysWhichViewShowsHc(t *testing.T) {
+	t.Setenv("HC_SOCKET", filepath.Join(t.TempDir(), "s.sock"))
+	for _, c := range []struct {
+		display bool
+		want    string
+	}{
+		{true, "runtime hc is shown by the kitty view"},
+		{false, "runtime hc is shown by no view"},
+	} {
+		kittyOnPath(t, c.display)
+		if err := os.WriteFile(filepath.Join(os.Getenv("PATH"), "herdr-core"), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		configRoot(t, "[hosts]\nruntime = [\"hc\"]\nwindow = [\"none\"]\n", map[string]string{"sound.toml": sound})
+		var out strings.Builder
+		if err := cmdDoctor(&out, nil); err != nil {
+			t.Fatalf("cmdDoctor: %v", err)
+		}
+		if !strings.Contains(out.String(), c.want) {
+			t.Errorf("display %v: report should contain %q:\n%s", c.display, c.want, out.String())
+		}
+	}
+}
+
+// A kitty user's runtime is its own view, and doctor says nothing of it.
+func TestDoctorSaysNothingOfARuntimeThatIsItsOwnView(t *testing.T) {
+	kittyOnPath(t, true)
+	configRoot(t, "[hosts]\nruntime = [\"kitty\"]\nwindow = [\"none\"]\n", map[string]string{"sound.toml": sound})
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); err != nil {
+		t.Fatalf("cmdDoctor: %v", err)
+	}
+	if strings.Contains(out.String(), "shown by") {
+		t.Errorf("report names a view:\n%s", out.String())
+	}
+}

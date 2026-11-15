@@ -92,7 +92,8 @@ territory.
 
 Early, but usable. Linux only.
 
-- **Terminals:** kitty and tmux, and hc as an experiment. Ghostty works
+- **Terminals:** kitty and tmux, and hc as an experiment, shown in kitty, whose
+  agents outlive the kitty window. Ghostty works
   through tmux.
 - **Desktop:** GNOME, for window targets and desktop keys.
 - **Agents:** Claude Code 2.1.212 or newer reports its state; opencode reports

@@ -367,8 +367,8 @@ type finding struct {
 	ref revier.TargetRef
 }
 
-func (f finding) FindPanel([]revier.Instance, revier.PanelID) (revier.TargetRef, error) {
-	return f.ref, nil
+func (f finding) FindPanel(_ context.Context, _ []revier.Instance, panel revier.PanelID) (revier.TargetRef, revier.PanelID, error) {
+	return f.ref, panel, nil
 }
 
 // The id a terminal key passes is the view's, so the view's finder maps it:

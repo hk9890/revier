@@ -68,7 +68,7 @@ func (c *Core) focusPanel(ctx context.Context, snap snapshot, failed hostErrs, r
 	if !ok || !slices.ContainsFunc(inst.Panels, func(p revier.Panel) bool { return p.ID == panel }) {
 		return fmt.Errorf("%s: %w", name, ErrAgentGone)
 	}
-	osw, err := c.raisable(snap, failed, inst, name)
+	osw, err := c.raisableShown(ctx, snap, failed, inst, name)
 	if err != nil {
 		return err
 	}

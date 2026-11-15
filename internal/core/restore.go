@@ -133,6 +133,9 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 			logAgents(res)
 			c.note(stepLine(res))
 		}
+		if res.Action == RestoreRunning {
+			c.showRunning(walking, p, step.Target)
+		}
 		out = append(out, res)
 		opts.report(Progress{Phase: PhaseLaunch, N: i + 1, Of: len(plan), Label: string(step.Target), Done: true, Restored: res})
 	}
@@ -166,6 +169,42 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 		Counts: map[string]int{"opened": opened, "pending": pending, "failed": failed, "cancelled": len(plan) - len(out)},
 	}.Failed(back))
 	return out, back
+}
+
+// showRunning has a view that opens windows of its own show the instance of a
+// target the restore found running, as a press would: a view closed since
+// the save comes back over the live terminals and starts nothing, and is not
+// raised, as no step of a restore is (decisions.md D15, D181). A tab's
+// instance is the one it is inside. What fails is logged: the target runs,
+// and the next press shows it.
+func (c *Core) showRunning(ctx context.Context, p Project, name revier.TargetName) {
+	if _, ok := c.View.(revier.Shower); !ok {
+		return
+	}
+	i, ok := p.index(name)
+	if !ok {
+		return
+	}
+	if p.isTab(i) {
+		name = p.Targets[i].Runtime.Inside
+		if i, ok = p.index(name); !ok {
+			return
+		}
+	}
+	host, _, m, err := c.resolveAt(p, i)
+	if err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*BindWait)
+	defer cancel()
+	snap, _ := c.listing(ctx)
+	inst, found := c.locate(snap, p, i, host, m, c.state().Bound[p.Name][name])
+	if !found {
+		return
+	}
+	if _, err := c.show(ctx, inst.Ref, true); err != nil {
+		slog.Warn("restore: show a running target", "project", p.Name, "target", name, "err", err)
+	}
 }
 
 // stepLine is the state record's line of one launch of a restore: where it

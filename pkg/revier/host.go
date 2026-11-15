@@ -219,16 +219,45 @@ type PanelFocuser interface {
 
 // PanelFinder is an optional capability of a View, detected by type
 // assertion. FindPanel reports which of the instances the runtime just listed
-// holds a panel id as the calling process names it, and a zero ref when none
-// does. It exists because the id a terminal key passes is the view's: a kitty
-// window id is one kitty process's, and means a window of the kitty the key
-// was pressed in, which only the view can tell from the environment it
-// started the command with (decisions.md D145, D176). It is handed the
-// runtime's listing rather than taking its own, so a key press lists the
-// runtime once. A view whose ids are the runtime's, and unique, needs no
-// finder.
+// holds a panel id as the calling process names it, and the runtime's id of
+// that panel, or a zero ref when none does. It exists because the id a
+// terminal key passes is the view's: a kitty window id is one kitty
+// process's, and means a window of the kitty the key was pressed in, which
+// only the view can tell from the environment it started the command with
+// (decisions.md D145, D176); under hc that window attaches a terminal, whose
+// address is the panel (D180). It is handed the runtime's listing rather than
+// taking its own, so a key press lists the runtime once. A view whose ids are
+// the runtime's, and unique, needs no finder.
 type PanelFinder interface {
-	FindPanel(instances []Instance, panel PanelID) (TargetRef, error)
+	FindPanel(ctx context.Context, instances []Instance, panel PanelID) (TargetRef, PanelID, error)
+}
+
+// Shower is an optional capability of a View, detected by type assertion. A
+// view that implements it draws a runtime's instances in windows it opens
+// itself, which the runtime outlives: kitty over hc (decisions.md D180). Its
+// windows are opened from the runtime's listing, not by the runtime's Open.
+// A view that is the runtime, as kitty over kitty, has a window for every
+// instance it lists, and needs none.
+type Shower interface {
+	// Show draws the instance in the view: a window for it, a tab for each
+	// of its tabs, a pane for each panel, in the runtime's order. A panel
+	// shown already stays as it is, and only what is missing is added, so a
+	// view closed by hand opens again over the live panels and starts
+	// nothing (D181). Without open, only a window that shows the instance
+	// already gets what is missing, and none is opened. opened says a
+	// window was opened now, which the window host lists only after a wait.
+	Show(ctx context.Context, inst Instance, open bool) (opened bool, err error)
+}
+
+// BesideOpener is an optional capability of a View, detected by type
+// assertion. OpenBeside opens a tab of the view's own beside the window
+// panel, a view's id that no runtime instance holds, running spec, which is
+// how a terminal key pressed outside a workspace gives a plain tab under a
+// runtime that is not the view: such a tab is in no instance, so no survey
+// lists it (decisions.md D183). Without it the key does what the runtime's
+// tab outside a workspace does.
+type BesideOpener interface {
+	OpenBeside(ctx context.Context, panel PanelID, spec PanelSpec) error
 }
 
 // Closer is an optional capability of a Host or a Runtime, detected by type

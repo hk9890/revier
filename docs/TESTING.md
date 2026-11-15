@@ -18,9 +18,9 @@ Only L6 ever reaches one. L5 was retired and its number is not reused.
 |---|---|---|---|
 | L1 | none — pure functions | — | matching, status encoding, project lookup (`pkg/revier`) |
 | L2 | `internal/hosttest.Fake` | — | resolution, run-or-raise, toggle-back, survey, probe dispatch (`internal/core`) |
-| L3 | recorded tool output | `integration` | adapter parsing: `kitten @ ls` JSON, `wctl list --json`, hc `hello` and `terminal.list` |
-| L4 | real processes: tmux and hc on private sockets, `sh` scripts | `live` | the tmux and hc hosts, the core against a real substrate, the adapters that run a shell (`claude`, `execprobe`, `ssh`), and the process group of what `kitty` and `gnome` run |
-| L6 | the user's GNOME session | manual | the GNOME host, and the kitty host's `Open` and `Focus` |
+| L3 | recorded tool output | `integration` | adapter parsing: `kitten @ ls` JSON, `wctl list --json`, hc `hello` and `terminal.list`; the kitty view over hc on a listing built from a recorded one |
+| L4 | real processes: tmux and hc on private sockets, `sh` scripts | `live` | the tmux and hc hosts, the core against a real substrate (on hc beside `hosttest.FakeView`), the adapters that run a shell (`claude`, `execprobe`, `ssh`), and the process group of what `kitty` and `gnome` run |
+| L6 | the user's GNOME session | manual | the GNOME host, the kitty host's `Open` and `Focus`, and the kitty view over hc |
 
 L2 is where most behaviour is pinned. The core's decisions depend only on what a
 host *reports*, and `hosttest.Fake` reports whatever a test needs — which is why
@@ -107,7 +107,12 @@ that did not focus after `Open` passed L2 and failed L4.
   [RUNNING.md](RUNNING.md#run-a-private-hc-core), with terminals that carry
   revier's labels. Point the paths in `hc_integration_test.go` at them.
 - Run hc in a live test on a private core only: `world` in
-  `internal/adapter/hc/helpers_live_test.go`. Any `hc` command starts a core
+  `internal/adapter/hc/helpers_live_test.go`.
+  A live test of the core on hc sits in `internal/adapter/hc` for that
+  helper, with `hosttest.FakeView` as its view: `view_live_test.go`.
+- Build a `kitten @ ls` listing of the kitty view over hc from a recorded
+  one, as `internal/adapter/kitty/testdata/ls-hc-view.json` is: recording
+  one opens windows on a desktop. Any `hc` command starts a core
   when none answers its socket, the user's own included.
 - Call `testenv.NoServiceManager(t, dir)` in a live test that reaches a start
   through `internal/userunit` with the real `systemd-run` on PATH, as `world`

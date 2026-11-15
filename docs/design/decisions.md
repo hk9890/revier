@@ -1041,7 +1041,8 @@ Extends D173. A view only attaches to hc's terminals, so a kitty window closed
 by hand or crashed leaves every terminal live, and the survey still lists the
 instance. The view reports the instances it shows by the addresses its windows
 carry (D180); run-or-raise on a live instance it does not show opens a view
-over its terminals, in their tabs (D179), and starts nothing. A shutdown still
+over its terminals, in their tabs (D179), and starts nothing, and so does a
+restore that finds it running. A script's tab opens no view (D118). A shutdown
 closes the terminals through the runtime (D78). Under kitty the view is the
 runtime, so a closed window still ends its programs.
 

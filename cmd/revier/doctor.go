@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -78,6 +79,11 @@ func cmdDoctor(out io.Writer, args []string) error {
 	_ = w.Flush()
 
 	_, _ = fmt.Fprintf(out, "\n%s, %s with problems\n", core.Count(len(projects), "project"), core.Count(bad, "file"))
+	// Not a problem: under a runtime that draws nothing, which view shows it
+	// depends on the machine (decisions.md D185), and nothing else says so.
+	if line := shownBy(cfg); line != "" {
+		_, _ = fmt.Fprintln(out, line)
+	}
 	// Not a problem: the files are shared between machines, and the link is
 	// right on the other one (decisions.md D131).
 	if n := len(cfg.SelfLinks); n > 0 {
@@ -302,4 +308,24 @@ type problemsFound struct{ files int }
 
 func (e problemsFound) Error() string {
 	return core.Count(e.files, "file") + " with problems"
+}
+
+// shownBy says which view shows a runtime that does not draw itself, as
+// [hosts] selects them on this machine, and "" for a runtime that is its own
+// view, or for none: a kitty user reads nothing new. A selection that fails
+// says nothing here: every other command reports it.
+func shownBy(cfg *config.Config) string {
+	ctx, cancel := context.WithTimeout(context.Background(), commandWait)
+	defer cancel()
+	rt, view, err := selectTerminal(ctx, cfg, "", cfg.Hosts.Runtime)
+	if err != nil || rt == nil {
+		return ""
+	}
+	if own, ok := rt.(revier.View); ok && own == view {
+		return ""
+	}
+	if view == nil {
+		return fmt.Sprintf("runtime %s is shown by no view: nothing is focused; revier open --attach puts a terminal on a workspace", rt.Name())
+	}
+	return fmt.Sprintf("runtime %s is shown by the %s view", rt.Name(), view.Name())
 }

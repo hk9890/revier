@@ -757,6 +757,11 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 		}
 		added, err := c.addAgents(ctx, host, p, layout, ref, extra)
 		res.Agents, res.AgentErr = append(agents, added...), err
+		// A view that opens its own windows draws the instance once every
+		// tab of it runs (decisions.md D180).
+		if _, err := c.show(ctx, ref, true); err != nil {
+			return res, fmt.Errorf("%s: show new %s: %w", c.View.Name(), name, err)
+		}
 		// Focus explicitly. Some hosts focus what they launch and some do not,
 		// so without this the raise half of run-or-raise holds only by
 		// accident of the host - the window opens behind on the ones that do
@@ -785,7 +790,7 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 			return c.goTo(ctx, p, home.Name, bound)
 		}
 	}
-	osw, err := c.raisable(snap, failed, inst, name)
+	osw, err := c.raisableShown(ctx, snap, failed, inst, name)
 	if err != nil {
 		return Result{}, err
 	}
@@ -1194,7 +1199,7 @@ func (c *Core) Focus(ctx context.Context, ref revier.TargetRef) error {
 		return c.focus(ctx, ref)
 	}
 	name := revier.TargetName(ref.Title)
-	osw, err := c.raisable(snap, failed, inst, name)
+	osw, err := c.raisableShown(ctx, snap, failed, inst, name)
 	if err != nil {
 		return err
 	}

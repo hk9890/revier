@@ -5,11 +5,13 @@ import (
 	"errors"
 	"io"
 	"maps"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/hk9890/revier/internal/adapter/kitty"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/testenv"
@@ -172,12 +174,32 @@ func TestEveryAdapterIsInItsDefaultOrder(t *testing.T) {
 	check("window", slices.Sorted(maps.Keys(windowAdapters())), defaultWindowOrder)
 }
 
+// kittyOnPath puts a kitty and a kitten first on PATH that are never run,
+// and sets a display or none: what the kitty view probes for.
+func kittyOnPath(t *testing.T, display bool) {
+	t.Helper()
+	bin := t.TempDir()
+	for _, name := range []string{"kitty", "kitten"} {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", bin)
+	t.Setenv("DISPLAY", "")
+	t.Setenv("WAYLAND_DISPLAY", "")
+	if display {
+		t.Setenv("WAYLAND_DISPLAY", "wayland-0")
+	}
+}
+
 // A runtime that draws its own instances is its own view, and with no list
 // it is the one chosen: kitty and tmux show themselves as before. hc draws
-// nothing, so with no list it is shown by no view (decisions.md D185).
+// nothing, so with no list it is shown by kitty where kitty and a display
+// are, and by no view where they are not, as over ssh (decisions.md D185).
 func TestTheDefaultViewIsTheRuntimesOwn(t *testing.T) {
+	kittyOnPath(t, false)
 	for name, rt := range runtimeAdapters() {
-		view, err := selectView(nil, rt)
+		view, err := selectView(t.Context(), nil, rt)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -186,11 +208,18 @@ func TestTheDefaultViewIsTheRuntimesOwn(t *testing.T) {
 		case isView && view != own:
 			t.Errorf("%s: view %v, want the runtime itself", name, view)
 		case !isView && view != nil:
-			t.Errorf("%s: view %v, want none", name, view)
+			t.Errorf("%s with no display: view %v, want none", name, view)
 		}
 	}
-	if view, err := selectView(nil, nil); view != nil || err != nil {
+	if view, err := selectView(t.Context(), nil, nil); view != nil || err != nil {
 		t.Errorf("no runtime: view %v, %v; want none", view, err)
+	}
+
+	kittyOnPath(t, true)
+	hcRT := runtimeAdapters()["hc"]
+	view, err := selectView(t.Context(), nil, hcRT)
+	if kv, ok := view.(*kitty.View); err != nil || !ok || kv.Runtime != hcRT.(kitty.Attachable) {
+		t.Errorf("hc with kitty and a display: view %#v, %v; want the kitty view over hc", view, err)
 	}
 }
 
@@ -200,19 +229,37 @@ func TestTheDefaultViewIsTheRuntimesOwn(t *testing.T) {
 func TestAConfiguredViewIsTriedInOrder(t *testing.T) {
 	adapters := runtimeAdapters()
 	kittyRT, hcRT := adapters["kitty"], adapters["hc"]
-	if view, err := selectView([]string{hostNone}, kittyRT); view != nil || err != nil {
+	ctx := t.Context()
+	if view, err := selectView(ctx, []string{hostNone}, kittyRT); view != nil || err != nil {
 		t.Errorf("none: view %v, %v; want none", view, err)
 	}
-	if view, err := selectView([]string{"tmux", "kitty"}, kittyRT); err != nil || view != kittyRT.(revier.View) {
+	if view, err := selectView(ctx, []string{"tmux", "kitty"}, kittyRT); err != nil || view != kittyRT.(revier.View) {
 		t.Errorf("tmux, kitty over kitty: view %v, %v; want kitty", view, err)
 	}
-	if _, err := selectView([]string{"kitty"}, hcRT); err == nil || !strings.Contains(err.Error(), "kitty: cannot show the hc runtime") {
-		t.Errorf("kitty over hc: err = %v, want the kitty view refused", err)
+	if _, err := selectView(ctx, []string{"tmux"}, hcRT); err == nil || !strings.Contains(err.Error(), "tmux: cannot show the hc runtime") {
+		t.Errorf("tmux over hc: err = %v, want the tmux view refused", err)
 	}
-	if _, err := selectView([]string{"kitty"}, nil); err == nil || !strings.Contains(err.Error(), "no runtime") {
+	if _, err := selectView(ctx, []string{"kitty"}, nil); err == nil || !strings.Contains(err.Error(), "no runtime") {
 		t.Errorf("kitty over no runtime: err = %v, want it refused", err)
 	}
-	if _, err := selectView([]string{"ghostty"}, kittyRT); err == nil || err.Error() != `hosts.view: unknown host "ghostty"; known: kitty, tmux, none` {
+	if _, err := selectView(ctx, []string{"ghostty"}, kittyRT); err == nil || err.Error() != `hosts.view: unknown host "ghostty"; known: kitty, tmux, none` {
 		t.Errorf("ghostty: err = %v, want it named unknown", err)
 	}
+
+	kittyOnPath(t, false)
+	if _, err := selectView(ctx, []string{"kitty"}, hcRT); err == nil || !strings.Contains(err.Error(), "no display") {
+		t.Errorf("kitty over hc with no display: err = %v, want the kitty view refused for it", err)
+	}
+	if view, err := selectView(ctx, []string{"kitty", hostNone}, hcRT); view != nil || err != nil {
+		t.Errorf("kitty, none over hc with no display: view %v, %v; want none", view, err)
+	}
+	kittyOnPath(t, true)
+	if view, err := selectView(ctx, []string{"kitty"}, hcRT); err != nil || !is[*kitty.View](view) {
+		t.Errorf("kitty over hc with a display: view %v, %v; want the kitty view", view, err)
+	}
+}
+
+func is[T any](v any) bool {
+	_, ok := v.(T)
+	return ok
 }

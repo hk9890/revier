@@ -240,6 +240,9 @@ type Workspace struct {
 	Ref     revier.TargetRef
 	snap    snapshot
 	failed  hostErrs
+	// panel is the runtime's id of the panel PanelOwner found the workspace
+	// by, which is not the id a key passes where the view is not the runtime.
+	panel revier.PanelID
 }
 
 // AddressIn is the address of the panel a tab opened in the workspace w: the
@@ -295,7 +298,9 @@ func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.Target
 //
 // An instance that holds the panel but backs no project's target is
 // ErrNoWorkspace, and the Workspace that comes with it holds only that
-// instance: where PlaceTab opens a tab outside a workspace.
+// instance: where PlaceTab opens a tab outside a workspace. So is a panel of
+// a view that opens tabs beside its own windows, which no instance holds,
+// and its Workspace holds no instance (decisions.md D183).
 func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.PanelID) (Workspace, error) {
 	bound := c.state().Bound
 	if c.Runtime == nil {
@@ -307,10 +312,11 @@ func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.
 	}
 	instances := snap[c.Runtime.Name()]
 	var ref revier.TargetRef
+	own := panel
 	if finder, ok := c.finder(); ok {
 		var err error
-		if ref, err = finder.FindPanel(instances, panel); err != nil {
-			return Workspace{}, fmt.Errorf("%s: find panel %s: %w", c.Runtime.Name(), panel, err)
+		if ref, own, err = finder.FindPanel(ctx, instances, panel); err != nil {
+			return Workspace{}, fmt.Errorf("%s: find panel %s: %w", c.View.Name(), panel, err)
 		}
 	} else {
 		var found []revier.TargetRef
@@ -327,6 +333,9 @@ func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.
 		}
 	}
 	if ref.IsZero() {
+		if _, ok := c.View.(revier.BesideOpener); ok {
+			return Workspace{snap: snap, failed: failed}, fmt.Errorf("panel %s: %w", panel, ErrNoWorkspace)
+		}
 		return Workspace{}, fmt.Errorf("%w %s", ErrNoPanel, panel)
 	}
 	var owner Workspace
@@ -339,7 +348,7 @@ func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.
 			if inst, ok := c.locate(snap, p, i, host, m, bound[p.Name][t.Name]); !ok || key(inst.Ref) != key(ref) {
 				continue
 			}
-			w := Workspace{Project: p, Target: t.Name, Ref: ref, snap: snap, failed: failed}
+			w := Workspace{Project: p, Target: t.Name, Ref: ref, snap: snap, failed: failed, panel: own}
 			layout, err := c.layout(p, real)
 			if err != nil {
 				continue
@@ -353,7 +362,7 @@ func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.
 		}
 	}
 	if owner.Ref.IsZero() {
-		return Workspace{Ref: ref, snap: snap, failed: failed}, fmt.Errorf("panel %s: %w", panel, ErrNoWorkspace)
+		return Workspace{Ref: ref, snap: snap, failed: failed, panel: own}, fmt.Errorf("panel %s: %w", panel, ErrNoWorkspace)
 	}
 	return owner, nil
 }
@@ -568,7 +577,7 @@ func (c *Core) openTab(ctx context.Context, w Workspace, t tabRuntime, tab revie
 	if focus {
 		inst, _ := byRef(w.snap, w.Ref)
 		var err error
-		if osw, err = c.raisable(w.snap, w.failed, inst, w.Target); err != nil {
+		if osw, err = c.raisableShown(ctx, w.snap, w.failed, inst, w.Target); err != nil {
 			return "", err
 		}
 	}

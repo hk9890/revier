@@ -17,4 +17,7 @@ func TestHcIsARuntimeAndNoView(t *testing.T) {
 	if _, ok := rt.(revier.Attacher); !ok {
 		t.Error("the hc runtime cannot attach a terminal")
 	}
+	if _, ok := rt.(revier.TabOpener); !ok {
+		t.Error("the hc runtime opens no tab")
+	}
 }

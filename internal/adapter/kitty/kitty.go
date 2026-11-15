@@ -1,6 +1,8 @@
 // Package kitty implements a Runtime and the View that shows it over kitty's
 // remote control: the same kitty processes run the programs and draw them, so
 // a kitty window id names a runtime panel directly (decisions.md D176, D178).
+// It also implements the View of a runtime that draws nothing, hc, in
+// view.go: kitty windows that attach that runtime's panels (D180).
 //
 // kitty is the terminal this machine actually uses; tmux is the runtime
 // that exists for headless testing. An instance is a kitty OS window, and the
@@ -283,13 +285,19 @@ func (h *Host) launch(ctx context.Context, socket string, args ...string) (int, 
 	return id, nil
 }
 
-// FindPanel reports the OS window that holds a kitty window id. A window id is
+// FindPanel reports the OS window that holds a kitty window id, and the id,
+// which is the runtime's own: the same kitty runs and draws. A window id is
 // one kitty process's, and KITTY_LISTEN_ON names the kitty a command runs in:
 // a window's environment carries it, and a key's background launch gets it
 // with --copy-env (verified on kitty 0.48; without it the variable is empty).
 // A command started outside kitty, or from a kitty that has exited, names no
 // process that answers; then the id must be held in exactly one kitty.
-func (h *Host) FindPanel(instances []revier.Instance, panel revier.PanelID) (revier.TargetRef, error) {
+func (h *Host) FindPanel(_ context.Context, instances []revier.Instance, panel revier.PanelID) (revier.TargetRef, revier.PanelID, error) {
+	ref, err := h.findPanel(instances, panel)
+	return ref, panel, err
+}
+
+func (h *Host) findPanel(instances []revier.Instance, panel revier.PanelID) (revier.TargetRef, error) {
 	own := "unix:" + strings.TrimPrefix(h.here(), "unix:")
 	var mine []revier.Instance
 	for _, inst := range instances {

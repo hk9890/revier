@@ -29,9 +29,20 @@ Each section is also the text of its release on the
   use hc, kitty or tmux`, and `revier doctor` reports it wherever the list
   names it. With no `runtime` set, revier now tries kitty, then tmux, and
   finds no runtime on a machine that has only herdr.
+- **Under hc, your workspaces open in kitty, and your agents outlive it.**
+  With `runtime = ["hc"]` under `[hosts]`, a press opens the workspace in a
+  kitty window with its tabs, the active tab current, and its agent and shell
+  side by side. Targets with `inside`, `revier agent new`, `revier shell new`,
+  the kitty keys, a second press that goes home and `revier session restore`
+  work as on kitty. Closing kitty ends no agent: the next press opens the
+  window again over the running agents and starts nothing. With no kitty or
+  no display, as over ssh, nothing shows hc, and `revier open --attach`
+  reaches a workspace. `revier doctor` says which view shows hc. Without the
+  setting, kitty runs your workspaces as before. Images are gone once a
+  window opens again, and a program with a lot of output lags in its window.
 - **`[hosts] view` names what shows your workspaces.** Left out, kitty
-  shows the kitty runtime and tmux the tmux runtime, as before, and hc is
-  shown by nothing. `view = ["none"]` shows nothing: revier opens and lists
+  shows the kitty runtime and tmux the tmux runtime, as before, and kitty
+  shows hc where kitty and a display are, else nothing shows it. `view = ["none"]` shows nothing: revier opens and lists
   your workspaces and focuses none. A view that cannot show the runtime in
   use stops with an error, and `revier doctor` reports an unknown name.
   `revier status` prints the view on a `view` line, between `runtime` and

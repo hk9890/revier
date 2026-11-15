@@ -3,7 +3,9 @@
 kitty is a runtime host: the terminal that holds a project's workspace. revier
 opens each workspace as a kitty OS window, opens its tabs and split windows,
 and reads every kitty window to find the agents and their state. The popup is
-also a kitty window, whatever your runtime host is.
+also a kitty window, whatever your runtime host is. Under the hc runtime,
+kitty only shows the workspaces, and your agents run in hc
+([hc](hc.md)).
 
 revier opens every workspace in a kitty it starts for the workspaces, never in
 a kitty you started and never in the popup's. A kitty option applies to every

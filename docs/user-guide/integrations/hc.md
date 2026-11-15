@@ -1,9 +1,12 @@
 # hc
 
 hc ([herdr-core](https://github.com/herdrdev/herdr-core)) is an experimental
-runtime host. revier opens each workspace as an hc terminal and reads every
-terminal to find the agents. hc runs them headless, so
-no terminal has to show them.
+runtime host. hc runs your workspaces' programs headless, and kitty shows
+them. Your agents keep running when you close kitty, or when it crashes; the
+next press opens the window again over them.
+
+Without the switch, kitty runs and shows your workspaces, as before. Nothing
+changes until you name hc.
 
 ## What you need
 
@@ -13,10 +16,16 @@ no terminal has to show them.
   core that `hc` would talk to, and starts it when none runs. If you set
   `socket` in hc's `config.toml`, set `HC_SOCKET` to the same path for
   revier.
+- kitty, as for the kitty runtime, to see the workspaces. Without kitty, or
+  with no display, as over ssh, revier runs hc with no view.
 
-## Set it up
+## Switch to hc
 
-1. Name hc in `~/.config/revier/config.toml`
+1. Close the workspaces kitty runs with `revier shutdown`. A workspace kitty
+   runs is not an hc workspace: once you switch, revier does not see it, and
+   its window has the title the hc workspace's window gets.
+
+2. Name hc in `~/.config/revier/config.toml`
    (see [`[hosts]`](../configuration.md#hosts)):
 
    ```toml
@@ -24,16 +33,46 @@ no terminal has to show them.
    runtime = ["hc"]
    ```
 
-2. Open a project and put this terminal on it:
+3. Run `revier doctor`. Its last line says `runtime hc is shown by the kitty
+   view`.
 
-   ```bash
-   revier open demo --attach
-   ```
+Your project files stay as they are. A press opens the workspace in a kitty
+window of its title, with its tabs in their order, the active tab current,
+and an agent and a shell side by side where the tab declares them. A target
+with `inside`, `revier agent new`, `revier shell new`, the kitty keys and
+`revier session restore` work as they do on kitty. A second press goes home.
 
-   The terminal shows the workspace's first panel. Detach with hc's own key,
-   `ctrl+\`. The agents go on.
+To switch back, remove the line and run `revier shutdown` first: the kitty
+runtime does not read hc's terminals.
 
-3. From another terminal, run `revier` or `revier list` to see the agents.
+## What changes
+
+- Each kitty window runs hc's attach of one terminal. Closing a window, a tab
+  or the whole kitty ends no program. The next press on the workspace opens
+  its window again over the running terminals, and `revier session restore`
+  does too.
+- To end a program, close it in revier: `revier shutdown`, `revier agent
+  close`, or exit the program. Its window then closes.
+- `revier agent new --no-focus` from a script adds the tab to the window
+  that shows the workspace, and opens no window where none shows it.
+- In a kitty window that shows no workspace, the shell key opens a plain kitty
+  tab, as `outside = "tab"` says. That tab is kitty's alone, so revier does
+  not list it, and it ends with kitty.
+
+## Without a view
+
+Set `view = ["none"]` under `[hosts]`, or run revier over ssh. revier opens,
+lists, reads and types into the workspaces, and focuses nothing. To see one,
+put a terminal on it:
+
+```bash
+revier open demo --attach
+```
+
+The terminal shows the workspace's first terminal. Detach with hc's own key,
+`ctrl+\`. To see another, run `hc attach` with its name from `hc ls`.
+
+## The core's environment
 
 The core gives every program it starts the environment of the command that
 started the core, for as long as the core runs. Where systemd runs your
@@ -61,32 +100,18 @@ Code sets; a core you start yourself from a Claude Code session keeps it, and
 `git commit` without `-m` then aborts in each shell. To give the core another
 environment, start it yourself with `hc server start`.
 
-## What works
+## Limits
 
-- `revier open`, `revier list`, and the TUI's agent list. Claude Code reports
-  its state as it does on tmux.
-- `revier agent prompt`, `revier agent send-keys` and `revier agent read
-  --screen`.
-- `revier shutdown` and `revier agent close`.
-- `revier open --attach`, onto the workspace's first panel.
-
-## What does not work
-
-- Tabs: a target with `inside` or `tabs`, `revier agent new` and
-  `revier shell new`. Panels are declared on a tab only, so each target is
-  one hc terminal that runs its `launch`.
-- A second press does not return home: hc keeps no focus, so revier cannot
-  tell what you look at. A press on an open workspace does nothing you see;
-  attach to it.
-- The attach shows the workspace's first terminal, and fails once that
-  terminal is closed, or when you run it in that terminal. To see another,
-  run `hc attach` with its name, `rv-<id>-<place>`, from `hc ls`.
+- An image an agent draws, such as with `kitten icat`, is gone after the
+  window opens again. `kitten icat` draws one only with
+  `--use-window-size`, because hc does not answer the terminal's query for
+  its size in pixels.
+- A program that writes a lot of output at once lags in its window: every
+  byte goes through hc's attach.
 - The TUI and `revier agent read --screen` show the screen without its
   colours, and without the lines above it: hc reads those of an agent's
-  full-screen view by scrolling the agent.
-- `kitten icat` draws an image only with `--use-window-size`, because hc
-  does not answer the terminal's query for its size in pixels. The image is
-  gone after you detach and attach again.
+  full-screen view by scrolling the agent. kitty's own scrollback in a window
+  holds only what that window showed since it opened.
 - A close gives a program about a second to save before hc kills it.
 - hc does not bring a program back after a reboot. Run
   `revier session restore`: it opens the workspaces again, each running its
@@ -94,6 +119,5 @@ environment, start it yourself with `hc server start`.
 - Terminals on a machine hc added are not listed. hc still asks each such
   machine on every listing, and one that does not answer slows the listing
   by up to 3 s.
-- The popup is a kitty window. With hc and no kitty, run `revier` in a
-  terminal. Enter on a project or an agent in the popup brings no window to
-  the front; attach to see it.
+- A terminal you attach to by hand in a kitty of your own is not the
+  workspace's window: a press opens the workspace's own window beside it.

@@ -286,6 +286,23 @@ hcp hc get t1 --json | jq .labels                     # the labels Instances gro
 hcp hc server stop; rm -rf "$C"                       # ends every program the core runs
 ```
 
+To drive revier on that core, run it through `hcp` with the scratch
+configuration of [Drive the CLI](#drive-the-cli-against-a-scratch-configuration),
+and name the view `none`: under hc the default view is kitty, which opens
+windows on the user's desktop.
+
+```bash
+printf '[hosts]\nruntime = ["hc"]\nview = ["none"]\nwindow = ["none"]\n' > "$S/config.toml"
+hcp ./bin/revier doctor                               # last line: runtime hc is shown by no view
+hcp ./bin/revier open demo                            # the tabs as hc terminals
+for a in $(hcp hc ls --json | jq -r '.terminals[].address'); do hcp hc get "$a" --json | jq -c '{address, labels}'; done   # revier.tab and revier.tabplace per tab
+hcp ./bin/revier agent new -p demo --no-focus         # prints demo:home:<address>, a tab of its own token
+hcp ./bin/revier shutdown --force                     # no terminal left
+```
+
+Do not run `revier open --attach` there: the attach takes over the shell
+that runs it.
+
 ## When a screen is unavoidable
 
 Only the GNOME host and kitty's `Open` and `Focus` need the user's live
@@ -330,6 +347,24 @@ inside. Pass `--to unix:$XDG_RUNTIME_DIR/kitty-<pid>` to reach another
 process; the pids are the kitty entries in `wctl list --json`. A kitty that
 `kitty.conf` puts on `listen_on unix:@kitty` is at `--to unix:@kitty-<pid>`;
 revier does not look for it.
+
+To verify the kitty view over hc, hand the user the same scratch project on
+a private hc core: `hcp` from [Run a private hc core](#run-a-private-hc-core)
+and the `[hosts]` below. `hcp`'s runtime directory holds no workspace kitty,
+so revier starts one there, detached, and each view window runs `hc attach`
+of one terminal:
+
+```bash
+printf '[hosts]\nruntime = ["hc"]\nwindow = ["gnome"]\n' > "$S/config.toml"
+hcp ./bin/revier open demo                                # one kitty OS window titled home, a tab per tab
+for s in "$C"/run/revier-kitty-*; do W=unix:$s; done      # the workspace kitty revier started
+kitten @ --to "$W" ls | jq '.[] | select(.wm_name=="home") | .tabs[].windows[] | {id, user_vars}'   # REVIER_VIEW_PANEL names each terminal
+hcp ./bin/revier go agent -p demo; hcp ./bin/revier go agent -p demo   # the agent tab, and back to home
+kitten @ --to "$W" close-window --match id:<id>           # every id above: the terminals run on
+hcp ./bin/revier open demo                                # the window again, over the same terminals
+hcp ./bin/revier shutdown --force                         # the terminals end, and their windows with them
+pkill -f -- "--listen-on unix:$C/run/revier-kitty"        # the scratch workspace kitty
+```
 
 To check a binding's command as the desktop runs it, hand the user the same
 scratch project in the login shell the binding uses:

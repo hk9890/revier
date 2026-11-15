@@ -131,17 +131,36 @@ func selectTerminal(ctx context.Context, cfg *config.Config, panel string, want 
 	if err != nil {
 		return nil, nil, err
 	}
-	view, err := selectView(cfg.Hosts.View, rt)
+	view, err := selectView(ctx, cfg.Hosts.View, rt)
 	if err != nil {
 		return nil, nil, err
 	}
 	return rt, view, nil
 }
 
-// views are the compiled-in views. Each is, so far, the runtime of its name
-// drawing its own instances, so it shows that runtime and no other: hc has
-// no view yet (decisions.md D176, D178).
+// views are the compiled-in views. kitty and tmux each show the runtime of
+// their name as that runtime, and kitty also shows hc, in windows that attach
+// its terminals (decisions.md D178, D180).
 var views = []string{"kitty", "tmux"}
+
+// viewOf is the view called name that shows rt, and false when it cannot: a
+// runtime that draws itself is its own view, which was probed as the
+// runtime, and kitty shows a runtime whose panels a window attaches, once it
+// probes usable.
+func viewOf(ctx context.Context, name string, rt revier.Runtime) (revier.View, error) {
+	if view, ok := rt.(revier.View); ok && rt.Name() == name {
+		return view, nil
+	}
+	attachable, ok := rt.(kitty.Attachable)
+	if name != "kitty" || !ok {
+		return nil, fmt.Errorf("%s: cannot show the %s runtime", name, rt.Name())
+	}
+	view := &kitty.View{Runtime: attachable}
+	if err := view.Probe(ctx); err != nil {
+		return nil, fmt.Errorf("%s: %w", name, err)
+	}
+	return view, nil
+}
 
 // defaultViewOrder is the views tried when config names none: the runtime's
 // own, when it is one, and then kitty.
@@ -155,19 +174,15 @@ func defaultViewOrder(rt revier.Runtime) []string {
 // selectView picks the view that shows rt. A configured list is a preference
 // order, as selectHost reads one, and a view it names that cannot show rt is
 // an error; among the defaults such a view is passed over, and finding none
-// leaves the runtime unshown. A view shows a runtime when it is that runtime:
-// the runtime was probed already, so the view is not probed again.
-func selectView(want []string, rt revier.Runtime) (revier.View, error) {
-	shows := func(name string) (revier.View, bool) {
-		view, ok := rt.(revier.View)
-		return view, ok && rt.Name() == name
-	}
+// leaves the runtime unshown: hc with no kitty, or no display, as over ssh
+// (decisions.md D185).
+func selectView(ctx context.Context, want []string, rt revier.Runtime) (revier.View, error) {
 	if len(want) == 0 {
 		if rt == nil {
 			return nil, nil
 		}
 		for _, name := range defaultViewOrder(rt) {
-			if view, ok := shows(name); ok {
+			if view, err := viewOf(ctx, name, rt); err == nil {
 				return view, nil
 			}
 		}
@@ -184,10 +199,11 @@ func selectView(want []string, rt revier.Runtime) (revier.View, error) {
 			errs = append(errs, fmt.Errorf("%s: no runtime is selected to show", name))
 			continue
 		}
-		if view, ok := shows(name); ok {
+		view, err := viewOf(ctx, name, rt)
+		if err == nil {
 			return view, nil
 		}
-		errs = append(errs, fmt.Errorf("%s: cannot show the %s runtime", name, rt.Name()))
+		errs = append(errs, err)
 	}
 	return nil, fmt.Errorf("no configured view is usable: %w", errors.Join(errs...))
 }

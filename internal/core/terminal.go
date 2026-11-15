@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -53,13 +55,28 @@ type panelOpener interface {
 
 // tabs is the runtime's tabs as the view shows them. With a view that cannot
 // focus a panel, a tab opens and stays where it is, and no panel is current.
+// A view that opens its own windows draws a tab that opened in an instance
+// it shows already; one it does not show it leaves alone, so a script's tab
+// opens no window (decisions.md D118).
 type tabs struct {
 	revier.TabOpener
-	view revier.View
+	c *Core
+}
+
+func (t tabs) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Realization, vars map[string]string) (revier.PanelID, error) {
+	panel, err := t.TabOpener.OpenTab(ctx, ref, r, vars)
+	if err != nil {
+		return panel, err
+	}
+	// The tab runs, and the next press that shows the instance draws it.
+	if _, err := t.c.show(ctx, ref, false); err != nil {
+		slog.Warn("show the new tab", "view", t.c.View.Name(), "ref", ref, "err", err)
+	}
+	return panel, nil
 }
 
 func (t tabs) FocusPanel(ctx context.Context, ref revier.TargetRef, panel revier.PanelID) error {
-	f, ok := t.view.(revier.PanelFocuser)
+	f, ok := t.c.View.(revier.PanelFocuser)
 	if !ok {
 		return nil
 	}
@@ -67,7 +84,7 @@ func (t tabs) FocusPanel(ctx context.Context, ref revier.TargetRef, panel revier
 }
 
 func (t tabs) FocusedPanel(ctx context.Context, ref revier.TargetRef) (revier.PanelID, error) {
-	f, ok := t.view.(revier.PanelFocuser)
+	f, ok := t.c.View.(revier.PanelFocuser)
 	if !ok {
 		return "", nil
 	}
@@ -83,7 +100,52 @@ func (c *Core) opener(host revier.Host) (panelOpener, bool) {
 	if !ok {
 		return nil, false
 	}
-	return tabs{TabOpener: o, view: c.View}, true
+	return tabs{TabOpener: o, c: c}, true
+}
+
+// show has a view that opens windows of its own draw the runtime instance
+// ref names, from a listing of the runtime alone, and reports whether it
+// opened a window now. With open it opens one where none shows the
+// instance: a press, which raises it. Every other view shows every instance
+// it is the runtime of, and nothing is done (decisions.md D180, D181).
+func (c *Core) show(ctx context.Context, ref revier.TargetRef, open bool) (bool, error) {
+	shower, ok := c.View.(revier.Shower)
+	if !ok || c.Runtime == nil || ref.Host != c.Runtime.Name() {
+		return false, nil
+	}
+	snap, err := c.answered(ctx, c.Runtime.Name())
+	if err != nil {
+		return false, err
+	}
+	inst, ok := byRef(snap, ref)
+	if !ok {
+		return false, fmt.Errorf("%s: %s is not listed to show", c.Runtime.Name(), ref.ID)
+	}
+	return shower.Show(ctx, inst, open)
+}
+
+// raisableShown is raisable for a press on an instance that is open: a view
+// that opens its own windows first opens one where none shows it, and the OS
+// window is then the new one, which the window host lists only after a
+// wait. A new window it never lists is not raised, as a launch's is not
+// (raiseNew).
+func (c *Core) raisableShown(ctx context.Context, snap snapshot, failed hostErrs, inst revier.Instance, name revier.TargetName) (revier.TargetRef, error) {
+	opened, err := c.show(ctx, inst.Ref, true)
+	if err != nil {
+		return revier.TargetRef{}, fmt.Errorf("%s: show %s: %w", c.View.Name(), name, err)
+	}
+	if !opened {
+		return c.raisable(snap, failed, inst, name)
+	}
+	slog.Info("view opened again over a live instance", "view", c.View.Name(), "ref", inst.Ref, "target", name)
+	if !c.bridged(inst) {
+		return revier.TargetRef{}, nil
+	}
+	osw, ok := c.windowOfNew(ctx, inst.Ref)
+	if !ok {
+		slog.Warn("raise: the window host never listed the new window", "ref", inst.Ref, "target", name)
+	}
+	return osw, nil
 }
 
 // finder is the view's map from the panel id a terminal key passes to the
