@@ -1083,6 +1083,7 @@ Extends D119, D144. kitty 0.50 keeps the OSC 7501 records each program in a
 window sends, and the listing revier already takes reports them, so the panel
 carries them as a var and a probe that needs them starts no kitten of its own.
 The records name a program, not an agent: rsync sends them too. So the host
-neither filters nor maps them, and drops a user var of the same name. Rejected:
+neither filters nor maps them. It drops a user var of the same name: kitty
+keeps its own records apart from what a program in the window can set. Rejected:
 the socket to the probe, which hands it all of kitty's remote control; a
 built-in mapping, until a second agent sends the records.
