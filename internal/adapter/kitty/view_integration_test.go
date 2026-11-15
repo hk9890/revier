@@ -9,6 +9,7 @@ package kitty_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"slices"
@@ -140,6 +141,42 @@ func TestShowOpensAnOSWindowWithATabPerTabAndAWindowPerPanel(t *testing.T) {
 		if slices.Contains(got[i], "--hold") {
 			t.Errorf("launch %d holds its window: %q", i, got[i])
 		}
+	}
+}
+
+// A title of the user's survives the round trip: it goes to kitty as one
+// argument, and comes back from the listing as it went, with the colon of a
+// title template, a newline and a non-ASCII letter in it.
+func TestAViewWindowsTitleSurvivesTheRoundTrip(t *testing.T) {
+	const title = "session:shop: ü\nnext"
+	inst := demo
+	inst.Title, inst.Ref.Title = title, title
+
+	v, rec := viewOn(t, hiddenOnly(t))
+	if opened, err := v.Show(t.Context(), inst, true); err != nil || !opened {
+		t.Fatalf("Show = %v, %v; want a window opened", opened, err)
+	}
+	got := launches(rec)
+	if len(got) == 0 || !slices.Equal(got[0][:5], []string{"--type=os-window", "--os-window-name", title, "--os-window-title", title}) {
+		t.Fatalf("first launch = %q, want the title %q as one argument", got, title)
+	}
+
+	raw, err := os.ReadFile("testdata/ls-hc-view.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	quoted, err := json.Marshal(title)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listing := strings.Replace(string(raw), `"wm_name": "session:demo"`, `"wm_name": `+string(quoted), 1)
+	path := t.TempDir() + "/ls.json"
+	if err := os.WriteFile(path, []byte(listing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	v, _ = viewOn(t, path)
+	if ref, err := v.Focused(t.Context()); err != nil || ref.Title != title {
+		t.Errorf("Focused = %+v, %v; want the title %q", ref, err, title)
 	}
 }
 
