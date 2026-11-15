@@ -1014,9 +1014,8 @@ Extends D165 and D179. hc's attach shows one terminal, so a tab of an agent and
 a shell is two kitty windows in one kitty tab, and an instance is one kitty OS
 window of the workspace kitty, titled as its match expects. Each kitty window
 carries the hc address it attaches, which maps a key's kitty window id to its
-terminal and a terminal to its window. A view's window is never held: holding
-is a runtime's, and hc removes a terminal whose program exited, so the window
-ends with its panel (D94).
+terminal and a terminal to its window. A window ends with its panel, and a
+tab with its last one (D94), past the hold of a command that ended (D187).
 
 ### D181 — under hc a view that closes ends no agent, and the next press opens a view again
 
@@ -1076,3 +1075,13 @@ places it once, as a launch: a closed kitty comes back where the workspace
 always opens. A raise of a window that shows the instance still moves nothing.
 An agent reached from the TUI names no target, so a window it opens again is
 not placed.
+
+### D187 — under hc a view's window holds a panel's command once it ends, as kitty does
+
+Extends D180, whose window ended with its panel. The kitty runtime holds a
+panel's command so its output stays readable, while under hc an agent that
+failed took its error with its window. So hc keeps a command's terminal once
+it ends, and the window shows what it left and how it ended, removes it, and
+closes on Enter. A shell, a close and a shutdown end the window at once. The
+next open removes a terminal no window took within a minute. The window asks
+the core with no hc command, as one would start a core a stop ended.

@@ -1,6 +1,12 @@
 package hc
 
-import "context"
+import (
+	"context"
+	"io"
+	"time"
+
+	"github.com/hk9890/revier/pkg/revier"
+)
 
 // SocketPath is socketPath, for the tests outside the package.
 var SocketPath = socketPath
@@ -34,4 +40,20 @@ func (h *Host) CorePID(ctx context.Context) (int, error) {
 	}
 	defer s.close()
 	return s.pid, nil
+}
+
+// Hold is hold, for the live tests of a held window.
+func (h *Host) Hold(ctx context.Context, panel revier.PanelID, in io.Reader, out io.Writer) (bool, error) {
+	return h.hold(ctx, panel, in, out)
+}
+
+// Sweep is sweep on a session of its own, at now.
+func (h *Host) Sweep(ctx context.Context, now time.Time) error {
+	s, err := h.dial(ctx, false)
+	if err != nil {
+		return err
+	}
+	defer s.close()
+	s.sweep(now)
+	return nil
 }

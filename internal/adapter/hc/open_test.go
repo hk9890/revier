@@ -64,8 +64,13 @@ func TestOpenLabelsAndNamesEachTerminal(t *testing.T) {
 			labels["revier.tab"] != token || labels["revier.tabplace"] != "0" || labels["revier_target"] != "home" || len(labels) != 6 {
 			t.Errorf("run %d labels = %v, want the instance, name, tab, tab place, place and var", i, labels)
 		}
-		if run["name"] != "rv-"+id+"-"+[]string{"0", "1"}[i] || run["no_parent"] != true || run["keep"] != false || run["rm"] != true || run["cwd"] != dir {
-			t.Errorf("run %d = %v, want named after the instance, no parent, not kept, removed at exit, in %s", i, run, dir)
+		if run["name"] != "rv-"+id+"-"+[]string{"0", "1"}[i] || run["no_parent"] != true || run["keep"] != false || run["cwd"] != dir {
+			t.Errorf("run %d = %v, want named after the instance, no parent, not kept, in %s", i, run, dir)
+		}
+		// The agent's command ends finished, for its window to hold; the
+		// shell is removed as it exits.
+		if run["rm"] != (i == 1) {
+			t.Errorf("run %d rm = %v, want %v", i, run["rm"], i == 1)
 		}
 	}
 	// A bare program name could name one of the user's hc templates, which hc
@@ -387,8 +392,7 @@ func TestTwoFailedCoreStartsAtOnceEachGiveTheirOwnReason(t *testing.T) {
 }
 
 // A panel whose program ended before the listing that follows the runs fails
-// the Open, and its instance is closed. hc removed the terminal at its exit,
-// so it is missing from the listing.
+// the Open, and its instance is closed, the finished terminal with it.
 func TestAPanelThatExitedAtOnceFailsTheOpen(t *testing.T) {
 	c, sock := newCore(t)
 	c.exitRun = 2
@@ -400,9 +404,6 @@ func TestAPanelThatExitedAtOnceFailsTheOpen(t *testing.T) {
 	}
 	if records := c.records(); len(records) != 0 {
 		t.Errorf("records = %q, want none", records)
-	}
-	if kills := c.paramsOf("terminal.kill"); len(kills) != 2 || kills[0]["terminal"] == "t2" || kills[1]["terminal"] == "t2" {
-		t.Errorf("killed %v, want t1 and t3, the panels that still ran", kills)
 	}
 }
 

@@ -2,6 +2,7 @@ package hc_test
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hk9890/revier/internal/adapter/hc"
 	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -73,6 +75,10 @@ type fakeTerminal struct {
 	Title      string            `json:"title"`
 	Labels     map[string]string `json:"labels"`
 	Foreground map[string]any    `json:"foreground,omitempty"`
+	Reason     string            `json:"reason,omitempty"`
+	ExitCode   *int              `json:"exit_code"`
+	Signal     *int              `json:"signal"`
+	FinishedMS int64             `json:"finished_ms,omitempty"`
 
 	// rm removes the terminal when it exits, as hc's terminal.run rm with no
 	// parent does: a kill answers not_found, as hc's does of the record it
@@ -328,7 +334,7 @@ func (c *fakeCore) dispatch(req request) (any, map[string]any) {
 		if t == nil {
 			return nil, notFound
 		}
-		t.State = "finished"
+		t.State, t.Reason = "finished", "killed"
 		if t.rm {
 			c.remove(t)
 			return nil, notFound
@@ -424,7 +430,18 @@ func ran(dir string) bool {
 	return err == nil
 }
 
-func TestMain(m *testing.M) { os.Exit(testenv.Run(m)) }
+// TestMain runs the tests, or, run as a view's window runs revier, revier's
+// attach of one terminal: a live test gives the test binary as the host's
+// Revier.
+func TestMain(m *testing.M) {
+	if len(os.Args) == 4 && os.Args[1] == hc.AttachCmd {
+		if err := (&hc.Host{}).Attach(context.Background(), os.Args[2], revier.PanelID(os.Args[3]), os.Stdin, os.Stdout); err != nil {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+	os.Exit(testenv.Run(m))
+}
 
 func asList(v any) []any {
 	l, _ := v.([]any)

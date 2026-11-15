@@ -49,6 +49,10 @@ var ownLabels = []string{instanceLabel, nameLabel, tabLabel, tabPlaceLabel, pane
 // would use from this environment.
 type Host struct {
 	Socket string
+	// Revier is the revier binary a view's window runs to attach a terminal
+	// and hold it once its program ends (decisions.md D187). With none, the
+	// window runs hc's attach alone, and ends with its program.
+	Revier string
 
 	// procRoot replaces /proc in tests.
 	procRoot string

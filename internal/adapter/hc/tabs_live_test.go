@@ -4,6 +4,7 @@
 package hc_test
 
 import (
+	"os"
 	"os/exec"
 	"slices"
 	"strings"
@@ -70,15 +71,17 @@ func TestATabThatExitsAtOnceLeavesTheInstance(t *testing.T) {
 	})
 }
 
-// A view's window runs hc's attach of one terminal, which ends when the
-// terminal is closed: the window ends with its panel, so it needs no hold
-// (decisions.md D180). script gives the attach the terminal it needs.
+// A view's window runs revier's attach of one terminal, which ends when the
+// terminal is closed: the window ends with its panel (decisions.md D180),
+// and a close holds none (D187). The test binary is revier here, and script
+// gives the attach the terminal it needs.
 func TestAnAttachedPanelEndsWithItsTerminal(t *testing.T) {
 	script, err := exec.LookPath("script")
 	if err != nil {
 		t.Skip("script is not installed; the attach needs a terminal")
 	}
 	h, c := world(t), ctx(t)
+	h.Revier = os.Args[0]
 	ref, err := h.Open(c, revier.Realization{Name: "home", Launch: []string{"sh", "-c", "exec sleep 30"}})
 	if err != nil {
 		t.Fatalf("Open: %v", err)
@@ -120,13 +123,15 @@ func TestAnAttachedPanelEndsWithItsTerminal(t *testing.T) {
 
 // A view's window that closes or crashes ends its attach as kitty does, by a
 // hang-up or a kill of the attach's process group, and its terminal runs on:
-// closing kitty ends no agent (decisions.md D181).
+// closing kitty ends no agent (decisions.md D181). The test binary is revier
+// here.
 func TestAnAttachThatIsHungUpOrKilledLeavesItsTerminal(t *testing.T) {
 	script, err := exec.LookPath("script")
 	if err != nil {
 		t.Skip("script is not installed; the attach needs a terminal")
 	}
 	h, c := world(t), ctx(t)
+	h.Revier = os.Args[0]
 	ref, err := h.Open(c, revier.Realization{Name: "home", Launch: []string{"sh", "-c", "exec sleep 30"}})
 	if err != nil {
 		t.Fatalf("Open: %v", err)
