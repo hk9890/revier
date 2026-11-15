@@ -61,7 +61,7 @@ func TestSelectRuntimeRejectsAnUnknownName(t *testing.T) {
 // A config written for a release that had the herdr runtime is told it was
 // removed and what to name instead, not that herdr is an unknown name.
 func TestSelectRuntimeSaysTheHerdrRuntimeWasRemoved(t *testing.T) {
-	_, err := selectHost(context.Background(), "runtime", []string{"herdr", "tmux"}, defaultRuntimeOrder, runtimeAdapters())
+	_, err := selectHost(t.Context(), "runtime", []string{"herdr", "tmux"}, defaultRuntimeOrder, runtimeAdapters())
 	if !errors.Is(err, errHerdrRemoved) {
 		t.Fatalf("err = %v, want %v", err, errHerdrRemoved)
 	}
