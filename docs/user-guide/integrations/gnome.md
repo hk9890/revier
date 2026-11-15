@@ -54,7 +54,9 @@ hide it when another window takes the focus or the overview opens.
   revier's: install replaces it. Any other rule of yours for it holds the
   install back, and `revier setup install --force` replaces it.
 - An extension older than version 23 cannot read the rules, and
-  `revier setup` skips them and says so. Upgrade the extension.
+  `revier setup install` skips them and says so. Upgrade the extension.
+  `revier setup uninstall` still removes them, with or without a running
+  extension.
 - A hide by the extension acts as Esc: the next press raises the popup on the
   project list, with no query. An error the popup showed stays. A screen or a
   question the popup showed, such as the help or a delete, still waits for

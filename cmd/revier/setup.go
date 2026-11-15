@@ -56,28 +56,36 @@ type setupStores struct {
 	term     revier.TermKeys
 	rules    revier.WindowRules
 	rulesWhy error
+	// addWhy is why an install may not add the rules, nil where it may. A
+	// status and an uninstall read and remove, and need no running extension.
+	addWhy error
 }
 
-// machineStores probes this machine for the stores. write picks the types
-// that write: status is given the readers, which cannot write whatever a
-// later change does to them.
+// machineStores probes this machine for the stores, each probe in a
+// keyBinderWait of its own. write picks the types that write: status is
+// given the readers, which cannot write whatever a later change does to them.
 func machineStores(ctx context.Context, write bool) setupStores {
-	probe, cancel := context.WithTimeout(ctx, keyBinderWait)
-	defer cancel()
 	var s setupStores
+	probe := func(f func(context.Context)) {
+		ctx, cancel := context.WithTimeout(ctx, keyBinderWait)
+		defer cancel()
+		f(ctx)
+	}
 	if write {
-		s.keys = selectKeyWriter(probe, keyWriters())
+		probe(func(ctx context.Context) { s.keys = selectKeyWriter(ctx, keyWriters()) })
 		s.term = termKeyWriter()
 		rules := &gnome.RuleWriter{}
-		if s.rulesWhy = rules.Probe(probe); s.rulesWhy == nil {
-			s.rules = rules
+		probe(func(ctx context.Context) { s.rulesWhy = rules.Probe(ctx) })
+		if s.rulesWhy == nil {
+			s.rules, s.addWhy = rules, rules.CanAdd()
 		}
 		return s
 	}
-	s.keys = selectKeyBinder(probe, keyBinders())
+	probe(func(ctx context.Context) { s.keys = selectKeyBinder(ctx, keyBinders()) })
 	s.term = termKeys()
 	rules := &gnome.Rules{}
-	if s.rulesWhy = rules.Probe(probe); s.rulesWhy == nil {
+	probe(func(ctx context.Context) { s.rulesWhy = rules.Probe(ctx) })
+	if s.rulesWhy == nil {
 		s.rules = rules
 	}
 	return s
@@ -129,7 +137,7 @@ func cmdSetup(ctx context.Context, a *app, args []string) error {
 	s := stores(ctx, sub != "status")
 	a.core.KeyBinder, a.core.TermKeys, a.core.WindowRules = s.keys, s.term, s.rules
 
-	run := setupRun{a: a, sub: sub, force: force, dryRun: dryRun, trigger: trigger, rulesWhy: s.rulesWhy}
+	run := setupRun{a: a, sub: sub, force: force, dryRun: dryRun, trigger: trigger, rulesWhy: s.rulesWhy, addWhy: s.addWhy}
 	if sub == "status" {
 		return run.status(ctx, *asJSON)
 	}
@@ -153,15 +161,18 @@ type setupRun struct {
 	force, dryRun bool
 	trigger       core.Chord
 	rulesWhy      error
+	addWhy        error
 }
 
 // setupReport is what status prints as JSON. A part this machine cannot do
-// is null, and Skipped says why.
+// is null, and Skipped says why; one that could not be read is null too, and
+// Failed says why.
 type setupReport struct {
 	Keys    *core.KeyReport       `json:"keys"`
 	Term    *core.TermKeyReport   `json:"term"`
 	Rules   *core.PopupRuleReport `json:"rules"`
 	Skipped map[string]string     `json:"skipped"`
+	Failed  map[string]string     `json:"failed"`
 }
 
 // setupPlan is what install and uninstall print as JSON: each part's plan
@@ -180,61 +191,66 @@ type setupPlan struct {
 // printed against the part it belongs to.
 var errSetupIncomplete = errors.New("some of the setup was not installed")
 
+// setupParts are the parts in the order every run prints them.
+var setupParts = []string{"keys", "term", "rules"}
+
+// setupFailed is the error of a run in which a part failed, nil when none
+// did. The parts are printed already; the error names them for stderr and
+// for the exit status, which tells a part that failed from one held back.
+func setupFailed(sub string, failed map[string]string) error {
+	var errs []error
+	for _, part := range setupParts {
+		if why, ok := failed[part]; ok {
+			errs = append(errs, fmt.Errorf("setup %s: %s: %s", sub, part, why))
+		}
+	}
+	return errors.Join(errs...)
+}
+
 func (r setupRun) status(ctx context.Context, asJSON bool) error {
 	a := r.a
-	out := setupReport{Skipped: map[string]string{}}
+	out := setupReport{Skipped: map[string]string{}, Failed: map[string]string{}}
+	parts := partResults{skipped: out.Skipped, failed: out.Failed}
 
 	keys, err := a.core.KeyReport(ctx, a.projects, r.trigger)
-	switch {
-	case errors.Is(err, core.ErrNoKeyBinder):
-		out.Skipped["keys"] = err.Error()
-	case err != nil:
-		return err
-	default:
+	if parts.ok("keys", err, core.ErrNoKeyBinder, "") {
 		out.Keys = &keys
 	}
 	term, err := a.core.TermKeyReport(ctx, a.cfg.TermKeys(), a.projects, r.trigger)
-	switch {
-	case errors.Is(err, core.ErrNoTermKeys):
-		out.Skipped["term"] = err.Error()
-	case err != nil:
-		return err
-	default:
+	if parts.ok("term", err, core.ErrNoTermKeys, "") {
 		out.Term = &term
 	}
 	rules, err := a.core.PopupRuleReport(ctx)
-	switch {
-	case errors.Is(err, core.ErrNoWindowRules):
-		out.Skipped["rules"] = r.skipped(err)
-	case err != nil:
-		return err
-	default:
+	if parts.ok("rules", err, core.ErrNoWindowRules, r.skipped(err)) {
 		out.Rules = &rules
 	}
 
 	if asJSON {
-		return a.printJSON(out)
+		if err := a.printJSON(out); err != nil {
+			return err
+		}
+		return setupFailed(r.sub, out.Failed)
 	}
 	w := a.out
 	_, _ = fmt.Fprintln(w, "desktop keys:")
 	if out.Keys != nil {
 		printKeys(w, *out.Keys)
 	} else {
-		_, _ = fmt.Fprintf(w, "  - skipped: %s\n", out.Skipped["keys"])
+		parts.print(w, "keys")
 	}
 	_, _ = fmt.Fprintln(w, "\nterminal keys:")
 	if out.Term != nil {
 		printTermReport(w, *out.Term)
 	} else {
-		_, _ = fmt.Fprintf(w, "  - skipped: %s\n", out.Skipped["term"])
+		parts.print(w, "term")
 	}
 	_, _ = fmt.Fprintln(w, "\npopup rules:")
 	if out.Rules != nil {
 		printRuleReport(w, *out.Rules)
 	} else {
-		_, _ = fmt.Fprintf(w, "  - skipped: %s\n", out.Skipped["rules"])
+		parts.print(w, "rules")
 	}
-	return nil
+	return setupFailed(r.sub, out.Failed)
 }
 
 // skipped is why the rules part is skipped: what the probe found, else the
@@ -243,5 +259,11 @@ func (r setupRun) skipped(err error) string {
 	if r.rulesWhy != nil {
 		return r.rulesWhy.Error()
 	}
-	return err.Error()
+	if r.sub == "install" && r.addWhy != nil {
+		return r.addWhy.Error()
+	}
+	if err != nil {
+		return err.Error()
+	}
+	return ""
 }

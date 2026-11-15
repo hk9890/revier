@@ -16,23 +16,18 @@ import (
 func (r setupRun) apply(ctx context.Context, asJSON bool) error {
 	a := r.a
 	out := setupPlan{Skipped: map[string]string{}, Failed: map[string]string{}}
+	parts := partResults{skipped: out.Skipped, failed: out.Failed}
 
 	keys, err := r.applyKeys(ctx)
-	if err != nil {
-		out.fail("keys", err, core.ErrNoKeyBinder, "")
-	} else {
+	if parts.ok("keys", err, core.ErrNoKeyBinder, "") {
 		out.Keys = &keys
 	}
 	termBefore, term, err := r.applyTerm(ctx)
-	if err != nil {
-		out.fail("term", err, core.ErrNoTermKeys, "")
-	} else {
+	if parts.ok("term", err, core.ErrNoTermKeys, "") {
 		out.Term = &term
 	}
 	rules, err := r.applyRules(ctx)
-	if err != nil {
-		out.fail("rules", err, core.ErrNoWindowRules, r.skipped(err))
-	} else {
+	if parts.ok("rules", err, core.ErrNoWindowRules, r.skipped(err)) {
 		out.Rules = &rules
 	}
 
@@ -41,11 +36,13 @@ func (r setupRun) apply(ctx context.Context, asJSON bool) error {
 			return err
 		}
 	} else {
-		r.print(a.out, out, termBefore)
+		r.print(a.out, out, termBefore, parts)
 	}
 
-	if len(out.Failed) > 0 ||
-		(out.Keys != nil && keysIncomplete(*out.Keys, r.force)) ||
+	if err := setupFailed(r.sub, out.Failed); err != nil {
+		return err
+	}
+	if (out.Keys != nil && keysIncomplete(*out.Keys, r.force)) ||
 		(out.Term != nil && termIncomplete(*out.Term, r.sub)) ||
 		(out.Rules != nil && rulesIncomplete(*out.Rules, r.force)) {
 		return errSetupIncomplete
@@ -53,7 +50,7 @@ func (r setupRun) apply(ctx context.Context, asJSON bool) error {
 	return nil
 }
 
-func (r setupRun) print(w io.Writer, out setupPlan, termBefore core.TermKeyPlan) {
+func (r setupRun) print(w io.Writer, out setupPlan, termBefore core.TermKeyPlan, parts partResults) {
 	_, _ = fmt.Fprintf(w, "=== revier setup %s ===\n\n", r.sub)
 	if r.dryRun {
 		_, _ = fmt.Fprint(w, "  dry run: nothing is changed\n\n")
@@ -62,42 +59,49 @@ func (r setupRun) print(w io.Writer, out setupPlan, termBefore core.TermKeyPlan)
 	if out.Keys != nil {
 		printPlan(w, *out.Keys, r.sub, r.dryRun, r.force)
 	} else {
-		printPartNot(w, out, "keys")
+		parts.print(w, "keys")
 	}
 	_, _ = fmt.Fprintln(w, "\nterminal keys:")
 	if out.Term != nil {
 		printTermPlan(w, termBefore, *out.Term, r.sub, r.dryRun)
 	} else {
-		printPartNot(w, out, "term")
+		parts.print(w, "term")
 	}
 	_, _ = fmt.Fprintln(w, "\npopup rules:")
 	if out.Rules != nil {
 		printRulePlan(w, *out.Rules, r.sub, r.dryRun, r.force)
 	} else {
-		printPartNot(w, out, "rules")
+		parts.print(w, "rules")
 	}
 }
 
-// fail records a part that could not be planned: skipped when the machine
-// does not have it, which is the sentinel, and failed otherwise. why, when
-// set, says why it is skipped in place of the sentinel.
-func (p *setupPlan) fail(part string, err, sentinel error, why string) {
+// partResults records, for every run, the parts that did not come out: a
+// part is skipped when the machine does not have it, which is its sentinel,
+// and failed on any other error.
+type partResults struct{ skipped, failed map[string]string }
+
+// ok records err for part and reports whether there was none. why, when
+// set, says why the part is skipped in place of the sentinel.
+func (p partResults) ok(part string, err, sentinel error, why string) bool {
 	switch {
+	case err == nil:
+		return true
 	case !errors.Is(err, sentinel):
-		p.Failed[part] = err.Error()
+		p.failed[part] = err.Error()
 	case why != "":
-		p.Skipped[part] = why
+		p.skipped[part] = why
 	default:
-		p.Skipped[part] = err.Error()
+		p.skipped[part] = err.Error()
 	}
+	return false
 }
 
-func printPartNot(w io.Writer, p setupPlan, part string) {
-	if why, ok := p.Skipped[part]; ok {
+func (p partResults) print(w io.Writer, part string) {
+	if why, ok := p.skipped[part]; ok {
 		_, _ = fmt.Fprintf(w, "  - skipped: %s\n", why)
 		return
 	}
-	_, _ = fmt.Fprintf(w, "  ! failed: %s\n", p.Failed[part])
+	_, _ = fmt.Fprintf(w, "  ! failed: %s\n", p.failed[part])
 }
 
 // applyKeys builds the desktop keys' plan and, unless this is a dry run,
@@ -152,6 +156,9 @@ func (r setupRun) applyRules(ctx context.Context) (core.PopupRulePlan, error) {
 	planFor := a.core.PlanInstallPopupRules
 	if r.sub == "uninstall" {
 		planFor = a.core.PlanUninstallPopupRules
+	}
+	if r.sub == "install" && r.addWhy != nil {
+		return core.PopupRulePlan{}, core.ErrNoWindowRules
 	}
 	plan, err := planFor(ctx)
 	if err != nil || r.dryRun {

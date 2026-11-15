@@ -261,12 +261,13 @@ var popupTiers = []popupTier{
 }
 
 // popupGeometry is the place of the first tier the workarea is wide enough
-// for.
+// for. The last tier holds on any screen.
 func popupGeometry(workareaWidth int) string {
-	for _, t := range popupTiers {
+	last := len(popupTiers) - 1
+	for _, t := range popupTiers[:last] {
 		if workareaWidth >= t.minWidth {
 			return t.place
 		}
 	}
-	return popupTiers[len(popupTiers)-1].place
+	return popupTiers[last].place
 }

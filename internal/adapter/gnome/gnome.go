@@ -124,16 +124,9 @@ func (h *Host) Probe(ctx context.Context) error {
 	if d := os.Getenv("XDG_CURRENT_DESKTOP"); d != "" && !strings.Contains(strings.ToUpper(d), "GNOME") {
 		return fmt.Errorf("XDG_CURRENT_DESKTOP is %q, not GNOME", d)
 	}
-	raw, err := h.wctl(ctx, "version", "--json")
-	var doc versionDoc
-	if json.Unmarshal(bytes.TrimSpace(raw), &doc) != nil || doc.Wctl == "" {
-		if err != nil {
-			return fmt.Errorf("wctl is present but not answering: %w", err)
-		}
-		return fmt.Errorf("wctl version --json names no version: revier needs wctl %s or later", minWctlText())
-	}
-	if !atLeast(doc.Wctl, minWctl) {
-		return fmt.Errorf("wctl %s is older than %s, the oldest revier drives", doc.Wctl, minWctlText())
+	doc, err := wctlVersion(ctx, h.wctl)
+	if err != nil {
+		return err
 	}
 	if doc.Extension == nil {
 		return fmt.Errorf("wctl is present but no extension answers: %s", doc.Message)
@@ -141,6 +134,23 @@ func (h *Host) Probe(ctx context.Context) error {
 	h.quietHide = slices.Contains(doc.Capabilities, "no-animation")
 	h.quietFocus = slices.Contains(doc.Capabilities, "activate-no-animation")
 	return nil
+}
+
+// wctlVersion reads `wctl version --json` and refuses a wctl older than
+// minWctl. What it says of the extension is the caller's to read.
+func wctlVersion(ctx context.Context, run func(context.Context, ...string) ([]byte, error)) (versionDoc, error) {
+	raw, err := run(ctx, "version", "--json")
+	var doc versionDoc
+	if json.Unmarshal(bytes.TrimSpace(raw), &doc) != nil || doc.Wctl == "" {
+		if err != nil {
+			return doc, fmt.Errorf("wctl is present but not answering: %w", err)
+		}
+		return doc, fmt.Errorf("wctl version --json names no version: revier needs wctl %s or later", minWctlText())
+	}
+	if !atLeast(doc.Wctl, minWctl) {
+		return doc, fmt.Errorf("wctl %s is older than %s, the oldest revier drives", doc.Wctl, minWctlText())
+	}
+	return doc, nil
 }
 
 func minWctlText() string { return fmt.Sprintf("%d.%d.%d", minWctl[0], minWctl[1], minWctl[2]) }

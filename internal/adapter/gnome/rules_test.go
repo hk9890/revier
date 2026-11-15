@@ -28,27 +28,33 @@ func (w *wctl) rules() *gnome.RuleWriter {
 	return r
 }
 
-// The rules are usable only where the loaded extension reads every key revier
-// writes: a file with a key it does not read is refused whole, the user's
-// rules with it.
-func TestRulesNeedAnExtensionThatReadsEveryKeyRevierWrites(t *testing.T) {
+// Listing and removing need only a wctl that has the rules. Adding needs a
+// loaded extension that reads every key revier writes: a file with a key it
+// does not read is refused whole, the user's rules with it.
+func TestRulesAddOnlyWhereTheExtensionReadsEveryKeyRevierWrites(t *testing.T) {
 	all := `["rules","rules-overlay","rules-min-width"]`
 	cases := []struct {
 		name   string
 		doc    string
 		usable bool
+		adds   bool
 	}{
-		{"all three", `{"wctl":"0.23.0","extension":"23","capabilities":` + all + `}`, true},
-		{"no min_width", `{"wctl":"0.23.0","extension":"21","capabilities":["rules","rules-overlay"]}`, false},
-		{"no extension", `{"wctl":"0.23.0","extension":null,"capabilities":[],"message":"not running"}`, false},
-		{"an old wctl", `{"wctl":"0.22.0","extension":"23","capabilities":` + all + `}`, false},
+		{"all three", `{"wctl":"0.23.0","extension":"23","capabilities":` + all + `}`, true, true},
+		{"no min_width", `{"wctl":"0.23.0","extension":"21","capabilities":["rules","rules-overlay"]}`, true, false},
+		{"no extension", `{"wctl":"0.23.0","extension":null,"capabilities":[],"message":"not running"}`, true, false},
+		{"an old wctl", `{"wctl":"0.22.0","extension":"23","capabilities":` + all + `}`, false, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			w := &wctl{reply: versionReply(tc.doc, 0)}
-			err := w.rules().Probe(t.Context())
-			if (err == nil) != tc.usable {
-				t.Errorf("Probe = %v, want usable %v", err, tc.usable)
+			r := (&wctl{reply: versionReply(tc.doc, 0)}).rules()
+			if err := r.Probe(t.Context()); (err == nil) != tc.usable {
+				t.Fatalf("Probe = %v, want usable %v", err, tc.usable)
+			}
+			if !tc.usable {
+				return
+			}
+			if err := r.CanAdd(); (err == nil) != tc.adds {
+				t.Errorf("CanAdd = %v, want adds %v", err, tc.adds)
 			}
 		})
 	}

@@ -1,7 +1,6 @@
 package gnome
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -23,6 +22,8 @@ type Rules struct {
 	// run runs wctl with the arguments and returns its standard output.
 	// Tests replace it; production leaves it nil and runs the wctl on PATH.
 	run func(ctx context.Context, args ...string) ([]byte, error)
+	// version is what Probe read, for CanAdd.
+	version versionDoc
 }
 
 func (r *Rules) Name() string { return "gnome" }
@@ -33,25 +34,24 @@ func (r *Rules) Name() string { return "gnome" }
 // the extension reads all of these.
 var ruleCapabilities = []string{"rules", "rules-overlay", "rules-min-width"}
 
-// Probe reports the rules usable when wctl is minWctl or later and the
-// extension the shell has loaded reads every key revier writes.
+// Probe reports the rules usable when wctl is minWctl or later. Listing and
+// removing a rule need no running extension, so a status and an uninstall
+// work without one; CanAdd says whether an install may add.
 func (r *Rules) Probe(ctx context.Context) error {
 	if r.run == nil {
 		if _, err := exec.LookPath("wctl"); err != nil {
 			return fmt.Errorf("wctl not on PATH: %w", err)
 		}
 	}
-	raw, err := r.wctl(ctx, "version", "--json")
-	var doc versionDoc
-	if json.Unmarshal(bytes.TrimSpace(raw), &doc) != nil || doc.Wctl == "" {
-		if err != nil {
-			return fmt.Errorf("wctl is present but not answering: %w", err)
-		}
-		return fmt.Errorf("wctl version --json names no version: revier needs wctl %s or later", minWctlText())
-	}
-	if !atLeast(doc.Wctl, minWctl) {
-		return fmt.Errorf("wctl %s is older than %s, the oldest revier drives", doc.Wctl, minWctlText())
-	}
+	doc, err := wctlVersion(ctx, r.wctl)
+	r.version = doc
+	return err
+}
+
+// CanAdd reports, from what Probe read, whether the extension the shell has
+// loaded reads every key revier writes.
+func (r *Rules) CanAdd() error {
+	doc := r.version
 	if doc.Extension == nil {
 		return fmt.Errorf("no extension answers, so revier cannot tell which rules it reads: %s", doc.Message)
 	}
@@ -100,10 +100,10 @@ func (w *RuleWriter) Remove(ctx context.Context, index int) error {
 }
 
 // readRuleCommands is every rules command Rules may run, and
-// writeRuleCommands every one RuleWriter may run.
+// writeRuleCommands every one RuleWriter adds to them.
 var (
 	readRuleCommands  = []string{"list"}
-	writeRuleCommands = []string{"list", "add", "remove"}
+	writeRuleCommands = []string{"add", "remove"}
 )
 
 func (r *Rules) exec(ctx context.Context, allowed []string, args ...string) ([]byte, error) {

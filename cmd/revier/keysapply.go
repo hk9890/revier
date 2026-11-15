@@ -98,7 +98,6 @@ func heldBy(s core.KeyStep) string {
 }
 
 func printPlan(w io.Writer, plan core.KeyPlan, sub string, dryRun, force bool) {
-
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	for _, s := range plan.Steps {
 		_, _ = fmt.Fprintf(tw, "  %s %s\t%s\t%s\n",

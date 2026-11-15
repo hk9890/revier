@@ -130,3 +130,40 @@ func TestSetupSaysWhyTheRulesAreSkipped(t *testing.T) {
 		t.Errorf("status:\n%s", out)
 	}
 }
+
+// A part that cannot be read fails alone: status still reports the others,
+// and the run's error names the part, so it is no exit for want of --force.
+func TestSetupStatusReportsThePartsBesideOneThatFails(t *testing.T) {
+	a, w := rulesApp(t)
+	w.ReadErr = errors.New("rules.json is not valid JSON")
+	out, err := runSetup(t, a, "status")
+	if err == nil || errors.Is(err, errSetupIncomplete) || !strings.Contains(err.Error(), "rules: rules.json is not valid JSON") {
+		t.Errorf("err = %v, want the rules part named", err)
+	}
+	if !strings.Contains(out, "terminal: kitty") || !strings.Contains(out, "! failed: rules.json is not valid JSON") {
+		t.Errorf("status:\n%s", out)
+	}
+}
+
+// An extension that cannot read revier's rules keeps an install from adding
+// them, and an uninstall still removes the ones revier wrote.
+func TestSetupUninstallNeedsNoExtensionThatReadsTheRules(t *testing.T) {
+	a, w := rulesApp(t)
+	stores := a.stores
+	a.stores = func(ctx context.Context, write bool) setupStores {
+		s := stores(ctx, write)
+		s.addWhy = errors.New("extension 21 does not read \"rules-min-width\" in a rule: upgrade it")
+		return s
+	}
+	out, err := runSetup(t, a, "install")
+	if err != nil || !strings.Contains(out, "- skipped: extension 21 does not read") || len(w.Calls) != 0 {
+		t.Errorf("install: err %v, calls %v:\n%s", err, w.Calls, out)
+	}
+	w.Rules = core.PopupRules()
+	if _, err := runSetup(t, a, "uninstall"); err != nil {
+		t.Fatalf("uninstall: %v", err)
+	}
+	if len(w.Rules) != 0 {
+		t.Errorf("uninstall left %v", w.Rules)
+	}
+}

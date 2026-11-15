@@ -155,8 +155,10 @@ flags:
 const exitNoProject = 3
 
 // exitSetupIncomplete is returned when `revier setup install` ran and the
-// machine is not fully what was asked for. Every reason is already printed
-// against the part it belongs to, so this status carries no message of its own.
+// machine is not fully what was asked for: something was held back for want
+// of --force, or refused. Every reason is already printed against the part
+// it belongs to, so this status carries no message of its own. A part that
+// failed exits 1 and names itself on stderr.
 const exitSetupIncomplete = 4
 
 // exitTimeout is returned when `revier agent wait` gave up. It is not 1, so a
