@@ -55,8 +55,9 @@ hide it when another window takes the focus or the overview opens.
   primary monitor, less its panels.
 - A rule of yours for `revier-popup` that keeps the popup on top is
   revier's: install replaces it. Any other rule of yours for it holds the
-  install back, and `revier setup install --force` replaces it. The install
-  prints each rule it removed, as the file held it, for you to put back.
+  install back, and `revier setup install --force` replaces it. Install and
+  uninstall print each rule they removed that revier does not write, as the
+  file held it, for you to put back.
 - An extension older than version 23 cannot read the rules, and
   `revier setup install` skips them and says so. Upgrade the extension.
   `revier setup uninstall` still removes them, with or without a running

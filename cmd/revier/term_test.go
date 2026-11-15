@@ -123,7 +123,7 @@ func TestTermInstallOnALinkToNothingWritesNothing(t *testing.T) {
 				t.Errorf("status: %v\n%s", err, out)
 			}
 			out, err = runTerm(t, a, "install", "-n")
-			if !errors.Is(err, errSetupIncomplete) || !strings.Contains(out, "install would be refused: "+want) || strings.Contains(out, "would be created") {
+			if !errors.Is(err, errSetupIncomplete) || !strings.Contains(out, "install would be refused: "+want) || strings.Contains(terminalPart(out), "would be created") {
 				t.Errorf("dry run: %v\n%s", err, out)
 			}
 			out, err = runTerm(t, a, "install")
@@ -131,7 +131,7 @@ func TestTermInstallOnALinkToNothingWritesNothing(t *testing.T) {
 				t.Errorf("install: %v\n%s", err, out)
 			}
 			for _, claim := range []string{": created", "  written"} {
-				if strings.Contains(out, claim) {
+				if strings.Contains(terminalPart(out), claim) {
 					t.Errorf("install claims %q:\n%s", claim, out)
 				}
 			}
@@ -140,6 +140,13 @@ func TestTermInstallOnALinkToNothingWritesNothing(t *testing.T) {
 			}
 		})
 	}
+}
+
+// terminalPart is what a setup run printed of the terminal keys.
+func terminalPart(out string) string {
+	_, after, _ := strings.Cut(out, "terminal keys:")
+	part, _, _ := strings.Cut(after, "popup rules:")
+	return part
 }
 
 // A run that failed half way says the step that ran did what it did, and

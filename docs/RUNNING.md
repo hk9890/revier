@@ -380,7 +380,7 @@ export XDG_CURRENT_DESKTOP=none XDG_CONFIG_HOME=$S/xdg KITTY_CONFIG_DIRECTORY=$S
 mkdir -p "$KITTY_CONFIG_DIRECTORY"
 printf 'map ctrl+shift+t new_tab\n' > "$KITTY_CONFIG_DIRECTORY/kitty.conf"
 wctl rules path                  # must name $S/xdg/gnome-window-control/rules.json
-./bin/revier setup install       # desktop keys skipped; revier.conf, the include, 3 popup rules
+./bin/revier setup install       # desktop keys skipped, so exit 4; revier.conf, the include, 3 popup rules
 ./bin/revier setup status        # each key written; ctrl+shift+t shadowed by kitty.conf:3
 wctl rules list --json           # revier's rules first
 ./bin/revier setup uninstall     # kitty.conf and the rules file as they were

@@ -42,7 +42,10 @@ func (r setupRun) apply(ctx context.Context, asJSON bool) error {
 	if err := setupFailed(r.sub, out.Failed); err != nil {
 		return err
 	}
-	if (out.Keys != nil && keysIncomplete(*out.Keys, r.force)) ||
+	// An install that skipped a part did not set up the machine: a script
+	// that installs and goes on must hear it, as it hears a held key.
+	if (r.sub == "install" && len(out.Skipped) > 0) ||
+		(out.Keys != nil && keysIncomplete(*out.Keys, r.force)) ||
 		(out.Term != nil && termIncomplete(*out.Term, r.sub)) ||
 		(out.Rules != nil && rulesIncomplete(*out.Rules, r.force)) {
 		return errSetupIncomplete

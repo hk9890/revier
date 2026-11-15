@@ -303,17 +303,22 @@ func termApp(t *testing.T, text, kittyConf string) (*app, string) {
 	if err := os.WriteFile(filepath.Join(dir, "kitty.conf"), []byte(kittyConf), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return &app{cfg: cfg, core: &core.Core{}, out: &bytes.Buffer{}, stores: termOnly}, dir
+	return &app{cfg: cfg, core: &core.Core{}, out: &bytes.Buffer{}, stores: fakeStores()}, dir
 }
 
-// termOnly gives `revier setup` the kitty configuration a test points
-// KITTY_CONFIG_DIRECTORY at, and no desktop and no window rules, so no test
-// reaches the user's desktop.
-func termOnly(_ context.Context, write bool) setupStores {
-	if write {
-		return setupStores{term: termKeyWriter()}
+// fakeStores gives `revier setup` the kitty configuration a test points
+// KITTY_CONFIG_DIRECTORY at, and a fake desktop and fake window rules that
+// keep what each run wrote, so no test reaches the user's desktop and an
+// install skips no part.
+func fakeStores() func(context.Context, bool) setupStores {
+	keys := hosttest.NewWriter("gnome")
+	rules := hosttest.NewWindowRuleWriter()
+	return func(_ context.Context, write bool) setupStores {
+		if write {
+			return setupStores{keys: keys, term: termKeyWriter(), rules: rules}
+		}
+		return setupStores{keys: keys.FakeKeys, term: termKeys(), rules: rules.FakeWindowRules}
 	}
-	return setupStores{term: termKeys()}
 }
 
 // kittyOnPath puts a kitty and a kitten first on PATH that are never run,

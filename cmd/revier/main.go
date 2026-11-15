@@ -156,7 +156,8 @@ const exitNoProject = 3
 
 // exitSetupIncomplete is returned when `revier setup install` ran and the
 // machine is not fully what was asked for: something was held back for want
-// of --force, or refused. Every reason is already printed against the part
+// of --force, or refused, or install skipped a part the machine does not
+// have. Every reason is already printed against the part
 // it belongs to, so this status carries no message of its own. A part that
 // failed exits 1 and names itself on stderr.
 const exitSetupIncomplete = 4

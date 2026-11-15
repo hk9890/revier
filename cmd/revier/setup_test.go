@@ -20,8 +20,9 @@ func rulesApp(t *testing.T, rules ...revier.WindowRule) (*app, *hosttest.FakeWin
 	t.Helper()
 	a, _ := termApp(t, "", "")
 	w := hosttest.NewWindowRuleWriter(rules...)
+	stores := a.stores
 	a.stores = func(ctx context.Context, write bool) setupStores {
-		s := termOnly(ctx, write)
+		s := stores(ctx, write)
 		if write {
 			s.rules = w
 		} else {
@@ -52,7 +53,7 @@ func TestSetupDryRunWritesNoRule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"dry run: nothing is changed", "desktop keys:", "- skipped: " + core.ErrNoKeyBinder.Error(), "popup rules:", "3 rules would be written first"} {
+	for _, want := range []string{"dry run: nothing is changed", "desktop keys:", "popup rules:", "3 rules would be written first"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("dry run does not say %q:\n%s", want, out)
 		}
@@ -94,6 +95,12 @@ func TestSetupInstallNeedsForceForARuleOfTheUsers(t *testing.T) {
 // with the reason under skipped; uninstall then removes revier's rules.
 func TestSetupStatusThenUninstall(t *testing.T) {
 	a, w := rulesApp(t, core.PopupRules()...)
+	stores := a.stores
+	a.stores = func(ctx context.Context, write bool) setupStores {
+		s := stores(ctx, write)
+		s.keys = nil
+		return s
+	}
 	out, err := runSetup(t, a, "status", "--json")
 	if err != nil {
 		t.Fatal(err)
@@ -125,8 +132,10 @@ func TestSetupStatusThenUninstall(t *testing.T) {
 // the rest of the setup still runs.
 func TestSetupSaysWhyTheRulesAreSkipped(t *testing.T) {
 	a, _ := termApp(t, "", "")
+	stores := a.stores
 	a.stores = func(ctx context.Context, write bool) setupStores {
-		s := termOnly(ctx, write)
+		s := stores(ctx, write)
+		s.rules = nil
 		s.rulesWhy = errors.New("extension 21 does not read \"rules-min-width\" in a rule: upgrade it")
 		return s
 	}
@@ -154,7 +163,8 @@ func TestSetupStatusReportsThePartsBesideOneThatFails(t *testing.T) {
 }
 
 // An extension that cannot read revier's rules keeps an install from adding
-// them, and an uninstall still removes the ones revier wrote.
+// them, and the install exits as incomplete, so a script hears that it set
+// up less than the machine; an uninstall still removes the ones revier wrote.
 func TestSetupUninstallNeedsNoExtensionThatReadsTheRules(t *testing.T) {
 	a, w := rulesApp(t)
 	stores := a.stores
@@ -164,7 +174,7 @@ func TestSetupUninstallNeedsNoExtensionThatReadsTheRules(t *testing.T) {
 		return s
 	}
 	out, err := runSetup(t, a, "install")
-	if err != nil || !strings.Contains(out, "- skipped: extension 21 does not read") || len(w.Calls) != 0 {
+	if !errors.Is(err, errSetupIncomplete) || !strings.Contains(out, "- skipped: extension 21 does not read") || len(w.Calls) != 0 {
 		t.Errorf("install: err %v, calls %v:\n%s", err, w.Calls, out)
 	}
 	w.Rules = core.PopupRules()

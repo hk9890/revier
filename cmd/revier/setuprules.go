@@ -101,9 +101,9 @@ func printRulePlan(w io.Writer, plan core.PopupRulePlan, sub string, dryRun, for
 	}
 }
 
-// printRemovedRules prints each rule of the user's that --force removed, as
-// the file held it: revier keeps no copy, and this is what the user puts
-// back, with an editor or wctl.
+// printRemovedRules prints each rule the run removed that revier does not
+// write, as the file held it: revier keeps no copy, and this is what the
+// user puts back, with an editor or wctl.
 func printRemovedRules(w io.Writer, removed []revier.WindowRule) {
 	if len(removed) == 0 {
 		return

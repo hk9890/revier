@@ -110,9 +110,11 @@ type PopupRulePlan struct {
 	// as they are read after the run.
 	Done bool   `json:"done"`
 	Err  string `json:"error,omitempty"`
-	// Removed is each rule of the user's that a take-over removed, as the
-	// host stored it. revier keeps no copy, so this is the user's one way to
-	// put it back: no tool writes a rule by hand again (decisions.md D189).
+	// Removed is each rule the run removed that is not one revier writes, as
+	// the host stored it: a rule of the user's that a take-over removed, and
+	// one in revier's shape with a size of the user's own. revier keeps no
+	// copy, so this is the user's one way to put it back: no tool writes a
+	// rule by hand again (decisions.md D189).
 	Removed []revier.WindowRule `json:"removed,omitempty"`
 }
 
@@ -233,8 +235,8 @@ func (c *Core) ApplyPopupRules(ctx context.Context, plan PopupRulePlan, force bo
 	return plan
 }
 
-// applyPopupRules returns the rules of the user's it removed, also when a
-// later step fails: they are gone either way.
+// applyPopupRules returns the rules it removed that revier does not write,
+// also when a later step fails: they are gone either way.
 func applyPopupRules(ctx context.Context, w revier.WindowRuleWriter, plan PopupRulePlan) ([]revier.WindowRule, error) {
 	shift := 0
 	if plan.Action != PopupRuleRemove {
@@ -254,7 +256,7 @@ func applyPopupRules(ctx context.Context, w revier.WindowRuleWriter, plan PopupR
 		if err := w.Remove(ctx, found[i].Index+shift); err != nil {
 			return removed, err
 		}
-		if !found[i].Own {
+		if !slices.ContainsFunc(plan.Report.Want, func(w revier.WindowRule) bool { return sameRule(found[i].Rule, w) }) {
 			removed = slices.Insert(removed, 0, found[i].Rule)
 		}
 	}

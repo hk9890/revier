@@ -73,7 +73,8 @@ func TestInstallOnCurrentRulesWritesNothing(t *testing.T) {
 
 // Rules in revier's shape are revier's wherever they are: an older revier's
 // sizes, and the overlay rule the guide had users write by hand. Install
-// replaces them with no --force.
+// replaces them with no --force, and carries each, as none is one revier
+// writes now, for the user to put back.
 func TestInstallRewritesRevierRulesWithoutForce(t *testing.T) {
 	w := hosttest.NewWindowRuleWriter(
 		kittyRule,
@@ -94,6 +95,9 @@ func TestInstallRewritesRevierRulesWithoutForce(t *testing.T) {
 	}
 	if want := append(core.PopupRules(), kittyRule); !reflect.DeepEqual(w.Rules, want) {
 		t.Errorf("rules =\n%+v\nwant\n%+v", w.Rules, want)
+	}
+	if want := []revier.WindowRule{popupRule(0, "center", "top", "1800", "100%"), popupRule(0)}; !reflect.DeepEqual(plan.Removed, want) {
+		t.Errorf("removed =\n%+v\nwant\n%+v", plan.Removed, want)
 	}
 	// The adds first, at the top; then the removes from the last one up,
 	// each three further down than the report found it.
