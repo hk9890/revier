@@ -1,6 +1,8 @@
 package tui_test
 
 import (
+	"errors"
+	"net"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -48,5 +50,32 @@ func TestASurfaceWithNoSocketWaitsForNoPress(t *testing.T) {
 	_, _, c, projects := world(t, 1)
 	if cmd := refreshed(t, c, projects, stateWith(t, nil), nil).AwaitSwitch(); cmd != nil {
 		t.Error("a surface with no socket waits for a press")
+	}
+}
+
+// brokenListener is a socket whose accept fails for good, and that records
+// its close.
+type brokenListener struct {
+	net.Listener
+	closed bool
+}
+
+func (l *brokenListener) Accept() (net.Conn, error) {
+	return nil, errors.New("accept: too many open files")
+}
+func (l *brokenListener) Close() error { l.closed = true; return nil }
+
+// A socket that fails is closed, not kept bound with no one reading it: a
+// press then finds no surface on it and raises the popup, instead of being
+// taken and switching nothing.
+func TestAFailedSwitchSocketIsClosed(t *testing.T) {
+	_, _, c, projects := world(t, 1)
+	ln := &brokenListener{}
+	m := refreshed(t, c, projects, stateWith(t, nil), nil).WithPopup().WithSwitchSocket(ln)
+	if msg := m.AwaitSwitch()(); msg != nil {
+		t.Errorf("a failed wait delivered %T, want nothing", msg)
+	}
+	if !ln.closed {
+		t.Error("the failed socket is still open")
 	}
 }

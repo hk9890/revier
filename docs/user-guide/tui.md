@@ -121,8 +121,9 @@ selection.
 
 Press alt+space to see every agent of every open project. In the popup, press
 the trigger key instead. In a terminal of your own, the trigger key opens the
-popup; where the trigger key is alt+space, click `agents` in the top line. Agents that need you are on top, then working
-agents, then idle ones, then those in state `unknown`. Among those that need
+popup; where the trigger key is alt+space, click `agents` in the top line.
+Agents that need you are on top, then working agents, then idle ones, then
+those in state `unknown`. Among those that need
 you and among the idle ones, the one that spoke last is first. The list
 opens with no query, on the first agent that needs you or, if none does, the
 first idle one. It skips working agents because they need nothing from you

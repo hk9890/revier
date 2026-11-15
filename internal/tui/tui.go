@@ -471,7 +471,8 @@ func (m Model) Init() tea.Cmd {
 type switchMsg struct{}
 
 // awaitSwitch waits for the next press on the popup's socket. Nil with no
-// socket; nothing comes once the socket is closed.
+// socket; nothing comes once the socket is closed. A socket that fails is
+// closed, so the next press finds no surface on it and raises the popup.
 func (m Model) awaitSwitch() tea.Cmd {
 	ln := m.switchSocket
 	if ln == nil {
@@ -479,6 +480,10 @@ func (m Model) awaitSwitch() tea.Cmd {
 	}
 	return func() tea.Msg {
 		if err := popupswitch.Await(ln); err != nil {
+			if !errors.Is(err, net.ErrClosed) {
+				slog.Warn("popup: switch socket", "err", err)
+				_ = ln.Close()
+			}
 			return nil
 		}
 		return switchMsg{}

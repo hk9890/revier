@@ -8,11 +8,13 @@ Each section is also the text of its release on the
 
 ## Unreleased
 
-- **The trigger key no longer switches a revier you run in a terminal of
-  your own.** With that terminal focused, the key opens or raises the popup.
-  Where the trigger key is alt+space, click `agents` in the top line to
-  switch lists there. The second press on the popup still switches its
-  lists, now whatever runs your workspaces, hc included.
+- **Action required: the trigger key no longer switches a revier you run in
+  a terminal of your own.** With that terminal focused, the key opens or
+  raises the popup. Where the trigger key is alt+space, click `agents` in
+  the top line to switch lists there. The second press on the popup still switches its
+  lists, now whatever runs your workspaces, hc included. A popup that was
+  open before the upgrade only comes to the front on that press: quit it
+  once with ctrl+c, and the next press opens one that switches.
 - **Under hc, a shell's own settings no longer reach your agents.** The hc
   core gives every program it runs the environment of the command that
   started it, so an activated virtualenv or a credential of the shell you
