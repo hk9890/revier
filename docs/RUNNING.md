@@ -12,10 +12,9 @@ session.** A stray `Open` steals focus mid-sentence, and a stray `Focus` moves
 a window the user is reading.
 
 Every recipe below runs on a private substrate instead: an hc core of its
-own, shown in no view. Nothing here attaches a client, reaches the user's
-display, or reaches the user's own hc core or service manager. A check that
-needs a desktop runs on a werft lease's:
-[Drive the desktop on a werft lease](#drive-the-desktop-on-a-werft-lease).
+own, shown in no view, or a werft lease, whose desktop is its own
+([Drive the desktop on a werft lease](#drive-the-desktop-on-a-werft-lease)).
+Nothing here reaches the user's display, hc core or service manager.
 
 `revier keys install`, `revier term install` and their `uninstall` rewrite the
 user's desktop and kitty configuration, the kitty one often a link into a
@@ -301,9 +300,9 @@ Call the Skill tool with `werft:werft` for the lease flow.
 - Send a key the way the user presses it to the lease's `domain`, which
   `werft --json leases` prints: `virsh -c qemu:///system send-key <domain> KEY_LEFTALT KEY_SPACE`.
 
-Verify on the demo project of the scratch configuration recipe. Write it in
-the lease as `~/.config/revier/projects/demo.toml`, with `path` set to the
-lease's `$HOME`. Then run, each line in the lease, the kitty host first:
+- Write the demo project of the scratch configuration recipe in the lease as
+  `~/.config/revier/projects/demo.toml`, with `path` set to the lease's `$HOME`.
+- Run each line below in the lease, the kitty host first:
 
 ```bash
 printf '[hosts]\nruntime = ["kitty"]\nwindow = ["gnome"]\n' > ~/.config/revier/config.toml   # gnome raises the OS window
@@ -336,10 +335,14 @@ process; the pids are the kitty entries in `wctl list --json`. A kitty that
 `kitty.conf` puts on `listen_on unix:@kitty` is at `--to unix:@kitty-<pid>`;
 revier does not look for it.
 
-To drive save and restore across a real reboot, run `revier session save` in
-the lease, then `sudo -n systemctl reboot`. Wait for ssh as the werft skill
-says: GNOME logs in again by itself. Then run `revier session restore`, and
-`wctl focused --json | jq .title` prints `home`.
+To drive save and restore across a real reboot, run each line in the lease:
+
+```bash
+revier session save --name before-reboot   # what is open now
+sudo -n systemctl reboot                   # wait for ssh as the werft skill says; GNOME logs in again by itself
+revier session restore                     # the newest whole save
+wctl focused --json | jq .title            # home
+```
 
 ## Verify a keybinding without pressing it
 

@@ -8,6 +8,7 @@
 set -eu
 
 id="${1:?usage: scripts/lease-desktop <lease-id>}"
+cd "$(dirname "$0")/.."
 cfg=$(werft --json leases | jq -re --arg id "$id" '.[] | select(.id == $id) | .ssh_config')
 guest() { ssh -F "$cfg" "$id" "$@"; }
 hc_version=$(sed -n 's/^ *HC_VERSION: //p' .github/workflows/ci.yml)
