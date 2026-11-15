@@ -94,6 +94,14 @@ const workspaceName = "revier-kitty"
 // is no panel variable, and a listing leaves it out.
 const openVar = "REVIER_KITTY_OPEN"
 
+// programStatusVar is the panel variable that carries the window's OSC 7501
+// records, kitty's program_status, as the JSON list kitty reports, from kitty
+// 0.50 (read from kitty 0.50.0's protocol docs; not run against a live
+// kitty). The records name a program, not an agent, so the host passes them
+// on unread and a probe says what they mean. A user var of the same name is
+// dropped, so the var holds only what kitty reports (decisions.md D188).
+const programStatusVar = "kitty_program_status"
+
 // runtimeDir is the directory that is the user's alone, and "" when the
 // environment names none. A relative path names none: kitty resolves one
 // under the temporary directory, which every user can enter.
@@ -186,6 +194,7 @@ type window struct {
 	UserVars   map[string]string `json:"user_vars"`
 	CWD        string            `json:"cwd"`
 	Foreground []process         `json:"foreground_processes"`
+	Status     json.RawMessage   `json:"program_status"`
 }
 
 type process struct {
@@ -523,6 +532,13 @@ func panelOf(w window, parent func(pid int) (int, bool)) revier.Panel {
 	}
 	vars := maps.Clone(w.UserVars)
 	delete(vars, openVar)
+	delete(vars, programStatusVar)
+	if records := programStatus(w.Status); records != "" {
+		if vars == nil {
+			vars = map[string]string{}
+		}
+		vars[programStatusVar] = records
+	}
 	return revier.Panel{
 		ID:      revier.PanelID(strconv.Itoa(w.ID)),
 		Kind:    kind,
@@ -532,6 +548,17 @@ func panelOf(w window, parent func(pid int) (int, bool)) revier.Panel {
 		Command: cmd,
 		Dir:     dirOf(w, pid),
 	}
+}
+
+// programStatus is the window's OSC 7501 records as one line of JSON, and ""
+// when kitty reports none: a kitty before 0.50 has no such field.
+func programStatus(raw json.RawMessage) string {
+	var records []json.RawMessage
+	if json.Unmarshal(raw, &records) != nil || len(records) == 0 {
+		return ""
+	}
+	line, _ := json.Marshal(records)
+	return string(line)
 }
 
 // dirOf is the directory of the panel's process, as --cwd=current takes it

@@ -1084,3 +1084,14 @@ keeps a command's terminal once it ends, and its window shows what it left
 and how it ended until dismissed. The held terminal stays its workspace's
 panel, so a press raises the workspace and a close ends the window; a shell's
 window ends at once.
+
+### D188 — a kitty panel carries the window's program status unread, and a probe reads it
+
+Extends D119, D144. kitty 0.50 keeps the OSC 7501 records each program in a
+window sends, and the listing revier already takes reports them, so the panel
+carries them as a var and a probe that needs them starts no kitten of its own.
+The records name a program, not an agent: rsync sends them too. So the host
+neither filters nor maps them, and drops a user var of the same name, so the
+var holds only what kitty reports; any program can still send a record. Rejected:
+the socket to the probe, which hands it all of kitty's remote control; a
+built-in mapping, until a second agent sends the records.

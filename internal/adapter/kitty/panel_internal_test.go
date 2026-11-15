@@ -1,6 +1,7 @@
 package kitty
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/hk9890/revier/pkg/revier"
@@ -57,5 +58,36 @@ func TestAHeldWindowUnderKitty050IsTheShellOnceItsProgramEnds(t *testing.T) {
 	}}
 	if got := panelOf(w, noParents); got.Kind != revier.PanelShell || got.PID != 10 || got.Dir != "/p" {
 		t.Errorf("panel = %s pid %d in %q, want the shell 10 in /p", got.Kind, got.PID, got.Dir)
+	}
+}
+
+// kitty 0.50 keeps a window's OSC 7501 records as program_status. A panel
+// carries them unread, as one line of JSON, so that a probe can say which are
+// an agent's. A user var of the same name never stands in for them.
+func TestAPanelCarriesItsWindowsProgramStatus(t *testing.T) {
+	noParents := func(int) (int, bool) { return 0, false }
+	forged := `"user_vars": {"kitty_program_status": "forged", "revier_target": "agent"}`
+	record := `, "program_status": [{"id": "", "state": "blocked", "kind": "", "progress": -1, "app": "dtop", "title": "Größe", "msg": "deploy?\nnow"}]`
+	want := `[{"id":"","state":"blocked","kind":"","progress":-1,"app":"dtop","title":"Größe","msg":"deploy?\nnow"}]`
+	cases := map[string]struct{ window, want string }{
+		"a record":            {forged + record, want},
+		"a record, no vars":   {`"user_vars": {}` + record, want},
+		"a record, null vars": {`"user_vars": null` + record, want},
+		"no record":           {forged + `, "program_status": []`, ""},
+		"kitty 0.49":          {forged, ""},
+	}
+	for name, c := range cases {
+		var w window
+		if err := json.Unmarshal([]byte(`{"id": 4, "pid": 10, `+c.window+"}"), &w); err != nil {
+			t.Fatal(err)
+		}
+		vars := panelOf(w, noParents).Vars
+		got, ok := vars[programStatusVar]
+		if got != c.want || ok != (c.want != "") {
+			t.Errorf("%s: var = %q, want %q", name, got, c.want)
+		}
+		if w.UserVars["revier_target"] != "" && vars["revier_target"] != "agent" {
+			t.Errorf("%s: vars = %v, want revier_target kept", name, vars)
+		}
 	}
 }
