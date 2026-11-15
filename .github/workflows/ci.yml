@@ -38,7 +38,7 @@ jobs:
       - name: L3 adapter parsing
         run: CGO_ENABLED=1 go test -race -tags=integration ./...
 
-      # hc (herdr-core) is pinned, unlike tmux: it is pre-1.0, and a new release
+      # hc (herdr-core) is pinned: it is pre-1.0, and a new release
       # is taken on purpose, with new fixtures. The URL and digest are the
       # linux-x86_64 entry of the release's manifest.json on releases.herdr.dev.
       - name: Install hc
@@ -53,12 +53,10 @@ jobs:
           ln -s herdr-core "$RUNNER_TEMP/hc/hc"
           echo "$RUNNER_TEMP/hc" >> "$GITHUB_PATH"
 
-      # ubuntu-latest ships tmux and sh; hc comes from the step above. Every
-      # tmux or hc test starts a private server on its own socket and stops it
-      # in cleanup.
+      # ubuntu-latest ships sh; hc comes from the step above. Every hc test
+      # starts a private core on its own socket and stops it in cleanup.
       - name: L4 live
         run: |
-          tmux -V
           hc --version
           CGO_ENABLED=1 go test -race -tags=live -timeout=300s ./...
 

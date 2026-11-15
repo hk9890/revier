@@ -39,14 +39,16 @@ const (
 // compiled-in hosts in their default order.
 const autoRuntime = "auto"
 
-// RuntimeSelector picks the runtime host for a configured preference list,
-// probing as startup does. An empty list is the default search.
-type RuntimeSelector func(ctx context.Context, want []string) (revier.Runtime, error)
+// RuntimeSelector picks the runtime for a configured preference list, and the
+// view that shows it, probing as startup does. An empty list is the default
+// search.
+type RuntimeSelector func(ctx context.Context, want []string) (revier.Runtime, revier.View, error)
 
 // runtimeMsg is a runtime choice probed: the host it selected, or why none.
 type runtimeMsg struct {
 	want    []string
 	runtime revier.Runtime
+	view    revier.View
 	err     error
 }
 
@@ -142,8 +144,8 @@ func (m Model) runtimeSwitched(msg runtimeMsg) (tea.Model, tea.Cmd) {
 		m.err = err
 		return m, nil
 	}
-	m.core = m.core.WithRuntime(msg.runtime)
-	slog.Info("runtime switched", "want", msg.want, "runtime", hostName(msg.runtime))
+	m.core = m.core.WithRuntime(msg.runtime, msg.view)
+	slog.Info("runtime switched", "want", msg.want, "runtime", hostName(msg.runtime), "view", hostName(msg.view))
 	return m, nil
 }
 
@@ -316,8 +318,8 @@ func (cs *configScreen) switchRuntime(step int) (tea.Cmd, error) {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), localHostWait)
 		defer cancel()
-		rt, err := pick(ctx, want)
-		return runtimeMsg{want: want, runtime: rt, err: err}
+		rt, view, err := pick(ctx, want)
+		return runtimeMsg{want: want, runtime: rt, view: view, err: err}
 	}, nil
 }
 
@@ -525,7 +527,7 @@ func (cs *configScreen) screen(sf surface) (string, int) {
 }
 
 // hostName is a host's name, or "none" for no host.
-func hostName(h revier.Host) string {
+func hostName(h interface{ Name() string }) string {
 	if h == nil {
 		return "none"
 	}

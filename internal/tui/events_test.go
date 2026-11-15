@@ -18,7 +18,7 @@ func TestASurveyRecordsTheConversationEachAgentHoldsOnce(t *testing.T) {
 	t.Cleanup(func() { events.Setup("") })
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:demo", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"})
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{
 		Harness: "claude", Marker: "claude",
 		State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle, Session: "abc-123"},
 	}}}

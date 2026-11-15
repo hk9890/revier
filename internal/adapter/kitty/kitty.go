@@ -1,7 +1,11 @@
-// Package kitty implements a Runtime host over kitty's remote control.
+// Package kitty implements a Runtime and the View that shows it over kitty's
+// remote control: the same kitty processes run the programs and draw them, so
+// a kitty window id names a runtime panel directly (decisions.md D176, D178).
+// It also implements the View of a runtime that draws nothing, hc, in
+// view.go: kitty windows that attach that runtime's panels (D180).
 //
-// kitty is the terminal this machine actually uses; tmux is the runtime host
-// that exists for headless testing. An instance is a kitty OS window, and the
+// kitty is the terminal this machine actually uses; hc is the runtime that
+// headless tests run on. An instance is a kitty OS window, and the
 // kitty windows inside it, across all of its tabs, are the panels a probe
 // reads.
 //
@@ -33,7 +37,7 @@
 //   - `kitten @ focus-window` focuses inside kitty but does not raise the OS
 //     window under GNOME on Wayland: the compositor refuses a focus request
 //     that did not come from user input. Raising is the window host's job,
-//     which the core arranges because Capabilities reports OSWindows.
+//     which the core arranges because the view's Capabilities report OSWindows.
 //
 // Layout is built with `kitten @ launch` sequences, never `kitty --session`:
 // a session file handed to a running kitty starts a new process, not a new
@@ -47,7 +51,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"maps"
 	"os"
 	"os/exec"
@@ -58,11 +61,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/hk9890/revier/internal/adapter/proc"
 	"github.com/hk9890/revier/internal/procgroup"
+	"github.com/hk9890/revier/internal/userunit"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -282,13 +285,19 @@ func (h *Host) launch(ctx context.Context, socket string, args ...string) (int, 
 	return id, nil
 }
 
-// FindPanel reports the OS window that holds a kitty window id. A window id is
+// FindPanel reports the OS window that holds a kitty window id, and the id,
+// which is the runtime's own: the same kitty runs and draws. A window id is
 // one kitty process's, and KITTY_LISTEN_ON names the kitty a command runs in:
 // a window's environment carries it, and a key's background launch gets it
 // with --copy-env (verified on kitty 0.48; without it the variable is empty).
 // A command started outside kitty, or from a kitty that has exited, names no
 // process that answers; then the id must be held in exactly one kitty.
-func (h *Host) FindPanel(instances []revier.Instance, panel revier.PanelID) (revier.TargetRef, error) {
+func (h *Host) FindPanel(_ context.Context, instances []revier.Instance, panel revier.PanelID) (revier.TargetRef, revier.PanelID, error) {
+	ref, err := h.findPanel(instances, panel)
+	return ref, panel, err
+}
+
+func (h *Host) findPanel(instances []revier.Instance, panel revier.PanelID) (revier.TargetRef, error) {
 	own := "unix:" + strings.TrimPrefix(h.here(), "unix:")
 	var mine []revier.Instance
 	for _, inst := range instances {
@@ -888,13 +897,11 @@ const workspaceUnit = "revier-kitty"
 // minKitty is the first kitty that starts hidden.
 const minKitty = "0.42"
 
-// startProcess starts the workspace kitty through the user's service manager
-// where there is one, so it has the session's login environment whatever
-// process asked first: started from a shell, it would hand that shell's
-// environment to every workspace after (decisions.md D167). A start that
-// fails because the service runs already is one another process made. Where
-// there is no systemd-run, or it cannot start the service, kitty is started
-// detached from this process.
+// startProcess starts the workspace kitty as a service of the user's service
+// manager, so it has the session's login environment whatever process asked
+// first: started from a shell, it would hand that shell's environment to
+// every workspace after (decisions.md D167). Where there is none, kitty is
+// started detached from this process.
 func (h *Host) startProcess(ctx context.Context, args ...string) error {
 	if h.start != nil {
 		return h.start(ctx, args...)
@@ -903,25 +910,11 @@ func (h *Host) startProcess(ctx context.Context, args ...string) error {
 	if err != nil {
 		return fmt.Errorf("kitty: start: %w", err)
 	}
-	if run, err := exec.LookPath("systemd-run"); err == nil {
-		err := runStart(ctx, run, append([]string{"--user", "--quiet", "--collect", "--unit=" + workspaceUnit, "--", kitty}, args...)...)
-		if err == nil || runStart(ctx, "systemctl", "--user", "--quiet", "is-active", workspaceUnit) == nil {
-			return nil
-		}
-		slog.Warn("kitty: the service manager did not start the workspace kitty; starting it detached", "err", err)
-	}
-	return runStart(ctx, kitty, append([]string{"--detach"}, args...)...)
-}
-
-// runStart runs a command that starts the workspace kitty, in a process group
-// of its own: the ctrl+c a terminal sends to revier's group cancels a shutdown
-// or a restore after its step, and must not end the step's command with it.
-func runStart(ctx context.Context, name string, args ...string) error {
-	c := exec.CommandContext(ctx, name, args...)
-	c.Stdin, c.Stdout, c.Stderr = nil, nil, nil
-	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	if err := c.Run(); err != nil {
-		return fmt.Errorf("kitty: start: %s: %w", filepath.Base(name), err)
+	err = userunit.Start(ctx, userunit.Unit{Name: workspaceUnit}, append([]string{kitty}, args...), func(ctx context.Context) error {
+		return userunit.Run(ctx, kitty, append([]string{"--detach"}, args...)...)
+	})
+	if err != nil {
+		return fmt.Errorf("kitty: start: %w", err)
 	}
 	return nil
 }
@@ -972,7 +965,7 @@ func (h *Host) active(ctx context.Context, ref revier.TargetRef) (socket string,
 // agents by. The vars become user vars of every window of the tab, which ls
 // reports back as the panel's Vars.
 //
-// The keyboard stays where it is, which is what revier.PanelOpener asks.
+// The keyboard stays where it is, which is what revier.TabOpener asks.
 // While an OS window of this kitty holds it, every launch carries
 // --keep-focus: kitty would otherwise put the keyboard in the new window when
 // the tab opens in the focused OS window. While none does, a launch moves no

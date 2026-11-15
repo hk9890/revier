@@ -1,11 +1,50 @@
 package main
 
 import (
+	"os"
 	"slices"
 	"testing"
 
+	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/popupswitch"
 )
+
+// The popup's surface listens where the press of the core revier builds
+// sends the switch, and the socket's file goes with the surface
+// (decisions.md D182).
+func TestThePopupListensWhereThePressSendsTheSwitch(t *testing.T) {
+	run := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", run)
+	ln := listenForSwitch()
+	if ln == nil {
+		t.Fatal("listenForSwitch: no socket in a runtime directory")
+	}
+	defer func() { _ = ln.Close() }()
+	c := newCore(&config.Config{}, nil, nil, nil, nil)
+	if err := c.SwitchPopup(t.Context()); err != nil {
+		t.Fatalf("SwitchPopup: %v", err)
+	}
+	if err := popupswitch.Await(ln); err != nil {
+		t.Fatalf("Await: %v", err)
+	}
+	_ = ln.Close()
+	if err := c.SwitchPopup(t.Context()); err == nil {
+		t.Error("SwitchPopup with the surface gone returned no error")
+	}
+	if entries, _ := os.ReadDir(run); len(entries) != 0 {
+		t.Errorf("runtime directory after the close holds %v, want nothing", entries)
+	}
+}
+
+// With no runtime directory the popup has no socket, and runs as before.
+func TestThePopupHasNoSocketWithoutARuntimeDirectory(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "")
+	if ln := listenForSwitch(); ln != nil {
+		_ = ln.Close()
+		t.Error("listenForSwitch bound a socket with no runtime directory")
+	}
+}
 
 // The popup's kitty runs the surface through env(1), with the marker on the
 // surface's command alone, and the marker names the project resolved at the
@@ -31,9 +70,9 @@ func TestPopupArgvMarksTheSurfaceWithItsProject(t *testing.T) {
 	}
 }
 
-// revier reaches the popup through its kitty's control socket, so that socket
-// is a socket file only the user can reach, whatever kitty.conf names, and
-// remote control is on for it. With no socket file, kitty.conf decides both:
+// The popup's kitty has a control socket file only the user can reach,
+// whatever kitty.conf names, and remote control is on for it alone. With no
+// socket file, kitty.conf decides both:
 // remote control on a socket it names could be open to every user. The
 // options are before -e: what follows -e is the surface's command.
 func TestPopupArgvPutsThePopupOnASocketFile(t *testing.T) {

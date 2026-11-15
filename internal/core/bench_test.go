@@ -26,7 +26,7 @@ func benchCore(n int) *core.Core {
 	for i := 0; i < 40; i++ {
 		wm.Add(fmt.Sprintf("Some Window %d", i), "other")
 	}
-	return &core.Core{Runtime: rt, Window: wm}
+	return &core.Core{Runtime: rt, View: rt, Window: wm}
 }
 
 func benchmarkSurvey(b *testing.B, n int) {

@@ -451,7 +451,7 @@ const longName = "a-project-name-of-thirty-chars"
 func longNamedWorld(t *testing.T) (*hosttest.FakeRuntime, *hosttest.Fake, *core.Core, []core.Project) {
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{&hosttest.FakeProbe{
 		Harness: "claude", Marker: "claude",
 		State: revier.AgentState{Harness: "claude", Status: revier.StatusAttention, Activity: "needs a decision"},
 	}}}
@@ -610,7 +610,7 @@ func TestARunningRowDoesNotNameItsOpenTargets(t *testing.T) {
 	}}})
 	rt.Add("session:alpha", "kitty")
 	wm.Add("editor", "code-alpha")
-	m := resize(refreshed(t, &core.Core{Runtime: rt, Window: wm}, projects, stateWith(t, nil), nil), 96, 20)
+	m := resize(refreshed(t, &core.Core{Runtime: rt, View: rt, Window: wm}, projects, stateWith(t, nil), nil), 96, 20)
 	if path := rows(m)[1]; strings.Contains(path, "home") || strings.Contains(path, "editor") {
 		t.Errorf("path line = %q, want no targets named", path)
 	}

@@ -27,7 +27,7 @@ func agentWorld(t *testing.T) (*hosttest.FakeRuntime, tui.Model) {
 		}})
 	}
 	projects := core.Prepare(raw)
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
 	return rt, resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 30).Said()
 }
 
@@ -226,7 +226,7 @@ func threeAgents(t *testing.T) (*hosttest.FakeRuntime, revier.TargetRef, tui.Mod
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "session:demo", Launch: []string{"x"}, Match: revier.Match{Title: "^session:demo$"}}},
 	}}})
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
 	m, now := clocked(resize(refreshed(t, c, projects, stateWith(t, nil), nil), 140, 30).Said())
 	return rt, ref, m, now
 }

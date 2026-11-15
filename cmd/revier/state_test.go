@@ -128,7 +128,7 @@ func TestStateSessionComparesTheSave(t *testing.T) {
 // prune changed in the state.
 func TestListWritesNoRecord(t *testing.T) {
 	wm := hosttest.New("gnome")
-	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Window: wm}
+	c := &core.Core{Runtime: hosttest.NewRuntime("hc"), Window: wm}
 	p, root := demoProject(t), t.TempDir()
 	record.Setup(root, "list")
 	t.Cleanup(func() { record.Setup("", "") })

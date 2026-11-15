@@ -20,7 +20,7 @@ func saidCore(t *testing.T, probe revier.AgentProbe) (*core.Core, core.Agent) {
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"})
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{probe}}
 	a, err := c.Agent(context.Background(), prepared(t, project()), "")
 	if err != nil {
 		t.Fatal(err)
@@ -136,7 +136,7 @@ func TestSendKeysTypesNothingWhenAKeyIsUnknown(t *testing.T) {
 func TestSendKeysNeedsARuntimeThatCanType(t *testing.T) {
 	fake := hosttest.NewRuntime("rt")
 	fake.Add("session:revier", "kitty", agentPanel("1", "idle"))
-	c := &core.Core{Runtime: bareRuntime{fake}, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+	c := &core.Core{Runtime: bareRuntime{fake}, View: bareView{fake}, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 	a, err := c.Agent(context.Background(), prepared(t, project()), "")
 	if err != nil {
 		t.Fatal(err)
@@ -151,7 +151,7 @@ func TestSendKeysNeedsARuntimeThatCanType(t *testing.T) {
 // (decisions.md D118).
 func TestAddAgentOpensTheTabAndLeavesTheFocus(t *testing.T) {
 	rt, wm, _, _ := osWindowHosts()
-	c := &core.Core{Runtime: rt, Window: wm, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm, Probes: []revier.AgentProbe{resumable()}}
 	w, err := c.AgentWorkspace(context.Background(), prepared(t, agentProject()), "home")
 	if err != nil {
 		t.Fatal(err)
@@ -176,7 +176,7 @@ func TestAddAgentOpensTheTabAndLeavesTheFocus(t *testing.T) {
 // takes a script's tab.
 func TestAddAgentNeedsNoWindowToRaise(t *testing.T) {
 	rt, _, _, _ := osWindowHosts()
-	c := &core.Core{Runtime: rt, Window: hosttest.New("wm"), Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Window: hosttest.New("wm"), Probes: []revier.AgentProbe{resumable()}}
 	w, err := c.AgentWorkspace(context.Background(), prepared(t, agentProject()), "home")
 	if err != nil {
 		t.Fatal(err)

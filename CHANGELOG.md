@@ -8,12 +8,58 @@ Each section is also the text of its release on the
 
 ## Unreleased
 
+- **Action required: revier no longer runs workspaces in tmux.** Name
+  `kitty` or `hc` in `[hosts] runtime` in place of `tmux`, and remove `tmux`
+  from `[hosts] view`. A command that reaches `tmux` there stops with `the
+  tmux runtime was removed; use hc or kitty` (or `the tmux view was removed;
+  use kitty`), and `revier doctor` reports it wherever the list names it.
+  With no `runtime` set, revier now tries kitty alone. Close what runs in
+  tmux with `revier shutdown` before you switch, and reopen it with `revier
+  session restore`. Remove the tmux keys that ran `revier agent new --panel`
+  and `revier shell new --panel`. Over ssh, or with no display, run hc with
+  `view = ["none"]` and `revier open --attach`; Ghostty works the same way.
+- **The config screen (alt+c) offers hc as a runtime host**, beside kitty and
+  `none`.
+- **Action required: the trigger key no longer switches a revier you run in
+  a terminal of your own.** With that terminal focused, the key opens or
+  raises the popup. Where the trigger key is alt+space, click `agents` in
+  the top line to switch lists there. The second press on the popup still switches its
+  lists, now whatever runs your workspaces, hc included. A popup that was
+  open before the upgrade only comes to the front on that press: quit it
+  once with ctrl+c, and the next press opens one that switches.
 - **Action required: revier no longer runs workspaces in herdr.** Name
-  `kitty`, `tmux` or `hc` in `[hosts] runtime` in place of `herdr`. A command
+  `kitty` or `hc` in `[hosts] runtime` in place of `herdr`. A command
   that reaches `herdr` in that list stops with `the herdr runtime was removed;
-  use hc, kitty or tmux`, and `revier doctor` reports it wherever the list
-  names it. With no `runtime` set, revier now tries kitty, then tmux, and
-  finds no runtime on a machine that has only herdr.
+  use hc or kitty`, and `revier doctor` reports it wherever the list
+  names it. With no `runtime` set, revier finds no runtime on a machine that
+  has only herdr.
+- **Under hc, your workspaces open in kitty, and your agents outlive it.**
+  With `runtime = ["hc"]` under `[hosts]`, a press opens the workspace in a
+  kitty window with its tabs, the active tab current, and its agent and shell
+  side by side. Targets with `inside`, `revier agent new`, `revier shell new`,
+  the kitty keys, a second press that goes home and `revier session restore`
+  work as on kitty. Closing kitty ends no agent: the next press opens the
+  window again over the running agents, where `place` puts a new one, and
+  starts nothing. With no kitty or
+  no display, as over ssh, nothing shows hc, and `revier open --attach`
+  reaches a workspace. `revier doctor` says which view shows hc. Where
+  systemd runs your session, revier starts the hc core as a user service
+  named `revier-hc-` and a short hash of the core's socket, so your agents
+  get your desktop session's environment and not that of the shell you ran
+  revier in. Set a variable your agents need, such as `CLAUDE_CONFIG_DIR`,
+  with `systemctl --user set-environment`. That core stops at your last
+  logout, with every agent in it, unless you run `loginctl enable-linger`;
+  `revier doctor` says so. Without the setting, kitty runs your workspaces
+  as before. Images are gone once a
+  window opens again, and a program with a lot of output lags in its window.
+- **`[hosts] view` names what shows your workspaces.** Left out, kitty
+  shows the kitty runtime, as before, and kitty
+  shows hc where kitty and a display are, else nothing shows it. `view = ["none"]` shows nothing: revier opens and lists
+  your workspaces and focuses none. A view that cannot show the runtime in
+  use stops with an error, and `revier doctor` reports an unknown name. With
+  `runtime = ["none"]`, revier ignores the view.
+  `revier status` prints the view on a `view` line, between `runtime` and
+  `window`.
 - A name in `[hosts]` that revier does not know now stops with
   `hosts.runtime: unknown host "<name>"; known: ...` (or `hosts.window: ...`),
   in place of `unknown runtime host "<name>"`.

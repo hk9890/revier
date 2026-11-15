@@ -50,7 +50,7 @@ func TestTheAssistantRunsWithTheRootsItWasGiven(t *testing.T) {
 func TestAListOfTheAssistantAloneSaysWhereToAddOne(t *testing.T) {
 	configRoot(t, "", nil)
 	builtin := config.Builtin(t.TempDir(), []string{"/bin/revier", "assist", "--exec"})
-	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Window: hosttest.New("gnome")}
+	c := &core.Core{Runtime: hosttest.NewRuntime("hc"), Window: hosttest.New("gnome")}
 	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{builtin}, assistant: builtin, stateRoot: t.TempDir(), core: c}, &state.State{})
 
 	out := output(t, a, func() error { return cmdList(context.Background(), a, nil) })

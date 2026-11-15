@@ -62,8 +62,9 @@ type Panel struct {
 	PID     int               `json:"pid,omitempty"`
 	Command []string          `json:"command,omitempty"`
 
-	// Tab is the tab of the instance that holds the panel: a kitty tab id, a
-	// tmux window id. It is empty on a runtime that has no tabs.
+	// Tab is the tab of the instance that holds the panel: a kitty tab id, an
+	// hc tab's token. It is empty on a runtime that has no
+	// tabs.
 	Tab string `json:"tab,omitempty"`
 
 	// Dir is the panel's working directory, as the runtime reports it, and

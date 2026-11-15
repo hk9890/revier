@@ -23,3 +23,7 @@ func (h *Host) StartProcess(ctx context.Context, args ...string) error {
 
 func (h *Host) SetOwnSocket(f func() string)           { h.ownSocket = f }
 func (h *Host) SetParents(f func(pid int) (int, bool)) { h.parent = f }
+
+// Kitty is the kitty plumbing of the view, for the tests to inject recorders
+// into as they do into a Host.
+func (v *View) Kitty() *Host { return &v.kitty }

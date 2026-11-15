@@ -37,7 +37,7 @@ file order, then the others.
 {"id":"3","kind":"tool","title":"aider: refactoring the store","vars":{"revier_target":"agent"},"pid":41221,"command":["aider"],"tab":"2"}
 ```
 
-`id` is the panel (kitty window id, tmux pane id) and `tab` its tab. `kind` is
+`id` is the panel (kitty window id, hc address) and `tab` its tab. `kind` is
 `shell` when the command is a shell, else `tool`. `title` is the panel's
 title; many agents write their state there. `vars`, `pid`, `command`, `tab`
 and `dir` are optional. `pid` and `command` are the panel's foreground process.

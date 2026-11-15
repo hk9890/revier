@@ -27,7 +27,7 @@ func TestAttachRecordsTheTerminalInTheWindow(t *testing.T) {
 	a := &app{
 		cfg: &config.Config{}, projects: []core.Project{demoProject(t)},
 		stateRoot: root,
-		core:      &core.Core{Runtime: rt, Window: wm, Ledger: ledger.File{Root: root}},
+		core:      &core.Core{Runtime: rt, View: rt, Window: wm, Ledger: ledger.File{Root: root}},
 	}
 
 	output(t, a, func() error { return cmdAttach(context.Background(), a, []string{"-p", "demo"}) })
@@ -58,7 +58,7 @@ func TestAttachRecordsAnAmbiguousWindowAlone(t *testing.T) {
 	a := &app{
 		cfg: &config.Config{}, projects: []core.Project{demoProject(t)},
 		stateRoot: root,
-		core:      &core.Core{Runtime: rt, Window: wm, Ledger: ledger.File{Root: root}},
+		core:      &core.Core{Runtime: rt, View: rt, Window: wm, Ledger: ledger.File{Root: root}},
 	}
 
 	output(t, a, func() error { return cmdAttach(context.Background(), a, []string{"-p", "demo"}) })

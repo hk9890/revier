@@ -13,9 +13,8 @@
 //
 // The package is also the one reader of a process's parent and terminal on
 // this machine: Parent, which the kitty host walks a window's processes with,
-// Foreground, which the tmux host reads a pane's command with, PeerPID and
-// ServerPATH, the hc core behind its socket and the PATH it starts a program
-// with, RunsUnder, the panels a shutdown closes last, and AgentSessionVars,
+// PeerPID and ServerPATH, the hc core behind its socket and the PATH it
+// starts a program with, RunsUnder, the panels a shutdown closes last, and AgentSessionVars,
 // TerminalVars, CommandVars, WithoutAgentSession, Without and Cleared, what
 // the hc host keeps from the programs its core starts.
 package proc
@@ -85,8 +84,9 @@ func WithoutAgentSession(env []string) []string {
 // TerminalVars name what a terminal or a multiplexer sets in each program it
 // runs. A server started inside one hands them to every program it starts,
 // which then acts on a kitty window, a tmux pane, a herdr pane or an hc
-// terminal that is not its own. hc's are here too: hc sets its own in each of
-// its terminals over the env a run gives.
+// terminal that is not its own: revier may itself run inside any of them.
+// hc's are here too: hc sets its own in each of its terminals over the env a
+// run gives.
 var TerminalVars = []string{
 	"KITTY_WINDOW_ID", "KITTY_LISTEN_ON", "KITTY_PID", "KITTY_PUBLIC_KEY", "KITTY_INSTALLATION_DIR",
 	"KITTY_SHELL_INTEGRATION", "WINDOWID",
@@ -423,9 +423,9 @@ func PeerPID(conn *net.UnixConn) (int, error) {
 }
 
 // Dir is the working directory of the first of pids that /proc shows one
-// for, or "" where it shows none. tmux reads pane_current_path the same way:
-// the foreground process's, else the pane's own, since /proc hides the
-// directory of a process another user runs, such as sudo.
+// for, or "" where it shows none: the foreground process's, else the
+// panel's own, since /proc hides the directory of a process another user
+// runs, such as sudo.
 func Dir(pids ...int) string { return DirIn("/proc", pids...) }
 
 // DirIn is Dir from the /proc tree at root, which a test replaces.
@@ -436,33 +436,6 @@ func DirIn(root string, pids ...int) string {
 		}
 	}
 	return ""
-}
-
-// Foreground reads the foreground process of the terminal pid runs in: the
-// leader of the terminal's foreground process group, and its argv. That is
-// the process tmux names in pane_current_command, so the two agree.
-func Foreground(pid int) (int, []string, bool) {
-	stat, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
-	if err != nil {
-		return 0, nil, false
-	}
-	// state, ppid, pgrp, session, tty_nr, tpgid.
-	fields := statFields(stat)
-	if len(fields) < 6 {
-		return 0, nil, false
-	}
-	fg, err := strconv.Atoi(fields[5])
-	if err != nil || fg <= 0 {
-		return 0, nil, false
-	}
-	cmdline, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(fg), "cmdline"))
-	// A process that cleared its argv reads as NULs alone, and names no
-	// program.
-	args := strings.TrimRight(string(cmdline), "\x00")
-	if err != nil || args == "" {
-		return 0, nil, false
-	}
-	return fg, strings.Split(args, "\x00"), true
 }
 
 // RunsUnder reports a panel the calling process runs under: the panel's

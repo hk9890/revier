@@ -23,7 +23,7 @@ func hostWith(t *testing.T, names ...string) (*app, *hosttest.FakeRemote) {
 		views = append(views, revier.ProjectView{Project: revier.Project{Name: revier.ProjectName(n), Path: "/home/user/dev/" + n}, PathExists: true})
 	}
 	remote := hosttest.NewRemote("buildbox", views...)
-	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), NewRemote: func(string) revier.Remote { return remote }}
+	c := &core.Core{Runtime: hosttest.NewRuntime("hc"), NewRemote: func(string) revier.Remote { return remote }}
 	a := withState(t, &app{cfg: &config.Config{}, cfgRoot: t.TempDir(), stateRoot: t.TempDir(), core: c}, &state.State{})
 	return a, remote
 }

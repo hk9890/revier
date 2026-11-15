@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/fsutil"
+	"github.com/hk9890/revier/internal/userunit"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -78,6 +80,24 @@ func cmdDoctor(out io.Writer, args []string) error {
 	_ = w.Flush()
 
 	_, _ = fmt.Fprintf(out, "\n%s, %s with problems\n", core.Count(len(projects), "project"), core.Count(bad, "file"))
+	ctx, cancel := context.WithTimeout(context.Background(), commandWait)
+	defer cancel()
+	// A selection that fails says nothing here: every other command reports
+	// it.
+	if rt, view, err := selectTerminal(ctx, cfg, cfg.Hosts.Runtime); err == nil && rt != nil {
+		// Not a problem: under a runtime that draws nothing, which view
+		// shows it depends on the machine (decisions.md D185), and nothing
+		// else says so.
+		if line := shownBy(rt, view); line != "" {
+			_, _ = fmt.Fprintln(out, line)
+		}
+		// Not a problem either: the core runs while the user is logged in,
+		// and the logout that ends the last session ends it (decisions.md
+		// D167).
+		if line := coreLifetime(ctx, rt); line != "" {
+			_, _ = fmt.Fprintln(out, line)
+		}
+	}
 	// Not a problem: the files are shared between machines, and the link is
 	// right on the other one (decisions.md D131).
 	if n := len(cfg.SelfLinks); n > 0 {
@@ -302,4 +322,34 @@ type problemsFound struct{ files int }
 
 func (e problemsFound) Error() string {
 	return core.Count(e.files, "file") + " with problems"
+}
+
+// shownBy says which view shows a runtime that does not draw itself, as
+// [hosts] selects them on this machine, and "" for a runtime that is its own
+// view: a kitty user reads nothing new.
+func shownBy(rt revier.Runtime, view revier.View) string {
+	if own, ok := rt.(revier.View); ok && own == view {
+		return ""
+	}
+	if view == nil {
+		line := fmt.Sprintf("runtime %s is shown by no view: nothing is focused", rt.Name())
+		if _, ok := rt.(revier.Attacher); ok {
+			line += "; revier open --attach puts a terminal on a workspace"
+		}
+		return line
+	}
+	return fmt.Sprintf("runtime %s is shown by the %s view", rt.Name(), view.Name())
+}
+
+// coreLifetime says that the hc core ends with the user's last login
+// session, and every agent in it, where hc is the runtime in use and the
+// user's service manager, which runs the core, does not linger; "" otherwise.
+func coreLifetime(ctx context.Context, rt revier.Runtime) string {
+	if rt.Name() != "hc" {
+		return ""
+	}
+	if lingers, known := userunit.Outlives(ctx); !known || lingers {
+		return ""
+	}
+	return "the hc core stops at your last logout, and every agent with it; run loginctl enable-linger to keep it running"
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os/exec"
 	"strings"
 
 	"github.com/hk9890/revier/pkg/revier"
@@ -19,7 +20,7 @@ func (h *Host) Close(ctx context.Context, r revier.TargetRef) error {
 	}
 	if !ref.byHand() {
 		// It checks on each connection that the ref's core answers.
-		return h.closeInstance(ctx, ref.core, ref.key)
+		return h.closeLabelled(ctx, ref.core, map[string]string{instanceLabel: ref.key})
 	}
 	s, _, err := h.session(ctx, r, false)
 	if err != nil {
@@ -209,7 +210,7 @@ func (h *Host) AttachCommand(r revier.TargetRef) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	bin, err := program()
+	bin, err := Program()
 	if err != nil {
 		return nil, err
 	}
@@ -222,4 +223,20 @@ func (h *Host) AttachCommand(r revier.TargetRef) ([]string, error) {
 		argv = append([]string{"env", "HC_SOCKET=" + h.Socket}, argv...)
 	}
 	return argv, nil
+}
+
+// AttachPanel is the argv a view's window runs to show one terminal: hc's
+// attach of its address (decisions.md D180). The window starts in the
+// view's own environment, not this process's, so the argv names hc by its
+// path and the core by its socket, even when neither was set here.
+func (h *Host) AttachPanel(panel revier.PanelID) ([]string, error) {
+	bin, err := Program()
+	if err != nil {
+		return nil, err
+	}
+	path, err := exec.LookPath(bin)
+	if err != nil {
+		return nil, fmt.Errorf("hc: %w", err)
+	}
+	return []string{"env", "HC_SOCKET=" + h.socket(), path, "attach", panel.String()}, nil
 }

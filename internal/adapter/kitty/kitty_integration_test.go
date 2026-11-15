@@ -10,11 +10,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/hk9890/revier/internal/adapter/kitty"
@@ -28,24 +28,6 @@ func fixture(t *testing.T) []byte {
 		t.Fatalf("read fixture: %v", err)
 	}
 	return b
-}
-
-// recorder collects calls; the host queries sockets concurrently.
-type recorder struct {
-	mu    sync.Mutex
-	calls []call
-}
-
-func (r *recorder) add(socket string, args []string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.calls = append(r.calls, call{socket, args})
-}
-
-func (r *recorder) all() []call {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return append([]call(nil), r.calls...)
 }
 
 // host returns a Host whose kitten answers from the fixture on every socket
@@ -967,7 +949,7 @@ func TestReadPanelReadsTheWindowsScreenWithItsColours(t *testing.T) {
 // as user vars, and runs the launch argv in the directory given.
 func TestOpenTabLaunchesATabWithItsVars(t *testing.T) {
 	h, rec := host(t, "unix:@kitty-4000")
-	var opener revier.PanelOpener = h
+	var opener revier.TabOpener = h
 	panel, err := opener.OpenTab(context.Background(), revier.TargetRef{Host: "kitty", ID: "@kitty-4000/2"},
 		revier.Realization{Launch: []string{"taskmgr-ui"}, Dir: "/p"}, map[string]string{"revier_target": "tickets"})
 	if err != nil {
@@ -1015,26 +997,36 @@ func TestFindPanelTakesTheWindowOfTheKittyTheCommandRunsIn(t *testing.T) {
 	h, _ := host(t, "unix:@kitty-4000", "unix:@kitty-4001")
 
 	h.SetOwnSocket(func() string { return "unix:@kitty-4001" })
-	ref, err := h.FindPanel(listed(t, h), "3")
+	ref, err := findPanel(h, listed(t, h), "3")
 	if err != nil || ref.ID != "@kitty-4001/2" {
 		t.Errorf("from kitty 4001: ref = %+v, %v, want @kitty-4001/2", ref, err)
 	}
-	if ref, err := h.FindPanel(listed(t, h), "99"); err != nil || !ref.IsZero() {
+	if ref, err := findPanel(h, listed(t, h), "99"); err != nil || !ref.IsZero() {
 		t.Errorf("unknown window: ref = %+v, %v, want none", ref, err)
 	}
 
 	for _, own := range []string{"", "unix:@kitty-9999"} {
 		h.SetOwnSocket(func() string { return own })
-		if _, err := h.FindPanel(listed(t, h), "3"); err == nil || !strings.Contains(err.Error(), "2 kitty processes") {
+		if _, err := findPanel(h, listed(t, h), "3"); err == nil || !strings.Contains(err.Error(), "2 kitty processes") {
 			t.Errorf("own socket %q: err = %v, want the id refused as held by two kitties", own, err)
 		}
 	}
 
 	one, _ := host(t, "unix:@kitty-4000")
 	one.SetOwnSocket(func() string { return "" })
-	if ref, err := one.FindPanel(listed(t, one), "3"); err != nil || ref.ID != "@kitty-4000/2" {
+	if ref, err := findPanel(one, listed(t, one), "3"); err != nil || ref.ID != "@kitty-4000/2" {
 		t.Errorf("one kitty: ref = %+v, %v, want @kitty-4000/2", ref, err)
 	}
+}
+
+// findPanel is the host's FindPanel, which hands back the id it is given:
+// under kitty the view's window id is the runtime's panel.
+func findPanel(h *kitty.Host, instances []revier.Instance, panel revier.PanelID) (revier.TargetRef, error) {
+	ref, own, err := h.FindPanel(context.Background(), instances, panel)
+	if own != panel {
+		return ref, fmt.Errorf("FindPanel handed back panel %s for %s", own, panel)
+	}
+	return ref, err
 }
 
 // listed is the host's own listing, the one the core hands FindPanel.
@@ -1054,7 +1046,7 @@ func TestFindPanelListsNothing(t *testing.T) {
 	h.SetOwnSocket(func() string { return "unix:@kitty-4001" })
 	instances := listed(t, h)
 	before := len(rec.all())
-	if _, err := h.FindPanel(instances, "3"); err != nil {
+	if _, err := findPanel(h, instances, "3"); err != nil {
 		t.Fatalf("FindPanel: %v", err)
 	}
 	if calls := rec.all()[before:]; len(calls) != 0 {

@@ -68,10 +68,10 @@ window = ["none"]
 // there is created.
 func TestSetAddsAMissingTableAndAMissingFile(t *testing.T) {
 	root := writeConfig(t, "# only a comment\n")
-	if err := config.Set(root, "hosts", "runtime", []string{"tmux"}); err != nil {
+	if err := config.Set(root, "hosts", "runtime", []string{"hc"}); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := readConfig(t, root), "# only a comment\n\n[hosts]\nruntime = [\"tmux\"]\n"; got != want {
+	if got, want := readConfig(t, root), "# only a comment\n\n[hosts]\nruntime = [\"hc\"]\n"; got != want {
 		t.Errorf("config.toml = %q, want %q", got, want)
 	}
 
@@ -90,7 +90,7 @@ func TestSetReplacesAnArrayOverSeveralLines(t *testing.T) {
 	root := writeConfig(t, `[hosts]
 runtime = [
   "kitty", # first
-  "tmux",
+  "hc",
 ]
 window = ["none"]
 `)

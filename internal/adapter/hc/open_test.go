@@ -23,8 +23,9 @@ import (
 )
 
 // Each panel is a terminal with no parent, not kept, removed when its
-// program exits, named after the instance and its place, and labelled with the instance, the name, its place
-// and the realization's vars.
+// program exits, named after the instance and its place, and labelled with
+// the instance, the name, the token and place 0 of the first tab, its place
+// in the tab, and the realization's vars.
 func TestOpenLabelsAndNamesEachTerminal(t *testing.T) {
 	c, sock := newCore(t)
 	dir := t.TempDir()
@@ -53,11 +54,15 @@ func TestOpenLabelsAndNamesEachTerminal(t *testing.T) {
 	if len(runs) != 2 {
 		t.Fatalf("ran %d terminals, want 2", len(runs))
 	}
+	token := asMap(runs[0]["labels"])["revier.tab"]
+	if s, _ := token.(string); !regexp.MustCompile(`^[0-9a-f]{16}$`).MatchString(s) || s == id {
+		t.Errorf("tab token = %v, want 16 hex digits of the tab's own", token)
+	}
 	for i, run := range runs {
 		labels := asMap(run["labels"])
 		if labels["revier.instance"] != id || labels["revier.name"] != "home" || labels["revier.panel"] != []string{"0", "1"}[i] ||
-			labels["revier_target"] != "home" || len(labels) != 4 {
-			t.Errorf("run %d labels = %v, want the instance, name, place and var", i, labels)
+			labels["revier.tab"] != token || labels["revier.tabplace"] != "0" || labels["revier_target"] != "home" || len(labels) != 6 {
+			t.Errorf("run %d labels = %v, want the instance, name, tab, tab place, place and var", i, labels)
 		}
 		if run["name"] != "rv-"+id+"-"+[]string{"0", "1"}[i] || run["no_parent"] != true || run["keep"] != false || run["rm"] != true || run["cwd"] != dir {
 			t.Errorf("run %d = %v, want named after the instance, no parent, not kept, removed at exit, in %s", i, run, dir)

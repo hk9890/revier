@@ -1,50 +1,69 @@
 //go:build live
 
-// Layer L4: real processes read from this machine's /proc. A private tmux
-// server gives each one the terminal sshd gives a served process, so it is in
-// the foreground of a pty as a panel's process is.
+// Layer L4: real processes read from this machine's /proc. Each one is
+// started on a pty of its own, the terminal sshd gives a served process, so
+// it is in the foreground of a pty as a panel's process is.
 package proc_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/hk9890/revier/internal/adapter/proc"
-	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/pkg/revier"
 )
+
+// onPty starts sleep as the leader of a session whose terminal is a new pty,
+// with env added to the test's environment, and ends it with the test.
+func onPty(t *testing.T, env ...string) {
+	t.Helper()
+	ptmx, err := os.OpenFile("/dev/ptmx", os.O_RDWR, 0)
+	if err != nil {
+		t.Skipf("no pty: %v", err)
+	}
+	t.Cleanup(func() { _ = ptmx.Close() })
+	if err := unix.IoctlSetPointerInt(int(ptmx.Fd()), unix.TIOCSPTLCK, 0); err != nil {
+		t.Fatal(err)
+	}
+	n, err := unix.IoctlGetInt(int(ptmx.Fd()), unix.TIOCGPTN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tty, err := os.OpenFile(fmt.Sprintf("/dev/pts/%d", n), os.O_RDWR|syscall.O_NOCTTY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tty.Close() }()
+	cmd := exec.Command("sleep", "600")
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = tty, tty, tty
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true}
+	// A name this test runs under, inside an agent served here, would mark
+	// the unnamed one.
+	cmd.Env = append(slices.DeleteFunc(os.Environ(), func(kv string) bool { return strings.HasPrefix(kv, proc.AgentVar+"=") }), env...)
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	})
+}
 
 // A process started with a named agent's name in its environment is reported
 // with that name as its panel's mark, and one started without it with none.
 func TestAProcessStartedAsANamedAgentCarriesItsMark(t *testing.T) {
-	if _, err := exec.LookPath("tmux"); err != nil {
-		t.Skip("tmux not installed; L4 needs it for a terminal")
-	}
-	socket := "revier-test-" + testenv.ShortName(t)
 	workspace := "session:" + t.Name()
-	t.Cleanup(func() { _ = exec.Command("tmux", "-L", socket, "kill-server").Run() })
-	start := func(session, tag string, env ...string) {
-		t.Helper()
-		args := []string{"-L", socket, "-f", "/dev/null", "new-session", "-d", "-s", session,
-			"-e", proc.TagVar + "=" + tag, "-e", proc.WorkspaceVar + "=" + workspace}
-		for _, e := range env {
-			args = append(args, "-e", e)
-		}
-		// The server's environment is every pane's: a name this test runs
-		// under, inside an agent served here, would mark the default one.
-		cmd := exec.Command("tmux", append(args, "exec sleep 600")...)
-		cmd.Env = slices.DeleteFunc(os.Environ(), func(kv string) bool { return strings.HasPrefix(kv, proc.AgentVar+"=") })
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("tmux new-session: %v: %s", err, out)
-		}
-	}
-	start("default", "box.1")
-	start("named", "box.2", proc.AgentVar+"=dtop")
+	onPty(t, proc.TagVar+"=box.1", proc.WorkspaceVar+"="+workspace)
+	onPty(t, proc.TagVar+"=box.2", proc.WorkspaceVar+"="+workspace, proc.AgentVar+"=dtop")
 
 	var panels []revier.Panel
 	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {

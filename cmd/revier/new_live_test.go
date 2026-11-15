@@ -1,7 +1,7 @@
 //go:build live
 
 // Layer L4 for the commands that write a project file or clone a checkout:
-// the real command paths, a real tmux, real git. Every origin is a local bare
+// the real command paths, a real hc, real git. Every origin is a local bare
 // repository, so nothing reaches the network, and mise's trust list is
 // redirected to a temporary directory.
 package main
@@ -17,7 +17,7 @@ import (
 	"github.com/hk9890/revier/internal/config"
 )
 
-// fileScratch is scratch plus what these commands touch besides tmux: git,
+// fileScratch is scratch plus what these commands touch besides hc: git,
 // a mise trust list of their own, and a `claude` that is a sleep, because the
 // template's workspace starts one and the real one must not start here.
 func fileScratch(t *testing.T) (root, workdir string) {

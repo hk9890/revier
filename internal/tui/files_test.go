@@ -20,7 +20,7 @@ import (
 func fileWorld(t *testing.T, names ...string) (*hosttest.FakeRuntime, tui.Model, string) {
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	projects, dir := onDisk(t, names, nil, nil)
 	return rt, resize(refreshed(t, c, projects, stateWith(t, nil), nil), 120, 20), dir
 }
@@ -118,7 +118,7 @@ func TestDeleteClosesARunningProjectFirst(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:alpha", "sh")
 	projects, dir := onDisk(t, []string{"alpha"}, nil, nil)
-	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 120, 20)
+	m := resize(refreshed(t, &core.Core{Runtime: rt, View: rt}, projects, stateWith(t, nil), nil), 120, 20)
 
 	m, cmd := press(m, "alt+d")
 	m = run(m, cmd)
@@ -170,7 +170,7 @@ func TestDeleteDeclinedOnTheConfirmClosesNothing(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:alpha", "sh")
 	projects, dir := onDisk(t, []string{"alpha"}, nil, nil)
-	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 120, 20)
+	m := resize(refreshed(t, &core.Core{Runtime: rt, View: rt}, projects, stateWith(t, nil), nil), 120, 20)
 
 	m, cmd := press(m, "alt+d")
 	m = run(m, cmd)
@@ -193,7 +193,7 @@ func TestARaiseDropsACloseAndDeleteAskedBeforeTheHide(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:alpha", "sh")
 	projects, dir := onDisk(t, []string{"alpha"}, nil, nil)
-	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 120, 20)
+	m := resize(refreshed(t, &core.Core{Runtime: rt, View: rt}, projects, stateWith(t, nil), nil), 120, 20)
 	m, cmd := press(m, "alt+d")
 	m = run(m, cmd)
 	if sub := lines(m)[2]; !strings.Contains(sub, "Close and delete alpha?") {
@@ -222,7 +222,7 @@ func TestARaiseDropsACloseAndDeletePlannedBeforeTheHide(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:alpha", "sh")
 	projects, _ := onDisk(t, []string{"alpha"}, nil, nil)
-	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 120, 20)
+	m := resize(refreshed(t, &core.Core{Runtime: rt, View: rt}, projects, stateWith(t, nil), nil), 120, 20)
 	m, plan := press(m, "alt+d")
 
 	m = run(m.Raised(), plan)
@@ -235,7 +235,7 @@ func TestARaiseDropsACloseAndDeletePlannedBeforeTheHide(t *testing.T) {
 func TestDetailPaneShowsTheGitURL(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	projects, _ := onDisk(t, []string{"alpha"}, nil, map[string]string{"alpha": "git@github.com:hk9890/alpha.git"})
-	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 140, 30)
+	m := resize(refreshed(t, &core.Core{Runtime: rt, View: rt}, projects, stateWith(t, nil), nil), 140, 30)
 	if body := pane(m); !strings.Contains(body, "git@github.com:hk9890/alpha.git") {
 		t.Errorf("pane = %q, want the git URL", body)
 	}
@@ -247,7 +247,7 @@ func TestDetailPaneSaysWhatEnterDoesForAMissingDirectory(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	gone := map[string]string{"cloneable": "/nowhere/a", "stuck": "/nowhere/b"}
 	projects, _ := onDisk(t, []string{"cloneable", "stuck"}, gone, map[string]string{"cloneable": "/srv/git/a.git"})
-	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 140, 30)
+	m := resize(refreshed(t, &core.Core{Runtime: rt, View: rt}, projects, stateWith(t, nil), nil), 140, 30)
 
 	if body := pane(m); !strings.Contains(body, "Enter: clone and open") {
 		t.Errorf("pane = %q, want the clone offered", body)
@@ -264,7 +264,7 @@ func TestDetailPaneSaysWhyTheLastCloneFailed(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	projects, _ := onDisk(t, []string{"cloneable"}, map[string]string{"cloneable": "/nowhere/a"},
 		map[string]string{"cloneable": "/srv/git/a.git"})
-	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 140, 30)
+	m := resize(refreshed(t, &core.Core{Runtime: rt, View: rt}, projects, stateWith(t, nil), nil), 140, 30)
 
 	m, _ = m.Cloned(projects[0], &checkout.CloneError{Project: "cloneable", URL: "/srv/git/a.git", Reason: "fatal: repository '/srv/git/a.git' does not exist"})
 	body := pane(m)
@@ -287,7 +287,7 @@ func TestDetailPaneOffersNoRetryOfARefusedClone(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	projects, _ := onDisk(t, []string{"cloneable"}, map[string]string{"cloneable": "/nowhere/a"},
 		map[string]string{"cloneable": "/srv/git/a.git"})
-	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 140, 30)
+	m := resize(refreshed(t, &core.Core{Runtime: rt, View: rt}, projects, stateWith(t, nil), nil), 140, 30)
 
 	m, _ = m.Cloned(projects[0], errors.New(`project "cloneable": /nowhere/a exists and is not a directory`))
 	body := pane(m)
@@ -305,7 +305,7 @@ func TestDetailPaneSaysAPageLinkCannotBeCloned(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	projects, _ := onDisk(t, []string{"paged"}, map[string]string{"paged": "/nowhere/a"},
 		map[string]string{"paged": "https://github.com/o/r/tree/main/paged"})
-	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 160, 30)
+	m := resize(refreshed(t, &core.Core{Runtime: rt, View: rt}, projects, stateWith(t, nil), nil), 160, 30)
 
 	body := pane(m)
 	if !strings.Contains(body, "not a clone URL") || !strings.Contains(body, "https://github.com/o/r\n") {
@@ -322,7 +322,7 @@ func TestEnterOnAMissingDirectoryClonesBeforeLaunching(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	projects, _ := onDisk(t, []string{"cloneable"}, map[string]string{"cloneable": "/nowhere/a"},
 		map[string]string{"cloneable": "/srv/git/a.git"})
-	m := refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil)
+	m := refreshed(t, &core.Core{Runtime: rt, View: rt}, projects, stateWith(t, nil), nil)
 
 	_, cmd := press(m, "enter")
 	if cmd == nil {
@@ -340,7 +340,7 @@ func TestEnterOnAMissingDirectoryClonesBeforeLaunching(t *testing.T) {
 func TestEnterOnAMissingDirectoryWithoutGitURLOpensNothing(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	projects, _ := onDisk(t, []string{"stuck"}, map[string]string{"stuck": "/nowhere/b"}, nil)
-	m := resize(refreshed(t, &core.Core{Runtime: rt}, projects, stateWith(t, nil), nil), 160, 20)
+	m := resize(refreshed(t, &core.Core{Runtime: rt, View: rt}, projects, stateWith(t, nil), nil), 160, 20)
 
 	m, cmd := press(m, "enter")
 	if cmd != nil {

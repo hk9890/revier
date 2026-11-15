@@ -62,10 +62,10 @@ func placeTab(t *testing.T, c *core.Core, projects []core.Project, req core.TabR
 // window and the last project both answer other. It returns demo's home.
 func focusedOther(t *testing.T) (*core.Core, *hosttest.FakeRuntime, []core.Project, revier.TargetRef) {
 	t.Helper()
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	home := rt.Add("demo", "")
 	rt.SetFocus(rt.Add("other", ""))
-	c := &core.Core{Runtime: rt, Ledger: &ledger{st: state.State{Current: "other"}}}
+	c := &core.Core{Runtime: rt, View: rt, Ledger: &ledger{st: state.State{Current: "other"}}}
 	return c, rt, []core.Project{placeProject(t, "demo"), placeProject(t, "other")}, home
 }
 
@@ -133,9 +133,9 @@ func TestPlaceTabTakesTheTargetAfterTheColonElseTheKindsTarget(t *testing.T) {
 			Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}, {Kind: revier.PanelShell}}}},
 		{Name: "side", Runtime: &revier.Realization{Name: "side", Match: revier.Match{Title: "^side$"}}},
 	}})
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	home, side := rt.Add("demo", ""), rt.Add("side", "")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	projects := []core.Project{demo}
 
 	placeTab(t, c, projects, core.TabRequest{Kind: revier.PanelAgent, Project: "demo"})
@@ -157,9 +157,9 @@ func TestPlaceTabShellRefusesAProjectWithNoHome(t *testing.T) {
 	homeless := prepared(t, revier.Project{Name: "homeless", Path: t.TempDir(), Targets: []revier.Target{
 		{Name: "side", Runtime: &revier.Realization{Name: "side", Match: revier.Match{Title: "^side$"}}},
 	}})
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	rt.Add("side", "")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	req := core.TabRequest{Kind: revier.PanelShell, Project: "homeless"}
 
 	if _, err := c.PlaceTab(t.Context(), []core.Project{homeless}, req); err == nil || !strings.Contains(err.Error(), "has no home target") {
@@ -187,9 +187,9 @@ func TestPlaceTabOfARemoteProjectOpensHereAndDropsDir(t *testing.T) {
 			Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}, {Kind: revier.PanelShell}}}},
 	}})
 	remote := hosttest.NewRemote("buildbox")
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	pane := rt.Add("far", "", revier.Panel{ID: "%7", Kind: revier.PanelTool})
-	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
+	c := &core.Core{Runtime: rt, View: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
 	projects := []core.Project{placeProject(t, "demo"), far}
 
 	placeTab(t, c, projects, core.TabRequest{Kind: revier.PanelAgent, Project: "far", Resume: core.Resume{Session: "abc-123"}})
@@ -215,7 +215,7 @@ func TestPlaceTabAtAPanelDropsADirOutsideItsProject(t *testing.T) {
 	demo := placeProject(t, "demo")
 	rt := hosttest.NewRuntime("kitty")
 	rt.Add("demo", "", revier.Panel{ID: "3", Kind: revier.PanelTool})
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 
 	for _, dir := range []string{"", "/", demo.Path} {
 		placeTab(t, c, []core.Project{demo}, core.TabRequest{Kind: revier.PanelShell, Panel: "3", Dir: dir})
@@ -239,7 +239,7 @@ func TestPlaceTabAtAPanelShellStartsInThePanelsDirectory(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.Add("demo", "", revier.Panel{ID: "1", Dir: here}, revier.Panel{ID: "2", Dir: gone}, revier.Panel{ID: "5", Dir: elsewhere})
 	rt.Add("a kitty window of no project", "", revier.Panel{ID: "9", Dir: elsewhere})
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	projects := []core.Project{demo}
 
 	placeTab(t, c, projects, core.TabRequest{Kind: revier.PanelShell, Project: "demo"})
@@ -281,7 +281,7 @@ func TestPlaceTabAtAPanelAgentStartsInTheProject(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.Add("demo", "", revier.Panel{ID: "3", Dir: worktree})
 	rt.Add("a kitty window of no project", "", revier.Panel{ID: "9", Dir: elsewhere})
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	projects := []core.Project{demo}
 
 	for _, tc := range []struct{ dir, want string }{
@@ -314,7 +314,7 @@ func TestPlaceTabRefusesADirThatIsNotADirectory(t *testing.T) {
 	worktree, gone := mkdir(t, filepath.Join(demo.Path, "wt")), filepath.Join(demo.Path, "removed")
 	rt := hosttest.NewRuntime("kitty")
 	rt.Add("demo", "", revier.Panel{ID: "3", Dir: worktree})
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	projects := []core.Project{demo}
 
 	_, err := c.PlaceTab(t.Context(), projects, core.TabRequest{Kind: revier.PanelShell, Project: "demo", Dir: gone})
@@ -334,7 +334,7 @@ func TestPlaceTabNoFocusGivesTheAddress(t *testing.T) {
 	demo := placeProject(t, "demo")
 	rt := hosttest.NewRuntime("kitty")
 	rt.Add("demo", "")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 
 	placed := placeTab(t, c, []core.Project{demo}, core.TabRequest{Kind: revier.PanelAgent, Project: "demo", NoFocus: true})
 	if len(rt.Tabs) != 1 {
@@ -359,10 +359,10 @@ func TestPlaceTabReportsTheAgentOutcome(t *testing.T) {
 	rt.Add("demo", "")
 	req := core.TabRequest{Kind: revier.PanelAgent, Project: "demo", Resume: core.Resume{Session: "abc-123"}}
 
-	if placed := placeTab(t, &core.Core{Runtime: rt}, []core.Project{demo}, req); placed.Outcome != core.AgentUnresumable {
+	if placed := placeTab(t, &core.Core{Runtime: rt, View: rt}, []core.Project{demo}, req); placed.Outcome != core.AgentUnresumable {
 		t.Errorf("no probe: outcome = %s, want %s", placed.Outcome, core.AgentUnresumable)
 	}
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 	if placed := placeTab(t, c, []core.Project{demo}, req); placed.Outcome != core.AgentResumed {
 		t.Errorf("resumable: outcome = %s, want %s", placed.Outcome, core.AgentResumed)
 	}

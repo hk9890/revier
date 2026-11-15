@@ -3,7 +3,7 @@
 ```bash
 mise run test              # L1 + L2   fast, no processes, no display
 mise run test:integration  # L3        adapter parsing against recorded output
-mise run test:live         # L4        real processes: tmux, hc and sh, still headless
+mise run test:live         # L4        real processes: hc and sh, still headless
 mise run test:all          # everything runnable without a screen
 mise run quality           # fmt + vet + lint + build + L1-L3   (pre-commit)
 mise run quality:full      # + L4                               (pre-handoff)
@@ -18,9 +18,9 @@ Only L6 ever reaches one. L5 was retired and its number is not reused.
 |---|---|---|---|
 | L1 | none — pure functions | — | matching, status encoding, project lookup (`pkg/revier`) |
 | L2 | `internal/hosttest.Fake` | — | resolution, run-or-raise, toggle-back, survey, probe dispatch (`internal/core`) |
-| L3 | recorded tool output | `integration` | adapter parsing: `kitten @ ls` JSON, `wctl list --json`, hc `hello` and `terminal.list` |
-| L4 | real processes: tmux and hc on private sockets, `sh` scripts | `live` | the tmux and hc hosts, the core against a real substrate, the adapters that run a shell (`claude`, `execprobe`, `ssh`), and the process group of what `kitty` and `gnome` run |
-| L6 | the user's GNOME session | manual | the GNOME host, and the kitty host's `Open` and `Focus` |
+| L3 | recorded tool output | `integration` | adapter parsing: `kitten @ ls` JSON, `wctl list --json`, hc `hello` and `terminal.list`; the kitty view over hc on a listing built from a recorded one |
+| L4 | real processes: hc on private sockets, `sh` scripts | `live` | the hc host, the core and the CLI against a real hc core beside `hosttest.FakeView`, the adapters that run a shell (`claude`, `execprobe`, `ssh`), and the process group of what `kitty` and `gnome` run |
+| L6 | the user's GNOME session | manual | the GNOME host, the kitty host's `Open` and `Focus`, and the kitty view over hc |
 
 L2 is where most behaviour is pinned. The core's decisions depend only on what a
 host *reports*, and `hosttest.Fake` reports whatever a test needs — which is why
@@ -32,12 +32,12 @@ that did not focus after `Open` passed L2 and failed L4.
 ## What every host test must cover
 
 - **`Open` produces what `Match` finds** ([CODING.md](CODING.md)).
-  `TestOpenThenMatchFindsIt` in `internal/adapter/tmux` is the shape.
+  `TestOpenThenMatchFindsIt` in `internal/adapter/hc` is the shape.
 - **`Instances` does not scale with the project count** ([CODING.md](CODING.md)).
   Assert on the tool invocation count, not on timing.
 - **Free text survives the round trip.** Test a title that contains the host's
-  field separator. tmux 3.4 escapes non-printable bytes that 3.7 passes
-  through, so a control-character delimiter passes locally and fails in CI.
+  field separator, a newline and a non-ASCII letter, as
+  `internal/adapter/hc/testdata` records one.
 
 ## Conventions
 
@@ -96,9 +96,7 @@ that did not focus after `Open` passed L2 and failed L4.
 - A live test starts its substrate on a socket named after itself and kills it
   in `t.Cleanup`, so suites cannot collide.
 - A missing substrate skips (`t.Skip`), never fails: `mise run test:live` must
-  stay green on a machine without tmux.
-- Leave tmux unpinned in `.mise.toml`: the live layer runs against
-  whatever is installed, which is how CI caught the delimiter difference above.
+  stay green on a machine without hc.
 - Keep hc pinned in `.github/workflows/ci.yml`: it is pre-1.0. To
   bump the pin, take the `linux-x86_64` URL and digest from
   `https://releases.herdr.dev/core/<version>/manifest.json`, and record a new
@@ -107,11 +105,24 @@ that did not focus after `Open` passed L2 and failed L4.
   [RUNNING.md](RUNNING.md#run-a-private-hc-core), with terminals that carry
   revier's labels. Point the paths in `hc_integration_test.go` at them.
 - Run hc in a live test on a private core only: `world` in
-  `internal/adapter/hc/helpers_live_test.go`. Any `hc` command starts a core
+  `internal/adapter/hc/helpers_live_test.go`, `scratch` in
+  `cmd/revier/helpers_live_test.go`.
+  - A live test of the core on hc sits in `internal/adapter/hc` for that
+    helper, with `hosttest.FakeView` as its view: `view_live_test.go`.
+  - A live test of the CLI calls `scratch`: it names the view kitty in the
+    scratch `config.toml` and puts `hosttest.FakeView` in kitty's place
+    through `viewOf`, so no run opens a window.
+  - Wait for a panel's program with `running` before a test reads its pid:
+    hc reads a terminal's foreground process about twice a second.
+- Build a `kitten @ ls` listing of the kitty view over hc from a recorded
+  one, as `internal/adapter/kitty/testdata/ls-hc-view.json` is: recording
+  one opens windows on a desktop. Any `hc` command starts a core
   when none answers its socket, the user's own included.
-- tmux leaves an inert socket file in `/tmp/tmux-$UID/` after `kill-server`.
-  A `revier-test-*` entry there is a dead socket, not a leaked server; confirm
-  with `tmux -L <name> list-sessions`, which reports no server running.
+- Call `testenv.NoServiceManager(t, dir)` in a live test that reaches a start
+  through `internal/userunit` with the real `systemd-run` on PATH, as `world`
+  does: without it, the test starts a unit in the user's own service manager.
+  Test the start itself with scripts named `systemd-run` and `systemctl` first
+  on PATH, as `internal/userunit/live_test.go` does.
 - `mise run test:coverage:summary` reports and gates nothing. A covered line is
   one that ran, not one whose behaviour anything asserted.
 

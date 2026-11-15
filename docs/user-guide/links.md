@@ -17,7 +17,7 @@ host knows the project; this machine asks it over ssh.
 - On the host: revier on the `PATH` of your **login** shell. revier runs each
   command through `$SHELL -l`, so a `PATH` that only your interactive shell
   sets is not enough.
-- On the host: the project, in its own project file. The host needs no tmux
+- On the host: the project, in its own project file. The host needs no runtime
   and no desktop.
 
 ## Add the machine

@@ -54,14 +54,12 @@ func (r keyRecorder) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return r, nil
 }
 
-// The desktop takes the key that opens the popup before the popup's terminal
-// sees it, so `revier popup` types core.SwitchKey into a popup that is focused
-// already. Those bytes, read by bubbletea's own input reader as a terminal's
-// are and folded as the surface folds every press, are the press the surface
-// switches its list on.
-func TestTheKeyTypedIntoTheFocusedPopupIsTheSwitch(t *testing.T) {
+// alt+space as a terminal sends it, read by bubbletea's own input reader as a
+// terminal's bytes are and folded as the surface folds every press, is the
+// press the surface switches its list on.
+func TestAltSpaceTypedInATerminalIsTheSwitch(t *testing.T) {
 	var got []tea.KeyPressMsg
-	p := tea.NewProgram(keyRecorder{&got}, tea.WithInput(strings.NewReader(core.SwitchKey)), tea.WithOutput(io.Discard))
+	p := tea.NewProgram(keyRecorder{&got}, tea.WithInput(strings.NewReader("\x1b ")), tea.WithOutput(io.Discard))
 	if _, err := p.Run(); err != nil {
 		t.Fatalf("Run: %v", err)
 	}

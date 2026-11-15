@@ -1,8 +1,8 @@
 //go:build live
 
 // Layer L4 for `revier agent read`, `send-keys` and `new --no-focus`, against
-// real tmux panes with no window host. The agents are the stand-ins of
-// helpers_live_test.go.
+// real hc terminals in a fake view, with no window host. The agents are the
+// stand-ins of helpers_live_test.go.
 package main
 
 import (
@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // Keys reach the agent's pane one at a time, the screen read back shows what
@@ -67,26 +69,30 @@ func TestAgentReadOfAnAgentWithNoConversationNamesTheScreen(t *testing.T) {
 	}
 }
 
-// A script's agent tab opens behind the current window, and what is printed
-// is the address the new agent's pane answers to.
-func TestAgentNewWithNoFocusLeavesTheCurrentWindowAndPrintsTheAddress(t *testing.T) {
+// A script's agent tab opens behind the current tab, and what is printed is
+// the address the new agent's terminal answers to.
+func TestAgentNewWithNoFocusLeavesTheCurrentTabAndPrintsTheAddress(t *testing.T) {
 	work(t)
-	before := tmuxRun(t, "display-message", "-p", "-t", "work:", "#{window_id} #{pane_id}")
+	ref := instance(t, "work").Ref
+	focused, _ := liveView.Focused(t.Context())
+	before, _ := liveView.FocusedPanel(t.Context(), ref)
 
 	address := strings.TrimSpace(capture(t, "agent", "new", "-p", "work", "--no-focus"))
-	if !regexp.MustCompile(`^work:home:%\d+$`).MatchString(address) {
-		t.Fatalf("printed %q, want work:home:<pane>", address)
+	if !regexp.MustCompile(`^work:home:t\d+$`).MatchString(address) {
+		t.Fatalf("printed %q, want work:home:<address>", address)
 	}
-	windows := strings.Split(strings.TrimSpace(tmuxRun(t, "list-windows", "-t", "work", "-F", "#{window_panes} #{window_active}")), "\n")
-	if len(windows) != 2 || windows[1] != "2 0" {
-		t.Errorf("windows (panes, active) = %q, want a second window of agent and shell that is not current", windows)
+	got := tabs(instance(t, "work"))
+	if len(got) != 2 || len(got[1]) != 2 {
+		t.Fatalf("tabs = %+v, want a second tab of agent and shell", got)
 	}
-	if after := tmuxRun(t, "display-message", "-p", "-t", "work:", "#{window_id} #{pane_id}"); after != before {
-		t.Errorf("current window and pane = %q, want %q as before", after, before)
+	if after, _ := liveView.Focused(t.Context()); after != focused {
+		t.Errorf("focused instance %+v, want %+v as before", after, focused)
 	}
-	pane := strings.TrimPrefix(address, "work:home:")
-	if in := strings.TrimSpace(tmuxRun(t, "display-message", "-p", "-t", pane, "#{window_panes} #{window_active}")); in != "2 0" {
-		t.Errorf("pane %s is in a window of (panes, active) %q, want the new one", pane, in)
+	if after, _ := liveView.FocusedPanel(t.Context(), ref); after != before {
+		t.Errorf("current panel %s, want %s as before", after, before)
+	}
+	if panel := strings.TrimPrefix(address, "work:home:"); revier.PanelID(panel) != got[1][0].ID {
+		t.Errorf("address names %s, want the new tab's agent %s", panel, got[1][0].ID)
 	}
 	eventually(t, "the printed address naming the new agent", func() bool {
 		return run(io.Discard, []string{"agent", "read", address, "--screen"}) == nil

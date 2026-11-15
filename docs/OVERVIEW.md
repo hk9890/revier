@@ -9,13 +9,14 @@ A findability map: where things live, and how to search for them.
 | `pkg/revier/` | The ports and every type that crosses them, the project model included. Public, because out-of-tree adapters import it. |
 | `internal/core/` | All policy: resolution, matching, run-or-raise, toggle-back, survey. |
 | `internal/app/` | The use cases that cross stores, written once for both surfaces: create, link and rename a project, run an action, save a session. |
-| `internal/adapter/<tool>/` | One tool each. No policy. `kitty`, `tmux` and `hc` (runtime; `hc` opt-in, a prototype; `kitty` also the terminal keys), `gnome` (window and key binder), `proc` (what a link on another machine started here, a process's parent on this machine, and the agent session variables a server must not hand on), `claude` (probe, and the assistant launcher), `opencode` and `execprobe` (probes), `ssh` (remote). |
-| `internal/panelstart/` | What the tmux and hc hosts and the core say about a panel whose command does not start: not on the PATH the runtime starts it with, or ended at once. |
+| `internal/adapter/<tool>/` | One tool each. No policy. `kitty` (runtime, the view of itself and of hc, and the terminal keys), `hc` (runtime, with tabs as labels; opt-in, a prototype), `gnome` (window and key binder), `proc` (what a link on another machine started here, a process's parent on this machine, and the agent session variables a server must not hand on), `claude` (probe, and the assistant launcher), `opencode` and `execprobe` (probes), `ssh` (remote). |
+| `internal/panelstart/` | What the hc host and the core say about a panel whose command does not start: not on the PATH the runtime starts it with, or ended at once. |
 | `internal/config/` | TOML loading and the validation that rejects a project before a keypress can fail on it; the template `revier new` writes. |
 | `internal/state/` | What revier learned at runtime: the last project, and hand-attached instances. |
 | `internal/ledger/` | The state file and the event file as the core reads and writes them, and the state record's line for each change a state write made: the one caller of the state lock. |
 | `internal/session/` | The saved sets of open projects `revier session` writes and reads, under the state root, and `seen.toml`, what a surface last saw, which an end with no shutdown saves. |
 | `internal/checkout/` | git and mise on a project's directory: the origin a new project records, the clone of a missing one. |
+| `internal/userunit/` | The start of a long-lived program as a service of the user's service manager, with the session's login environment: the workspace kitty and the hc core. |
 | `internal/procgroup/` | The process group each host command runs in, the end of the whole group when a command's context ends, and the end of every group still running when a second ctrl+c ends revier. |
 | `internal/plain/` | The text an agent, a tool or a status command wrote, with every escape sequence and control character taken off, for the TUI and the command line. |
 | `internal/shell/` | The quoting that keeps a word one word for a POSIX shell and for fish: the line `ssh` runs on a host, the command `revier each` lists, the assistant's status line. |
@@ -25,12 +26,13 @@ A findability map: where things live, and how to search for them.
 | `internal/record/` | The state record `revier state` replays: what each operation did, failed or not, and what each surface's survey saw, never pruned. |
 | `internal/runlog/` | The record of every `revier each`: each project's output and a summary, under the state root. |
 | `internal/sshconfig/` | The hosts `~/.ssh/config` names, for the remote screen's "new", and the `HostName` that tells this machine apart. |
-| `internal/hosttest/` | The fake host, probe, key binder, terminal keys and remote that layer L2 runs against. |
+| `internal/hosttest/` | The fake host, view, probe, key binder, terminal keys and remote that layers L2 and L4 run against. |
 | `internal/testenv/` | The scratch configuration, state, ssh configuration and kitty configuration a test binary runs in, in place of the user's own; the empty PATH of a test that must start no tool; the short socket name of a live test. |
+| `internal/popupswitch/` | The socket the popup's surface listens on in the runtime directory, and the second press of the desktop's key that tells it there to switch its list. |
 | `internal/tui/` | The TUI surface: the project list, the pane, the dialogs and the config screen. |
 | `internal/theme/` | Every colour and glyph the TUI draws with, named by role. |
 | `internal/build/` | The version, commit and date that `.goreleaser.yaml` and `.mise.toml` stamp in by ldflags. |
-| `scripts/drive/` | Manual headless driver. |
+| `scripts/drive/` | Manual headless driver, on an hc core of its own. |
 | `scripts/release-notes` | One version's `CHANGELOG.md` section, the text of its GitHub release. |
 | `scripts/demo/` | The README's clips, `.github/assets/*.webp`: the recording scripts run here, `guest/` on a VM's GNOME desktop. |
 | `docs/user-guide/` | The [user guide](user-guide/README.md). The package carries its reference pages (`configuration.md`, `extending/`) into the binary, which `revier assist --reference` prints. |
@@ -38,19 +40,19 @@ A findability map: where things live, and how to search for them.
 
 ## The ports
 
-- `Host`, with `Runtime` and `WindowController`: `pkg/revier/host.go`
+- `Runtime`, `View`, and `WindowController`, which is a `Host`: `pkg/revier/host.go`
 - `AgentProbe`: `pkg/revier/agent.go`
 - `Remote`: `pkg/revier/remote.go`
 - `KeyBinder`: `pkg/revier/keys.go`
 - `TermKeys`: `pkg/revier/termkeys.go`
 
-What each port is: [docs/design/architecture.md](design/architecture.md#five-ports).
+What each port is: [docs/design/architecture.md](design/architecture.md#ports).
 
 ## Finding things
 
 ```bash
 rg 'func \(c \*Core\)' internal/core      # every decision the core makes
-rg 'revier\.Host' --type go               # what implements or consumes the port
+rg 'revier\.(Runtime|View|Host)\b' --type go   # what implements or consumes a terminal or window port
 rg -l '//go:build live'                   # tests needing a real substrate
 rg 'ErrNo' pkg internal                   # the normal-outcome sentinels
 rg 'func cmd' cmd/revier                  # every CLI command

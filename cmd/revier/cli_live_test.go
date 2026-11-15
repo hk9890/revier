@@ -1,9 +1,10 @@
 //go:build live
 
-// Layer L4 for the CLI: the real command paths against a real tmux server.
+// Layer L4 for the CLI: the real command paths against a real hc core, shown
+// in a fake view.
 //
 // It runs in-process against a scratch config and state root, so it never sees
-// the user's projects and never writes their state. tmux is the runtime; no
+// the user's projects and never writes their state. hc is the runtime; no
 // window host probes in this environment, which is also the degradation case
 // worth pinning - window-only targets must report unavailable rather than
 // failing the command.
@@ -12,10 +13,12 @@ package main
 import (
 	"errors"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
@@ -81,7 +84,7 @@ func TestProjectResolvesFromWorkingDirectory(t *testing.T) {
 	if !strings.Contains(out, "demo") {
 		t.Fatalf("status did not resolve the project from the cwd:\n%s", out)
 	}
-	if !strings.Contains(out, "tmux") {
+	if !strings.Contains(out, "hc") {
 		t.Errorf("status should report the selected runtime:\n%s", out)
 	}
 }
@@ -221,17 +224,23 @@ func TestPopupRefusesArguments(t *testing.T) {
 }
 
 // A help request is answered before any host is probed: `revier popup
-// --help` opens no window, and no command asks tmux anything. The status run
-// at the end proves the stub would have seen a probe.
+// --help` opens no window, and no command asks hc anything. The probe of hc
+// connects to its core's socket, which here is one the test listens on and
+// closes each connection of; the status run at the end proves it would have
+// seen a probe.
 func TestAHelpRequestProbesNoHost(t *testing.T) {
 	root := t.TempDir()
-	if err := os.WriteFile(config.File(root), []byte("[hosts]\nruntime = [\"tmux\"]\nwindow = [\"none\"]\n"), 0o644); err != nil {
+	if err := os.WriteFile(config.File(root), []byte("[hosts]\nruntime = [\"hc\"]\nview = [\"none\"]\nwindow = [\"none\"]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("REVIER_CONFIG_HOME", root)
 	t.Setenv("REVIER_STATE_HOME", filepath.Join(root, "state"))
-	marker := filepath.Join(root, "probed")
-	onPath(t, "tmux", "touch "+marker+"; exit 1")
+	onPath(t, "herdr-core", "exit 1")
+	var probed atomic.Int32
+	t.Setenv("HC_SOCKET", listen(t, func(conn net.Conn) {
+		probed.Add(1)
+		_ = conn.Close()
+	}))
 
 	for _, cmd := range dispatched(t) {
 		args := append(strings.Fields(cmd), "--help")
@@ -239,11 +248,11 @@ func TestAHelpRequestProbesNoHost(t *testing.T) {
 			t.Errorf("revier %s: %v", strings.Join(args, " "), err)
 		}
 	}
-	if _, err := os.Stat(marker); err == nil {
-		t.Fatal("a help request ran tmux")
+	if probed.Load() != 0 {
+		t.Fatal("a help request asked hc")
 	}
 	_ = run(io.Discard, []string{"status"})
-	if _, err := os.Stat(marker); err != nil {
-		t.Error("revier status ran no tmux, so this test proves nothing")
+	if probed.Load() == 0 {
+		t.Error("revier status asked no hc, so this test proves nothing")
 	}
 }

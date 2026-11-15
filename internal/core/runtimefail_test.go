@@ -87,7 +87,7 @@ func TestSendKeysThatStopPartWaySayHowManyArrived(t *testing.T) {
 func TestATabThatCannotBeFocusedInTheWorkspaceItOpenedReportsTheWorkspace(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.FocusPanelErr = errRuntimeGone
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	proj := tabProject()
 	proj.Targets[0].Runtime.Tabs, proj.Targets[0].Runtime.Launch = nil, []string{"zsh"}
 
@@ -106,7 +106,7 @@ func TestATabThatCannotBeFocusedInTheWorkspaceItOpenedReportsTheWorkspace(t *tes
 func TestATabThatCannotBeFocusedInAnOpenWorkspaceReportsNothing(t *testing.T) {
 	rt, wm, _ := tabHosts(t)
 	rt.FocusPanelErr = errRuntimeGone
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 
 	res, err := press(context.Background(), c, prepared(t, tabProject()), "tickets")
 	if !errors.Is(err, errRuntimeGone) {
@@ -125,7 +125,7 @@ func TestATabThatCannotBeFocusedInAnOpenWorkspaceReportsNothing(t *testing.T) {
 // tab is still the one showing.
 func TestAReturnHomeFromATabThatCannotBeFocusedIsAFailure(t *testing.T) {
 	rt, wm, osw := tabHosts(t)
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 	p := prepared(t, tabProject())
 	if _, err := press(context.Background(), c, p, "tickets"); err != nil {
 		t.Fatalf("Go: %v", err)
@@ -152,7 +152,7 @@ func restoreWithAgentTabs(t *testing.T, fail func(*hosttest.FakeRuntime)) (core.
 	t.Helper()
 	rt := hosttest.NewRuntime("rt")
 	fail(rt)
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 	res, err := pressResuming(context.Background(), c, prepared(t, agentProject()), "home", []core.Resume{
 		{Harness: "claude", Session: "declared"},
 		{Harness: "claude", Session: "second"},
@@ -249,6 +249,7 @@ func TestANewAgentThatCannotBeFocusedIsStillAdded(t *testing.T) {
 func TestANewAgentWhoseCommandEndedBesideItsShellIsStillAdded(t *testing.T) {
 	c, rt, p, _ := openWorkspace(t)
 	c.Runtime = endingTab{rt}
+	c.View = endingTab{rt}
 
 	outcome, err := newAgent(t, c, p, "home", core.Resume{})
 	if !errors.Is(err, errPaneGone) {
@@ -263,7 +264,7 @@ func TestANewAgentWhoseCommandEndedBesideItsShellIsStillAdded(t *testing.T) {
 // runs, and the error says the shell exited.
 func TestANewShellWhoseShellEndedBeforeItsFocusSaysItExited(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: endingTab{rt}}
+	c := &core.Core{Runtime: endingTab{rt}, View: endingTab{rt}}
 	rt.Add("notes:revier", "")
 	w, err := c.AgentWorkspace(context.Background(), prepared(t, agentProject()), "notes")
 	if err != nil {
@@ -282,8 +283,8 @@ func TestANewShellWhoseShellEndedBeforeItsFocusSaysItExited(t *testing.T) {
 var errPaneGone = errors.New("can't find pane")
 
 // endingTab is a runtime whose tab commands exit as soon as they start, as
-// `true` does on tmux: the tab's panel is gone when the core focuses it, and
-// the focus fails.
+// `true` does: the tab's panel is gone when the core focuses it, and the
+// focus fails.
 type endingTab struct{ *hosttest.FakeRuntime }
 
 func (e endingTab) FocusPanel(ctx context.Context, ref revier.TargetRef, panel revier.PanelID) error {
@@ -295,15 +296,15 @@ func (e endingTab) FocusPanel(ctx context.Context, ref revier.TargetRef, panel r
 // exited, under the tab's opening: the focus failure names neither the panel
 // nor its command.
 func TestATabWhoseCommandEndedBeforeItsFocusSaysItExited(t *testing.T) {
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	rt.Add("session:revier", "", revier.Panel{ID: "1", Kind: revier.PanelTool})
-	c := &core.Core{Runtime: endingTab{rt}}
+	c := &core.Core{Runtime: endingTab{rt}, View: endingTab{rt}}
 	proj := tabProject()
 	proj.Targets = append(proj.Targets, revier.Target{Name: "quick", Runtime: &revier.Realization{
 		Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelTool, Command: []string{"true"}}}}})
 
 	_, err := press(context.Background(), c, prepared(t, proj), "quick")
-	want := `tmux: open tab quick: the tool panel's command "true" exited as soon as it started`
+	want := `hc: open tab quick: the tool panel's command "true" exited as soon as it started`
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
 	}
@@ -313,7 +314,7 @@ func TestATabWhoseCommandEndedBeforeItsFocusSaysItExited(t *testing.T) {
 // runtime whose home already holds that tab, as panel "2".
 func quickTab(t *testing.T) (*hosttest.FakeRuntime, core.Project) {
 	t.Helper()
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	rt.Add("session:revier", "",
 		revier.Panel{ID: "1", Kind: revier.PanelTool, Tab: "t1"},
 		revier.Panel{ID: "2", Kind: revier.PanelTool, Tab: "t2", Vars: map[string]string{core.PanelTargetVar: "quick"}})
@@ -339,7 +340,7 @@ func (e endedOnce) FocusPanel(ctx context.Context, ref revier.TargetRef, panel r
 // the same press: a press on a tab that is not there opens it.
 func TestATabThatEndsBeforeItsFocusOpensAgain(t *testing.T) {
 	rt, p := quickTab(t)
-	c := &core.Core{Runtime: endedOnce{rt}}
+	c := &core.Core{Runtime: endedOnce{rt}, View: endedOnce{rt}}
 
 	res, err := press(context.Background(), c, p, "quick")
 	if err != nil {
@@ -354,10 +355,10 @@ func TestATabThatEndsBeforeItsFocusOpensAgain(t *testing.T) {
 // command as exited, not the focus of the tab that was there.
 func TestATabThatEndsBeforeItsFocusAndAgainSaysItExited(t *testing.T) {
 	rt, p := quickTab(t)
-	c := &core.Core{Runtime: endingTab{rt}}
+	c := &core.Core{Runtime: endingTab{rt}, View: endingTab{rt}}
 
 	_, err := press(context.Background(), c, p, "quick")
-	want := `tmux: open tab quick: the tool panel's command "true" exited as soon as it started`
+	want := `hc: open tab quick: the tool panel's command "true" exited as soon as it started`
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
 	}
@@ -368,7 +369,7 @@ func TestATabThatEndsBeforeItsFocusAndAgainSaysItExited(t *testing.T) {
 func TestATabThatStaysButCannotBeFocusedKeepsItsError(t *testing.T) {
 	rt, p := quickTab(t)
 	rt.FocusPanelErr = errPaneGone
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 
 	_, err := press(context.Background(), c, p, "quick")
 	if err == nil || !errors.Is(err, errPaneGone) || !strings.Contains(err.Error(), "focus tab quick") {
@@ -383,7 +384,7 @@ func TestATabThatStaysButCannotBeFocusedKeepsItsError(t *testing.T) {
 // second. The first pass focused the instance, so the press made again would
 // read as one made on the tab, which goes home: it does not.
 func TestATabThatLosesItsFirstPanelAtItsFocusLandsOnTheRest(t *testing.T) {
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	ref := rt.Add("session:revier", "",
 		revier.Panel{ID: "1", Kind: revier.PanelTool, Tab: "t1"},
 		revier.Panel{ID: "2", Kind: revier.PanelTool, Tab: "t2", Vars: map[string]string{core.PanelTargetVar: "quick"}},
@@ -397,7 +398,7 @@ func TestATabThatLosesItsFirstPanelAtItsFocusLandsOnTheRest(t *testing.T) {
 		Inside: "home", Panels: []revier.PanelSpec{
 			{Kind: revier.PanelTool, Command: []string{"true"}},
 			{Kind: revier.PanelShell}}}})
-	c := &core.Core{Runtime: endedOnce{rt}}
+	c := &core.Core{Runtime: endedOnce{rt}, View: endedOnce{rt}}
 
 	res, err := press(context.Background(), c, prepared(t, proj), "quick")
 	if err != nil {
@@ -414,7 +415,7 @@ func TestATabThatLosesItsFirstPanelAtItsFocusLandsOnTheRest(t *testing.T) {
 func TestAPlainTabWhoseShellEndedBeforeItsFocusSaysItExited(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.Add("a kitty window of no project", "", revier.Panel{ID: "9"})
-	c := &core.Core{Runtime: endingTab{rt}}
+	c := &core.Core{Runtime: endingTab{rt}, View: endingTab{rt}}
 
 	_, err := c.PlaceTab(context.Background(), nil, core.TabRequest{Kind: revier.PanelShell, Panel: "9", Outside: core.OutsideKey{Outside: core.OutsideTab}})
 	want := `kitty: plain tab: the shell panel's shell exited as soon as it started`
@@ -429,7 +430,7 @@ func TestAPlainTabWhoseFocusFailsWhileItsShellRunsReportsTheFocus(t *testing.T) 
 	rt := hosttest.NewRuntime("kitty")
 	rt.Add("a kitty window of no project", "", revier.Panel{ID: "9"})
 	rt.FocusPanelErr = errRuntimeGone
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 
 	_, err := c.PlaceTab(context.Background(), nil, core.TabRequest{Kind: revier.PanelShell, Panel: "9", Outside: core.OutsideKey{Outside: core.OutsideTab}})
 	if !errors.Is(err, errRuntimeGone) || !strings.Contains(err.Error(), "focus the plain tab") {
@@ -440,9 +441,9 @@ func TestAPlainTabWhoseFocusFailsWhileItsShellRunsReportsTheFocus(t *testing.T) 
 // A tab of two panels whose first command exited still holds the second, so
 // it opened: the focus failure stands, and the tab is not called gone.
 func TestATabWhoseFirstCommandEndedBesideAnotherReportsTheFocus(t *testing.T) {
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	rt.Add("session:revier", "", revier.Panel{ID: "1", Kind: revier.PanelTool})
-	c := &core.Core{Runtime: endingTab{rt}}
+	c := &core.Core{Runtime: endingTab{rt}, View: endingTab{rt}}
 	proj := tabProject()
 	proj.Targets = append(proj.Targets, revier.Target{Name: "quick", Runtime: &revier.Realization{
 		Inside: "home", Panels: []revier.PanelSpec{
@@ -462,7 +463,7 @@ func TestAnAgentWhoseTabCannotBeFocusedIsNotRaised(t *testing.T) {
 	workspace := rt.Add("session:revier", "kitty", shellPanel("1"), agentPanel("2", "idle"))
 	wm := hosttest.New("wm")
 	wm.AddInstance(revier.Instance{Title: "session:revier", Class: "kitty", PID: 1001})
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 	rt.FocusPanelErr = errRuntimeGone
 
 	err := c.FocusAgent(context.Background(), "revier", revier.AgentView{Ref: workspace, Panel: "2"})
@@ -474,52 +475,13 @@ func TestAnAgentWhoseTabCannotBeFocusedIsNotRaised(t *testing.T) {
 	}
 }
 
-// The second press of the popup's key is typed into the popup. When the
-// typing fails the press is what it was before the popup had a second list:
-// the popup, raised.
-func TestAPopupThatCannotBeTypedIntoIsRaised(t *testing.T) {
-	wm := hosttest.New("wm")
-	open := wm.Add("revier", core.PopupClass)
-	wm.SetFocus(open)
-	rt := hosttest.NewRuntime("rt")
-	rt.Add("revier", core.PopupClass, revier.Panel{ID: "9"})
-	rt.SendErr = errRuntimeGone
-	c := &core.Core{Window: wm, Runtime: rt}
-
-	ref, err := c.Popup(context.Background(), popupArgv)
-	if err != nil || ref != open {
-		t.Fatalf("Popup = %v, %v; want the open popup and no error", ref, err)
-	}
-	if !slices.Equal(wm.Focuses, []revier.TargetRef{open}) || len(wm.Opened) != 0 {
-		t.Errorf("focuses = %v, opened = %v; want the popup raised and none opened", wm.Focuses, wm.Opened)
-	}
-}
-
-// A terminal whose current panel cannot be read is not taken for a surface:
-// nothing is typed into it, and the popup opens.
-func TestATerminalWhoseCurrentPanelCannotBeReadIsNoSurface(t *testing.T) {
-	wm, rt, _, _ := surfaceTerminal(
-		revier.Panel{ID: "1", Command: []string{"zsh"}},
-		revier.Panel{ID: "2", Command: []string{"revier"}})
-	wm.Workarea = 5120
-	rt.FocusedPanelErr = errRuntimeGone
-	c := &core.Core{Window: wm, Runtime: rt}
-
-	if _, err := c.Popup(context.Background(), popupArgv); err != nil {
-		t.Fatalf("Popup: %v", err)
-	}
-	if len(rt.Sent) != 0 || len(wm.Opened) != 1 {
-		t.Errorf("sent = %+v, opened = %v; want nothing typed and the popup launched", rt.Sent, wm.Opened)
-	}
-}
-
 // The surface's press of an agent: its tab is made current, the press is one
 // agent event, and nothing is written to the ledger.
 func TestActivateAgentWaitingFocusesTheAgentAndWritesNothing(t *testing.T) {
 	recorded := recording(t)
 	rt := hosttest.NewRuntime("rt")
 	ref := rt.Add("diff:revier", "kitty", shellPanel("1"), agentPanel("2", "idle"))
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	a := revier.AgentView{Panel: "2", Ref: ref, State: revier.AgentState{Harness: "agent", Session: "abc"}}
 	l := pendingLaunch("revier", "home")
 
@@ -548,7 +510,7 @@ func TestActivateAgentWaitingFocusesTheAgentAndWritesNothing(t *testing.T) {
 func TestActivateAgentWaitingLeavesALinkThatIsComingUp(t *testing.T) {
 	recorded := recording(t)
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Machine: "box"}
+	c := &core.Core{Runtime: rt, View: rt, Machine: "box"}
 	a := revier.AgentView{Panel: "9", Ref: revier.TargetRef{Host: "rt", ID: "1"}, State: revier.AgentState{Harness: "claude"}}
 
 	c.Ledger = pendingLaunch("far", "home")
@@ -570,7 +532,7 @@ func TestActivateAgentWaitingLeavesALinkThatIsComingUp(t *testing.T) {
 func TestActivateAgentWaitingFindsALinksWorkspaceByItsBinding(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	ref := rt.Add("renamed", "kitty", agentPanel("9", "idle"))
-	c := &core.Core{Runtime: rt, Machine: "box"}
+	c := &core.Core{Runtime: rt, View: rt, Machine: "box"}
 	a := revier.AgentView{Panel: "9", Ref: ref, State: revier.AgentState{Harness: "claude"}}
 	l := bindings("far", core.Bindings{"home": ref})
 	l.st.Launch = &state.Launch{Project: "far", Target: "home", At: time.Now()}
@@ -591,7 +553,7 @@ func TestActivateAgentWaitingRecordsNoEventForAFailure(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	ref := rt.Add("session:revier", "kitty", agentPanel("1", "idle"))
 	rt.FocusPanelErr = errRuntimeGone
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	a := revier.AgentView{Panel: "1", Ref: ref, State: revier.AgentState{Harness: "agent"}}
 
 	c.Ledger = &ledger{}

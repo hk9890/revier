@@ -44,7 +44,7 @@ func lastPanelFocus(t *testing.T, rt *hosttest.FakeRuntime) revier.PanelID {
 // after it. The active tab has the focus and the home mark.
 func TestAWorkspaceOpensWithTheTabsItListsAndTheActiveOneCurrent(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 
 	res, err := press(context.Background(), c, prepared(t, listedTabsProject("agent")), "home")
 	if err != nil {
@@ -84,7 +84,7 @@ func TestAWorkspaceEndsOnItsFirstTabWhenThatIsActiveOrNoneIs(t *testing.T) {
 	for _, active := range []revier.TargetName{"tickets", ""} {
 		t.Run("active="+string(active), func(t *testing.T) {
 			rt := hosttest.NewRuntime("kitty")
-			c := &core.Core{Runtime: rt}
+			c := &core.Core{Runtime: rt, View: rt}
 
 			res, err := press(context.Background(), c, prepared(t, listedTabsProject(active)), "home")
 			if err != nil {
@@ -105,7 +105,7 @@ func TestAWorkspaceEndsOnItsFirstTabWhenThatIsActiveOrNoneIs(t *testing.T) {
 // The second press goes home, which is the active tab.
 func TestAPressOnAListedTabOfAClosedWorkspaceEndsOnThatTab(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	p := prepared(t, listedTabsProject("agent"))
 
 	res, err := press(context.Background(), c, p, "tickets")
@@ -141,7 +141,7 @@ func TestAPressOnAListedTabOfAClosedWorkspaceEndsOnThatTab(t *testing.T) {
 // instance. An active tab that was skipped leaves the first opened tab active.
 func TestAListedTabThatIsRefusedIsSkipped(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	p := prepared(t, listedTabsProject("tickets"))
 	p.Refuse(1, errors.New("tickets is refused"))
 
@@ -183,7 +183,7 @@ func (f *failingTabs) OpenTab(ctx context.Context, ref revier.TargetRef, r revie
 // opens no second one.
 func TestAListedTabThatDoesNotOpenStopsTheRestAndTheWorkspaceIsKept(t *testing.T) {
 	rt := &failingTabs{FakeRuntime: hosttest.NewRuntime("kitty"), failAt: 1}
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	project := listedTabsProject("agent")
 	project.Targets[0].Runtime.Tabs = append(project.Targets[0].Runtime.Tabs, "logs")
 	project.Targets = append(project.Targets, revier.Target{Name: "logs", Runtime: &revier.Realization{
@@ -224,7 +224,7 @@ func TestAListedTabThatDoesNotOpenStopsTheRestAndTheWorkspaceIsKept(t *testing.T
 // the key.
 func TestARuntimeWithoutTabsRefusesATargetThatListsTabs(t *testing.T) {
 	rt := hosttest.NewRuntime("plain")
-	c := &core.Core{Runtime: bareRuntime{rt}}
+	c := &core.Core{Runtime: bareRuntime{rt}, View: bareView{rt}}
 
 	_, err := press(context.Background(), c, prepared(t, listedTabsProject("agent")), "home")
 	if !errors.Is(err, core.ErrNoTabs) {
@@ -245,7 +245,7 @@ func TestARuntimeWithoutTabsRefusesATargetThatListsTabs(t *testing.T) {
 func TestAnOpenWorkspaceIsNotChangedByTheTabsItsTargetLists(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	ref := rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool})
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 
 	res, err := press(context.Background(), c, prepared(t, listedTabsProject("agent")), "home")
 	if err != nil {
@@ -275,7 +275,7 @@ func TestATabThatCreatedTheWorkspaceIsFoundWithoutItsMark(t *testing.T) {
 	for _, key := range []revier.TargetName{"home", "tickets"} {
 		t.Run(string(key), func(t *testing.T) {
 			rt := hosttest.NewRuntime("kitty")
-			c := &core.Core{Runtime: unmarkedOpen{rt}}
+			c := &core.Core{Runtime: unmarkedOpen{rt}, View: unmarkedOpen{rt}}
 			active := revier.TargetName("tickets")
 			if key == "tickets" {
 				active = "agent"
@@ -321,7 +321,7 @@ func (f firstUnmarked) Instances(ctx context.Context) ([]revier.Instance, error)
 // shell beside it.
 func TestATabThatCreatedTheWorkspaceStartsAtItsFirstPanelWhenThatLostItsMark(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
-	c := &core.Core{Runtime: firstUnmarked{rt}}
+	c := &core.Core{Runtime: firstUnmarked{rt}, View: firstUnmarked{rt}}
 	project := listedTabsProject("agent")
 	project.Targets[0].Runtime.Tabs = []revier.TargetName{"agent", "tickets"}
 
@@ -357,7 +357,7 @@ func TestARestorePlanHasNoStepForAListedTab(t *testing.T) {
 // it. A tab the target does not list keeps its step.
 func TestASaveRecordsNoStepForAListedTab(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	project := listedTabsProject("agent")
 	project.Targets = append(project.Targets, revier.Target{Name: "logs", Runtime: &revier.Realization{
 		Inside: "home", Launch: []string{"tail", "-f", "log"}}})
@@ -410,7 +410,7 @@ func markedPanels(t *testing.T, rt *hosttest.FakeRuntime, name revier.TargetName
 // opens no second one (decisions.md D64).
 func TestATabIsFoundAfterItsFirstPanelHasEnded(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	p := prepared(t, listedTabsProject("tickets"))
 	res, err := press(context.Background(), c, p, "home")
 	if err != nil {
@@ -440,7 +440,7 @@ func TestATabIsFoundAfterItsFirstPanelHasEnded(t *testing.T) {
 // first.
 func TestAPressOnATabGoesHomeFromItsSecondPanel(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	p := prepared(t, listedTabsProject("tickets"))
 	res, err := press(context.Background(), c, p, "home")
 	if err != nil {
@@ -472,7 +472,7 @@ func TestAPressOnATabGoesHomeFromItsSecondPanel(t *testing.T) {
 func openListedTabs(t *testing.T) (*core.Core, *hosttest.FakeRuntime, core.Project, revier.TargetRef) {
 	t.Helper()
 	rt := hosttest.NewRuntime("kitty")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 	p := prepared(t, listedTabsProject("agent"))
 	res, err := press(context.Background(), c, p, "home")
 	if err != nil {
@@ -571,7 +571,7 @@ func savedListedTabs(t *testing.T, dir string) (session.Session, core.SessionGap
 		inTab(agent("4", "by-hand", dir), "t3", nil),
 		inTab(revier.Panel{ID: "5", Kind: revier.PanelShell, Title: "zsh"}, "t3", nil),
 	)
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 	return c.Session(context.Background(), survey(t, c, []core.Project{prepared(t, listedTabsProject("agent"))}, nil))
 }
 
@@ -580,7 +580,7 @@ func savedListedTabs(t *testing.T, dir string) (session.Session, core.SessionGap
 func restoredInto(t *testing.T, project revier.Project, s session.Session) (*hosttest.FakeRuntime, core.Restored) {
 	t.Helper()
 	rt := hosttest.NewRuntime("kitty")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}, Ledger: &ledger{}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}, Ledger: &ledger{}}
 	projects := []core.Project{prepared(t, project)}
 	report := survey(t, c, projects, nil)
 	preview := c.RestorePreview(s, report, projects)
@@ -688,7 +688,7 @@ func TestASessionOfListedTabsRestoresIntoAWorkspaceThatListsTheAgentTabAlone(t *
 // fails: it started.
 func TestAnAgentOfAnOpenedTabIsReportedWhenALaterTabFails(t *testing.T) {
 	rt := &failingTabs{FakeRuntime: hosttest.NewRuntime("kitty"), failAt: 1}
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 	project := listedTabsProject("agent")
 	project.Targets[0].Runtime.Tabs = []revier.TargetName{"agent", "tickets"}
 
@@ -708,7 +708,7 @@ func TestAnAgentOfAnOpenedTabIsReportedWhenALaterTabFails(t *testing.T) {
 // the tab that carries the home mark.
 func TestShutdownAgentsKeepsTheShellOfTheTabWithTheHomeMark(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
 	projects := []core.Project{prepared(t, listedTabsProject("agent"))}
 	if _, err := press(context.Background(), c, projects[0], "home"); err != nil {
 		t.Fatalf("Go: %v", err)
@@ -779,7 +779,7 @@ func TestAnActiveTabOpenedAgainByItsKeyHasTheHomeMark(t *testing.T) {
 // alone: one tab of an instance is home.
 func TestATabOpenedByItsKeyBesideTheHomeMarkHasItsOwnMarkAlone(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	p := prepared(t, listedTabsProject("tickets"))
 	res, err := press(context.Background(), c, p, "home")
 	if err != nil {
@@ -798,7 +798,7 @@ func TestATabOpenedByItsKeyBesideTheHomeMarkHasItsOwnMarkAlone(t *testing.T) {
 // The dry run of a restore refuses what the launch refuses: on a runtime with
 // no tabs a target that lists tabs starts no agent, so it reports none.
 func TestTheDryRunReportsNoAgentForATargetTheRuntimeCannotOpen(t *testing.T) {
-	c := &core.Core{Runtime: bareRuntime{hosttest.NewRuntime("plain")}, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: bareRuntime{hosttest.NewRuntime("plain")}, View: bareView{hosttest.NewRuntime("plain")}, Probes: []revier.AgentProbe{resumable()}}
 
 	got := c.Resumes(prepared(t, listedTabsProject("agent")), "home", []core.Resume{{Harness: "claude", Session: "abc"}})
 	if len(got) != 0 {
@@ -812,7 +812,7 @@ func savedWith(t *testing.T, project revier.Project, panels ...revier.Panel) (se
 	t.Helper()
 	rt := hosttest.NewRuntime("kitty")
 	rt.Add("session:revier", "kitty", panels...)
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 	s, gaps := c.Session(context.Background(), survey(t, c, []core.Project{prepared(t, project)}, nil))
 	if len(s.Projects) != 1 {
 		t.Fatalf("session = %+v, want one project", s.Projects)
@@ -896,7 +896,7 @@ func twoAgentTabsProject() revier.Project {
 // tab and a served agent copy that one.
 func TestTheAgentPanelOfAWorkspaceIsTheOneOfItsFirstListedTab(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 	p := prepared(t, twoAgentTabsProject())
 	if _, err := press(context.Background(), c, p, "home"); err != nil {
 		t.Fatalf("Go: %v", err)
@@ -922,7 +922,7 @@ func TestTheAgentPanelOfAWorkspaceIsTheOneOfItsFirstListedTab(t *testing.T) {
 // tabs in the order of the tabs: the first conversation is in the first tab.
 func TestARestoreLaysTheAgentsOverTheListedTabsInTheirOrder(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 
 	res, err := pressResuming(context.Background(), c, prepared(t, twoAgentTabsProject()), "home", []core.Resume{
 		{Harness: "claude", Session: "one"}, {Harness: "claude", Session: "two"},

@@ -49,9 +49,7 @@ usage:
   <key>      esc, enter, tab, shift+tab, space, backspace, up, down, left,
              right, ctrl+c, or one character
   --panel    the open workspace that holds this panel; kitty's
-             @active-kitty-window-id is the window a key was pressed in,
-             and tmux's #{pane_id} the pane, which takes tmux as the
-             runtime wherever the runtime list names it before none
+             @active-kitty-window-id is the window a key was pressed in
   --agent    with exec, run this named agent, not the default agent
   --resume   start the agent on this conversation
   --dir      start the agent and its shell here, not in the project;
@@ -116,7 +114,7 @@ lands on whatever the panel shows.
 var errWaitTimeout = errors.New("timed out")
 
 // promptWait bounds `revier agent prompt` from the host probe to the watch
-// for the turn to start. A wedged tmux would otherwise hold it for good. A
+// for the turn to start. A wedged runtime would otherwise hold it for good. A
 // variable, so a test need not wait this long for it.
 var promptWait = commandWait
 
@@ -484,7 +482,7 @@ func cmdAgentNew(out io.Writer, args []string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), commandWait)
 	defer cancel()
-	a, err := newAppAt(ctx, out, *panel)
+	a, err := newApp(ctx, out)
 	if err != nil {
 		return err
 	}

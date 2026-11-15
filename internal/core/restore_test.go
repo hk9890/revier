@@ -21,7 +21,7 @@ import (
 func TestRestoreOpensOnlyWhatIsNotUp(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	s := session.Session{Projects: []session.Project{{Name: "revier", Targets: []session.Target{
 		{Name: "home"}, {Name: "notes"},
 	}}}}
@@ -76,7 +76,7 @@ func TestARestoreRecordsEachStepAndItsAgents(t *testing.T) {
 func TestAFailedStepDoesNotStopTheRestore(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.OpenErr = errors.New("no socket")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	s := session.Session{Projects: []session.Project{{Name: "revier", Targets: []session.Target{
 		{Name: "home"}, {Name: "notes"},
 	}}}}
@@ -118,7 +118,7 @@ func TestARestoreStepDoesNotRaiseTheWindowItBinds(t *testing.T) {
 	home := rt.Add("session:revier", "kitty")
 	wm := hosttest.New("wm")
 	wm.Detached = true
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 	s := session.Session{Current: "revier", Projects: []session.Project{{Name: "revier", Targets: []session.Target{{Name: "editor"}}}}}
 
 	out, _, back := restoreOf(t, c, s)
@@ -147,7 +147,7 @@ func TestARestoreStepDoesNotRaiseTheTerminalWindowItOpens(t *testing.T) {
 	rt.OnOpen = func(revier.Realization) {
 		wm.AddInstance(revier.Instance{Title: "notes:revier", Class: "kitty", PID: 1002})
 	}
-	c := &core.Core{Runtime: rt, Window: wm}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm}
 	s := session.Session{Current: "revier", Projects: []session.Project{{Name: "revier", Targets: []session.Target{{Name: "notes"}}}}}
 
 	out, _, back := restoreOf(t, c, s)
@@ -163,7 +163,7 @@ func TestARestoreStepDoesNotRaiseTheTerminalWindowItOpens(t *testing.T) {
 func TestRestoreEndsOnTheSavedCurrentProject(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	home := rt.Add("session:revier", "kitty")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	s := session.Session{Current: "revier", Projects: []session.Project{{Name: "revier", Targets: []session.Target{
 		{Name: "notes"},
 	}}}}
@@ -179,7 +179,7 @@ func TestRestoreEndsOnTheSavedCurrentProject(t *testing.T) {
 // A preview says what a restore would do and does none of it.
 func TestRestorePreviewOpensNothing(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{resumable()}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable()}}
 	projects := []core.Project{prepared(t, agentProject())}
 	report, err := c.Survey(context.Background(), projects)
 	if err != nil {
@@ -244,7 +244,7 @@ func TestSessionGapsNotesEveryGap(t *testing.T) {
 // restore launches nothing its plan did not show.
 func TestRestoreDoesNotLaunchACurrentHomeItDidNotRecord(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	s := session.Session{Current: "revier", Projects: []session.Project{{Name: "revier", Targets: []session.Target{
 		{Name: "notes"},
 	}}}}

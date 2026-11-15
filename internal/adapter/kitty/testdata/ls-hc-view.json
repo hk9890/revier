@@ -1,0 +1,118 @@
+[
+  {
+    "id": 1,
+    "wm_name": "revier-kitty",
+    "wm_class": "kitty",
+    "is_active": false,
+    "is_focused": false,
+    "platform_window_id": null,
+    "tabs": [
+      {
+        "id": 1,
+        "title": "sleep",
+        "title_overridden": false,
+        "is_active": true,
+        "layout": "fat",
+        "windows": [
+          {
+            "id": 1,
+            "pid": 6001,
+            "title": "sleep",
+            "cwd": "/home/user",
+            "is_active": true,
+            "is_focused": false,
+            "user_vars": {},
+            "foreground_processes": [
+              {"pid": 6001, "cmdline": ["sleep", "infinity"], "cwd": "/home/user"}
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "wm_name": "session:demo",
+    "wm_class": "kitty",
+    "is_active": true,
+    "is_focused": true,
+    "platform_window_id": null,
+    "tabs": [
+      {
+        "id": 2,
+        "title": "taskmgr-ui",
+        "title_overridden": false,
+        "is_active": false,
+        "layout": "fat",
+        "windows": [
+          {
+            "id": 2,
+            "pid": 6010,
+            "title": "taskmgr-ui",
+            "cwd": "/home/user",
+            "is_active": true,
+            "is_focused": false,
+            "user_vars": {"REVIER_VIEW_PANEL": "t1", "REVIER_VIEW_INSTANCE": "core1/0a1b2c3d4e5f6a7b"},
+            "foreground_processes": [
+              {"pid": 6010, "cmdline": ["/home/user/.local/bin/hc", "attach", "t1"], "cwd": "/home/user"}
+            ]
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "✳ Claude Code",
+        "title_overridden": false,
+        "is_active": true,
+        "layout": "fat",
+        "windows": [
+          {
+            "id": 3,
+            "pid": 6020,
+            "title": "✳ Claude Code",
+            "cwd": "/home/user",
+            "is_active": true,
+            "is_focused": true,
+            "user_vars": {"REVIER_VIEW_PANEL": "t2", "REVIER_VIEW_INSTANCE": "core1/0a1b2c3d4e5f6a7b"},
+            "foreground_processes": [
+              {"pid": 6020, "cmdline": ["/home/user/.local/bin/hc", "attach", "t2"], "cwd": "/home/user"}
+            ]
+          },
+          {
+            "id": 4,
+            "pid": 6030,
+            "title": "zsh",
+            "cwd": "/home/user",
+            "is_active": false,
+            "is_focused": false,
+            "user_vars": {"REVIER_VIEW_PANEL": "t3", "REVIER_VIEW_INSTANCE": "core1/0a1b2c3d4e5f6a7b"},
+            "foreground_processes": [
+              {"pid": 6030, "cmdline": ["/home/user/.local/bin/hc", "attach", "t3"], "cwd": "/home/user"}
+            ]
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "zsh",
+        "title_overridden": false,
+        "is_active": false,
+        "layout": "fat",
+        "windows": [
+          {
+            "id": 6,
+            "pid": 6040,
+            "title": "zsh",
+            "cwd": "/home/user/dev/demo",
+            "is_active": true,
+            "is_focused": false,
+            "user_vars": {},
+            "foreground_processes": [
+              {"pid": 6040, "cmdline": ["/usr/bin/zsh"], "cwd": "/home/user/dev/demo"}
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

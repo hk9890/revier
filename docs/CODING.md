@@ -51,17 +51,16 @@ Concretely, an adapter never: compiles a `Match`, reads `Target`, `Project`, or
 
 **`Open` must produce an instance that the same realization's `Match` finds.**
 Otherwise every keypress opens another copy. `Realization.Name` exists for hosts
-that assign their own identity — a tmux session name, a browser `--class`. See
-`internal/adapter/tmux.Host.Open`. A command target has no `Open` and no
-`Match`: its command does the run-or-raise, and the core runs it through
-`Core.Run` (`docs/design/decisions.md` D166).
+that assign their own identity — an hc instance's name label, a browser
+`--class`. See `internal/adapter/hc.Host.Open`. A command target has no `Open`
+and no `Match`: its command does the run-or-raise, and the core runs it
+through `Core.Run` (`docs/design/decisions.md` D166).
 
 **`Instances` must cost the same whatever the project count.** It runs on every
 TUI refresh, and this repository expects roughly ninety projects.
 
-- Query in bulk: `tmux list-panes -a`, `kitten @ ls`, `wctl list --json`.
-- A constant number of calls is fine. tmux needs two, because its format output
-  carries one free-text field per line.
+- Query in bulk: hc's `terminal.list`, `kitten @ ls`, `wctl list --json`.
+- A constant number of calls is fine.
 - Calls that scale with something else are fine. kitty issues one `ls` per
   kitty process, concurrently, because each process has its own socket.
 - One call per project is not.

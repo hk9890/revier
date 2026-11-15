@@ -34,10 +34,10 @@ func press(t *testing.T, c *core.Core, p core.Project, root string, name revier.
 // home window would be where the diff key lands from then on: every later
 // press would find home through the binding and toggle back to it again.
 func TestAToggleBackPinsHomeNotThePressedTarget(t *testing.T) {
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	homeRef := rt.Add("home", "")
 	diffRef := rt.Add("diff", "")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	p, root := demoProject(t), t.TempDir()
 
 	rt.SetFocus(diffRef)
@@ -54,7 +54,7 @@ func TestAToggleBackPinsHomeNotThePressedTarget(t *testing.T) {
 func TestAWindowThatCouldNotBeFocusedIsStillPinned(t *testing.T) {
 	wm := hosttest.New("gnome")
 	wm.FocusErr = errors.New("no such window")
-	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Window: wm}
+	c := &core.Core{Runtime: hosttest.NewRuntime("hc"), Window: wm}
 	p, root := demoProject(t), t.TempDir()
 	st, err := state.Load(root)
 	if err != nil {
@@ -80,7 +80,7 @@ func TestAWindowThatCouldNotBeFocusedIsStillPinned(t *testing.T) {
 // launch necessary.
 func TestASecondPressDuringALaunchReportsItComingUp(t *testing.T) {
 	wm := hosttest.NewLateWindows("gnome")
-	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Window: wm}
+	c := &core.Core{Runtime: hosttest.NewRuntime("hc"), Window: wm}
 	p, root := demoProject(t), t.TempDir()
 	st := &state.State{Launch: &state.Launch{Project: "demo", Target: "editor", At: time.Now().Add(-3 * time.Second)}}
 	st.Bind("demo", "editor", revier.TargetRef{Host: "gnome", ID: "99"}) // a window closed since
@@ -100,7 +100,7 @@ func TestASecondPressDuringALaunchReportsItComingUp(t *testing.T) {
 // file: the state saved is the state pruned, not a fresh copy from disk.
 func TestListSavesItsPrune(t *testing.T) {
 	wm := hosttest.New("gnome")
-	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Window: wm}
+	c := &core.Core{Runtime: hosttest.NewRuntime("hc"), Window: wm}
 	p, root := demoProject(t), t.TempDir()
 	gone := revier.TargetRef{Host: "gnome", ID: "99"}
 	st := &state.State{}
@@ -131,7 +131,7 @@ func TestListSavesItsPrune(t *testing.T) {
 func TestListJSONCarriesAttachments(t *testing.T) {
 	wm := hosttest.New("gnome")
 	stray := wm.Add("Pull requests", "chromium")
-	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Window: wm}
+	c := &core.Core{Runtime: hosttest.NewRuntime("hc"), Window: wm}
 	p, root := demoProject(t), t.TempDir()
 	st := &state.State{}
 	st.Attach("demo", stray)

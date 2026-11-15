@@ -26,16 +26,16 @@ command left it. See [Which kind to declare](#which-kind-to-declare).
 
 revier drives two kinds of program, called hosts:
 
-- **The runtime host** runs terminals: kitty or tmux, or the experimental
-  hc. It opens the workspace and its tabs, and lets a probe read each panel.
+- **The runtime host** runs terminals: kitty, or the experimental hc. It
+  opens the workspace and its tabs, and lets a probe read each panel.
 - **The window host** manages desktop windows: GNOME, through `wctl`. It opens
   and raises window targets, and tells which window has the focus.
 
-revier uses the first host of each kind it finds: kitty, then tmux, and GNOME
-([Hosts](configuration.md#hosts)). There is no daemon: each keypress is one
+revier uses kitty as the runtime host and GNOME as the window host when it
+finds them ([Hosts](configuration.md#hosts)). There is no daemon: each keypress is one
 revier process.
 
-A missing host costs only the targets that need it. Over ssh with tmux and no
+A missing host costs only the targets that need it. Over ssh with hc and no
 desktop, every target with a runtime part works, and window-only targets do
 not. In the same way, a configuration mistake costs only one target or one
 project; `revier doctor` shows it ([Mistakes](configuration.md#mistakes)).
@@ -122,8 +122,8 @@ The fields of each kind are in [Targets](configuration.md#targets) and
 ## Home, tabs and panels
 
 Each project has one home target: the workspace you return to. In kitty it is
-an OS window. In tmux it is a session. A workspace holds tabs, and a tab
-holds panels. A panel is one pane: an agent, a shell or another tool.
+an OS window. In hc it is a set of terminals, which kitty shows as one OS
+window. A workspace holds tabs, and a tab holds panels. A panel is one pane: an agent, a shell or another tool.
 
 ## Agents
 

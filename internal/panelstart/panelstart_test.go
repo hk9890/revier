@@ -14,19 +14,19 @@ import (
 
 // A program not on PATH is refused by the panel's kind and its program; a
 // shell, and a program named by a path, are left to the runtime.
-func TestStartableRefusesAProgramNotOnPATH(t *testing.T) {
-	testenv.NoTools(t)
+func TestCommandsOnRefusesAProgramNotOnPATH(t *testing.T) {
+	path := t.TempDir()
 
 	shell := revier.PanelSpec{Kind: revier.PanelShell}
 	byPath := revier.PanelSpec{Kind: revier.PanelTool, Command: []string{"./missing"}}
-	if err := panelstart.Startable([]revier.PanelSpec{shell, byPath}); err != nil {
-		t.Fatalf("Startable = %v, want nil", err)
+	if _, err := panelstart.CommandsOn([]revier.PanelSpec{shell, byPath}, path); err != nil {
+		t.Fatalf("CommandsOn = %v, want nil", err)
 	}
 
 	missing := revier.PanelSpec{Kind: revier.PanelAgent, Command: []string{"no-such-agent", "--flag"}}
-	err := panelstart.Startable([]revier.PanelSpec{shell, missing})
+	_, err := panelstart.CommandsOn([]revier.PanelSpec{shell, missing}, path)
 	if want := `the agent panel's command "no-such-agent" is not on PATH`; err == nil || err.Error() != want {
-		t.Fatalf("Startable = %v, want %q", err, want)
+		t.Fatalf("CommandsOn = %v, want %q", err, want)
 	}
 }
 
@@ -59,8 +59,8 @@ func TestCommandsOnSearchesTheGivenPATH(t *testing.T) {
 
 // A bare program is resolved to its file on the given PATH, its arguments
 // kept; a program named by a path is kept as written, and a panel with no
-// command has none. A program not on PATH is refused as Startable refuses
-// it.
+// command has none. A program not on PATH is refused before any panel
+// starts.
 func TestCommandsOnResolvesEachBareProgram(t *testing.T) {
 	testenv.NoTools(t)
 	dir := t.TempDir()

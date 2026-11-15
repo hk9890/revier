@@ -231,8 +231,8 @@ func TestRenameProjectChangesNothingWhenTheFileIsRefused(t *testing.T) {
 func TestRenameProjectIsRefusedWhileTheProjectRuns(t *testing.T) {
 	idle := revier.ProjectView{Project: revier.Project{Name: "revier"}}
 	held := idle
-	held.Targets = []revier.TargetView{{Name: "home", Ref: revier.TargetRef{Host: "tmux", ID: "1"}}}
-	bound := map[revier.ProjectName]map[revier.TargetName]revier.TargetRef{"revier": {"home": {Host: "tmux", ID: "1"}}}
+	held.Targets = []revier.TargetView{{Name: "home", Ref: revier.TargetRef{Host: "hc", ID: "1"}}}
+	bound := map[revier.ProjectName]map[revier.TargetName]revier.TargetRef{"revier": {"home": {Host: "hc", ID: "1"}}}
 	for name, tc := range map[string]struct {
 		view    revier.ProjectView
 		settled core.Settled
@@ -248,7 +248,7 @@ func TestRenameProjectIsRefusedWhileTheProjectRuns(t *testing.T) {
 			t.Fatal(err)
 		}
 		l := &ledger{st: state.State{Current: "revier"}}
-		c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Ledger: l}
+		c := &core.Core{Runtime: hosttest.NewRuntime("hc"), Ledger: l}
 
 		if _, err := app.RenameProject(c, root, stateRoot, tc.view, tc.settled, "rv", config.Inherited{}); err == nil {
 			t.Errorf("%s: the rename was not refused", name)

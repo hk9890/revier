@@ -95,7 +95,7 @@ func TestRestoreReportsEachStepAndTheReturnHome(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty")
 	rt.OpenErr = errors.New("no socket")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 	projects := []core.Project{prepared(t, agentProject())}
 	s := session.Session{Current: "revier", Projects: []session.Project{{Name: "revier", Targets: []session.Target{
 		{Name: "home"}, {Name: "notes"},
@@ -204,7 +204,7 @@ func TestACancelledRestoreStopsBeforeTheNextStep(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	home := rt.Add("session:revier", "kitty")
 	wm := hosttest.New("wm")
-	c := &core.Core{Runtime: cancelAware{FakeRuntime: rt}, Window: wm}
+	c := &core.Core{Runtime: cancelAware{FakeRuntime: rt}, View: cancelAware{FakeRuntime: rt}, Window: wm}
 	projects := []core.Project{prepared(t, agentProject())}
 	s := session.Session{Current: "revier", Projects: []session.Project{{Name: "revier", Targets: []session.Target{
 		{Name: "notes"}, {Name: "editor"},
@@ -237,7 +237,7 @@ func TestACancelledRestoreStopsBeforeTheNextStep(t *testing.T) {
 func TestARestoreCancelledOnItsLastStepCancelsTheReturnHomeAlone(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	home := rt.Add("session:revier", "kitty")
-	c := &core.Core{Runtime: cancelAware{FakeRuntime: rt}}
+	c := &core.Core{Runtime: cancelAware{FakeRuntime: rt}, View: cancelAware{FakeRuntime: rt}}
 	projects := []core.Project{prepared(t, agentProject())}
 	s := session.Session{Current: "revier", Projects: []session.Project{{Name: "revier", Targets: []session.Target{{Name: "notes"}}}}}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -283,7 +283,7 @@ func restoreWithHungHome(t *testing.T, ctx context.Context, entered func()) (cor
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty")
 	hang := new(atomic.Bool)
-	c := &core.Core{Runtime: hangsOnList{FakeRuntime: rt, hang: hang, entered: entered}}
+	c := &core.Core{Runtime: hangsOnList{FakeRuntime: rt, hang: hang, entered: entered}, View: hangsOnList{FakeRuntime: rt, hang: hang, entered: entered}}
 	projects := []core.Project{prepared(t, agentProject())}
 	s := session.Session{Current: "revier", Projects: []session.Project{{Name: "revier", Targets: []session.Target{{Name: "notes"}}}}}
 	report := survey(t, c, projects, nil)
@@ -339,11 +339,12 @@ func TestACancelDuringTheReturnHomeLetsItFinish(t *testing.T) {
 	home := rt.Add("session:revier", "kitty")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	c := &core.Core{Runtime: cancelAware{FakeRuntime: rt, onFocus: func(ref revier.TargetRef) {
+	aware := cancelAware{FakeRuntime: rt, onFocus: func(ref revier.TargetRef) {
 		if ref == home {
 			cancel()
 		}
-	}}}
+	}}
+	c := &core.Core{Runtime: aware, View: aware}
 	projects := []core.Project{prepared(t, agentProject())}
 	s := session.Session{Current: "revier", Projects: []session.Project{{Name: "revier", Targets: []session.Target{{Name: "notes"}}}}}
 

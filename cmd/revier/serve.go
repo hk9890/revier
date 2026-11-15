@@ -36,7 +36,7 @@ func serve(project, tag string, what func(*core.Core, core.Project) (core.Served
 	if p := projects[i]; p.Invalid != nil {
 		return p.Invalid
 	}
-	s, err := what(newCore(cfg, nil, nil, nil), projects[i])
+	s, err := what(newCore(cfg, nil, nil, nil, nil), projects[i])
 	if err != nil {
 		return err
 	}

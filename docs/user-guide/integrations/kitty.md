@@ -3,7 +3,9 @@
 kitty is a runtime host: the terminal that holds a project's workspace. revier
 opens each workspace as a kitty OS window, opens its tabs and split windows,
 and reads every kitty window to find the agents and their state. The popup is
-also a kitty window, whatever your runtime host is.
+also a kitty window, whatever your runtime host is. Under the hc runtime,
+kitty only shows the workspaces, and your agents run in hc
+([hc](hc.md)).
 
 revier opens every workspace in a kitty it starts for the workspaces, never in
 a kitty you started and never in the popup's. A kitty option applies to every
@@ -104,7 +106,7 @@ term status` names them as `shadowed by kitty.conf:<line>`.
 - A kitty window does not keep its contents after kitty exits. Use
   `revier session save` and `revier session restore`; see
   [Projects](../projects.md).
-- `revier open --attach` needs tmux or hc.
+- `revier open --attach` needs hc.
 - A window you opened yourself in a kitty of your own is no workspace until
   you run `revier attach` in it. revier reads its agents only when it is the
   one unnamed window of its kitty process. In an OS window you opened in

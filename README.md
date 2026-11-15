@@ -29,8 +29,9 @@ territory.
   See [The popup](docs/user-guide/tui.md#the-popup).
 - **All agents in one list.** In the popup, press the trigger key again to
   see every agent of every open project in one list. In a terminal, press
-  alt+space. Agents that need you are on top, then working, idle and
-  `unknown` agents. The project list shows each project with its agents
+  alt+space, or click `agents` where the trigger key is alt+space. Agents
+  that need you are on top, then working, idle and `unknown` agents. The
+  project list shows each project with its agents
   counted by state. See [The agent list](docs/user-guide/tui.md#the-agent-list).
 - **Jump to an agent.** Select an agent and press Enter. revier raises its
   tab and its window. The pane shows the agent's terminal as it is now.
@@ -41,8 +42,8 @@ territory.
 **Open a project and its tools**
 
 - **Search and open a workspace.** Type to fuzzy-filter the project list,
-  then press Enter. revier opens the project's workspace as a kitty window or
-  a tmux session, with its tabs, or raises it if it is open. From a shell,
+  then press Enter. revier opens the project's workspace as a kitty window,
+  with its tabs, or raises it if it is open. From a shell,
   run `revier open demo`.
   See [Tabs](docs/user-guide/configuration.md#tabs).
 - **One key per tool.** Give the editor, the ticket viewer or any other
@@ -91,8 +92,9 @@ territory.
 
 Early, but usable. Linux only.
 
-- **Terminals:** kitty and tmux, and hc as an experiment. Ghostty works
-  through tmux.
+- **Terminals:** kitty, and hc as an experiment, shown in kitty, whose
+  agents outlive the kitty window, or with no display, as over ssh. Ghostty
+  works through hc.
 - **Desktop:** GNOME, for window targets and desktop keys.
 - **Agents:** Claude Code 2.1.212 or newer reports its state; opencode reports
   none. An external probe adds any other tool.
@@ -144,7 +146,7 @@ revier                         # every project, its agent state, its targets
 The [user guide](docs/user-guide/README.md) covers the rest: getting started,
 the concepts, the TUI and every key, projects, agents, projects on another
 machine, the configuration reference, every command, troubleshooting,
-statuses and agent probes, and how to set revier up with kitty, tmux,
+statuses and agent probes, and how to set revier up with kitty,
 hc, Ghostty, GNOME, Claude Code and opencode.
 
 ## Building

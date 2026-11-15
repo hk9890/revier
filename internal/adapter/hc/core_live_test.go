@@ -2,23 +2,31 @@
 
 // Layer L4: the core's run-or-raise against a real hc core, headless. L2
 // proves the core against a fake; this proves it against the host. hc keeps
-// no focus, so a second press raises what the first opened rather than
-// returning home.
+// no focus, so with no view a second press raises what the first opened
+// rather than returning home; beside the fake view, which reports the focus
+// a view keeps, it returns home (decisions.md D184).
 package hc_test
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/ledger"
+	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-func TestCoreRunOrRaiseAgainstRealHc(t *testing.T) {
-	h, c := world(t), ctx(t)
-	cr := &core.Core{Runtime: h}
+// homeAndDiff is a project of two instances, home and diff.
+func homeAndDiff() core.Project {
 	sleep := []string{"sh", "-c", "sleep 30"}
-	p := core.PrepareProject(revier.Project{
+	return core.PrepareProject(revier.Project{
 		Name: "revier",
 		Targets: []revier.Target{
 			{Name: "home", Home: true, Runtime: &revier.Realization{
@@ -29,6 +37,12 @@ func TestCoreRunOrRaiseAgainstRealHc(t *testing.T) {
 			}},
 		},
 	})
+}
+
+func TestCoreRunOrRaiseAgainstRealHc(t *testing.T) {
+	h, c := world(t), ctx(t)
+	cr := &core.Core{Runtime: h}
+	p := homeAndDiff()
 
 	home, err := press(c, cr, p, "home")
 	if err != nil {
@@ -58,7 +72,179 @@ func TestCoreRunOrRaiseAgainstRealHc(t *testing.T) {
 	}
 }
 
-func press(ctx context.Context, c *core.Core, p core.Project, name revier.TargetName) (core.Result, error) {
-	_, res, err := c.ActivateWaiting(ctx, p, name, nil)
-	return res, err
+// The whole product against a real runtime and a view: run-or-raise opens
+// the target the first time, a second press returns home, and the third
+// raises the existing instance rather than opening a duplicate.
+func TestCoreRunOrRaiseTogglesHomeInAView(t *testing.T) {
+	h, c := world(t), ctx(t)
+	view := hosttest.NewView("kitty")
+	cr := &core.Core{Runtime: h, View: view}
+	p := homeAndDiff()
+
+	home, err := press(c, cr, p, "home")
+	if err != nil {
+		t.Fatalf("open home: %v", err)
+	}
+	diff, err := press(c, cr, p, "diff")
+	if err != nil {
+		t.Fatalf("open diff: %v", err)
+	}
+	if focused, _ := view.Focused(c); focused.ID != diff.Ref.ID {
+		t.Fatalf("focused %s after the open, want diff %s", focused.ID, diff.Ref.ID)
+	}
+	back, err := press(c, cr, p, "diff")
+	if err != nil {
+		t.Fatalf("toggle back: %v", err)
+	}
+	if back.Ref.ID != home.Ref.ID {
+		t.Fatalf("toggle-back returned %s, want home %s", back.Ref.ID, home.Ref.ID)
+	}
+	again, err := press(c, cr, p, "diff")
+	if err != nil {
+		t.Fatalf("raise diff: %v", err)
+	}
+	if again.Ref.ID != diff.Ref.ID || again.Launched {
+		t.Errorf("raise returned %s, launched %v; want the existing %s", again.Ref.ID, again.Launched, diff.Ref.ID)
+	}
+	if instances, err := h.Instances(c); err != nil || len(instances) != 2 {
+		t.Fatalf("instances = %+v, %v; want 2: run-or-raise must not duplicate", instances, err)
+	}
+}
+
+// A tab whose command exits as soon as it starts leaves the instance as it
+// was, on every press, and a press that sees it end names it as exited. A
+// real core gives no bound on when the command ends against the listing that
+// checks it, so a press may also pass and the tab then end; that the core
+// names it is internal/core's to pin, on a fake that ends it first.
+func TestCoreSaysATabWhoseCommandEndsAtOnceExited(t *testing.T) {
+	h, c := world(t), ctx(t)
+	cr := &core.Core{Runtime: h, View: hosttest.NewView("kitty")}
+	p := homeAndDiff()
+	p.Targets = append(p.Targets, revier.Target{Name: "quick", Runtime: &revier.Realization{
+		Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelTool, Dir: t.TempDir(), Command: []string{"true"}}},
+	}})
+	p = core.PrepareProject(p.Project)
+	home, err := press(c, cr, p, "home")
+	if err != nil {
+		t.Fatalf("open home: %v", err)
+	}
+
+	want := `hc: open tab quick: the tool panel's command "true" exited as soon as it started`
+	for range 2 {
+		if _, err := press(c, cr, p, "quick"); err != nil && !strings.HasPrefix(err.Error(), want) {
+			t.Errorf("press quick = %v, want it passed or %q", err, want)
+		}
+		own := listing(t, h, home.Ref)[0].ID
+		waitFor(t, h, func([]revier.Instance) bool {
+			panels := listing(t, h, home.Ref)
+			return len(panels) == 1 && panels[0].ID == own
+		})
+	}
+}
+
+// hc's core keeps its id over a restart, and gives every instance an id of
+// its own, so a binding kept from before a restart names no instance of the
+// new core, and the next press opens the target again.
+func TestABindingDoesNotOutliveItsCore(t *testing.T) {
+	h, c := world(t), ctx(t)
+	cr := &core.Core{Runtime: h}
+	p := homeAndDiff()
+	diff, err := press(c, cr, p, "diff")
+	if err != nil {
+		t.Fatalf("open diff: %v", err)
+	}
+	stop(h)
+	if _, err := press(c, cr, p, "home"); err != nil {
+		t.Fatalf("open home on the new core: %v", err)
+	}
+
+	// The binding the first press left, as the next press reads it.
+	cr.Ledger = ledger.File{Root: t.TempDir()}
+	cr.Ledger.Update(func(st *state.State) bool {
+		st.Bind(p.Name, "diff", diff.Ref)
+		return true
+	})
+	res, err := press(c, cr, p, "diff")
+	if err != nil {
+		t.Fatalf("go diff: %v", err)
+	}
+	if !res.Launched {
+		t.Fatalf("go diff raised %q: the binding from the old core landed on another instance", res.Ref.Title)
+	}
+}
+
+// A tab the listing holds can end before its focus: its view window ends
+// with its terminal, so the focus fails. The press is made once more, finds
+// the tab gone and opens it again, and focuses the tab it opened.
+func TestCoreOpensAgainATabThatEndsAsItIsFocused(t *testing.T) {
+	h, c := world(t), ctx(t)
+	dir := t.TempDir()
+	view := &endingView{FakeView: hosttest.NewView("kitty")}
+	cr := &core.Core{Runtime: h, View: view}
+	p := homeAndDiff()
+	waits := []string{"sh", "-c", "while [ ! -e release ]; do sleep 0.01; done"}
+	p.Targets = append(p.Targets, revier.Target{Name: "quick", Runtime: &revier.Realization{
+		Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelTool, Dir: dir, Command: waits}},
+	}})
+	p = core.PrepareProject(p.Project)
+	home, err := press(c, cr, p, "home")
+	if err != nil {
+		t.Fatalf("open home: %v", err)
+	}
+	if _, err := press(c, cr, p, "quick"); err != nil {
+		t.Fatalf("open quick: %v", err)
+	}
+	panels := listing(t, h, home.Ref)
+	if len(panels) != 2 {
+		t.Fatalf("home's panels = %+v, want home's own and quick's", panels)
+	}
+	first := panels[1].ID
+	// Off the tab, so the next press focuses it and does not return home.
+	if err := view.FakeView.FocusPanel(c, home.Ref, panels[0].ID); err != nil {
+		t.Fatal(err)
+	}
+
+	view.ending = func(panel revier.PanelID) error {
+		if panel != first {
+			return nil
+		}
+		if err := os.WriteFile(filepath.Join(dir, "release"), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		waitFor(t, h, func([]revier.Instance) bool {
+			return !slices.ContainsFunc(listing(t, h, home.Ref), func(p revier.Panel) bool { return p.ID == first })
+		})
+		// The tab opened again runs on.
+		if err := os.Remove(filepath.Join(dir, "release")); err != nil {
+			t.Fatal(err)
+		}
+		return fmt.Errorf("kitty: no window shows panel %s", panel)
+	}
+	if _, err := press(c, cr, p, "quick"); err != nil {
+		t.Fatalf("press quick = %v, want the tab opened again", err)
+	}
+	panels = listing(t, h, home.Ref)
+	if len(panels) != 2 || panels[1].ID == first {
+		t.Fatalf("home's panels = %+v, want home's own and a quick tab other than %s", panels, first)
+	}
+	if cur, _ := view.FocusedPanel(c, home.Ref); cur != panels[1].ID {
+		t.Errorf("current panel %s, want the quick tab opened again, %s", cur, panels[1].ID)
+	}
+}
+
+// endingView is the fake view whose FocusPanel runs ending first, which can
+// end the panel's terminal and fail the focus, as a kitty window that ended
+// with its terminal does.
+type endingView struct {
+	*hosttest.FakeView
+	ending func(revier.PanelID) error
+}
+
+func (v *endingView) FocusPanel(ctx context.Context, ref revier.TargetRef, panel revier.PanelID) error {
+	if v.ending != nil {
+		if err := v.ending(panel); err != nil {
+			return err
+		}
+	}
+	return v.FakeView.FocusPanel(ctx, ref, panel)
 }

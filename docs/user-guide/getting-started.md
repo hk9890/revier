@@ -9,7 +9,8 @@ full-screen view in a terminal. [Concepts](concepts.md) explains the rest.
 ## What you need
 
 - Linux, `x64` or `arm64`.
-- kitty or tmux. revier opens your workspaces in it.
+- kitty. revier opens your workspaces in it. With no display, as over ssh,
+  use hc instead; see [hc](integrations/hc.md).
 - Claude Code, in the version
   [Claude Code](integrations/claude-code.md#what-you-need) names, as `claude`
   on your `PATH`. The project that `revier new` writes runs it in its agent
@@ -53,9 +54,7 @@ proves the archive matches them.
 - **kitty**: give kitty a control socket, as step 1 of
   [kitty](integrations/kitty.md#set-it-up) shows, then restart kitty. Without
   it, revier still opens workspaces, but cannot reach your own kitty windows.
-- **tmux**: nothing to set in tmux. When kitty is also installed, tell revier
-  to use tmux; see [tmux](integrations/tmux.md).
-- **Ghostty**: revier cannot drive it; run tmux in it, as
+- **Ghostty**: revier cannot drive it; run hc and attach it in Ghostty, as
   [Ghostty](integrations/ghostty.md) shows.
 
 ## Give your editor a key
@@ -91,16 +90,15 @@ terminal window called `session:demo`, and `agent`, a tab in it with Claude
 Code beside a shell. Your shared `editor` is the third target.
 
 Run `revier status` to check which hosts revier found: the `runtime` line
-names the terminal host, the `window` line gnome, and `-` means none.
+names the terminal host, the `view` line what shows it, the `window` line
+gnome, and `-` means none.
 
 ## Open it
 
 Run `revier open`. revier opens the workspace with the `agent` tab. Run it
 again, and revier raises the same window instead of a second one. This is
-run-or-raise. From another directory, run `revier open demo`. On tmux or
-hc, `revier open --attach` puts your terminal on the workspace. In a pane of the
-same tmux server, it switches that pane to the workspace and
-attaches nothing, because the server does not attach to itself.
+run-or-raise. From another directory, run `revier open demo`. On hc,
+`revier open --attach` puts your terminal on the workspace.
 
 ## Install the desktop keys
 
@@ -145,8 +143,9 @@ key, or run `revier` in a terminal.
 
 The project with an agent that needs you is at the top, and the pane shows
 the agent's terminal. For the list of all agents, press the trigger key
-again in the popup, or Alt+Space in a terminal. Select the agent and press
-Enter. revier raises its tab and window.
+again in the popup. In a terminal, press Alt+Space, or click `agents` where
+the trigger key is Alt+Space. Select the agent and press Enter. revier raises
+its tab and window.
 
 From a shell, `revier list` prints one line per project with its most urgent
 agent state: `attention` means it needs you.

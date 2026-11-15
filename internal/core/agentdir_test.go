@@ -19,7 +19,7 @@ func dirOf(t *testing.T, path, dir string) string {
 	rt.Add("session:demo", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"})
 	probe := &hosttest.FakeProbe{Harness: "claude", Marker: "claude",
 		State: revier.AgentState{Harness: "claude", Status: revier.StatusIdle, Dir: dir}}
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{probe}}
 	projects := core.Prepare([]revier.Project{{Name: "demo", Path: path, Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "session:demo", Launch: []string{"x"}, Match: revier.Match{Title: "^session:demo$"}}},

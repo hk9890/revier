@@ -4,7 +4,7 @@
 // It is the only adapter that speaks to another revier, and the JSON that
 // `revier list --json` and `revier events` print is the whole contract
 // between the two. Nothing
-// about the remote machine's terminal, its tmux or its agents is interpreted
+// about the remote machine's terminal, its runtime or its agents is interpreted
 // here; the revier there did that.
 package ssh
 

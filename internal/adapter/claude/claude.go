@@ -243,10 +243,9 @@ func (p *Probe) list(ctx context.Context) (map[int]listedSession, error) {
 // case this feature exists for, and the one a guess from the newest transcript
 // under ~/.claude/projects gets wrong.
 //
-// The pid is the Claude process itself. kitty reports the foreground process,
-// and tmux the pane's own process, which is Claude when it is the pane's
-// command - as revier launches it. A pane where claude was typed into a shell
-// reports the shell, is not matched, and restores empty.
+// The pid is the Claude process itself. kitty and hc report the foreground
+// process, which is Claude when it is the panel's command - as revier
+// launches it.
 //
 // The directory is the session's cwd as the listing gives it, which is where
 // Claude works and not where its pane was opened: an agent that entered a

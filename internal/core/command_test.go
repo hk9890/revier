@@ -73,7 +73,7 @@ func commandDesktop(l *ledger) (*core.Core, *hosttest.Fake, *run, revier.TargetR
 	r := &run{do: focusing(wm, chrome)}
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty")
-	return &core.Core{Runtime: rt, Window: wm, Run: r.Run, Ledger: l}, wm, r, chrome
+	return &core.Core{Runtime: rt, View: rt, Window: wm, Run: r.Run, Ledger: l}, wm, r, chrome
 }
 
 // longBindWait makes a press that waits for a window wait an hour, so a
@@ -163,6 +163,7 @@ func TestASecondPressOfACommandTargetWaitsForAHomeComingUp(t *testing.T) {
 	c, wm, r, chrome := commandDesktop(l)
 	rt := hosttest.NewRuntime("rt")
 	c.Runtime = rt
+	c.View = rt
 	if err := wm.Focus(context.Background(), chrome); err != nil {
 		t.Fatal(err)
 	}

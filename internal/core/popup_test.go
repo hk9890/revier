@@ -22,7 +22,7 @@ func TestRaiseSelfRaisesTheTerminalThisProcessRunsIn(t *testing.T) {
 	wm := hosttest.New("wm")
 	wm.AddInstance(revier.Instance{Title: "session:demo", Class: "kitty", PID: 1001})
 	osw := wm.AddInstance(revier.Instance{Title: "revier", Class: "kitty", PID: 1002})
-	c := &core.Core{Runtime: rt, Window: wm, Self: func(p revier.Panel) bool { return p.ID == "3" }}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm, Self: func(p revier.Panel) bool { return p.ID == "3" }}
 
 	if err := c.RaiseSelf(context.Background()); err != nil {
 		t.Fatalf("RaiseSelf: %v", err)
@@ -35,24 +35,38 @@ func TestRaiseSelfRaisesTheTerminalThisProcessRunsIn(t *testing.T) {
 	}
 }
 
-// The popup's terminal is raised by its class, as the press that raises it
-// is. A popup kitty an older revier started still holds workspaces, so
-// neither its pid nor the title the runtime gives it names the popup's window.
-func TestRaiseSelfRaisesThePopupByItsClass(t *testing.T) {
-	rt := hosttest.NewRuntime("kitty")
-	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
-	rt.Add("billing", "kitty", shellPanel("1"))
-	rt.Add("revier-popup", core.PopupClass, shellPanel("2"))
+// The popup is raised by its class through the window host, as the press
+// that raises it is, and no runtime is asked: it is raised under every
+// runtime, and a runtime that lists no popup leaves it where the restore hid
+// it all the same (decisions.md D182).
+func TestRaisePopupRaisesThePopupByItsClassAlone(t *testing.T) {
+	rt := hosttest.NewRuntime("hc")
 	wm := hosttest.New("wm")
 	wm.AddInstance(revier.Instance{Title: "billing", Class: "kitty", PID: 1001})
 	popup := wm.AddInstance(revier.Instance{Title: "revier", Class: core.PopupClass, PID: 1001})
-	c := &core.Core{Runtime: rt, Window: wm, Self: func(p revier.Panel) bool { return p.ID == "2" }}
+	c := &core.Core{Runtime: rt, View: rt, Window: wm, Self: func(revier.Panel) bool { return true }}
 
-	if err := c.RaiseSelf(context.Background()); err != nil {
-		t.Fatalf("RaiseSelf: %v", err)
+	if err := c.RaisePopup(t.Context()); err != nil {
+		t.Fatalf("RaisePopup: %v", err)
 	}
 	if !slices.Equal(wm.Focuses, []revier.TargetRef{popup}) {
 		t.Errorf("window focuses = %v, want the popup %v", wm.Focuses, popup)
+	}
+	if rt.InstancesCalls != 0 {
+		t.Errorf("the runtime was listed %d times, want never", rt.InstancesCalls)
+	}
+}
+
+// With no window host there is nothing to raise the popup by, and with no
+// popup open nothing to raise: both are refused, and nothing is focused.
+func TestRaisePopupIsRefusedWithNothingToRaise(t *testing.T) {
+	if err := (&core.Core{}).RaisePopup(t.Context()); !errors.Is(err, core.ErrNoPopupHost) {
+		t.Errorf("no window host: err = %v, want ErrNoPopupHost", err)
+	}
+	wm := hosttest.New("wm")
+	wm.Add("session:demo", "kitty")
+	if err := (&core.Core{Window: wm}).RaisePopup(t.Context()); err == nil || len(wm.Focuses) != 0 {
+		t.Errorf("no popup: err = %v, focuses = %v; want a refusal and nothing focused", err, wm.Focuses)
 	}
 }
 
@@ -68,7 +82,7 @@ func TestRaiseSelfRaisesNothingWhereItRunsInNoListedTerminal(t *testing.T) {
 		rt.Add("session:demo", "kitty", shellPanel("1"))
 		wm := hosttest.New("wm")
 		wm.AddInstance(revier.Instance{Title: "session:demo", Class: "kitty", PID: 1001})
-		c := &core.Core{Runtime: rt, Window: wm, Self: self}
+		c := &core.Core{Runtime: rt, View: rt, Window: wm, Self: self}
 
 		if err := c.RaiseSelf(context.Background()); err != nil {
 			t.Errorf("%s: RaiseSelf: %v", name, err)
@@ -135,7 +149,7 @@ func TestHidePopupIsRefusedWithNothingToHide(t *testing.T) {
 
 // A raise of a minimized popup puts that on record for the surface, and
 // costs what the raise of one on the screen costs otherwise: the same
-// listings, and nothing typed (decisions.md D169).
+// listings, and no switch (decisions.md D169).
 func TestARaiseOfAMinimizedPopupIsOnRecord(t *testing.T) {
 	raise := func(minimized bool) (*hosttest.Fake, *hosttest.FakeRuntime) {
 		wm := hosttest.New("wm")
@@ -144,11 +158,12 @@ func TestARaiseOfAMinimizedPopupIsOnRecord(t *testing.T) {
 		rt := hosttest.NewRuntime("rt")
 		rt.Add("revier", core.PopupClass, revier.Panel{ID: "9", Command: []string{"revier"}})
 		l := &ledger{}
-		if _, err := (&core.Core{Window: wm, Runtime: rt, Ledger: l}).Popup(context.Background(), popupArgv); err != nil {
+		sw := &switches{}
+		if _, err := (&core.Core{Window: wm, Runtime: rt, View: rt, Ledger: l, SwitchPopup: sw.switchPopup}).Popup(context.Background(), popupArgv); err != nil {
 			t.Fatalf("Popup: %v", err)
 		}
-		if !slices.Equal(wm.Focuses, []revier.TargetRef{open}) || len(rt.Sent) != 0 {
-			t.Errorf("minimized %v: focuses = %v, sent = %+v; want the popup raised and nothing typed", minimized, wm.Focuses, rt.Sent)
+		if !slices.Equal(wm.Focuses, []revier.TargetRef{open}) || sw.calls != 0 {
+			t.Errorf("minimized %v: focuses = %v, switches = %d; want the popup raised and no switch", minimized, wm.Focuses, sw.calls)
 		}
 		if l.popupHidden != minimized {
 			t.Errorf("minimized %v: marked = %v, want %v", minimized, l.popupHidden, minimized)
@@ -239,115 +254,111 @@ func TestPopupLaunchesAndPlacesByTheWorkarea(t *testing.T) {
 	}
 }
 
+// switches stands for the popup's socket: it counts the switches it was told,
+// and fails each with err.
+type switches struct {
+	calls int
+	err   error
+}
+
+func (s *switches) switchPopup(context.Context) error {
+	s.calls++
+	return s.err
+}
+
 // A press on the popup that is the focused window already is the second
-// press of its key: it is typed into the popup's panel as the key that
-// switches its list, and nothing is raised.
+// press of its key: the popup is told over its socket to switch its list, and
+// nothing is raised. The popup is found by its class alone, so no runtime is
+// asked, and the switch works under every runtime (decisions.md D182).
 func TestPopupSwitchesItsListWhenItIsFocusedAlready(t *testing.T) {
 	wm := hosttest.New("wm")
 	open := wm.Add("revier", core.PopupClass)
 	wm.SetFocus(open)
-	rt := hosttest.NewRuntime("rt")
-	rt.Add("session:demo", "kitty", revier.Panel{ID: "1"})
-	surface := rt.Add("revier", core.PopupClass, revier.Panel{ID: "9"})
-	c := &core.Core{Window: wm, Runtime: rt}
+	rt := hosttest.NewRuntime("hc")
+	sw := &switches{}
+	c := &core.Core{Window: wm, Runtime: rt, View: rt, SwitchPopup: sw.switchPopup}
 
 	ref, err := c.Popup(context.Background(), popupArgv)
 	if err != nil || ref != open {
 		t.Fatalf("Popup = %v, %v; want the open popup", ref, err)
 	}
-	want := []hosttest.Sent{{Ref: surface, Panel: "9", Text: core.SwitchKey}}
-	if !slices.Equal(rt.Sent, want) {
-		t.Errorf("sent = %+v, want the switch key typed into the popup's panel", rt.Sent)
+	if sw.calls != 1 {
+		t.Errorf("switches = %d, want one", sw.calls)
 	}
-	if len(wm.Focuses) != 0 || len(wm.Opened) != 0 {
-		t.Errorf("focuses = %v, opened = %v; want neither", wm.Focuses, wm.Opened)
+	if len(wm.Focuses) != 0 || len(wm.Opened) != 0 || rt.InstancesCalls != 0 {
+		t.Errorf("focuses = %v, opened = %v, runtime listings = %d; want none", wm.Focuses, wm.Opened, rt.InstancesCalls)
 	}
 }
 
-// A press with the popup open and another window focused raises it, and types
-// nothing: the popup opens on what it showed, and its first press is no
-// switch.
-func TestPopupTypesNothingWhenItIsNotFocused(t *testing.T) {
+// A press with the popup open and another window focused raises it, and
+// switches nothing: the popup opens on what it showed, and its first press is
+// no switch.
+func TestPopupSwitchesNothingWhenItIsNotFocused(t *testing.T) {
 	wm := hosttest.New("wm")
 	open := wm.Add("revier", core.PopupClass)
 	wm.SetFocus(wm.Add("session:demo", "kitty"))
-	rt := hosttest.NewRuntime("rt")
-	rt.Add("revier", core.PopupClass, revier.Panel{ID: "9"})
-	c := &core.Core{Window: wm, Runtime: rt}
+	sw := &switches{}
+	c := &core.Core{Window: wm, SwitchPopup: sw.switchPopup}
 
-	if _, err := c.Popup(context.Background(), popupArgv); err != nil {
+	if _, err := c.Popup(t.Context(), popupArgv); err != nil {
 		t.Fatalf("Popup: %v", err)
 	}
-	if len(rt.Sent) != 0 || !slices.Equal(wm.Focuses, []revier.TargetRef{open}) {
-		t.Errorf("sent = %+v, focuses = %v; want the popup raised and nothing typed", rt.Sent, wm.Focuses)
+	if sw.calls != 0 || !slices.Equal(wm.Focuses, []revier.TargetRef{open}) {
+		t.Errorf("switches = %d, focuses = %v; want the popup raised and no switch", sw.calls, wm.Focuses)
 	}
 }
 
-// A focused popup no runtime here holds a panel of cannot be typed into: the
-// press stays the raise it was before the surface had a second list.
-func TestPopupRaisesAFocusedPopupTheRuntimeDoesNotHold(t *testing.T) {
+// A focused popup that takes no switch - no socket wired, or none that a
+// surface listens on, as in a popup an older revier started - stays the
+// raise the press was before the surface had a second list.
+func TestPopupRaisesAFocusedPopupThatTakesNoSwitch(t *testing.T) {
 	wm := hosttest.New("wm")
 	open := wm.Add("revier", core.PopupClass)
 	wm.SetFocus(open)
-	rt := hosttest.NewRuntime("rt")
-	rt.Add("session:demo", "kitty", revier.Panel{ID: "1"})
+	refused := &switches{err: errors.New("popup switch: connection refused")}
 
 	for name, c := range map[string]*core.Core{
-		"no runtime":                  {Window: wm},
-		"a runtime without the popup": {Window: wm, Runtime: rt},
+		"no switch wired":       {Window: wm},
+		"no surface listens on": {Window: wm, SwitchPopup: refused.switchPopup},
 	} {
 		wm.Focuses = nil
-		if _, err := c.Popup(context.Background(), popupArgv); err != nil {
-			t.Fatalf("%s: Popup: %v", name, err)
+		ref, err := c.Popup(t.Context(), popupArgv)
+		if err != nil || ref != open {
+			t.Fatalf("%s: Popup = %v, %v; want the open popup and no error", name, ref, err)
 		}
-		if len(rt.Sent) != 0 || !slices.Equal(wm.Focuses, []revier.TargetRef{open}) {
-			t.Errorf("%s: sent = %+v, focuses = %v; want the popup raised", name, rt.Sent, wm.Focuses)
+		if !slices.Equal(wm.Focuses, []revier.TargetRef{open}) || len(wm.Opened) != 0 {
+			t.Errorf("%s: focuses = %v, opened = %v; want the popup raised and none opened", name, wm.Focuses, wm.Opened)
 		}
+	}
+	if refused.calls != 1 {
+		t.Errorf("the refused switch was tried %d times, want once", refused.calls)
 	}
 }
 
-// A revier the user runs in a terminal of their own is a surface too, and the
-// desktop takes the key from it as it does from the popup. A press with that
-// terminal focused, and the surface current in it, switches its list: no
-// popup opens over it.
-func TestPopupSwitchesTheSurfaceInAFocusedTerminal(t *testing.T) {
-	wm, rt, window, terminal := surfaceTerminal(
-		revier.Panel{ID: "1", Command: []string{"zsh"}},
-		revier.Panel{ID: "2", Command: []string{"/usr/local/bin/revier"}})
-	wm.Workarea = 5120
-	c := &core.Core{Window: wm, Runtime: rt}
-
-	ref, err := c.Popup(context.Background(), popupArgv)
-	if err != nil || ref != window {
-		t.Fatalf("Popup = %v, %v; want the focused terminal", ref, err)
-	}
-	want := []hosttest.Sent{{Ref: terminal, Panel: "2", Text: core.SwitchKey}}
-	if !slices.Equal(rt.Sent, want) {
-		t.Errorf("sent = %+v, want the switch key typed into the surface's panel", rt.Sent)
-	}
-	if len(wm.Opened) != 0 || len(wm.Focuses) != 0 {
-		t.Errorf("opened = %v, focuses = %v; want no popup", wm.Opened, wm.Focuses)
-	}
-}
-
-// A focused terminal opens the popup as before when the panel current in it
-// is not the surface: a shell, a revier command that is not the TUI, or the
-// surface in a tab the user is not looking at. The window the key was pressed
-// over is asked for once, for the switch and for the launch's line both.
-func TestPopupOpensOverATerminalWhoseCurrentPanelIsNoSurface(t *testing.T) {
+// A revier the user runs in a terminal of their own is no popup: a press with
+// that terminal focused opens the popup over it, whatever runs in it, the
+// surface current included, and switches nothing (decisions.md D182). The
+// runtime is not asked, and the window the key was pressed over is asked for
+// once, for the switch and for the launch's line both.
+func TestPopupOpensOverAFocusedTerminalOfTheUsersOwn(t *testing.T) {
 	for name, panels := range map[string][]revier.Panel{
+		"the surface current":        {{ID: "1", Command: []string{"zsh"}}, {ID: "2", Command: []string{"/usr/local/bin/revier"}}},
 		"a shell":                    {{ID: "1", Command: []string{"zsh"}}},
 		"a revier command":           {{ID: "1", Command: []string{"revier", "agent", "wait", "demo"}}},
 		"the surface in another tab": {{ID: "1", Command: []string{"revier"}}, {ID: "2", Command: []string{"zsh"}}},
 	} {
 		wm, rt, _, _ := surfaceTerminal(panels...)
 		wm.Workarea = 5120
-		c := &core.Core{Window: wm, Runtime: rt}
-		if _, err := c.Popup(context.Background(), popupArgv); err != nil {
+		sw := &switches{}
+		c := &core.Core{Window: wm, Runtime: rt, View: rt, SwitchPopup: sw.switchPopup}
+		if _, err := c.Popup(t.Context(), popupArgv); err != nil {
 			t.Fatalf("%s: Popup: %v", name, err)
 		}
-		if len(rt.Sent) != 0 || len(wm.Opened) != 1 {
-			t.Errorf("%s: sent = %+v, opened = %v; want nothing typed and the popup launched", name, rt.Sent, wm.Opened)
+		if sw.calls != 0 || len(rt.Sent) != 0 || len(wm.Opened) != 1 {
+			t.Errorf("%s: switches = %d, sent = %+v, opened = %v; want no switch, nothing typed and the popup launched", name, sw.calls, rt.Sent, wm.Opened)
+		}
+		if rt.InstancesCalls != 0 {
+			t.Errorf("%s: the runtime was listed %d times, want never", name, rt.InstancesCalls)
 		}
 		if wm.FocusedCalls != 1 {
 			t.Errorf("%s: asked for the focused window %d times, want once", name, wm.FocusedCalls)

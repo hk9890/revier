@@ -5,8 +5,9 @@
 //
 // hc has no object that groups terminals. An instance is the set of live
 // terminals that carry the same revier.instance label, which Open gives every
-// terminal it starts (decisions.md D173). The host speaks hc's JSON-RPC on
-// the core's Unix socket.
+// terminal it starts (decisions.md D173), and a tab is the terminals of the
+// instance that carry the same revier.tab label (D179). The host speaks hc's
+// JSON-RPC on the core's Unix socket.
 package hc
 
 import (
@@ -24,16 +25,28 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// The labels Open gives each terminal of an instance: the instance's id, the
-// realization's name, and the terminal's place among the panels.
+// The labels Open and OpenTab give each terminal of an instance: the
+// instance's id, the realization's name, the tab's token, the tab's place
+// among the tabs, and the terminal's place among the panels of its tab. The
+// token is the tab's own, so two tabs of the same vars, as two agent tabs,
+// stay two; the places keep the order a view draws them in (decisions.md
+// D179).
 const (
 	instanceLabel = "revier.instance"
 	nameLabel     = "revier.name"
+	tabLabel      = "revier.tab"
+	tabPlaceLabel = "revier.tabplace"
 	panelLabel    = "revier.panel"
 )
 
-// Host is an hc Runtime. Socket selects the core's socket; an empty Socket
-// uses the one hc's own CLI would use from this environment.
+// ownLabels are the labels that are revier's, and no panel var.
+var ownLabels = []string{instanceLabel, nameLabel, tabLabel, tabPlaceLabel, panelLabel}
+
+// Host is an hc Runtime, and no View: hc keeps no focus and draws nothing,
+// so a terminal is put on an instance by attaching it, by hand or in a
+// view's window (decisions.md D176, D180).
+// Socket selects the core's socket; an empty Socket uses the one hc's own CLI
+// would use from this environment.
 type Host struct {
 	Socket string
 
@@ -50,16 +63,12 @@ func (h *Host) root() string {
 	return "/proc"
 }
 
-func (h *Host) Capabilities() revier.Capabilities {
-	return revier.Capabilities{}
-}
-
 // Probe reports hc usable when herdr-core is on PATH and the core, when one
 // listens, is one this host can work with. It does not require a running
 // core: Open starts one. It never runs hc itself: every hc command starts a
 // core when none runs.
 func (h *Host) Probe(ctx context.Context) error {
-	if _, err := program(); err != nil {
+	if _, err := Program(); err != nil {
 		return err
 	}
 	s, err := h.dial(ctx, false)
@@ -73,11 +82,11 @@ func (h *Host) Probe(ctx context.Context) error {
 	return nil
 }
 
-// program is the hc binary on PATH: herdr-core, else an hc that is a link to
+// Program is the hc binary on PATH: herdr-core, else an hc that is a link to
 // a file named herdr-core, as hc's install makes. Any other hc is not
-// herdr-core: hc is also the name of Holochain's CLI. It is looked up and
-// never run.
-func program() (string, error) {
+// herdr-core: hc is also the name of Holochain's CLI. It is found by its name
+// and its link, never by running it.
+func Program() (string, error) {
 	if _, err := exec.LookPath("herdr-core"); err == nil {
 		return "herdr-core", nil
 	}
@@ -136,7 +145,9 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 	instances := make([]revier.Instance, 0, len(keys))
 	for _, key := range keys {
 		terminals := groups[key]
-		slices.SortStableFunc(terminals, func(a, b terminal) int { return cmp.Compare(panelIndex(a), panelIndex(b)) })
+		slices.SortStableFunc(terminals, func(a, b terminal) int {
+			return cmp.Or(cmp.Compare(place(a, tabPlaceLabel), place(b, tabPlaceLabel)), cmp.Compare(place(a, panelLabel), place(b, panelLabel)))
+		})
 		title := titleOf(terminals[0])
 		inst := revier.Instance{
 			Ref:   revier.TargetRef{Host: h.Name(), ID: s.hello.Core.ID + "/" + key, Title: title},
@@ -159,14 +170,15 @@ func panelOf(t terminal) revier.Panel {
 		pid, command, dir = fg.PID, fg.Argv, fg.Cwd
 	}
 	vars := maps.Clone(t.Labels)
-	delete(vars, instanceLabel)
-	delete(vars, nameLabel)
-	delete(vars, panelLabel)
+	for _, label := range ownLabels {
+		delete(vars, label)
+	}
 	return revier.Panel{
 		ID:      revier.PanelID(t.Address),
 		Kind:    kindOf(command),
 		Title:   t.Title,
 		Vars:    vars,
+		Tab:     t.Labels[tabLabel],
 		PID:     pid,
 		Command: command,
 		Dir:     dir,
@@ -179,10 +191,10 @@ func titleOf(t terminal) string {
 	return cmp.Or(t.Labels[nameLabel], t.Name, t.Address)
 }
 
-// panelIndex is a terminal's place among its instance's panels; a terminal
-// with none comes first.
-func panelIndex(t terminal) int {
-	n, _ := strconv.Atoi(t.Labels[panelLabel])
+// place is the number a terminal's label holds: its tab's place among the
+// tabs, or its own within the tab. A terminal with none comes first.
+func place(t terminal, label string) int {
+	n, _ := strconv.Atoi(t.Labels[label])
 	return n
 }
 
@@ -193,16 +205,6 @@ func kindOf(argv []string) revier.PanelKind {
 		return revier.PanelShell
 	}
 	return revier.PanelTool
-}
-
-// Focus does nothing: hc keeps no focus, and knows of no terminal that shows
-// one of its terminals. A terminal is put on an instance by attaching it.
-func (h *Host) Focus(context.Context, revier.TargetRef) error { return nil }
-
-// Focused is no instance: hc keeps no focus to report, so a second press
-// does not return home.
-func (h *Host) Focused(context.Context) (revier.TargetRef, error) {
-	return revier.TargetRef{}, nil
 }
 
 // ref is an instance ref taken apart: the core that made it, and the

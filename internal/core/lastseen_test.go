@@ -30,7 +30,7 @@ func TestSeenRecordsWhatSessionRecordsWithoutAskingAProbe(t *testing.T) {
 		revier.Panel{ID: "2", Kind: revier.PanelShell, Title: "zsh"}, marked, listed, tab)
 	stray := rt.Add("some tool nobody declared", "meld")
 	probe := resumable()
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}, Ledger: &ledger{st: state.State{
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{probe}, Ledger: &ledger{st: state.State{
 		Current: "revier", Attached: map[revier.ProjectName][]revier.TargetRef{"revier": {stray}},
 	}}}
 	p := prepared(t, tabProject())

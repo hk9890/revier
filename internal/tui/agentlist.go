@@ -35,8 +35,9 @@ import (
 
 // switchChord is the key that switches between the two lists: alt+space, the
 // default of the desktop key that opens the surface. On a desktop that takes
-// that key before the terminal sees it, `revier popup` types it into the
-// popup instead (core.SwitchKey).
+// that key before the terminal sees it, `revier popup` sends the press to the
+// popup over its socket instead (switchMsg), and in any other terminal the
+// key opens the popup.
 const switchChord core.Chord = "alt+space"
 
 // switches reports the press that switches between the lists.

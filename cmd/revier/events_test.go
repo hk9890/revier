@@ -179,14 +179,14 @@ func TestEventsPrintsTheLocalOnesWhenAHostDoesNotAnswer(t *testing.T) {
 func TestAnAgentTabThatWasNotResumedNamesNoConversation(t *testing.T) {
 	root := t.TempDir()
 	recordingTo(t, root)
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	rt.Add("home", "", revier.Panel{ID: "%1", Kind: revier.PanelTool})
 	p := core.PrepareProject(revier.Project{Name: "demo", Path: t.TempDir(), Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "home", Match: revier.Match{Title: "^home$"}, Tabs: []revier.TargetName{"agent"}}},
 		{Name: "agent", Runtime: &revier.Realization{Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}}}},
 	}})
-	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{p}, stateRoot: root, core: &core.Core{Runtime: rt}}, &state.State{})
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{p}, stateRoot: root, core: &core.Core{Runtime: rt, View: rt}}, &state.State{})
 
 	if err := a.newAgent(context.Background(), "demo", "", "", core.Resume{Session: "abc-123"}); err != nil {
 		t.Fatalf("agent new: %v", err)
@@ -206,7 +206,7 @@ func TestAnAgentTabThatWasNotResumedNamesNoConversation(t *testing.T) {
 func TestANamedAgentTabIsAnEventThatNamesTheAgent(t *testing.T) {
 	root := t.TempDir()
 	recordingTo(t, root)
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	rt.Add("home", "", revier.Panel{ID: "%1", Kind: revier.PanelTool})
 	p := core.PrepareProject(revier.Project{Name: "demo", Path: t.TempDir(), Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
@@ -214,7 +214,7 @@ func TestANamedAgentTabIsAnEventThatNamesTheAgent(t *testing.T) {
 		{Name: "agent", Runtime: &revier.Realization{Inside: "home", Panels: []revier.PanelSpec{{Kind: revier.PanelAgent}}}},
 	}})
 	p.Agents = []core.NamedAgent{{Name: "dtop", Command: []string{"dtop"}}}
-	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{p}, stateRoot: root, core: &core.Core{Runtime: rt}}, &state.State{})
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{p}, stateRoot: root, core: &core.Core{Runtime: rt, View: rt}}, &state.State{})
 
 	if err := a.newAgent(context.Background(), "demo", "", "", core.Resume{Agent: "dtop"}); err != nil {
 		t.Fatalf("agent new dtop: %v", err)

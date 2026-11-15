@@ -1,14 +1,13 @@
 //go:build live
 
-// Layer L4 for `revier agent new` against a real tmux server. An agent tab is
-// a tab (decisions.md D145), and on tmux a tab is a window of the workspace's
-// session.
+// Layer L4 for `revier agent new` against a real hc core, shown in a fake
+// view. An agent tab is a tab (decisions.md D145), and on hc a tab is the
+// terminals of the workspace that share a tab's token (D179).
 package main
 
 import (
 	"io"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -19,8 +18,9 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// The agent opens in a new window of the workspace, on the conversation and in
-// the directory the command names, with the declared shell split beside it.
+// The agent opens in a new tab of the workspace, on the conversation and in
+// the directory the command names, with the declared shell split beside it,
+// and the view shows it current.
 func TestAgentNewOpensATabInTheWorkspace(t *testing.T) {
 	args := work(t)
 	agent := strings.TrimSuffix(args, ".args")
@@ -37,9 +37,13 @@ func TestAgentNewOpensATabInTheWorkspace(t *testing.T) {
 		read, _ := os.ReadFile(agent + ".started")
 		return slices.Contains(strings.Split(strings.TrimSpace(string(read)), "\n"), want)
 	})
-	windows := strings.Split(strings.TrimSpace(tmuxRun(t, "list-windows", "-t", "work", "-F", "#{window_panes} #{window_active}")), "\n")
-	if len(windows) != 2 || windows[1] != "2 1" {
-		t.Errorf("windows (panes, active) = %q, want the layout and a current second window of agent and shell", windows)
+	work := instance(t, "work")
+	got := tabs(work)
+	if len(got) != 2 || len(got[1]) != 2 {
+		t.Fatalf("tabs = %+v, want the layout and a second tab of agent and shell", got)
+	}
+	if cur, _ := liveView.FocusedPanel(t.Context(), work.Ref); cur != got[1][0].ID {
+		t.Errorf("current panel %s, want the new agent %s", cur, got[1][0].ID)
 	}
 }
 
@@ -97,55 +101,49 @@ func TestAnAgentFocusIsAGoAgentEvent(t *testing.T) {
 	}
 }
 
-// A panel no workspace holds is named, whatever the runtime.
+// A panel no workspace holds is named where no view opens a tab beside it.
 func TestAgentNewNamesAPanelNoWorkspaceHolds(t *testing.T) {
 	work(t)
-	err := run(io.Discard, []string{"agent", "new", "--panel", "%999"})
-	if err == nil || !strings.Contains(err.Error(), "%999") {
+	noView(t)
+	err := run(io.Discard, []string{"agent", "new", "--panel", "t999"})
+	if err == nil || !strings.Contains(err.Error(), "t999") {
 		t.Errorf("err = %v, want the unknown panel named", err)
 	}
 }
 
-// With outside "agent", in a tmux session that is no project's workspace, the
-// agent key opens a window that runs config.toml's first named agent in the
-// pane's directory, a named agent's key that agent, and the shell key a plain
-// shell window.
+// With outside "agent", in a window of the view's that shows no workspace,
+// the agent key opens a tab of the view's own beside it that runs
+// config.toml's first named agent, a named agent's key that agent, and the
+// shell key a plain shell tab; hc starts none of them (decisions.md D183).
 func TestAgentNewOutsideAWorkspaceRunsTheConfiguredAgent(t *testing.T) {
 	scratch(t)
 	root := os.Getenv("REVIER_CONFIG_HOME")
-	marks := t.TempDir()
 	cfg, err := os.OpenFile(config.File(root), os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = cfg.WriteString("[terminal]\noutside = \"agent\"\n" +
-		"[[agent]]\nname = \"first\"\ncommand = [\"sh\", \"-c\", \"pwd > " + marks + "/first; exec sleep 300\"]\n" +
-		"[[agent]]\nname = \"second\"\ncommand = [\"sh\", \"-c\", \"pwd > " + marks + "/second; exec sleep 300\"]\n")
+		"[[agent]]\nname = \"first\"\ncommand = [\"first-agent\"]\n" +
+		"[[agent]]\nname = \"second\"\ncommand = [\"second-agent\"]\n")
 	_ = cfg.Close()
 	if err != nil {
 		t.Fatal(err)
 	}
-	loose := t.TempDir()
-	tmuxRun(t, "new-session", "-d", "-s", "loose", "-c", loose, "sh")
-	pane := strings.TrimSpace(tmuxRun(t, "list-panes", "-t", "loose", "-F", "#{pane_id}"))
 
-	for _, args := range [][]string{{"agent", "new", "--panel", pane}, {"agent", "new", "second", "--panel", pane}, {"shell", "new", "--panel", pane}} {
+	for _, args := range [][]string{{"agent", "new", "--panel", "7"}, {"agent", "new", "second", "--panel", "7"}, {"shell", "new", "--panel", "7"}} {
 		if err := run(io.Discard, args); err != nil {
 			t.Fatalf("%s: %v", strings.Join(args, " "), err)
 		}
 	}
-	for _, name := range []string{"first", "second"} {
-		var got []byte
-		eventually(t, "agent "+name+"'s mark", func() bool {
-			got, _ = os.ReadFile(filepath.Join(marks, name))
-			return len(got) > 0
-		})
-		if dir := strings.TrimSpace(string(got)); dir != loose {
-			t.Errorf("agent %s started in %q, want %q", name, dir, loose)
-		}
+	var got []string
+	for _, tab := range liveView.Beside {
+		got = append(got, string(tab.Panel)+" "+string(tab.Spec.Kind)+" "+strings.Join(tab.Spec.Command, " "))
 	}
-	if windows := strings.Fields(tmuxRun(t, "list-windows", "-t", "loose", "-F", "#{window_panes}")); len(windows) != 4 {
-		t.Errorf("windows of loose = %q, want its own, two agents and a shell", windows)
+	if want := []string{"7 agent first-agent", "7 agent second-agent", "7 shell "}; !slices.Equal(got, want) {
+		t.Errorf("tabs beside the window = %q, want %q", got, want)
+	}
+	if n := len(instances(t)); n != 0 {
+		t.Errorf("hc runs %d instances, want none: the tabs are the view's own", n)
 	}
 }
 

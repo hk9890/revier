@@ -109,6 +109,7 @@ type Probe struct {
 // adapter that probes successfully", which is the normal case.
 type Hosts struct {
 	Runtime []string `toml:"runtime"`
+	View    []string `toml:"view"`
 	Window  []string `toml:"window"`
 }
 

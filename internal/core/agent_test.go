@@ -295,7 +295,7 @@ func TestAPanelIDHeldTwiceIsNamedByItsTarget(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty", agentPanel("1", "idle"))
 	rt.Add("diff:revier", "kitty", agentPanel("1", "idle"))
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 	p := prepared(t, project())
 
 	_, err := c.Agent(context.Background(), p, "")
@@ -420,7 +420,7 @@ func TestPromptToAWorkingAgentReturnsAtOnce(t *testing.T) {
 func TestPromptNeedsARuntimeThatCanType(t *testing.T) {
 	fake := hosttest.NewRuntime("rt")
 	fake.Add("session:revier", "kitty", agentPanel("1", "idle"))
-	c := &core.Core{Runtime: bareRuntime{fake}, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+	c := &core.Core{Runtime: bareRuntime{fake}, View: bareView{fake}, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 	a, err := c.Agent(context.Background(), prepared(t, project()), "")
 	if err != nil {
 		t.Fatal(err)

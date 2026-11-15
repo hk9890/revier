@@ -3,16 +3,14 @@ package main
 import (
 	"context"
 	"errors"
-	"io"
 	"maps"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/hk9890/revier/internal/adapter/kitty"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/hosttest"
-	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -58,15 +56,18 @@ func TestSelectRuntimeRejectsAnUnknownName(t *testing.T) {
 	}
 }
 
-// A config written for a release that had the herdr runtime is told it was
-// removed and what to name instead, not that herdr is an unknown name.
-func TestSelectRuntimeSaysTheHerdrRuntimeWasRemoved(t *testing.T) {
-	_, err := selectHost(t.Context(), "runtime", []string{"herdr", "tmux"}, defaultRuntimeOrder, runtimeAdapters())
-	if !errors.As(err, new(runtimeRemoved)) {
-		t.Fatalf("err = %v, want a removed runtime", err)
-	}
-	if want := "hosts.runtime: the herdr runtime was removed; use hc, kitty or tmux"; err.Error() != want {
-		t.Errorf("err = %q, want %q", err, want)
+// A config written for a release that had the herdr or the tmux runtime is
+// told it was removed and what to name instead, not that it is an unknown
+// name (decisions.md D175, D184).
+func TestSelectRuntimeSaysARemovedRuntimeWasRemoved(t *testing.T) {
+	for _, name := range []string{"herdr", "tmux"} {
+		_, err := selectHost(t.Context(), "runtime", []string{name, "kitty"}, defaultRuntimeOrder, runtimeAdapters())
+		if !errors.As(err, new(hostRemoved)) {
+			t.Fatalf("%s: err = %v, want a removed runtime", name, err)
+		}
+		if want := "hosts.runtime: the " + name + " runtime was removed; use hc or kitty"; err.Error() != want {
+			t.Errorf("err = %q, want %q", err, want)
+		}
 	}
 }
 
@@ -110,49 +111,6 @@ func TestAConfiguredProbeRunsBeforeOpencode(t *testing.T) {
 	}
 }
 
-// A key pressed in a tmux pane reaches tmux, also where kitty comes first and
-// would probe as usable: kitty holds no tmux pane, and the key failed.
-func TestATmuxPaneNarrowsTheRuntimeToTmux(t *testing.T) {
-	cases := []struct {
-		order, want []string
-	}{
-		{defaultRuntimeOrder, []string{"tmux"}},
-		{[]string{"kitty", "tmux"}, []string{"tmux"}},
-		{[]string{"kitty"}, []string{"kitty"}},
-		{[]string{"kitty", hostNone, "tmux"}, []string{"kitty", hostNone, "tmux"}},
-		{[]string{hostNone}, []string{hostNone}},
-		{nil, nil},
-	}
-	for _, c := range cases {
-		if got := atTmuxPane(c.order); !slices.Equal(got, c.want) {
-			t.Errorf("atTmuxPane(%q) = %q, want %q", c.order, got, c.want)
-		}
-	}
-}
-
-// The two commands a tmux key runs try tmux alone, and a kitty window id
-// still tries the list in order. With no tool on the PATH no host probes as
-// usable, so the error names every host the command tried.
-func TestATmuxKeysCommandsTryTmuxAlone(t *testing.T) {
-	root := configRoot(t, "[hosts]\nruntime = [\"kitty\", \"tmux\"]\nwindow = [\"none\"]\n", nil)
-	t.Setenv("REVIER_STATE_HOME", filepath.Join(root, "state"))
-	testenv.NoTools(t)
-
-	for _, args := range [][]string{
-		{"agent", "new", "--panel", "%3"},
-		{"shell", "new", "--panel", "%3"},
-	} {
-		err := run(io.Discard, args)
-		if err == nil || !strings.Contains(err.Error(), "tmux:") || strings.Contains(err.Error(), "kitty") {
-			t.Errorf("revier %s: err = %v, want tmux alone tried", strings.Join(args, " "), err)
-		}
-	}
-	err := run(io.Discard, []string{"agent", "new", "--panel", "3"})
-	if err == nil || !strings.Contains(err.Error(), "kitty:") || !strings.Contains(err.Error(), "tmux:") {
-		t.Errorf("revier agent new --panel 3: err = %v, want kitty and tmux tried", err)
-	}
-}
-
 // selectHost skips a default it cannot find without a word, so a name spelled
 // one way in the order and another in the registry drops that adapter, and an
 // adapter left out of the order is never tried, unless it is one a user opts
@@ -170,4 +128,79 @@ func TestEveryAdapterIsInItsDefaultOrder(t *testing.T) {
 		}
 	}
 	check("window", slices.Sorted(maps.Keys(windowAdapters())), defaultWindowOrder)
+}
+
+// A runtime that draws its own instances is its own view, and with no list
+// it is the one chosen: kitty shows itself as before. hc draws
+// nothing, so with no list it is shown by kitty where kitty and a display
+// are, and by no view where they are not, as over ssh (decisions.md D185).
+func TestTheDefaultViewIsTheRuntimesOwn(t *testing.T) {
+	kittyOnPath(t, false)
+	for name, rt := range runtimeAdapters() {
+		view, err := selectView(t.Context(), nil, rt)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		own, isView := rt.(revier.View)
+		switch {
+		case isView && view != own:
+			t.Errorf("%s: view %v, want the runtime itself", name, view)
+		case !isView && view != nil:
+			t.Errorf("%s with no display: view %v, want none", name, view)
+		}
+	}
+	if view, err := selectView(t.Context(), nil, nil); view != nil || err != nil {
+		t.Errorf("no runtime: view %v, %v; want none", view, err)
+	}
+
+	kittyOnPath(t, true)
+	hcRT := runtimeAdapters()["hc"]
+	view, err := selectView(t.Context(), nil, hcRT)
+	if kv, ok := view.(*kitty.View); err != nil || !ok || kv.Runtime != hcRT.(kitty.Attachable) {
+		t.Errorf("hc with kitty and a display: view %#v, %v; want the kitty view over hc", view, err)
+	}
+}
+
+// A configured view is a preference order: "none" leaves the runtime unshown,
+// and a view that cannot show the runtime is refused by name, as an unknown
+// name is. With runtime "none" there is nothing to show, and the view is
+// none, so every command still runs.
+func TestAConfiguredViewIsTriedInOrder(t *testing.T) {
+	adapters := runtimeAdapters()
+	kittyRT, hcRT := adapters["kitty"], adapters["hc"]
+	ctx := t.Context()
+	if view, err := selectView(ctx, []string{hostNone}, kittyRT); view != nil || err != nil {
+		t.Errorf("none: view %v, %v; want none", view, err)
+	}
+	if view, err := selectView(ctx, []string{"kitty"}, kittyRT); err != nil || view != kittyRT.(revier.View) {
+		t.Errorf("kitty over kitty: view %v, %v; want kitty", view, err)
+	}
+	cfg := &config.Config{}
+	cfg.Hosts.View = []string{"kitty"}
+	if rt, view, err := selectTerminal(ctx, cfg, []string{hostNone}); rt != nil || view != nil || err != nil {
+		t.Errorf("kitty over runtime none: %v, %v, %v; want no runtime and no view, and no error", rt, view, err)
+	}
+	if _, err := selectView(ctx, []string{"tmux"}, kittyRT); err == nil || err.Error() != "hosts.view: the tmux view was removed; use kitty" {
+		t.Errorf("tmux: err = %v, want it named removed", err)
+	}
+	if _, err := selectView(ctx, []string{"ghostty"}, kittyRT); err == nil || err.Error() != `hosts.view: unknown host "ghostty"; known: kitty, none` {
+		t.Errorf("ghostty: err = %v, want it named unknown", err)
+	}
+
+	kittyOnPath(t, false)
+	if _, err := selectView(ctx, []string{"kitty"}, hcRT); err == nil || !strings.Contains(err.Error(), "no display") {
+		t.Errorf("kitty over hc with no display: err = %v, want the kitty view refused for it", err)
+	}
+	if view, err := selectView(ctx, []string{"kitty", hostNone}, hcRT); view != nil || err != nil {
+		t.Errorf("kitty, none over hc with no display: view %v, %v; want none", view, err)
+	}
+	kittyOnPath(t, true)
+	if view, err := selectView(ctx, []string{"kitty"}, hcRT); err != nil || !is[*kitty.View](view) {
+		t.Errorf("kitty over hc with a display: view %v, %v; want the kitty view", view, err)
+	}
+}
+
+func is[T any](v any) bool {
+	_, ok := v.(T)
+	return ok
 }

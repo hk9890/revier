@@ -8,11 +8,11 @@ var SocketPath = socketPath
 // CoreEnv is coreEnv, for the tests outside the package.
 var CoreEnv = coreEnv
 
+// CoreUnit is coreUnit, for the live tests of the core's start.
+var CoreUnit = coreUnit
+
 // SetProcRoot replaces /proc.
 func (h *Host) SetProcRoot(root string) { h.procRoot = root }
-
-// Program is program, for a live test that skips where the host finds no hc.
-var Program = program
 
 // Request is one call on a session of its own, for a live test that arranges
 // or ends the core through hc's API, for what the host does not do.

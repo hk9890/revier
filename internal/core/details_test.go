@@ -24,7 +24,7 @@ func detailWorld(t *testing.T, probe revier.AgentProbe) (*core.Core, *hosttest.F
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "session:demo", Launch: []string{"x"}, Match: revier.Match{Title: "^session:demo$"}}},
 	}}})
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{probe}}
 	r, err := c.Survey(context.Background(), projects)
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +83,7 @@ func TestDetailsBeforeAnySurveyAreEmpty(t *testing.T) {
 	probe := hosttest.NewDetailedProbe("claude", "claude")
 	probe.Said["1"] = revier.AgentDetail{Message: "said"}
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{probe}}
 	got := c.Details(context.Background(), []revier.AgentView{{Panel: "1", Ref: revier.TargetRef{Host: "rt", ID: "1"}}})
 	if len(got) != 1 || !got[0].IsZero() {
 		t.Errorf("Details = %+v, want one empty detail", got)

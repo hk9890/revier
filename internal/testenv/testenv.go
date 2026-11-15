@@ -2,7 +2,8 @@
 // configuration, the state, the ssh configuration a link is checked
 // against, and kitty's configuration, which `revier term` writes. A package whose code reaches any of them calls Run from its
 // TestMain; see docs/TESTING.md. NoTools keeps one test off the tools on the
-// PATH. ShortName names a live test's socket.
+// PATH, and NoServiceManager off the user's service manager. ShortName names
+// a live test's socket.
 package testenv
 
 import (
@@ -10,6 +11,7 @@ import (
 	"hash/fnv"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -52,6 +54,23 @@ func Run(m *testing.M) int {
 	return code
 }
 
+// NoServiceManager leaves the test no user service manager to reach: run, a
+// directory of the test's own, becomes XDG_RUNTIME_DIR, and no session bus is
+// named. A start through the user's service manager then runs detached, as on
+// a machine with none, and no test starts a unit in the user's own manager.
+// The test fails when systemctl reaches a manager all the same.
+func NoServiceManager(t *testing.T, run string) {
+	t.Helper()
+	t.Setenv("XDG_RUNTIME_DIR", run)
+	t.Setenv("DBUS_SESSION_BUS_ADDRESS", "")
+	_ = os.Unsetenv("DBUS_SESSION_BUS_ADDRESS")
+	if systemctl, err := exec.LookPath("systemctl"); err == nil {
+		if exec.Command(systemctl, "--user", "--quiet", "show-environment").Run() == nil {
+			t.Fatal("systemctl --user still reaches a service manager; a start through it would run in the user's own")
+		}
+	}
+}
+
 // NoTools empties PATH for the test, so the code under test finds no tool to
 // start: the test starts no process, and mise's trust list is left as it was.
 func NoTools(t *testing.T) {
@@ -62,7 +81,8 @@ func NoTools(t *testing.T) {
 // ShortName is at most 32 of the test name's letters and digits, enough to
 // tell which test left a socket behind, and a hash of the whole name, so two
 // tests whose names differ only in what was cut or dropped still differ. It
-// is at most 40 bytes, short enough for a socket path, which tmux caps at 107.
+// is at most 40 bytes, short enough for a Unix socket path, which is at most
+// 107 bytes.
 func ShortName(t *testing.T) string {
 	name := strings.Map(func(r rune) rune {
 		if r < 128 && (unicode.IsLetter(r) || unicode.IsDigit(r)) {

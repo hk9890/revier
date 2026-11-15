@@ -14,12 +14,12 @@ import (
 // A delete or a rename is refused while anything of the project runs here or
 // may, and goes ahead when only another host's refs name it.
 func TestRefuseChange(t *testing.T) {
-	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Window: hosttest.New("gnome")}
+	c := &core.Core{Runtime: hosttest.NewRuntime("hc"), Window: hosttest.New("gnome")}
 	idle := revier.ProjectView{Project: revier.Project{Name: "demo"}, Targets: []revier.TargetView{{Name: "home"}}}
 	running := idle
-	running.Targets = []revier.TargetView{{Name: "home", Ref: revier.TargetRef{Host: "tmux", ID: "1"}}}
+	running.Targets = []revier.TargetView{{Name: "home", Ref: revier.TargetRef{Host: "hc", ID: "1"}}}
 	unknown := idle
-	unknown.Targets = []revier.TargetView{{Name: "home", Unknown: "tmux could not list"}}
+	unknown.Targets = []revier.TargetView{{Name: "home", Unknown: "hc could not list"}}
 	bound := func(host string) map[revier.ProjectName]map[revier.TargetName]revier.TargetRef {
 		return map[revier.ProjectName]map[revier.TargetName]revier.TargetRef{"demo": {"home": {Host: host, ID: "1"}}}
 	}
@@ -36,9 +36,9 @@ func TestRefuseChange(t *testing.T) {
 		{"nothing runs", idle, core.Settled{Surveyed: true}, ""},
 		{"no survey yet", idle, core.Settled{}, "no survey has answered yet; wait for it before renaming demo"},
 		{"the survey saw it run", running, core.Settled{Surveyed: true}, "demo is running"},
-		{"state bound it on a host here", idle, core.Settled{Surveyed: true, Bound: bound("tmux")}, "demo is running"},
+		{"state bound it on a host here", idle, core.Settled{Surveyed: true, Bound: bound("hc")}, "demo is running"},
 		{"state bound it on another host", idle, core.Settled{Surveyed: true, Bound: bound("kitty")}, ""},
-		{"its host could not list", unknown, core.Settled{Surveyed: true}, "tmux could not list; wait for the host before renaming it"},
+		{"its host could not list", unknown, core.Settled{Surveyed: true}, "hc could not list; wait for the host before renaming it"},
 		{"a window attached here", idle, core.Settled{Surveyed: true, Attached: attached("gnome")}, "demo has an attached window open"},
 		{"a window attached on another host", idle, core.Settled{Surveyed: true, Attached: attached("other")}, ""},
 		{"a launch of it still to show its window", idle, core.Settled{Surveyed: true, Launch: &state.Launch{Project: "demo", Target: "home", At: time.Now()}}, "demo is coming up; wait for its window before renaming it"},

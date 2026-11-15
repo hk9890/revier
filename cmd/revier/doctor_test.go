@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/hosttest"
 )
 
 // A message of several lines carries its label on the first line only: the
@@ -341,15 +342,17 @@ func TestDoctorAdvisesALinkTargetTheRemoteTable(t *testing.T) {
 // doctor reports it, in any position: after a host that works and after
 // none too, where host selection never reaches it.
 func TestDoctorReportsAnUnknownHostName(t *testing.T) {
-	configRoot(t, "[hosts]\nruntime = [\"none\", \"ghostty\", \"herdr\"]\nwindow = [\"sway\"]\n", map[string]string{"sound.toml": sound})
+	configRoot(t, "[hosts]\nruntime = [\"none\", \"ghostty\", \"herdr\", \"tmux\"]\nview = [\"none\", \"ghostty\"]\nwindow = [\"sway\"]\n", map[string]string{"sound.toml": sound})
 
 	var out strings.Builder
 	if err := cmdDoctor(&out, nil); !errors.As(err, new(problemsFound)) {
 		t.Fatalf("err = %v, want the silent non-zero end", err)
 	}
 	for _, want := range []string{
-		`hosts.runtime unknown host "ghostty"; known: hc, kitty, tmux, none`,
-		`hosts.runtime the herdr runtime was removed; use hc, kitty or tmux`,
+		`hosts.runtime unknown host "ghostty"; known: hc, kitty, none`,
+		`hosts.runtime the herdr runtime was removed; use hc or kitty`,
+		`hosts.runtime the tmux runtime was removed; use hc or kitty`,
+		`hosts.view    unknown host "ghostty"; known: kitty, none`,
 		`hosts.window  unknown host "sway"; known: gnome, none`,
 		"1 project, 1 file with problems",
 	} {
@@ -491,5 +494,57 @@ func TestDoctorWarnsWhenLinksShareARemoteProject(t *testing.T) {
 	}
 	if n := strings.Count(out.String(), "warning:"); n != 1 {
 		t.Errorf("%d warnings, want 1: only the two links to far on farbox:\n%s", n, out.String())
+	}
+}
+
+// Under hc, which draws nothing, doctor says which view shows it on this
+// machine: kitty where kitty and a display are, none where they are not, as
+// over ssh (decisions.md D185). The kitty and hc on PATH are never run.
+func TestDoctorSaysWhichViewShowsHc(t *testing.T) {
+	t.Setenv("HC_SOCKET", filepath.Join(t.TempDir(), "s.sock"))
+	for _, c := range []struct {
+		display bool
+		want    string
+	}{
+		{true, "runtime hc is shown by the kitty view"},
+		{false, "runtime hc is shown by no view"},
+	} {
+		kittyOnPath(t, c.display)
+		if err := os.WriteFile(filepath.Join(os.Getenv("PATH"), "herdr-core"), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		configRoot(t, "[hosts]\nruntime = [\"hc\"]\nwindow = [\"none\"]\n", map[string]string{"sound.toml": sound})
+		var out strings.Builder
+		if err := cmdDoctor(&out, nil); err != nil {
+			t.Fatalf("cmdDoctor: %v", err)
+		}
+		if !strings.Contains(out.String(), c.want) {
+			t.Errorf("display %v: report should contain %q:\n%s", c.display, c.want, out.String())
+		}
+	}
+}
+
+// A kitty user's runtime is its own view, and doctor says nothing of it.
+func TestDoctorSaysNothingOfARuntimeThatIsItsOwnView(t *testing.T) {
+	kittyOnPath(t, true)
+	configRoot(t, "[hosts]\nruntime = [\"kitty\"]\nwindow = [\"none\"]\n", map[string]string{"sound.toml": sound})
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); err != nil {
+		t.Fatalf("cmdDoctor: %v", err)
+	}
+	if strings.Contains(out.String(), "shown by") {
+		t.Errorf("report names a view:\n%s", out.String())
+	}
+}
+
+// A runtime shown by no view gets the hint of `revier open --attach` only
+// where it can put a terminal on a workspace: kitty cannot.
+func TestDoctorNamesTheAttachOnlyForARuntimeThatAttaches(t *testing.T) {
+	const attach = "revier open --attach"
+	if line := shownBy(attachingRuntime{FakeRuntime: hosttest.NewRuntime("hc")}, nil); !strings.Contains(line, attach) {
+		t.Errorf("hc: %q, want the hint %q", line, attach)
+	}
+	if line := shownBy(hosttest.NewRuntime("kitty"), nil); line == "" || strings.Contains(line, attach) {
+		t.Errorf("kitty: %q, want no view named and no hint %q", line, attach)
 	}
 }

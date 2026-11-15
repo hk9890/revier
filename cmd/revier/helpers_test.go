@@ -273,11 +273,11 @@ func dispatched(t *testing.T) []string {
 // runtime, and the app over state st.
 func demoDesktop(t *testing.T, st *state.State, open ...string) (*app, *hosttest.FakeRuntime) {
 	t.Helper()
-	rt := hosttest.NewRuntime("tmux")
+	rt := hosttest.NewRuntime("hc")
 	for _, title := range open {
 		rt.Add(title, "")
 	}
-	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t)}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt}}, st)
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t)}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt, View: rt}}, st)
 	return a, rt
 }
 
@@ -304,3 +304,29 @@ func termApp(t *testing.T, text, kittyConf string) (*app, string) {
 	}
 	return &app{cfg: cfg, core: &core.Core{}, out: &bytes.Buffer{}}, dir
 }
+
+// kittyOnPath puts a kitty and a kitten first on PATH that are never run,
+// and sets a display or none: what the kitty view probes for.
+func kittyOnPath(t *testing.T, display bool) {
+	t.Helper()
+	bin := t.TempDir()
+	for _, name := range []string{"kitty", "kitten"} {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", bin)
+	t.Setenv("DISPLAY", "")
+	t.Setenv("WAYLAND_DISPLAY", "")
+	if display {
+		t.Setenv("WAYLAND_DISPLAY", "wayland-0")
+	}
+}
+
+// attachingRuntime is a runtime that attaches with argv.
+type attachingRuntime struct {
+	*hosttest.FakeRuntime
+	argv []string
+}
+
+func (r attachingRuntime) AttachCommand(revier.TargetRef) ([]string, error) { return r.argv, nil }

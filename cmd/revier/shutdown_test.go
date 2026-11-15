@@ -50,7 +50,7 @@ func TestAShutdownThatLeavesATargetOpenFails(t *testing.T) {
 // complete.
 func TestAShutdownWithAStepThatFailedIsNotComplete(t *testing.T) {
 	a, rt := demoDesktop(t, &state.State{}, "home", "diff")
-	rt.CloseErr = errors.New("tmux refused")
+	rt.CloseErr = errors.New("hc refused")
 
 	var err error
 	out := output(t, a, func() error { err = cmdShutdown(context.Background(), a, nil); return nil })

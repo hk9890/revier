@@ -1,8 +1,8 @@
 //go:build live
 
-// Layer L4 for a target that lists its tabs against a real tmux server
-// (decisions.md D126). On tmux a tab is a window of the workspace's session,
-// and the order of the windows is the order revier opened them in.
+// Layer L4 for a target that lists its tabs against a real hc core, shown in
+// a fake view (decisions.md D126). On hc a tab is the terminals that share a
+// tab's label, and the labels keep the order revier opened them in (D179).
 package main
 
 import (
@@ -10,10 +10,12 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
 )
 
 const listedTabsTOML = `
@@ -57,31 +59,37 @@ func lead(t *testing.T) {
 	}
 }
 
-// leadPanes is every pane of the workspace in the order of its windows, as
-// the command it runs, whether its window is the current one, and whether it
-// is the current pane of its window.
+// leadPanes is every panel of the workspace in the order of its tabs, as the
+// place of its tab and the target its tab is, marked * when the view shows
+// it current.
 func leadPanes(t *testing.T) []string {
 	t.Helper()
-	out := tmuxRun(t, "list-panes", "-s", "-t", "lead", "-F", "#{pane_start_command} window=#{window_active} pane=#{pane_active}")
-	return strings.Split(strings.ReplaceAll(strings.TrimSpace(out), `"`, ""), "\n")
+	lead := instance(t, "lead")
+	current, err := liveView.FocusedPanel(t.Context(), lead.Ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for i, tab := range tabs(lead) {
+		for _, p := range tab {
+			line := strconv.Itoa(i) + " " + p.Vars[core.PanelTargetVar]
+			if p.ID == current {
+				line += " *"
+			}
+			out = append(out, line)
+		}
+	}
+	return out
 }
 
 var (
-	leadAtAgent = []string{
-		"sh -c sleep 302 window=0 pane=1",
-		"sh -c sleep 300 window=1 pane=1",
-		"sh -c sleep 301 window=1 pane=0",
-	}
-	leadAtTickets = []string{
-		"sh -c sleep 302 window=1 pane=1",
-		"sh -c sleep 300 window=0 pane=1",
-		"sh -c sleep 301 window=0 pane=0",
-	}
+	leadAtAgent   = []string{"0 tickets", "1 agent *", "1 agent"}
+	leadAtTickets = []string{"0 tickets *", "1 agent", "1 agent"}
 )
 
-// Window 1 runs the launch of tickets, window 2 holds the two panes of
-// agent, and the first pane of window 2 is the current one.
-func TestAWorkspaceOpensWithTheTabsItListsOnTmux(t *testing.T) {
+// The first tab runs the launch of tickets, the second holds the two panels
+// of agent, and the first panel of the second is the current one.
+func TestAWorkspaceOpensWithTheTabsItListsOnHc(t *testing.T) {
 	lead(t)
 	capture(t, "open", "lead")
 	if got := leadPanes(t); !slices.Equal(got, leadAtAgent) {
@@ -91,7 +99,7 @@ func TestAWorkspaceOpensWithTheTabsItListsOnTmux(t *testing.T) {
 
 // The key of a listed tab finds the tab the workspace opened with, and a
 // second press goes back to the agent.
-func TestTheKeyOfAListedTabFindsItAndReturnsOnTmux(t *testing.T) {
+func TestTheKeyOfAListedTabFindsItAndReturnsOnHc(t *testing.T) {
 	lead(t)
 	capture(t, "open", "lead")
 	capture(t, "go", "tickets", "-p", "lead")
@@ -106,7 +114,7 @@ func TestTheKeyOfAListedTabFindsItAndReturnsOnTmux(t *testing.T) {
 
 // The key of a listed tab with the workspace closed opens the workspace and
 // stays on that tab, with no second copy of it.
-func TestTheKeyOfAListedTabOpensTheWorkspaceOnThatTabOnTmux(t *testing.T) {
+func TestTheKeyOfAListedTabOpensTheWorkspaceOnThatTabOnHc(t *testing.T) {
 	lead(t)
 	capture(t, "go", "tickets", "-p", "lead")
 	if got := leadPanes(t); !slices.Equal(got, leadAtTickets) {
@@ -115,27 +123,25 @@ func TestTheKeyOfAListedTabOpensTheWorkspaceOnThatTabOnTmux(t *testing.T) {
 }
 
 // `revier agent new` finds the agent panel and the shell panel in the tab the
-// workspace lists (decisions.md D128): the new tab is a third window that
-// holds a copy of both, and the command prints the address of its agent.
-func TestAgentNewOpensATabInAWorkspaceThatListsItsTabsOnTmux(t *testing.T) {
+// workspace lists (decisions.md D128): the new tab is a third tab that holds
+// a copy of both, and the command prints the address of its agent.
+func TestAgentNewOpensATabInAWorkspaceThatListsItsTabsOnHc(t *testing.T) {
 	lead(t)
 	capture(t, "open", "lead")
 
 	address := strings.TrimSpace(capture(t, "agent", "new", "-p", "lead", "--no-focus"))
-	if !regexp.MustCompile(`^lead:home:%\d+$`).MatchString(address) {
-		t.Fatalf("printed %q, want lead:home:<pane>", address)
+	if !regexp.MustCompile(`^lead:home:t\d+$`).MatchString(address) {
+		t.Fatalf("printed %q, want lead:home:<address>", address)
 	}
-	pane := strings.TrimPrefix(address, "lead:home:")
-	got := strings.ReplaceAll(strings.TrimSpace(tmuxRun(t, "display-message", "-p", "-t", pane, "#{pane_start_command} panes=#{window_panes} index=#{window_index}")), `"`, "")
-	windows := strings.Split(strings.TrimSpace(tmuxRun(t, "list-windows", "-t", "lead", "-F", "#{window_index}")), "\n")
-	if want := "sh -c sleep 300 panes=2 index=" + windows[len(windows)-1]; len(windows) != 3 || got != want {
-		t.Errorf("pane %s = %q in windows %q, want %q in a third window", pane, got, windows, want)
+	got := tabs(instance(t, "lead"))
+	if len(got) != 3 || len(got[2]) != 2 || string(got[2][0].ID) != strings.TrimPrefix(address, "lead:home:") {
+		t.Errorf("tabs = %+v, want a third tab of two whose first panel is %s", got, address)
 	}
 }
 
 // A restore opens the workspace as a press does: tickets first, the agent
 // current. A shutdown closes it with its tabs in it.
-func TestListedTabsComeBackWithTheirWorkspaceOnTmux(t *testing.T) {
+func TestListedTabsComeBackWithTheirWorkspaceOnHc(t *testing.T) {
 	lead(t)
 	capture(t, "open", "lead")
 	capture(t, "session", "save")

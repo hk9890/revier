@@ -122,7 +122,7 @@ func panelTabDir(w Workspace, req TabRequest, outside bool) string {
 		return req.Dir
 	}
 	if outside || req.Kind != revier.PanelAgent {
-		return panelDir(w, req.Panel)
+		return panelDir(w, w.panel)
 	}
 	return ""
 }
@@ -173,21 +173,19 @@ func (c *Core) openPlaced(ctx context.Context, projects []Project, w Workspace, 
 }
 
 // tabOutside is the tab a terminal key asks for in a panel the runtime holds
-// in the instance w, which no project's open workspace holds. The key is not
+// in the instance w, which no project's open workspace holds, or in a
+// window of the view's that no project's workspace holds. The key is not
 // refused for that: it does what req.Outside says, a plain tab of the
-// runtime's own shell beside the panel, a tab of the agent an agent key asks
-// for, or nothing. Every other failure is returned, so the key's own
-// fallback runs (decisions.md D148, D164); so is an agent that cannot run
-// there, as OutsideKey's agent says.
+// runtime's own shell beside the panel, or of the view's beside its window,
+// also one that shows an instance, as a terminal started by hand, a tab of the
+// agent an agent key asks for, or nothing. Every other failure is returned,
+// so the key's own fallback runs (decisions.md D148, D164, D183); so is an
+// agent that cannot run there, as OutsideKey's agent says.
 func (c *Core) tabOutside(ctx context.Context, w Workspace, req TabRequest) error {
 	dir, outside := panelTabDir(w, req, true), req.Outside
 	slog.Info("tab outside a workspace", "panel", req.Panel, "ref", w.Ref, "outside", string(outside.Outside), "kind", string(req.Kind), "agent", outside.Agent, "dir", dir)
 	if outside.Outside == OutsideNone {
 		return nil
-	}
-	opener, ok := c.Runtime.(revier.PanelOpener)
-	if !ok {
-		return fmt.Errorf("%s: %w", c.Runtime.Name(), ErrNoTabsToOpen)
 	}
 	spec, what := revier.PanelSpec{Kind: revier.PanelShell, Dir: dir}, "plain tab"
 	if outside.Outside == OutsideAgent && req.Kind == revier.PanelAgent {
@@ -200,6 +198,16 @@ func (c *Core) tabOutside(ctx context.Context, w Workspace, req TabRequest) erro
 		} else {
 			slog.Warn("tab outside a workspace", "err", "config.toml declares no [[agent]] to run; the tab is a plain shell")
 		}
+	}
+	if beside, ok := c.View.(revier.BesideOpener); ok && w.beside {
+		if err := beside.OpenBeside(ctx, req.Panel, spec); err != nil {
+			return fmt.Errorf("%s: %s: %w", c.View.Name(), what, err)
+		}
+		return nil
+	}
+	opener, ok := c.opener(c.terminal())
+	if !ok {
+		return fmt.Errorf("%s: %w", c.Runtime.Name(), ErrNoTabsToOpen)
 	}
 	tab := revier.Realization{Dir: dir, Panels: []revier.PanelSpec{spec}}
 	opened, err := opener.OpenTab(ctx, w.Ref, tab, nil)

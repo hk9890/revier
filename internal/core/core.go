@@ -1,7 +1,7 @@
 // Package core holds everything that is not tool-specific: matching instances
 // against realizations, choosing which realization wins, run-or-raise, and
-// toggle-back. Adapters implement five methods and hold no policy, so this
-// package is where behaviour is pinned and where most tests point.
+// toggle-back. Adapters implement a few methods per port and hold no policy,
+// so this package is where behaviour is pinned and where most tests point.
 package core
 
 import (
@@ -38,10 +38,14 @@ var (
 )
 
 // Core orchestrates hosts and probes. Runtime may be nil on a machine with no
-// usable terminal host, and Window may be nil on one with no window control;
+// usable terminal, and Window may be nil on one with no window control;
 // targets degrade individually rather than the product failing as a whole.
+// View shows the runtime's instances (decisions.md D176), and is nil where
+// nothing shows them: a press then starts what is missing and focuses
+// nothing, and nothing reports the runtime's focus.
 type Core struct {
 	Runtime revier.Runtime
+	View    revier.View
 	Window  revier.WindowController
 	Probes  []revier.AgentProbe
 
@@ -66,6 +70,12 @@ type Core struct {
 	// process is a fact about this machine, so the wiring supplies it; nil
 	// refuses the press of every command target.
 	Run func(ctx context.Context, argv []string, dir string) error
+
+	// SwitchPopup tells the popup's surface to switch its list, over the
+	// socket that surface listens on (decisions.md D182), and fails when no
+	// surface listens. The socket is a fact about this machine, so the wiring
+	// supplies it; nil leaves the second press the raise of the popup.
+	SwitchPopup func(ctx context.Context) error
 
 	// Machine is this machine's name, as `uname -n` prints it: the first half
 	// of the tag a link's panel gives what it starts on a host. Empty reads
@@ -113,13 +123,13 @@ type Core struct {
 	Poll time.Duration
 }
 
-// WithRuntime is the same core over another runtime host. It is a new core
-// and not a changed field, so a survey still running on the old one reads
-// the host it started with, and the two never share a mutable map: the
-// remotes known so far are copied.
-func (c *Core) WithRuntime(rt revier.Runtime) *Core {
+// WithRuntime is the same core over another runtime and the view that shows
+// it. It is a new core and not a changed field, so a survey still running on
+// the old one reads the runtime it started with, and the two never share a
+// mutable map: the remotes known so far are copied.
+func (c *Core) WithRuntime(rt revier.Runtime, view revier.View) *Core {
 	out := c.clone()
-	out.Runtime = rt
+	out.Runtime, out.View = rt, view
 	return out
 }
 
@@ -141,11 +151,13 @@ func (c *Core) clone() *Core {
 	defer c.seenMu.Unlock()
 	return &Core{
 		Runtime:       c.Runtime,
+		View:          c.View,
 		Window:        c.Window,
 		Probes:        c.Probes,
 		Served:        c.Served,
 		Self:          c.Self,
 		Run:           c.Run,
+		SwitchPopup:   c.SwitchPopup,
 		Machine:       c.Machine,
 		Remotes:       maps.Clone(c.Remotes),
 		NewRemote:     c.NewRemote,
@@ -166,7 +178,7 @@ func (c *Core) hosts() []revier.Host {
 		out = append(out, c.Window)
 	}
 	if c.Runtime != nil {
-		out = append(out, c.Runtime)
+		out = append(out, c.terminal())
 	}
 	return out
 }
@@ -242,7 +254,7 @@ func (c *Core) resolve(t revier.Target) (revier.Host, revier.Realization, revier
 	}
 	runtime, hasRuntime := revier.Host(nil), false
 	if c.Runtime != nil && t.Runtime != nil {
-		runtime, hasRuntime = c.Runtime, true
+		runtime, hasRuntime = c.terminal(), true
 	}
 
 	switch {
@@ -346,7 +358,7 @@ func (c *Core) answered(ctx context.Context, hosts ...string) (snapshot, error) 
 }
 
 // nameOf is the host's name, or empty for no host.
-func nameOf(h revier.Host) string {
+func nameOf(h interface{ Name() string }) string {
 	if h == nil {
 		return ""
 	}
@@ -418,12 +430,12 @@ func (c *Core) listing(ctx context.Context) (snapshot, hostErrs) {
 // every named runtime window of the process is found there by its title, one
 // window per named window, so two named windows of one title need two. The
 // process id was rejected for pairing a pane to a window, because every OS
-// window of one kitty process shares its pid (D19); that objection is exactly
+// window of one kitty process shares its pid (D177); that objection is exactly
 // this refusal, so an ambiguous process is left as it was rather than guessed
 // at (D63). A named window the window host does not list could
 // be the one left over, and its title would then be lent to the wrong window.
 func (c *Core) identify(s snapshot) {
-	if c.Runtime == nil || c.Window == nil || !c.Runtime.Capabilities().OSWindows {
+	if c.Runtime == nil || c.Window == nil || !c.osWindows() {
 		return
 	}
 	runtimes, windows := s[c.Runtime.Name()], s[c.Window.Name()]
@@ -577,8 +589,8 @@ func (c *Core) locate(snap snapshot, p Project, i int, host revier.Host, m revie
 // is to survive a title the rule no longer matches (decisions.md D21): an
 // editor window is bound while its title still says the file it opened with.
 // A target that declares no class is trusted as before, and so is a runtime
-// binding: a runtime id is never handed back out, because the kitty, tmux
-// and hc hosts put the process or the server that assigned it into it.
+// binding: a runtime id is never handed back out, because the kitty and hc
+// hosts put the process or the core that assigned it into it.
 func (c *Core) bindingHolds(p Project, i int, host revier.Host, inst revier.Instance) bool {
 	if c.Window == nil || host.Name() != c.Window.Name() {
 		return true
@@ -745,6 +757,11 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 		}
 		added, err := c.addAgents(ctx, host, p, layout, ref, extra)
 		res.Agents, res.AgentErr = append(agents, added...), err
+		// A view that opens its own windows draws the instance once every
+		// tab of it runs (decisions.md D180).
+		if _, err := c.show(ctx, ref, true); err != nil {
+			return res, fmt.Errorf("%s: show new %s: %w", c.View.Name(), name, err)
+		}
 		// Focus explicitly. Some hosts focus what they launch and some do not,
 		// so without this the raise half of run-or-raise holds only by
 		// accident of the host - the window opens behind on the ones that do
@@ -773,7 +790,7 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 			return c.goTo(ctx, p, home.Name, bound)
 		}
 	}
-	osw, err := c.raisable(snap, failed, inst, name)
+	osw, err := c.raisableShown(ctx, snap, failed, inst, name, real.Place)
 	if err != nil {
 		return Result{}, err
 	}
@@ -971,7 +988,7 @@ func (c *Core) awaitNew(ctx context.Context, before []revier.Instance, wait, pol
 // opened. A terminal's own focus does not raise its OS window where the
 // compositor refuses it, kitty's on GNOME Wayland, and the workspace kitty
 // never holds the window the key was pressed in (decisions.md D165). So the
-// window host raises it, as it raises one already open (D19). A failure is
+// window host raises it, as it raises one already open (D177). A failure is
 // not returned, unlike a raise of an open window (D63): the launch ran, and
 // the press is one, with only the raise missing, as place says of a placement.
 // The OS window is the one place waited for, if it did; one place waited for
@@ -1084,7 +1101,7 @@ func (c *Core) classOK(p Project, i int, w revier.Instance) bool {
 }
 
 // osWindowOf finds the window-host instance that is the OS window of a runtime
-// instance. Only a runtime that reports OSWindows takes part: it gives each
+// instance. Only a runtime whose view reports OSWindows takes part: it gives each
 // instance the title a window host reports for the same window, so the two
 // listings describe one window from two sides. The pid is a filter on top -
 // every OS window of one kitty process shares it - never the identity.
@@ -1117,7 +1134,7 @@ func (c *Core) osWindowOf(snap snapshot, inst revier.Instance) (revier.Instance,
 // as soon as two runtime instances answer to it, because a guess here would
 // attach a project to the wrong terminal.
 func (c *Core) runtimeOf(instances []revier.Instance, w revier.Instance) (revier.Instance, bool) {
-	if c.Runtime == nil || c.Window == nil || !c.Runtime.Capabilities().OSWindows ||
+	if c.Runtime == nil || c.Window == nil || !c.osWindows() ||
 		w.Ref.Host != c.Window.Name() || w.Title == "" {
 		return revier.Instance{}, false
 	}
@@ -1163,9 +1180,9 @@ func (c *Core) attachment(instances []revier.Instance, ref revier.TargetRef) []r
 }
 
 // bridged reports whether inst lives in an OS window the window host raises:
-// it is the runtime's, and the runtime reports OSWindows.
+// it is the runtime's, and its view reports OSWindows.
 func (c *Core) bridged(inst revier.Instance) bool {
-	return c.Window != nil && c.Runtime != nil && inst.Ref.Host == c.Runtime.Name() && c.Runtime.Capabilities().OSWindows
+	return c.Window != nil && c.Runtime != nil && inst.Ref.Host == c.Runtime.Name() && c.osWindows()
 }
 
 // Focus activates a ref on the host that produced it and raises the OS window
@@ -1182,7 +1199,7 @@ func (c *Core) Focus(ctx context.Context, ref revier.TargetRef) error {
 		return c.focus(ctx, ref)
 	}
 	name := revier.TargetName(ref.Title)
-	osw, err := c.raisable(snap, failed, inst, name)
+	osw, err := c.raisableShown(ctx, snap, failed, inst, name, "")
 	if err != nil {
 		return err
 	}
@@ -1220,7 +1237,7 @@ func (c *Core) focusAuthority() revier.Host {
 		return c.Window
 	}
 	if c.Runtime != nil {
-		return c.Runtime
+		return c.terminal()
 	}
 	return nil
 }
@@ -1232,14 +1249,14 @@ func (c *Core) focusAuthority() revier.Host {
 // somewhere: strictly worse than a keypress that does nothing surprising.
 //
 // So only the focus authority's answer counts, and only about its own ids.
-// Ids are host-scoped - a GNOME window id and a tmux pane id are unrelated
-// numbers - so comparing across hosts is meaningless, and a runtime's "current
-// pane" says nothing about OS focus: a tmux session can be current while the
-// user is looking at the editor.
+// Ids are host-scoped - a GNOME window id and an hc address are unrelated -
+// so comparing across hosts is meaningless, and a view's current instance
+// says nothing about OS focus: a view can show one current while the user is
+// looking at the editor.
 //
 // A runtime instance is therefore judged through the OS window that holds it,
-// when the runtime can name one (osWindowOf). A multiplexer cannot, and for it
-// toggle-back does not fire on a machine that has a window host.
+// when its view can name one (osWindowOf). A view that cannot, and no view,
+// leave toggle-back unfired on a machine that has a window host.
 func (c *Core) focusedOn(ctx context.Context, snap snapshot, inst revier.Instance) bool {
 	auth := c.focusAuthority()
 	if auth == nil || inst.Ref.ID == "" {

@@ -121,8 +121,8 @@ const (
 
 // Realization is how one host provides a target.
 type Realization struct {
-	// Name is the identity a host gives a new instance: a tmux session name, a
-	// kitty OS window title, the --class a browser is launched with. Open must
+	// Name is the identity a host gives a new instance: an hc instance's name,
+	// a kitty OS window title, the --class a browser is launched with. Open must
 	// produce an instance that this realization's Match then finds, and Name is
 	// how a host that assigns its own identity satisfies that invariant.
 	Name string `toml:"name" json:"name,omitempty"`
@@ -151,7 +151,7 @@ type Realization struct {
 	// and reports back as Panel.Vars. No project file sets them: the core
 	// fills them, as it fills Dir, so that a panel revier opened is
 	// identified later by the mark rather than guessed at. They are what
-	// PanelOpener.OpenTab takes for a tab, on the panels of the instance's
+	// TabOpener.OpenTab takes for a tab, on the panels of the instance's
 	// own tab, or of the first tab it opens with.
 	// A window host has no panels and ignores them.
 	Vars map[string]string `toml:"-" json:"vars,omitempty"`
@@ -160,14 +160,15 @@ type Realization struct {
 	// width, height - in the window host's own vocabulary of pixels and
 	// workarea-relative words: "right top 75% 100%". It applies to a launch
 	// and never to a raise, because moving a window the user has already put
-	// somewhere is not revier's business (decisions.md D24).
+	// somewhere is not revier's business (decisions.md D24). A view window
+	// that opens again over a live instance is placed as a launch's (D186).
 	//
 	// A window host that cannot place windows ignores it.
 	Place string `toml:"place" json:"place,omitempty"`
 
 	// Inside names another target of the project, and makes this one a tab
 	// of that target's instance rather than an instance of its own. Runtime
-	// realizations only, on a runtime that implements PanelOpener. The tab
+	// realizations only, on a runtime that implements TabOpener. The tab
 	// runs Launch or holds Panels, one of the two. It is found by the
 	// target's name, which revier sets on it, so Match and Name are not used
 	// (decisions.md D64).
@@ -185,7 +186,7 @@ type Realization struct {
 	Active TargetName `toml:"active" json:"active,omitempty"`
 }
 
-// PanelSpecs is what a runtime host runs for the realization: its panels, or
+// PanelSpecs is what a runtime runs for the realization: its panels, or
 // Launch in Dir as the one panel.
 func (r Realization) PanelSpecs() []PanelSpec {
 	if len(r.Panels) == 0 {

@@ -41,7 +41,7 @@ func TestSurveyReportsARefusedTargetWithItsReason(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty")
 	win := hosttest.New("win")
-	c := &core.Core{Runtime: rt, Window: win}
+	c := &core.Core{Runtime: rt, View: rt, Window: win}
 
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, refusing())})
 	if err != nil {
@@ -71,7 +71,7 @@ func TestSurveyReportsARefusedTargetWithItsReason(t *testing.T) {
 // refused carries a Reason, so the two never read alike.
 func TestAMissingHostIsNotAReason(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt} // no window host
+	c := &core.Core{Runtime: rt, View: rt} // no window host
 
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
 	if err != nil {
@@ -92,7 +92,7 @@ func TestAMissingHostIsNotAReason(t *testing.T) {
 func TestGoOnARefusedTargetFailsWithTheReason(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	win := hosttest.New("win")
-	c := &core.Core{Runtime: rt, Window: win}
+	c := &core.Core{Runtime: rt, View: rt, Window: win}
 
 	_, err := press(context.Background(), c, prepared(t, refusing()), "web")
 	if err == nil {
@@ -110,7 +110,7 @@ func TestGoOnARefusedTargetFailsWithTheReason(t *testing.T) {
 // precisely so the reason has somewhere to be read.
 func TestSurveyListsAnInvalidProject(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt}
+	c := &core.Core{Runtime: rt, View: rt}
 
 	p := core.PrepareProject(revier.Project{Name: "broken"})
 	p.Invalid = errors.New("demo.toml: expected a key at line 2")

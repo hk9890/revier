@@ -38,22 +38,16 @@ const (
 	popupPoll = 20 * time.Millisecond
 )
 
-// SwitchKey is the press the popup's surface switches its list on, as a
-// terminal delivers alt+space. The desktop takes the trigger key before the
-// popup's terminal sees it, so a press on the focused popup is typed into its
-// panel instead (decisions.md D110).
-const SwitchKey = "\x1b "
-
-// Popup switches the list of the surface the focused window shows: the second
-// press of the key on the popup, and the first on a revier the user runs in a
-// terminal of their own (decisions.md D110). With no surface under the key it
-// raises the popup when it is open. Otherwise it launches what argv
-// returns, which must start a terminal of class PopupClass running the
-// surface, then raises the new window and places it (D76). The
-// size is decided before the launch, so revier places the window once and
-// never measures it to place it again. argv is a function, asked only for a launch: what
-// it carries - the project the surface opens on - costs a listing the raise
-// must not pay.
+// Popup switches the list of the popup when the popup is the focused window:
+// the second press of the key (decisions.md D182). Otherwise it raises the
+// popup when it is open, or launches what argv returns, which must start a
+// terminal of class PopupClass running the surface, then raises the new
+// window and places it (D76). A revier the user runs in a terminal of their
+// own is no popup: the key raises or opens the popup over it. The size is
+// decided before the launch, so revier places the window once and never
+// measures it to place it again. argv is a function, asked only for a launch:
+// what it carries - the project the surface opens on - costs a listing the
+// raise must not pay.
 func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (revier.TargetRef, error) {
 	if c.Window == nil {
 		return revier.TargetRef{}, ErrNoPopupHost
@@ -74,9 +68,9 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 	if err != nil {
 		slog.Warn("popup: focused window", "err", err)
 	}
-	if ref, ok := c.switchSurface(ctx, before, over); ok {
-		slog.Info("popup: switch", "ref", ref)
-		return ref, nil
+	if c.switchPopup(ctx, before, over) {
+		slog.Info("popup: switch", "ref", over)
+		return over, nil
 	}
 	if w, ok := popupWindow(before); ok {
 		slog.Info("popup: raise", "ref", w.Ref, "minimized", w.Minimized)
@@ -128,91 +122,35 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 	return ref, nil
 }
 
-// switchSurface types SwitchKey into the surface the focused window shows,
-// and reports that window and whether it did. focused is the window host's
-// focused window, zero for none. The surface is the popup, or a
-// revier the user started in a terminal of their own: the key means the same
-// on both, and the desktop takes it from both. windows is the window host's
-// listing.
-//
-// The panel is the runtime's to find and to type into. A runtime that cannot
-// type, a focused window that is no terminal of it, and a terminal whose
-// current panel runs something else all leave the press what it was before
-// the surface had a second list: the popup, raised or opened.
-func (c *Core) switchSurface(ctx context.Context, windows []revier.Instance, focused revier.TargetRef) (revier.TargetRef, bool) {
-	w, ok := c.Runtime.(revier.PanelWriter)
-	if !ok || focused.IsZero() {
-		return revier.TargetRef{}, false
+// switchPopup tells the popup to switch its list when it is the focused
+// window, and reports whether it did. focused is the window host's focused
+// window, zero for none, and windows its listing: the popup is found by its
+// class alone, so no runtime is asked and the switch works under every
+// runtime. A press the popup does not take - no SwitchPopup, or no surface
+// that listens - leaves the press what it was before the surface had a
+// second list: the popup, raised.
+func (c *Core) switchPopup(ctx context.Context, windows []revier.Instance, focused revier.TargetRef) bool {
+	if c.SwitchPopup == nil || focused.IsZero() {
+		return false
 	}
-	at := slices.IndexFunc(windows, func(in revier.Instance) bool { return in.Ref.ID == focused.ID })
-	if at < 0 {
-		return revier.TargetRef{}, false
+	if !slices.ContainsFunc(windows, func(w revier.Instance) bool { return w.Ref.ID == focused.ID && w.Class == PopupClass }) {
+		return false
 	}
-	instances, err := c.Runtime.Instances(ctx)
-	if err != nil {
-		slog.Warn("popup: switch", "err", err)
-		return revier.TargetRef{}, false
+	if err := c.SwitchPopup(ctx); err != nil {
+		slog.Warn("popup: switch", "ref", focused, "err", err)
+		return false
 	}
-	inst, panel, ok := c.surfacePanel(ctx, instances, windows[at])
-	if !ok {
-		return revier.TargetRef{}, false
-	}
-	if err := w.SendText(ctx, inst.Ref, panel, SwitchKey); err != nil {
-		slog.Warn("popup: switch", "ref", inst.Ref, "err", err)
-		return revier.TargetRef{}, false
-	}
-	return focused, true
-}
-
-// surfacePanel is the panel of a window that runs the surface, and the
-// runtime instance that holds it. The popup's terminal is found by its class
-// and holds the surface alone. Any other window is paired with its terminal
-// as an attachment is (runtimeOf), and counts only while the panel current in
-// it runs revier with no command: a terminal with the surface in another tab
-// is a terminal the user is doing something else in.
-func (c *Core) surfacePanel(ctx context.Context, instances []revier.Instance, window revier.Instance) (revier.Instance, revier.PanelID, bool) {
-	if window.Class == PopupClass {
-		for _, inst := range instances {
-			if inst.Class == PopupClass && len(inst.Panels) > 0 {
-				return inst, inst.Panels[0].ID, true
-			}
-		}
-		return revier.Instance{}, "", false
-	}
-	inst, ok := c.runtimeOf(instances, window)
-	opener, canAsk := c.Runtime.(revier.PanelOpener)
-	if !ok || !canAsk || !slices.ContainsFunc(inst.Panels, surface) {
-		return revier.Instance{}, "", false
-	}
-	current, err := opener.FocusedPanel(ctx, inst.Ref)
-	if err != nil {
-		return revier.Instance{}, "", false
-	}
-	for _, p := range inst.Panels {
-		if p.ID == current && surface(p) {
-			return inst, p.ID, true
-		}
-	}
-	return revier.Instance{}, "", false
-}
-
-// surface reports a panel whose foreground command is revier with no command
-// of its own: the TUI. `revier agent wait` in a panel is not one.
-func surface(p revier.Panel) bool {
-	return len(p.Command) == 1 && p.Runs("revier")
+	return true
 }
 
 // RaiseSelf brings the terminal this process runs in back to the front: its
 // panel current, and its window raised, as a press on an agent brings that
 // agent's. The surface calls it once a restore has ended, because each
-// window the restore opened came up over it, the popup included, and hid
-// the result. The terminal is the runtime's panel that c.Self names. A
-// surface in a terminal no runtime here lists - or with no Self - is left
-// where it is, and so is one whose window the window host cannot pair with
-// it: raising a guess would raise somebody else's window. The popup's
-// terminal is raised by its class, as the press that raises it does: kitty
-// gives its OS window no name of its own, and a popup kitty an older revier
-// started still holds workspaces.
+// window the restore opened came up over it and hid the result. The terminal
+// is the runtime's panel that c.Self names. A surface in a terminal no
+// runtime here lists - or with no Self - is left where it is, and so is one
+// whose window the window host cannot pair with it: raising a guess would
+// raise somebody else's window. The popup is raised by RaisePopup instead.
 func (c *Core) RaiseSelf(ctx context.Context) error {
 	if c.Self == nil || c.Runtime == nil {
 		return nil
@@ -226,11 +164,6 @@ func (c *Core) RaiseSelf(ctx context.Context) error {
 	for _, inst := range snap[c.Runtime.Name()] {
 		for _, p := range inst.Panels {
 			if c.Self(p) {
-				if inst.Class == PopupClass {
-					err := c.raisePopup(ctx, snap, failed)
-					logging.Op("surface raise", start, err, "ref", inst.Ref, "popup", true)
-					return err
-				}
 				err := c.focusPanel(ctx, snap, failed, inst.Ref, p.ID, "revier")
 				logging.Op("surface raise", start, err, "ref", inst.Ref, "panel", p.ID)
 				return err
@@ -238,6 +171,29 @@ func (c *Core) RaiseSelf(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// RaisePopup brings the popup back to the front once a restore has ended, as
+// RaiseSelf does for any other surface. The popup is found by its class
+// through the window host, as the press that raises it is: no runtime is
+// asked, so it is raised under every runtime (decisions.md D182). It is
+// ErrNoPopupHost with no window host.
+func (c *Core) RaisePopup(ctx context.Context) error {
+	if c.Window == nil {
+		return ErrNoPopupHost
+	}
+	start := time.Now()
+	windows, err := c.Window.Instances(ctx)
+	if err == nil {
+		w, ok := popupWindow(windows)
+		if !ok {
+			err = fmt.Errorf("popup: no window of class %s to raise", PopupClass)
+		} else {
+			err = c.Window.Focus(ctx, w.Ref)
+		}
+	}
+	logging.Op("surface raise", start, err, "popup", true)
+	return err
 }
 
 // HidePopup takes the open popup off the screen and keeps it, for the next
@@ -259,22 +215,6 @@ func (c *Core) HidePopup(ctx context.Context) error {
 	}
 	slog.Info("popup: hide", "ref", w.Ref)
 	return hider.Hide(ctx, w.Ref)
-}
-
-// raisePopup raises the popup's window, found by its class on a listing
-// already taken.
-func (c *Core) raisePopup(ctx context.Context, snap snapshot, failed hostErrs) error {
-	if c.Window == nil {
-		return ErrNoPopupHost
-	}
-	if err := failed[c.Window.Name()]; err != nil {
-		return err
-	}
-	w, ok := popupWindow(snap[c.Window.Name()])
-	if !ok {
-		return fmt.Errorf("popup: no window of class %s to raise", PopupClass)
-	}
-	return c.Window.Focus(ctx, w.Ref)
 }
 
 // TakePopupHidden reports whether the press that raised the popup found it

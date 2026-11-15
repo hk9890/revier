@@ -215,7 +215,7 @@ func TestSettleClaimsTheTerminalWithTheWindow(t *testing.T) {
 	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
 	wm := hosttest.New("wm")
 	l := &ledger{st: state.State{Launch: &state.Launch{Project: "revier", At: now}}}
-	settle := settling(t, &core.Core{Runtime: rt, Window: wm}, l, now)
+	settle := settling(t, &core.Core{Runtime: rt, View: rt, Window: wm}, l, now)
 	settle()
 
 	term := rt.AddInstance(revier.Instance{Title: "scratch", Class: "kitty", PID: 4242})

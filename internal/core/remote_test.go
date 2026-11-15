@@ -29,7 +29,7 @@ func TestSurveyTakesARemoteProjectsAgentsFromItsHost(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.Add("session:demo", "kitty")
 	remote := hosttest.NewRemote("buildbox", answer("demo", revier.StatusAttention))
-	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
+	c := &core.Core{Runtime: rt, View: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
 
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, remoteProject("demo"))})
 	if err != nil {
@@ -144,7 +144,7 @@ func TestSurveyDoesNotProbeTheLocalPaneOfARemoteProject(t *testing.T) {
 	rt.Add("session:demo", "kitty")
 	remote := hosttest.NewRemote("buildbox")
 	remote.Err = errors.New("buildbox: connection refused")
-	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
+	c := &core.Core{Runtime: rt, View: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
 
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, remoteProject("demo"))})
 	if err != nil {
@@ -253,7 +253,7 @@ func TestSurveyProbesTheLocalAgentsWhileAHostAnswers(t *testing.T) {
 	rt.Add("session:revier", "kitty", revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude"})
 	remote := slowRemote{hosttest.NewRemote("buildbox", answer("demo", revier.StatusIdle)), probed}
 	probe := &signalProbe{FakeProbe: &hosttest.FakeProbe{Harness: "claude", State: revier.AgentState{Harness: "claude", Status: revier.StatusRunning}}, probed: probed}
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}, Remotes: map[string]revier.Remote{"buildbox": remote}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{probe}, Remotes: map[string]revier.Remote{"buildbox": remote}}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
@@ -358,7 +358,7 @@ func TestSurveyLocalAsksNoHostAndLayPutsItsAnswerOver(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.Add("session:demo", "kitty")
 	remote := hosttest.NewRemote("buildbox", answer("demo", revier.StatusAttention))
-	c := &core.Core{Runtime: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
+	c := &core.Core{Runtime: rt, View: rt, Remotes: map[string]revier.Remote{"buildbox": remote}}
 	projects := []core.Project{prepared(t, remoteProject("demo"))}
 
 	local, err := c.SurveyLocal(context.Background(), projects)

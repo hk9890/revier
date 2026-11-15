@@ -36,7 +36,7 @@ func localProject(t *testing.T) core.Project {
 func TestAnActionThatRanIsAnEvent(t *testing.T) {
 	root := t.TempDir()
 	recordingTo(t, root)
-	c := &core.Core{Runtime: hosttest.NewRuntime("tmux")}
+	c := &core.Core{Runtime: hosttest.NewRuntime("hc")}
 	a := acting(root, localProject(t), c, config.Action{Name: "broken", Run: []string{"false"}}, config.Action{Name: "sync", Run: []string{"true"}})
 
 	if err := cmdRun(context.Background(), a, []string{"broken", "-p", "demo"}); !errors.Is(err, errActionFailed) {
@@ -62,7 +62,7 @@ func TestALinksActionIsNoEventHere(t *testing.T) {
 	recordingTo(t, root)
 	remote := hosttest.NewRemote("buildbox")
 	remote.RunArgv = []string{"true"}
-	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Remotes: map[string]revier.Remote{"buildbox": remote}}
+	c := &core.Core{Runtime: hosttest.NewRuntime("hc"), Remotes: map[string]revier.Remote{"buildbox": remote}}
 
 	if err := cmdRun(context.Background(), acting(root, remoteProject(t), c), []string{"sync", "-p", "far"}); err != nil {
 		t.Fatalf("run: %v", err)
@@ -83,7 +83,7 @@ func TestAnActionsEventCarriesTheTimeItStarted(t *testing.T) {
 	root := t.TempDir()
 	recordingTo(t, root)
 	const ran = 100 * time.Millisecond
-	a := acting(root, localProject(t), &core.Core{Runtime: hosttest.NewRuntime("tmux")}, config.Action{Name: "wait", Run: []string{"sleep", "0.1"}})
+	a := acting(root, localProject(t), &core.Core{Runtime: hosttest.NewRuntime("hc")}, config.Action{Name: "wait", Run: []string{"sleep", "0.1"}})
 
 	if err := cmdRun(context.Background(), a, []string{"wait", "-p", "demo"}); err != nil {
 		t.Fatalf("run: %v", err)
@@ -104,7 +104,7 @@ func TestAnActionsEventCarriesTheTimeItStarted(t *testing.T) {
 func TestRunOnARemoteProjectRunsOnTheHost(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox")
 	remote.RunArgv = []string{"true"}
-	c := &core.Core{Runtime: hosttest.NewRuntime("tmux"), Remotes: map[string]revier.Remote{"buildbox": remote}}
+	c := &core.Core{Runtime: hosttest.NewRuntime("hc"), Remotes: map[string]revier.Remote{"buildbox": remote}}
 	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{remoteProject(t)}, stateRoot: t.TempDir(), core: c}, &state.State{})
 
 	if err := cmdRun(context.Background(), a, []string{"sync", "-p", "far"}); err != nil {

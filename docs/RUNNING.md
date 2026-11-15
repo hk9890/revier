@@ -11,8 +11,9 @@ editors, and switches focus. **Never verify a change by driving the user's
 session.** A stray `Open` steals focus mid-sentence, and a stray `Focus` moves
 a window the user is reading.
 
-Every recipe below runs on a private substrate instead. Nothing here attaches a
-client, reaches a display, or is visible in the user's own tmux.
+Every recipe below runs on a private substrate instead: an hc core of its
+own, shown in no view. Nothing here attaches a client, reaches a display, or
+reaches the user's own hc core or service manager.
 
 `revier keys install`, `revier term install` and their `uninstall` rewrite the
 user's desktop and kitty configuration, the kitty one often a link into a
@@ -25,18 +26,22 @@ worktree has none.
 ## Drive the CLI against a scratch configuration
 
 `REVIER_CONFIG_HOME` and `REVIER_STATE_HOME` redirect revier away from the
-user's projects and state. `TMUX_TMPDIR` and `unset TMUX` move revier's tmux
-runtime, and every `tmux` command after them, onto a private server. Set all
-four, every time, in the one shell that runs the recipes below.
-`REVIER_SSH_CONFIG` points the remote screen's "new" (alt+r, then alt+n) and
-the check for this machine at a scratch ssh configuration instead of
-`~/.ssh/config`; set it whenever a recipe reaches the remote screen.
+user's projects and state. `hcp` runs a command on a private hc core: its own
+config, state, runtime directory and socket, and no session bus. Any `hc`
+command starts a core when none answers its socket, so run every `hc` and
+every `./bin/revier` through `hcp`. revier starts a core as the unit
+`revier-hc-<socket hash>` of the user's service manager; under `hcp` it reaches no manager
+and starts the core detached. Set all of it, every time, in the one shell
+that runs the recipes below. `REVIER_SSH_CONFIG` points the remote screen's
+"new" (alt+r, then alt+n) and the check for this machine at a scratch ssh
+configuration instead of `~/.ssh/config`; set it whenever a recipe reaches
+the remote screen.
 
 ```bash
 S=$(mktemp -d); mkdir -p "$S/projects" "$S/state"
-export TMUX_TMPDIR=$(mktemp -d /tmp/rv.XXXX)   # short: tmux fails on a socket path over 107 bytes
-unset TMUX                                     # inside tmux, $TMUX names the user's server
-printf '[hosts]\nruntime = ["tmux"]\nwindow = ["none"]\n' > "$S/config.toml"   # never touch a real window
+C=$(mktemp -d /tmp/hc.XXXX); mkdir -m 700 "$C/run"   # short: a socket path over 107 bytes cannot be bound
+hcp() { env -u DBUS_SESSION_BUS_ADDRESS -u HC_TERMINAL_ID -u HC_TERMINAL_SOCKET -u HC_SESSION SHELL=/bin/sh XDG_CONFIG_HOME=$C XDG_STATE_HOME=$C XDG_RUNTIME_DIR=$C/run HC_SOCKET=$C/s.sock "$@"; }
+printf '[hosts]\nruntime = ["hc"]\nview = ["none"]\nwindow = ["none"]\n' > "$S/config.toml"   # never touch a real window
 cat > "$S/projects/demo.toml" <<EOF
 path = "$S"
 [[target]]
@@ -52,24 +57,27 @@ name = "agent"
   inside = "home"                                         # panels are on a tab alone
     [[target.runtime.panels]]
     kind = "agent"
-    command = ["bash", "-c", "exec -a claude sleep 600"]   # the Claude probe claims a pane named claude
+    command = ["bash", "-c", "exec -a claude sleep 600"]   # the Claude probe claims a terminal named claude
     [[target.runtime.panels]]
     kind = "shell"
 EOF
 export REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state
+tabs() { for a in $(hcp hc ls --json | jq -r '.terminals[].address'); do hcp hc get "$a" --json | jq -c '{address, tab: .labels["revier.tab"], place: .labels["revier.tabplace"], argv: .foreground.argv}'; done; }
 
-./bin/revier status -p demo    # which hosts were selected
-./bin/revier doctor            # what did not load whole, and its fix; exit 1 if any
-./bin/revier open demo         # run-or-raise the workspace
-./bin/revier list              # agent state and target availability
-./bin/revier list --json       # what both renderers read
+hcp ./bin/revier status -p demo    # which hosts were selected
+hcp ./bin/revier doctor            # what did not load whole, and its fix; last line: runtime hc is shown by no view
+hcp ./bin/revier open demo         # run-or-raise the workspace: its tabs as hc terminals
+tabs                               # each terminal, its tab's token and place
+hcp ./bin/revier list              # agent state and target availability
+hcp ./bin/revier list --json       # what both renderers read
 ```
 
-Keep the `[hosts]` line. Without `runtime = ["tmux"]` the workspace opens as a
-real kitty OS window; without `window = ["none"]` a window target launches a
+Keep the `[hosts]` lines. Without `runtime = ["hc"]` the workspace opens as
+a real kitty OS window; without `view = ["none"]` kitty shows hc in windows
+on the user's desktop; without `window = ["none"]` a window target launches a
 real application and moves the user's focus.
 
-Leave the server and `$S` in place for the recipes below;
+Leave the core and `$S` in place for the recipes below;
 [Clean up](#clean-up) removes them.
 
 `revier new` and `revier open <unknown name>` write into
@@ -78,86 +86,92 @@ Leave the server and `$S` in place for the recipes below;
 Point a `git_url` you test cloning with at a local bare repository
 (`git init --bare $S/origin.git`).
 
+Do not run `revier open --attach` here: the attach takes over the shell
+that runs it.
+
 To exercise the agent monitor, use the demo's agent panel. Its state is what
-`claude agents --json` lists for the pane's pid (`docs/design/decisions.md`
+`claude agents --json` lists for the terminal's pid (`docs/design/decisions.md`
 D57), so put a `claude` first on PATH that lists the files of a scratch
-sessions directory, and write the pane's file there:
+sessions directory, and write the terminal's file there. hc reads a
+terminal's foreground process about twice a second, so `agentpane` finds a
+new agent a moment after it starts:
 
 ```bash
 export CLAUDE_CONFIG_DIR=$S/claude; mkdir -p "$S/bin" "$CLAUDE_CONFIG_DIR/sessions"
 printf '#!/bin/sh\nprintf "["; sep=; for f in "$CLAUDE_CONFIG_DIR"/sessions/*.json; do [ -e "$f" ] && printf "$sep" && cat "$f" && sep=,; done; printf "]"\n' > "$S/bin/claude"; chmod +x "$S/bin/claude"
 export PATH="$S/bin:$PATH"                            # every revier below asks this claude, never the real one
-agentpane() {                                         # the workspace's agent pane, the first listed; again after a restart
-  pid=$(tmux list-panes -a -F '#{pane_pid} #{pane_current_command}' | awk '$2=="claude"{print $1; exit}')
-  pane=$(tmux list-panes -a -F '#{pane_id} #{pane_current_command}' | awk '$2=="claude"{print $1; exit}')
+agentpane() {                                         # the workspace's agent terminal, the first listed; again after a restart
+  set -- $(for a in $(hcp hc ls --json | jq -r '.terminals[].address'); do hcp hc get "$a" --json | jq -r 'select(.foreground.argv[0]=="claude") | "\(.foreground.pid) \(.address)"'; done | head -1)
+  pid=$1 pane=$2
 }
 agentpane
 st() { printf '{"pid": %s, "status": "%s"}' "$pid" "$1" > "$CLAUDE_CONFIG_DIR/sessions/$pid.json"; }
 st busy       # -> running
 st waiting    # -> attention
 st idle       # -> idle
-./bin/revier agent wait demo --until idle --timeout 5    # exit 0, or 2 on timeout
-./bin/revier agent prompt demo 'hello'                    # types into that pane only; warns, as sleep never starts a turn
-tmux capture-pane -p -t "$pane"                           # the text arrived
-./bin/revier agent send-keys demo x enter                 # typed in any state, st waiting included
-./bin/revier agent read demo --screen --lines 5           # the pane's last lines, as plain text
-./bin/revier agent read demo                              # refused: the session file names no conversation
-./bin/revier agent new -p demo --no-focus                 # prints demo:home:<pane>
-tmux list-windows -t home -F '#{window_index} #{window_active}'   # the new window is not the current one
+hcp ./bin/revier agent wait demo --until idle --timeout 5    # exit 0, or 2 on timeout
+hcp ./bin/revier agent prompt demo 'hello'                    # types into that terminal only; warns, as sleep never starts a turn
+hcp hc read "$pane"                                           # the text arrived
+hcp ./bin/revier agent send-keys demo x enter                 # typed in any state, st waiting included
+hcp ./bin/revier agent read demo --screen --lines 5           # the terminal's last lines, as plain text
+hcp ./bin/revier agent read demo                              # refused: the session file names no conversation
+hcp ./bin/revier agent new -p demo --no-focus                 # prints demo:home:<address>, a tab of its own token
+tabs                                                          # the new tab's two terminals, after the layout's
 ```
 
-`revier agent prompt` and `revier agent send-keys` type into a pane, and
+`revier agent prompt` and `revier agent send-keys` type into a terminal, and
 `revier agent close` closes one. Run them only with the scratch configuration
 above: without it, they reach the user's real agent.
 
 ## Drive save and restore across a reboot
 
-`tmux kill-server` on the private server is the reboot: workspaces and
-bindings are gone, project files and the saved session stay.
+`hcp hc server stop` is the reboot: every terminal and binding is gone,
+project files and the saved session stay.
 
 ```bash
-./bin/revier session save --name before-reboot   # what is open now
-./bin/revier session list                        # id, reason, label, counts
-ls "$REVIER_STATE_HOME/sessions"                 # <id>.toml: names, conversations, dirs; never a host or argv
-tmux kill-server                                 # the private server only
-./bin/revier session restore --dry-run           # what it would open
-./bin/revier session restore                     # the newest whole save, in file order
-agentpane                                        # the restore started a new agent pane
+hcp ./bin/revier session save --name before-reboot   # what is open now
+hcp ./bin/revier session list                        # id, reason, label, counts
+ls "$REVIER_STATE_HOME/sessions"                     # <id>.toml: names, conversations, dirs; never a host or argv
+hcp hc server stop                                   # the private core only
+hcp ./bin/revier session restore --dry-run           # what it would open
+hcp ./bin/revier session restore                     # the newest whole save, in file order
+agentpane                                            # the restore started a new agent terminal
 ```
 
-The save asks `claude agents --json` which conversation each agent pane's
-process holds, and in which directory. To run the resume path, give the pane's
-file a `sessionId` and a `cwd`, with the fake `claude` from the agent monitor
-recipe on PATH. File a transcript for the conversation too: revier resumes
-only a conversation Claude Code has filed.
+The save asks `claude agents --json` which conversation each agent
+terminal's process holds, and in which directory. To run the resume path,
+give the terminal's file a `sessionId` and a `cwd`, with the fake `claude`
+from the agent monitor recipe on PATH. File a transcript for the
+conversation too: revier resumes only a conversation Claude Code has filed.
 
 ```bash
 printf '{"pid": %s, "status": "idle", "sessionId": "abc-123", "cwd": "%s"}' "$pid" "$S" > "$CLAUDE_CONFIG_DIR/sessions/$pid.json"
 mkdir -p "$CLAUDE_CONFIG_DIR/projects/-filed" && echo '{"type":"user"}' > "$CLAUDE_CONFIG_DIR/projects/-filed/abc-123.jsonl"
-./bin/revier session save   # prints "1 agent conversation recorded"
+hcp ./bin/revier session save   # prints "1 agent conversation recorded"
 ```
 
 To run the agents past the layout, open more agents before the save, each in
 its own directory, and list each one's pid the same way. The restore opens
-each as a window of the workspace's session:
+each as a tab of the workspace:
 
 ```bash
-./bin/revier agent new -p demo --dir "$S/state"
-tmux list-windows -t home                        # the layout, then one window per agent
+hcp ./bin/revier agent new -p demo --dir "$S/state"
+tabs                                             # the layout, then one tab per agent
 ```
 
-Run a real `claude` in the pane instead to check against Claude Code itself:
-answer its trust prompt for the directory with "Yes", since the default exits.
+Run a real `claude` in the terminal instead to check against Claude Code
+itself: answer its trust prompt for the directory with "Yes", since the
+default exits.
 
 To drive a shutdown, open the workspace again and close it on the private
-server only:
+core only:
 
 ```bash
-./bin/revier open demo; agentpane                # the pane st writes for
-./bin/revier shutdown --dry-run                  # what it would close
-st busy; ./bin/revier shutdown                   # refused, names the agent
-./bin/revier shutdown --force                    # saves when changed, then closes
-tmux list-sessions                               # no server running
+hcp ./bin/revier open demo; agentpane            # the terminal st writes for
+hcp ./bin/revier shutdown --dry-run              # what it would close
+st busy; hcp ./bin/revier shutdown               # refused, names the agent
+hcp ./bin/revier shutdown --force                # saves when changed, then closes
+hcp hc ls                                        # no terminal left
 ```
 
 ## Drive a link without a host
@@ -177,9 +191,9 @@ printf '#!/bin/sh\nshift\nexec sh -c "$1"\n' > "$S/bin/loginsh"   # a login shel
 printf '#!/bin/sh\nwhile [ "$1" != "--" ]; do shift; done; shift; shift\nREVIER_CONFIG_HOME=%s REVIER_STATE_HOME=%s/state SHELL=%s/bin/loginsh exec sh -c "$1"\n' "$H" "$H" "$S" > "$S/bin/ssh"
 chmod +x "$S/bin/ssh" "$S/bin/loginsh"; ln -s "$PWD/bin/revier" "$S/bin/revier"
 
-./bin/revier open far                                        # two panes, each the stand-in ssh become the host's panel
+hcp ./bin/revier open far                                    # two terminals, each the stand-in ssh become the host's panel
 REVIER_CONFIG_HOME=$H ./bin/revier list --json demo          # the host's view: the agent under its tag, on host "proc"
-./bin/revier list --json far                                 # the view here: the same agent, by its pane here
+hcp ./bin/revier list --json far                             # the view here: the same agent, by its terminal here
 ```
 
 The agent's pid for the session file is the process whose environment carries
@@ -188,25 +202,24 @@ The agent's pid for the session file is the process whose environment carries
 
 ## Drive the TUI without a screen
 
-The TUI needs a terminal, and a tmux pane is one. Run it on a private server
-against the scratch configuration above and read the screen back:
+The TUI needs a terminal, and an hc terminal is one. Run it on the private
+core against the scratch configuration above and read the screen back:
 
 ```bash
-t() { tmux -L revier-tui "$@"; }                # a function: zsh does not split a $T variable
-t new-session -d -s tui -x 100 -y 20 "env -u TMUX REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state ./bin/revier"   # inside the session $TMUX names this server, not the runtime's
-t capture-pane -p -t tui                        # the rows, as rendered
-t send-keys -t tui d e m M-t                    # type to filter, alt+t moves the cursor onto the targets
-for k in back clear quit; do t send-keys -t tui Escape; sleep 0.3; done   # one at a time: two quick Escapes read as alt+Escape
-t kill-server
+hcp hc run --bg --name tui ./bin/revier         # the TUI, in a terminal of the private core
+hcp hc read tui                                 # the rows, as rendered
+hcp hc keys tui d e m alt+t                     # type to filter, alt+t moves the cursor onto the targets
+for k in back clear quit; do hcp hc keys tui esc; sleep 0.3; done   # one at a time: two quick Escapes read as alt+Escape
+hcp hc kill tui; hcp hc rm tui
 ```
 
 Enter on a project runs its home target, so press it only on a scratch project
 whose panels are harmless, such as the demo's.
 
-To see the agent line change without a keypress, write the agent pane's session
-file while the TUI runs, then capture again after a refresh. Start the TUI with
-the fake `claude` and `CLAUDE_CONFIG_DIR` from the agent monitor recipe in its
-environment:
+To see the agent line change without a keypress, write the agent terminal's
+session file while the TUI runs, then read the screen again after a refresh.
+Start the TUI with the fake `claude` and `CLAUDE_CONFIG_DIR` from the agent
+monitor recipe in its environment:
 
 ```bash
 st waiting    # the row moves to the top as attention
@@ -214,18 +227,22 @@ st waiting    # the row moves to the top as attention
 
 ## Drive the core without any configuration
 
-`scripts/drive` builds a project in memory and runs it against a tmux server on
-socket `revier-drive`, which is private to it.
+`scripts/drive` builds a project in memory and runs it against an hc core of
+its own in `$TMPDIR/revier-drive-<uid>`, private to it, with no view.
 
 ```bash
 go run ./scripts/drive go home      # run-or-raise the workspace
-go run ./scripts/drive go diff      # opens, and leaves it focused
-go run ./scripts/drive go diff      # focused already, so this returns home
+go run ./scripts/drive go diff      # opens diff
+go run ./scripts/drive go diff      # raises the same diff: with no view nothing reports the focus
 go run ./scripts/drive survey       # the view both renderers read, as JSON
-go run ./scripts/drive kill         # remove the private server
+go run ./scripts/drive kill         # stop the private core and remove its directory
 ```
 
-Run `kill` when you finish. The server persists between invocations on purpose,
+Expect one WARN on the first `go`, `the service manager did not start the
+unit; starting it detached`: the driver's environment reaches no service
+manager, so the core starts detached, as it should.
+
+Run `kill` when you finish. The core persists between invocations on purpose,
 so a stale one skews the next session's first result.
 
 Read `survey` for `available`: a window-only target reports `false` on a machine
@@ -257,32 +274,6 @@ scripts/demo/record <vm> /tmp/x   # anywhere else, to compare first
 - Open each clip in a browser before you commit: ffmpeg cannot decode an
   animated WebP.
 
-## Inspect the private server
-
-```bash
-tmux -L revier-drive list-panes -a -F '#{session_id} #{@revier-name} #{window_id} #{pane_current_command}'
-tmux -L revier-drive show-options -s -v @revier-focus   # the session Focus left current
-```
-
-`-L revier-drive` is what keeps this off the user's default server. A tmux
-command without it addresses their real sessions.
-
-## Run a private hc core
-
-Any `hc` command starts a core when none answers its socket, so set the
-scratch directory before the first one. A private `XDG_RUNTIME_DIR` also keeps
-the core off systemd. Keep the directory short: a socket path over 107 bytes
-cannot be bound.
-
-```bash
-C=$(mktemp -d /tmp/hc.XXXX); mkdir -m 700 "$C/run"
-hcp() { env -u HC_TERMINAL_ID -u HC_TERMINAL_SOCKET -u HC_SESSION SHELL=/bin/sh XDG_CONFIG_HOME=$C XDG_STATE_HOME=$C XDG_RUNTIME_DIR=$C/run HC_SOCKET=$C/s.sock "$@"; }
-hcp setsid hc server start </dev/null >/dev/null 2>&1
-hcp hc run --bg --label revier.instance=0a1b2c3d4e5f6a7b --label revier.name=demo sleep 300
-hcp hc get t1 --json | jq .labels                     # the labels Instances groups by; `hc ls` leaves them out
-hcp hc server stop; rm -rf "$C"                       # ends every program the core runs
-```
-
 ## When a screen is unavoidable
 
 Only the GNOME host and kitty's `Open` and `Focus` need the user's live
@@ -313,7 +304,7 @@ kitten @ --to "$W" ls | jq '.[] | select(.wm_name=="home") | .tabs[].windows[] |
 wctl focused --json | jq .title                           # home
 ./bin/revier go agent -p demo; ./bin/revier go agent -p demo   # the agent tab, and back to home
 kitten @ --to "$W" close-window --match id:<id>           # once per id the ls above printed
-printf '[hosts]\nruntime = ["tmux"]\nwindow = ["none"]\n' > "$S/config.toml"   # back to the private substrate
+printf '[hosts]\nruntime = ["hc"]\nview = ["none"]\nwindow = ["none"]\n' > "$S/config.toml"   # back to the private substrate
 ```
 
 The scratch workspace opens in the user's own workspace kitty, the service
@@ -327,6 +318,30 @@ inside. Pass `--to unix:$XDG_RUNTIME_DIR/kitty-<pid>` to reach another
 process; the pids are the kitty entries in `wctl list --json`. A kitty that
 `kitty.conf` puts on `listen_on unix:@kitty` is at `--to unix:@kitty-<pid>`;
 revier does not look for it.
+
+To verify the kitty view over hc, hand the user the same scratch project on
+the private hc core of
+[Drive the CLI](#drive-the-cli-against-a-scratch-configuration), started
+first. Run revier
+with that core's `HC_SOCKET` alone, not through `hcp`: `hcp`'s runtime
+directory and unset bus hide the display from kitty and the window manager
+from `wctl`. The view windows open in the user's workspace kitty, as in the
+kitty recipe above, and each runs `hc attach` of one terminal:
+
+```bash
+hcp setsid hc server start </dev/null >/dev/null 2>&1   # first: a revier that finds no core starts a revier-hc-* unit in the user's manager
+hcr() { HC_SOCKET=$C/s.sock "$@"; }
+printf '[hosts]\nruntime = ["hc"]\nwindow = ["gnome"]\n' > "$S/config.toml"
+hcr ./bin/revier open demo                                # one kitty OS window titled home, a tab per tab
+for s in "$XDG_RUNTIME_DIR"/revier-kitty-*; do kitten @ --to "unix:$s" ls >/dev/null 2>&1 && W=unix:$s; done
+kitten @ --to "$W" ls | jq '.[] | select(.wm_name=="home") | .tabs[].windows[] | {id, user_vars}'   # REVIER_VIEW_PANEL names each terminal
+hcr ./bin/revier go agent -p demo; hcr ./bin/revier go agent -p demo   # the agent tab, and back to home
+kitten @ --to "$W" close-window --match id:<id>           # every id above: the terminals run on
+hcr ./bin/revier open demo                                # the window again, over the same terminals
+hcr ./bin/revier shutdown --force                         # the terminals end, and their windows with them
+hcp hc server stop
+printf '[hosts]\nruntime = ["hc"]\nview = ["none"]\nwindow = ["none"]\n' > "$S/config.toml"   # back to the private substrate
+```
 
 To check a binding's command as the desktop runs it, hand the user the same
 scratch project in the login shell the binding uses:
@@ -365,6 +380,6 @@ Run this in the shell that ran the recipes, once the last recipe that uses
 `$S` is done; they share its state:
 
 ```bash
-[ -n "$TMUX_TMPDIR" ] && env -u TMUX tmux kill-server   # the private server only
-rm -rf "$S" "$H" "$TMUX_TMPDIR"
+[ -n "$C" ] && hcp hc server stop   # the private core only; ends every terminal it runs
+rm -rf "$S" "$H" "$C"
 ```

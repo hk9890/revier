@@ -153,7 +153,7 @@ func TestTheSessionPaneShowsTheRestorePlan(t *testing.T) {
 // it resumes, and the directory where that is not the project's own.
 func TestAPlannedResumeShowsItsConversation(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
-	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{hosttest.NewResumableProbe("claude", "claude")}}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.NewResumableProbe("claude", "claude")}}
 	worktree := t.TempDir()
 	projects := core.Prepare([]revier.Project{{Name: "work", Path: "/p/work", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
@@ -272,6 +272,31 @@ func TestARestoreRaisesTheSurfaceOnceItEnds(t *testing.T) {
 	}
 	if bar := barLine(m); !strings.Contains(bar, "sessions alt+s") {
 		t.Errorf("bar = %q, want the project list once the restore ended", bar)
+	}
+}
+
+// The popup is raised by its class through the window host once a restore
+// ends, not by its panel: a runtime that lists no popup, as hc does, leaves
+// it raised all the same (decisions.md D182).
+func TestARestoreRaisesThePopupByItsClass(t *testing.T) {
+	rt, wm, c, projects := world(t, 2)
+	c.Self = func(revier.Panel) bool { return false }
+	popup := wm.Add("revier", core.PopupClass)
+	root := stateWith(t, nil)
+	saved(t, root, "work", 10, homeOf("project-00"), homeOf("project-01"))
+	m := resize(refreshed(t, c, projects, root, nil).WithPopup(), 150, 30)
+	m, _ = press(m, "alt+s")
+
+	m, cmd := press(m, "enter")
+	_, raise := deliver(m, cmd)
+	wm.Focuses = nil
+	runAll(raise)
+
+	if !slices.Equal(wm.Focuses, []revier.TargetRef{popup}) {
+		t.Errorf("window focuses = %v, want the popup %v raised once", wm.Focuses, popup)
+	}
+	if len(rt.Opened) == 0 {
+		t.Error("the restore opened nothing, want the saved homes")
 	}
 }
 

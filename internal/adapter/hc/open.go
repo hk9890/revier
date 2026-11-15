@@ -3,6 +3,7 @@ package hc
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -22,15 +23,16 @@ import (
 	"github.com/hk9890/revier/internal/adapter/proc"
 	"github.com/hk9890/revier/internal/panelstart"
 	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/internal/userunit"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
 // Open starts one terminal per panel, starting the core when none runs. The
 // terminals share a new instance id as their revier.instance label, and carry
-// r.Name as revier.name, which Instances reads as the title, their place as
-// revier.panel, and r.Vars as labels of their own, which Instances reports
-// back as the panel's Vars. Each is named rv-<id>-<place>, which the attach
-// takes.
+// r.Name as revier.name, which Instances reads as the title, the token of the
+// instance's first tab and its place 0, their place in it as revier.panel,
+// and r.Vars as labels of their own, which Instances reports back as the
+// panel's Vars. Each is named rv-<id>-<place>, which the attach takes.
 //
 // A terminal has no parent, so it outlives the terminal revier runs in, and
 // is not kept: a kept terminal hc brings back after a reboot is a bare shell
@@ -39,8 +41,7 @@ import (
 // terminals all exited is never seen to be closed, and hc would hold their
 // records and screens for a day.
 //
-// An instance that fails is closed whole, as tmux kills a session that fails:
-// left open, it would be matched.
+// An instance that fails is closed whole: left open, it would be matched.
 func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
 	if r.Name == "" || !utf8.ValidString(r.Name) {
 		return revier.TargetRef{}, fmt.Errorf("hc: realization has no name to give the instance")
@@ -64,10 +65,10 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	}
 	defer s.close()
 	// The core starts each program on its own PATH, which can differ from
-	// this process's: "hc server start" can hand the core to a systemd user
-	// unit, which gives it the PATH of the user's manager. So the core runs
-	// before a program is checked, and a core started here stays up when a
-	// program is not on its PATH. /proc shows the environment the core was
+	// this process's: the core runs as a service of the user's service
+	// manager, with the manager's PATH, or was started by hand. So the core
+	// is started before a program is checked, and a core started here stays
+	// up when a program is not on its PATH. /proc shows the environment the core was
 	// started with: after "hc server restart" the core sets the environment
 	// it saved, which /proc does not show, so the check can then use a stale
 	// PATH.
@@ -85,32 +86,106 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	if err != nil {
 		return revier.TargetRef{}, err
 	}
-	if err := start(s, id, r, panels, commands, runEnv(h.root(), s.pid)); err != nil {
-		// The close has a bound and a session of its own: the end of ctx may
-		// be what failed the instance. It finds the terminals by the instance
-		// label, so one whose run was not answered goes too.
-		closing, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
-		_ = h.closeInstance(closing, s.hello.Core.ID, id)
+	token, err := instanceID()
+	if err != nil {
+		return revier.TargetRef{}, err
+	}
+	tab := map[string]string{instanceLabel: id, nameLabel: r.Name, tabLabel: token, tabPlaceLabel: "0"}
+	name := func(i int) string { return terminalName(id, i) }
+	if _, err := start(s, tab, r.Vars, panels, commands, runEnv(h.root(), s.pid), name); err != nil {
+		// It finds the terminals by the instance label, so one whose run was
+		// not answered goes too.
+		h.closeAfter(ctx, s.hello.Core.ID, map[string]string{instanceLabel: id})
 		return revier.TargetRef{}, err
 	}
 	return revier.TargetRef{Host: h.Name(), ID: s.hello.Core.ID + "/" + id, Title: r.Name}, nil
 }
 
-// start runs the panels of instance id, each with its command and env, and
-// checks, in one listing, that each still runs. hc removes a terminal when
-// its program exits, so one that exited is missing from the listing.
+// OpenTab starts the terminals of a new last tab of the instance: one per
+// panel of r, or r.Launch in r.Dir alone. They carry the instance's labels, a
+// new tab token, the place after the last tab the instance holds, their place
+// in the tab, and vars as labels of their own, so a view draws them as one
+// tab after the others, and two tabs of the same vars stay two (decisions.md
+// D179). hc keeps no focus, so the focus is a view's.
+//
+// A tab whose terminal fails is closed whole, found by its token, as Open
+// closes an instance: the core names the agent of a failed tab as not added.
+// A terminal started by hand is no instance of revier's, and takes no tab.
+func (h *Host) OpenTab(ctx context.Context, r revier.TargetRef, real revier.Realization, vars map[string]string) (revier.PanelID, error) {
+	if err := keeps(vars); err != nil {
+		return "", err
+	}
+	panels := real.PanelSpecs()
+	for _, p := range panels {
+		if p.Dir != "" && !isDir(p.Dir) {
+			return "", fmt.Errorf("hc: directory %q does not exist", p.Dir)
+		}
+	}
+	s, ref, err := h.session(ctx, r, false)
+	if err != nil {
+		return "", err
+	}
+	defer s.close()
+	if ref.byHand() {
+		return "", fmt.Errorf("hc: %s is a terminal started by hand, not an instance of revier's, and opens no tab", ref.key)
+	}
+	var list listResult
+	if err := s.call("terminal.list", map[string]any{"labels": map[string]string{instanceLabel: ref.key}}, &list); err != nil {
+		return "", err
+	}
+	if len(list.Terminals) == 0 {
+		return "", fmt.Errorf("hc: instance %s runs no terminal to open a tab beside", r.ID)
+	}
+	last := -1
+	for _, t := range list.Terminals {
+		last = max(last, place(t, tabPlaceLabel))
+	}
+	commands, err := panelstart.CommandsOn(panels, proc.ServerPATH(h.root(), s.pid))
+	if err != nil {
+		return "", err
+	}
+	token, err := instanceID()
+	if err != nil {
+		return "", err
+	}
+	tab := map[string]string{
+		instanceLabel: ref.key, nameLabel: titleOf(list.Terminals[0]), tabLabel: token, tabPlaceLabel: strconv.Itoa(last + 1),
+	}
+	name := func(i int) string { return tabTerminalName(ref.key, token, i) }
+	first, err := start(s, tab, vars, panels, commands, runEnv(h.root(), s.pid), name)
+	if err != nil {
+		h.closeAfter(ctx, ref.core, map[string]string{instanceLabel: ref.key, tabLabel: token})
+		return "", err
+	}
+	return revier.PanelID(first), nil
+}
+
+// closeAfter closes the terminals that carry labels, live or finished, after
+// a start that failed. The close has a bound and a session of its own: the
+// end of ctx may be what failed the start.
+func (h *Host) closeAfter(ctx context.Context, core string, labels map[string]string) {
+	closing, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	_ = h.closeLabelled(closing, core, labels)
+}
+
+// start runs the panels of one tab, each with its command and env, under the
+// tab's labels, its place as revier.panel, and vars, and checks, in one
+// listing, that each still runs. hc removes a terminal when its program
+// exits, so one that exited is missing from the listing. It returns the
+// address of the tab's first terminal.
 //
 // The check sees only a program that ended before the listing: one that ends
-// a moment later leaves an instance without that panel. A terminal whose
+// a moment later leaves a tab without that panel. A terminal whose
 // revier.panel label names no place among the panels, as one a user labelled
 // by hand, is none of them.
-func start(s *session, id string, r revier.Realization, panels []revier.PanelSpec, commands [][]string, env map[string]string) error {
+func start(s *session, tab, vars map[string]string, panels []revier.PanelSpec, commands [][]string, env map[string]string, name func(int) string) (string, error) {
 	for i, p := range panels {
-		labels := map[string]string{instanceLabel: id, nameLabel: r.Name, panelLabel: strconv.Itoa(i)}
-		maps.Copy(labels, r.Vars)
+		labels := maps.Clone(tab)
+		labels[panelLabel] = strconv.Itoa(i)
+		maps.Copy(labels, vars)
 		params := map[string]any{
-			"labels": labels, "name": terminalName(id, i), "no_parent": true, "keep": false, "rm": true, "env": env,
+			"labels": labels, "name": name(i), "no_parent": true, "keep": false, "rm": true, "env": env,
 		}
 		if commands[i] != nil {
 			params["argv"] = commands[i]
@@ -119,27 +194,28 @@ func start(s *session, id string, r revier.Realization, panels []revier.PanelSpe
 			params["cwd"] = p.Dir
 		}
 		if err := s.call("terminal.run", params, nil); err != nil {
-			return notStarted(err, p)
+			return "", notStarted(err, p)
 		}
 	}
 
 	var list listResult
-	if err := s.call("terminal.list", map[string]any{"labels": map[string]string{instanceLabel: id}, "all": true}, &list); err != nil {
-		return err
+	filter := map[string]string{instanceLabel: tab[instanceLabel], tabLabel: tab[tabLabel]}
+	if err := s.call("terminal.list", map[string]any{"labels": filter, "all": true}, &list); err != nil {
+		return "", err
 	}
-	running := make([]bool, len(panels))
+	running := make([]string, len(panels))
 	for _, t := range list.Terminals {
 		i, err := strconv.Atoi(t.Labels[panelLabel])
 		if t.State == "live" && err == nil && i >= 0 && i < len(panels) {
-			running[i] = true
+			running[i] = t.Address
 		}
 	}
-	for i, live := range running {
-		if !live {
-			return panelstart.ExitedAtOnce(panels[i])
+	for i, address := range running {
+		if address == "" {
+			return "", panelstart.ExitedAtOnce(panels[i])
 		}
 	}
-	return nil
+	return running[0], nil
 }
 
 // notStarted words hc's spawn_failed as the panel's start failure. Its
@@ -154,10 +230,18 @@ func notStarted(err error, p revier.PanelSpec) error {
 	return err
 }
 
-// terminalName is the name of an instance's terminal at place i. hc takes
-// 1-32 of a-z, 0-9, '-', '_' and '.', and an instance id is 16 hex digits.
+// terminalName is the name of the terminal at place i of an instance's first
+// tab. hc takes 1-32 of a-z, 0-9, '-', '_' and '.', and an instance id is 16
+// hex digits.
 func terminalName(id string, i int) string {
 	return "rv-" + id + "-" + strconv.Itoa(i)
+}
+
+// tabTerminalName is the name of the terminal at place i of a tab OpenTab
+// starts: the instance id and the first 8 hex digits of the tab's token, so
+// two tabs never share a name and the name stays within 32 characters.
+func tabTerminalName(id, token string, i int) string {
+	return "rv-" + id + "-" + token[:8] + "-" + strconv.Itoa(i)
 }
 
 // instanceID is a new instance id: 64 random bits as 16 lowercase hex digits,
@@ -179,7 +263,7 @@ func keeps(vars map[string]string) error {
 		switch {
 		case k == "" || strings.Contains(k, "=") || !utf8.ValidString(k):
 			return fmt.Errorf("hc: var %q is not a label key hc takes: it must be UTF-8, not empty, with no '='", k)
-		case k == instanceLabel || k == nameLabel || k == panelLabel:
+		case slices.Contains(ownLabels, k):
 			return fmt.Errorf("hc: var %s is revier's own label", k)
 		case v == "" || !utf8.ValidString(v):
 			return fmt.Errorf("hc: var %s=%q is not kept as written: hc drops an empty label, and takes UTF-8 alone", k, v)
@@ -192,22 +276,33 @@ func keeps(vars map[string]string) error {
 // CLI waits as long for one it starts.
 const startWait = 15 * time.Second
 
+// coreUnit is the service the user's service manager runs the core on socket
+// as: revier-hc- and the first 8 hex digits of the socket path's SHA-256. One
+// name per socket makes a second start while it runs fail, so two presses at
+// once start one core, and names it to stop. The core of another socket, as
+// another hc session's, is a unit of another name: this socket's start
+// neither fails on it nor takes it for its own.
+func coreUnit(socket string) string {
+	sum := sha256.Sum256([]byte(socket))
+	return "revier-hc-" + hex.EncodeToString(sum[:4])
+}
+
 // startCore starts the core with "hc server start", which waits for the core
-// to answer, and returns a session with it. It runs in a session of its own,
-// with no terminal to write to; what it says on stderr is the reason a start
-// that fails gives.
+// to answer, and returns a session with it. What the start says on stderr is
+// the reason a start that fails gives.
 //
 // The core hands every program it starts its starter's environment, for its
-// whole life, so the core is started with coreEnv.
+// whole life: started from a shell, it would hand that shell's venv or
+// credentials to every agent. So the start runs as a service of the user's
+// service manager, with the session's login environment and the socket this
+// host dials (decisions.md D167). The start forks the core and exits, which
+// the service takes as its start. Where there is no service manager, it runs
+// detached, in a session of its own with no terminal to write to, and with
+// coreEnv.
 func (h *Host) startCore(ctx context.Context) (*session, error) {
-	bin, err := program()
+	bin, err := Program()
 	if err != nil {
 		return nil, err
-	}
-	cmd := exec.CommandContext(ctx, bin, "server", "start")
-	cmd.Env = coreEnv(os.Environ())
-	if h.Socket != "" {
-		cmd.Env = append(cmd.Env, "HC_SOCKET="+h.Socket)
 	}
 	// stderr is a file, not a pipe: a core that keeps the start's stderr
 	// then holds neither the wait open nor a pipe whose reader went away,
@@ -220,9 +315,32 @@ func (h *Host) startCore(ctx context.Context) (*session, error) {
 		_ = syscall.Flock(int(stderr.Fd()), syscall.LOCK_UN)
 		_ = stderr.Close()
 	}()
-	cmd.Stderr = stderr
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	if err := cmd.Run(); err != nil {
+	service := userunit.Unit{
+		Name:       coreUnit(h.socket()),
+		Properties: []string{"Type=forking", "StandardOutput=null", "StandardError=append:" + stderr.Name()},
+		Env:        []string{"HC_SOCKET=" + h.socket()},
+	}
+	// The manager's environment names no session: the core is told the
+	// session this host's socket is for.
+	if session := os.Getenv("HC_SESSION"); session != "" {
+		service.Env = append(service.Env, "HC_SESSION="+session)
+	}
+	detached := func(ctx context.Context) error {
+		cmd := exec.CommandContext(ctx, bin, "server", "start")
+		cmd.Env = coreEnv(os.Environ())
+		if h.Socket != "" {
+			cmd.Env = append(cmd.Env, "HC_SOCKET="+h.Socket)
+		}
+		cmd.Stderr = stderr
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		return cmd.Run()
+	}
+	// The manager's PATH need not hold the one program found on.
+	path, err := exec.LookPath(bin)
+	if err != nil {
+		return nil, fmt.Errorf("hc: %w", err)
+	}
+	if err := userunit.Start(ctx, service, []string{path, "server", "start"}, detached); err != nil {
 		said, _ := io.ReadAll(io.NewSectionReader(stderr, 0, 64<<10))
 		return nil, fmt.Errorf("hc: %s server start: %w: %s", bin, err, strings.TrimSpace(string(said)))
 	}
@@ -319,19 +437,19 @@ func (h *Host) waitCore(ctx context.Context) (*session, error) {
 // that terminal's.
 var foreignVars = slices.Concat(proc.TerminalVars, proc.CommandVars, proc.AgentSessionVars)
 
-// closeInstance kills and removes every terminal that carries the instance
-// id, live or finished, on the core called core, all at once: hc's kill can
-// take a second a terminal, and a plain connection answers one call after
-// another, so each terminal is ended on a connection of its own. Each
-// connection checks that core still answers: a core started on the socket in
-// between gives the same addresses to terminals of its own.
-func (h *Host) closeInstance(ctx context.Context, core, id string) error {
+// closeLabelled kills and removes every terminal that carries labels, live
+// or finished, on the core called core, all at once: hc's kill can take a
+// second a terminal, and a plain connection answers one call after another,
+// so each terminal is ended on a connection of its own. Each connection
+// checks that core still answers: a core started on the socket in between
+// gives the same addresses to terminals of its own.
+func (h *Host) closeLabelled(ctx context.Context, core string, labels map[string]string) error {
 	dial := func() (*session, error) {
 		s, err := h.dial(ctx, false)
 		if err != nil {
 			return nil, err
 		}
-		if err := (ref{core: core, key: id}).current(s); err != nil {
+		if err := (ref{core: core, key: labels[instanceLabel]}).current(s); err != nil {
 			s.close()
 			return nil, err
 		}
@@ -342,7 +460,7 @@ func (h *Host) closeInstance(ctx context.Context, core, id string) error {
 		return err
 	}
 	var list listResult
-	err = s.call("terminal.list", map[string]any{"labels": map[string]string{instanceLabel: id}, "all": true}, &list)
+	err = s.call("terminal.list", map[string]any{"labels": labels, "all": true}, &list)
 	s.close()
 	if err != nil {
 		return err
