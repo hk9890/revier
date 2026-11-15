@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -54,7 +55,8 @@ var errNotInInstance = errors.New("not in the instance")
 
 // holds refuses a panel that is not a terminal of the ref's instance, live or
 // finished, with errNotInInstance. A terminal hc no longer holds, as one a
-// close removed or one whose program exited, is a panel that is gone: the
+// close, a window or a sweep removed, or a shell that exited, is a panel
+// that is gone: the
 // error wraps revier.ErrPanelGone, which a read reports as such (decisions.md
 // D172), a close takes as done, and a send fails on.
 func (s *session) holds(ref ref, r revier.TargetRef, panel revier.PanelID) error {
@@ -153,10 +155,9 @@ const typedChunk = 64 << 10
 // scrolls the program with wheel input, which a person attached to it sees,
 // and hc's terminal record does not say which program is full-screen.
 //
-// A terminal Open started is removed when its program exits. A terminal hc
-// says not_found of is a panel that is gone: the read wraps
+// A terminal hc says not_found of is a panel that is gone: the read wraps
 // revier.ErrPanelGone (decisions.md D172). hc reads a finished terminal it
-// still holds, such as one started by hand, as it was left. A terminal of another instance is refused.
+// still holds as it was left. A terminal of another instance is refused.
 func (h *Host) ReadPanel(ctx context.Context, r revier.TargetRef, panel revier.PanelID, _ bool) (string, error) {
 	s, ref, err := h.session(ctx, r, false)
 	if err != nil {
@@ -226,9 +227,11 @@ func (h *Host) AttachCommand(r revier.TargetRef) ([]string, error) {
 }
 
 // AttachPanel is the argv a view's window runs to show one terminal: hc's
-// attach of its address (decisions.md D180). The window starts in the
-// view's own environment, not this process's, so the argv names hc by its
-// path and the core by its socket, even when neither was set here.
+// attach of its address (decisions.md D180), through revier's Attach, which
+// holds the window once the terminal's program ends (D187). The window
+// starts in the view's own environment, not this process's, so the argv
+// names hc and revier by their paths and the core by its socket, even when
+// none was set here.
 func (h *Host) AttachPanel(panel revier.PanelID) ([]string, error) {
 	bin, err := Program()
 	if err != nil {
@@ -238,5 +241,15 @@ func (h *Host) AttachPanel(panel revier.PanelID) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("hc: %w", err)
 	}
-	return []string{"env", "HC_SOCKET=" + h.socket(), path, "attach", panel.String()}, nil
+	argv := []string{"env", "HC_SOCKET=" + h.socket()}
+	// env reads a word with "=" in it as one more variable to set.
+	if strings.Contains(h.Revier, "=") {
+		return nil, fmt.Errorf("hc: the revier binary's path %s has a \"=\" in it, which env cannot run", h.Revier)
+	}
+	// A revier binary an upgrade removed under a running revier is no
+	// window's: the window shows the terminal unheld.
+	if _, err := os.Stat(h.Revier); h.Revier == "" || err != nil {
+		return append(argv, path, "attach", panel.String()), nil
+	}
+	return append(argv, h.Revier, AttachCmd, path, panel.String()), nil
 }

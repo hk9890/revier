@@ -114,6 +114,10 @@ that did not focus after `Open` passed L2 and failed L4.
     through `viewOf`, so no run opens a window.
   - Wait for a panel's program with `running` before a test reads its pid:
     hc reads a terminal's foreground process about twice a second.
+  - Assert that a panel whose program exits at once fails the start only on
+    the fake core, with `exitRun` in `internal/adapter/hc/helpers_test.go`:
+    a real core lists the terminal before or after it ends, so a live test
+    accepts either outcome.
 - Build a `kitten @ ls` listing of the kitty view over hc from a recorded
   one, as `internal/adapter/kitty/testdata/ls-hc-view.json` is: recording
   one opens windows on a desktop. Any `hc` command starts a core
@@ -123,8 +127,6 @@ that did not focus after `Open` passed L2 and failed L4.
   does: without it, the test starts a unit in the user's own service manager.
   Test the start itself with scripts named `systemd-run` and `systemctl` first
   on PATH, as `internal/userunit/live_test.go` does.
-- `mise run test:coverage:summary` reports and gates nothing. A covered line is
-  one that ran, not one whose behaviour anything asserted.
 
 ## Benchmarks
 

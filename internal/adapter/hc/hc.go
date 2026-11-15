@@ -40,7 +40,7 @@ const (
 )
 
 // ownLabels are the labels that are revier's, and no panel var.
-var ownLabels = []string{instanceLabel, nameLabel, tabLabel, tabPlaceLabel, panelLabel}
+var ownLabels = []string{instanceLabel, nameLabel, tabLabel, tabPlaceLabel, panelLabel, heldLabel}
 
 // Host is an hc Runtime, and no View: hc keeps no focus and draws nothing,
 // so a terminal is put on an instance by attaching it, by hand or in a
@@ -49,6 +49,10 @@ var ownLabels = []string{instanceLabel, nameLabel, tabLabel, tabPlaceLabel, pane
 // would use from this environment.
 type Host struct {
 	Socket string
+	// Revier is the revier binary a view's window runs to attach a terminal
+	// and hold it once its program ends (decisions.md D187). With none, the
+	// window runs hc's attach alone, and ends with its program.
+	Revier string
 
 	// procRoot replaces /proc in tests.
 	procRoot string
@@ -100,7 +104,8 @@ func Program() (string, error) {
 	return "", errors.New("hc: herdr-core not found (an hc on PATH is not herdr-core)")
 }
 
-// Instances lists every live terminal of this machine's core, grouped into
+// Instances lists every live terminal of this machine's core, and each
+// finished one a window holds (decisions.md D187), grouped into
 // instances by revier's instance label. A terminal without one that is an
 // instance id, as one a user started by hand, is an instance of its own,
 // named by its address, so it is seen too. A terminal
@@ -122,14 +127,14 @@ func (h *Host) Instances(ctx context.Context) ([]revier.Instance, error) {
 	}
 	defer s.close()
 	var list listResult
-	if err := s.call("terminal.list", struct{}{}, &list); err != nil {
+	if err := s.call("terminal.list", map[string]bool{"all": true}, &list); err != nil {
 		return nil, err
 	}
 
 	var keys []string
 	groups := map[string][]terminal{}
 	for _, t := range list.Terminals {
-		if t.State != "live" || strings.Contains(t.Address, "/") {
+		if (t.State != "live" && t.Labels[heldLabel] == "") || strings.Contains(t.Address, "/") {
 			continue
 		}
 		key := t.Labels[instanceLabel]

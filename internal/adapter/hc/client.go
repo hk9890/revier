@@ -27,7 +27,7 @@ const generation = 1
 // features SendText types with: framed mode, the attach, and
 // AUTOMATIC_INPUT, the one way to type text with no key added.
 var (
-	neededMethods  = []string{"hello", "terminal.run", "terminal.list", "terminal.get", "terminal.kill", "terminal.rm", "terminal.read", "terminal.attach"}
+	neededMethods  = []string{"hello", "terminal.run", "terminal.list", "terminal.get", "terminal.kill", "terminal.rm", "terminal.read", "terminal.attach", "terminal.label"}
 	neededFeatures = []string{"framed", "attach", "automatic_input"}
 )
 

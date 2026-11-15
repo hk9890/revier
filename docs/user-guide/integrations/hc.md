@@ -3,27 +3,23 @@
 hc ([herdr-core](https://github.com/herdrdev/herdr-core)) is an experimental
 runtime host. hc runs your workspaces' programs headless, and kitty shows
 them. Your agents keep running when you close kitty, or when it crashes; the
-next press opens the window again over them.
-
-Without the switch, kitty runs and shows your workspaces, as before. Nothing
-changes until you name hc.
+next press opens the window again over them. Until you name hc, kitty runs
+and shows your workspaces, as before.
 
 ## What you need
 
 - hc 0.1.21 on your PATH as `herdr-core`, or as an `hc` that links to
   `herdr-core`, as hc's install makes it. revier takes no other `hc`,
-  because `hc` can also be Holochain's CLI. revier uses the
-  core that `hc` would talk to, and starts it when none runs. If you set
-  `socket` in hc's `config.toml`, set `HC_SOCKET` to the same path for
-  revier.
-- kitty, as for the kitty runtime, to see the workspaces. Without kitty, or
-  with no display, as over ssh, revier runs hc with no view.
+  because `hc` can also be Holochain's CLI. If you set `socket` in hc's
+  `config.toml`, set `HC_SOCKET` to the same path for revier.
+- kitty, to see the workspaces. Without kitty, or with no display, as over
+  ssh, revier runs hc with no view.
 
 ## Switch to hc
 
-1. Close the workspaces kitty runs with `revier shutdown`. A workspace kitty
-   runs is not an hc workspace: once you switch, revier does not see it, and
-   its window has the title the hc workspace's window gets.
+1. Close the workspaces kitty runs with `revier shutdown`. Once you switch,
+   revier does not see them, and a window left open has the title of the
+   hc workspace's window, so a press cannot tell the two apart.
 
 2. Name hc in `~/.config/revier/config.toml`
    (see [`[hosts]`](../configuration.md#hosts)):
@@ -33,30 +29,32 @@ changes until you name hc.
    runtime = ["hc"]
    ```
 
-3. Run `revier doctor`. It says `runtime hc is shown by the kitty view`.
+3. Run `revier doctor` to check the setup.
 
 Your project files stay as they are. A press opens the workspace in a kitty
-window of its title, with its tabs in their order, the active tab current,
-and an agent and a shell side by side where the tab declares them. A target
-with `inside`, `revier agent new`, `revier shell new`, the kitty keys and
-`revier session restore` work as they do on kitty. A second press goes home.
+window, with its tabs, panels and keys as on kitty, and a second press goes
+home.
 
-To switch back, remove the line and run `revier shutdown` first: the kitty
+To switch back, run `revier shutdown` first, then remove the line: the kitty
 runtime does not read hc's terminals.
 
 ## What changes
 
-- Each kitty window runs hc's attach of one terminal. Closing a window, a tab
-  or the whole kitty ends no program. The next press on the workspace opens
-  its window again over the running terminals, where the workspace's `place`
-  puts it, and `revier session restore` does too.
-- To end a program, close it in revier: `revier shutdown`, `revier agent
-  close`, or exit the program. Its window then closes.
-- `revier agent new --no-focus` from a script adds the tab to the window
-  that shows the workspace, and opens no window where none shows it.
+- Each kitty window shows one hc terminal. Closing a window, a tab or the
+  whole kitty ends no program. The next press, or `revier session restore`,
+  opens the window again over the running terminals.
+- To end a program, close it in revier: `revier shutdown` or `revier agent
+  close`. Its window then closes.
+- When a panel's command ends on its own, as an agent that exits or fails,
+  its window stays open with what the command printed and its exit code, and
+  closes when you press Enter. Until then the window is still the
+  workspace's, and `revier agent close` or `revier shutdown` closes it. A
+  shell's window closes when the shell exits.
+- `revier agent new --no-focus` adds the tab to the window that shows the
+  workspace, and opens no window where none shows it.
 - In a kitty window that shows no workspace, the shell key opens a plain kitty
-  tab in that window's directory, as `outside = "tab"` says. That tab is kitty's alone, so revier does
-  not list it, and it ends with kitty.
+  tab, as `outside = "tab"` says. revier does not list it, and it ends with
+  kitty.
 
 ## Without a view
 
@@ -68,65 +66,42 @@ put a terminal on it:
 revier open demo --attach
 ```
 
-The terminal shows the workspace's first terminal. Detach with hc's own key,
-`ctrl+\`. To see another, run `hc attach` with its name from `hc ls`.
+Detach with hc's key, `ctrl+\`. To see another terminal, run `hc attach` with
+its name from `hc ls`.
 
 ## The core's environment
 
 The core gives every program it starts the environment of the command that
-started the core, for as long as the core runs. Where systemd runs your
-session, revier starts the core as a user service named `revier-hc-` and a
-short hash of the core's socket, one per hc session, with your
-desktop session's environment, wherever you run revier: a shell's own
-settings, such as an activated virtualenv or a credential, do not reach your
-agents. To give your agents a variable, such as `CLAUDE_CONFIG_DIR`, set it in
-the session with `systemctl --user set-environment NAME=value` before the core
-starts. `hc server stop` stops the core, and ends every program in it. A core
-you start yourself with `hc server start` takes your shell's environment.
-
-A user service stops when you log out of your last session, and so the core
-and every agent in it stop too. To keep them running after you log out, as
-over ssh, run once:
+started the core. Where systemd runs your session, revier starts the core as
+a user service with your desktop session's environment, so a shell's own
+settings, such as an activated virtualenv, do not reach your agents. To give
+your agents a variable, set it before the core starts:
 
 ```bash
-loginctl enable-linger
+systemctl --user set-environment NAME=value
 ```
 
-Without systemd, a core revier starts takes the environment of the revier
-command, without the variables of the terminal, the multiplexer, the Claude
-Code session or the revier command it ran in, such as `KITTY_WINDOW_ID`,
-`TMUX` (a tmux you run revier in) or `CLAUDE_CODE_SESSION_ID`. hc cannot remove a
-variable, so revier sets them empty in each program: the Claude Code
-session's always, and each of the others only when the core holds it, since
-an empty one reads as set. A core that `hc server restart` restarted keeps
-its old environment where revier cannot see it, so a terminal's variable in
-it reaches each program; run `hc server restart --fresh` from a terminal
-outside any multiplexer to replace it. A Claude Code that kept another
-session's variables would save no transcript, and revier would show its state
-as unknown. A core revier starts also drops the `GIT_EDITOR=true` that Claude
-Code sets; a core you start yourself from a Claude Code session keeps it, and
-`git commit` without `-m` then aborts in each shell. To give the core another
-environment, start it yourself with `hc server start`.
+`hc server stop` stops the core and every program in it. A core you start
+yourself with `hc server start` takes your shell's environment.
+
+Without systemd, the core takes the environment of the revier command, with
+the variables of the terminal, tmux and Claude Code session it ran in set
+empty. A core that `hc server restart` restarted keeps its old environment;
+run `hc server restart --fresh` from a terminal outside tmux to replace it.
 
 ## Limits
 
 - An image an agent draws, such as with `kitten icat`, is gone after the
-  window opens again. `kitten icat` draws one only with
-  `--use-window-size`, because hc does not answer the terminal's query for
-  its size in pixels.
-- A program that writes a lot of output at once lags in its window: every
-  byte goes through hc's attach.
+  window opens again, and `kitten icat` draws one only with
+  `--use-window-size`.
+- A program that writes a lot of output at once lags in its window.
 - The TUI and `revier agent read --screen` show the screen without its
-  colours, and without the lines above it: hc reads those of an agent's
-  full-screen view by scrolling the agent. kitty's own scrollback in a window
-  holds only what that window showed since it opened.
+  colours and without the lines above it.
 - A close gives a program about a second to save before hc kills it.
 - hc does not bring a program back after a reboot. Run
-  `revier session restore`: it opens the workspaces again, each running its
-  `launch` anew.
-- Terminals on a machine hc added are not listed. hc still asks each such
-  machine on every listing, and one that does not answer slows the listing
-  by up to 3 s.
+  `revier session restore` to open the workspaces again.
+- Terminals on a machine hc added are not listed, and one that does not
+  answer slows each listing by up to 3 s.
 - A panel's `title` is not shown: the terminal's title is the one its
   program sets.
 - A terminal you attach to by hand in a kitty of your own is not the

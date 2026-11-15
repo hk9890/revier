@@ -46,7 +46,8 @@ in full.
 | `revier version` | The installed version. |
 
 `revier agent exec` and `revier shell exec` are what a link's panels run on the
-host. You do not run them by hand.
+host, and `revier _hc-attach` is what a kitty window over hc runs. You do not
+run them by hand.
 
 [Agents](agents.md) and [Projects](projects.md) show these commands in use.
 

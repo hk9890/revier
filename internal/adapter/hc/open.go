@@ -36,10 +36,11 @@ import (
 //
 // A terminal has no parent, so it outlives the terminal revier runs in, and
 // is not kept: a kept terminal hc brings back after a reboot is a bare shell
-// under the agent's labels (decisions.md D173). It is removed when its
-// program exits: Instances lists live terminals alone, so an instance whose
-// terminals all exited is never seen to be closed, and hc would hold their
-// records and screens for a day.
+// under the agent's labels (decisions.md D173). A panel's own command ends
+// to a finished terminal, so the window that shows it can show what it left,
+// as the kitty runtime holds it (D187); a shell is removed when it exits.
+// Instances lists live terminals alone, so an instance whose terminals all
+// ended is never seen to be closed: sweep removes what no window took.
 //
 // An instance that fails is closed whole: left open, it would be matched.
 func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef, error) {
@@ -98,6 +99,8 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 		h.closeAfter(ctx, s.hello.Core.ID, map[string]string{instanceLabel: id})
 		return revier.TargetRef{}, err
 	}
+	// After the start, so the sweep does not delay the press's programs.
+	s.sweep(time.Now())
 	return revier.TargetRef{Host: h.Name(), ID: s.hello.Core.ID + "/" + id, Title: r.Name}, nil
 }
 
@@ -157,6 +160,7 @@ func (h *Host) OpenTab(ctx context.Context, r revier.TargetRef, real revier.Real
 		h.closeAfter(ctx, ref.core, map[string]string{instanceLabel: ref.key, tabLabel: token})
 		return "", err
 	}
+	s.sweep(time.Now())
 	return revier.PanelID(first), nil
 }
 
@@ -171,9 +175,9 @@ func (h *Host) closeAfter(ctx context.Context, core string, labels map[string]st
 
 // start runs the panels of one tab, each with its command and env, under the
 // tab's labels, its place as revier.panel, and vars, and checks, in one
-// listing, that each still runs. hc removes a terminal when its program
-// exits, so one that exited is missing from the listing. It returns the
-// address of the tab's first terminal.
+// listing, that each still runs: one that ended is finished, or missing when
+// it was a shell, which hc removes as it exits. It returns the address of
+// the tab's first terminal.
 //
 // The check sees only a program that ended before the listing: one that ends
 // a moment later leaves a tab without that panel. A terminal whose
@@ -185,7 +189,7 @@ func start(s *session, tab, vars map[string]string, panels []revier.PanelSpec, c
 		labels[panelLabel] = strconv.Itoa(i)
 		maps.Copy(labels, vars)
 		params := map[string]any{
-			"labels": labels, "name": name(i), "no_parent": true, "keep": false, "rm": true, "env": env,
+			"labels": labels, "name": name(i), "no_parent": true, "keep": false, "rm": len(p.Command) == 0, "env": env,
 		}
 		if commands[i] != nil {
 			params["argv"] = commands[i]
@@ -486,9 +490,9 @@ func (h *Host) closeLabelled(ctx context.Context, core string, labels map[string
 // after half a second, then KILL after another: a program that saves on
 // neither gets about a second, and hc has no gentler close.
 //
-// A terminal hc says not_found of is ended already: one Open started is
-// removed when its program exits, which can be before the kill, or the kill
-// itself.
+// A terminal hc says not_found of is ended already: a shell Open started is
+// removed when it exits, which can be before the kill, or the kill itself,
+// and the window that held a terminal removes it.
 func (s *session) end(address string) error {
 	params := map[string]string{"terminal": address}
 	for _, method := range []string{"terminal.kill", "terminal.rm"} {

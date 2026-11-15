@@ -40,8 +40,9 @@ type Attachable interface {
 // those vars.
 //
 // A window only attaches, so closing one ends no program, and the runtime
-// lists the instance on (D181). A window is never held: the attach ends with
-// its panel, and the window with it.
+// lists the instance on (D181). The window runs what the runtime's
+// AttachPanel gives, which ends with its panel, and the window with it: hc's
+// holds a command that ended until Enter (D187).
 type View struct {
 	Runtime Attachable
 

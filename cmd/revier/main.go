@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hk9890/revier/internal/adapter/hc"
 	"github.com/hk9890/revier/internal/build"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/events"
@@ -310,6 +311,9 @@ func run(out io.Writer, args []string) error {
 		return nil
 	case "new":
 		return cmdNew(out, args)
+	case hc.AttachCmd:
+		// No app: a view's window runs it, with no configuration to read.
+		return cmdHcAttach(args)
 	case "doctor":
 		// No app: what is wrong with the configuration is a question about
 		// files, and probing the desktop for hosts would be a second way for

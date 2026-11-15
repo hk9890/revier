@@ -5,7 +5,6 @@
 package hc_test
 
 import (
-	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -441,12 +440,13 @@ func TestClosePanelThenClose(t *testing.T) {
 	}
 }
 
-// A terminal whose program exits leaves no record: hc removes it at the exit,
-// and a read of it is a panel that is gone (decisions.md D172).
-func TestAProgramThatExitsLeavesNoRecord(t *testing.T) {
+// A panel's command that ends leaves its terminal finished, for the window
+// that shows it to hold, and a read of it is what it left (decisions.md
+// D187).
+func TestACommandThatEndsLeavesItsTerminalFinished(t *testing.T) {
 	h, c := world(t), ctx(t)
 	done := filepath.Join(t.TempDir(), "done")
-	ref, err := h.Open(c, revier.Realization{Name: "exits", Launch: untilFile(done)})
+	ref, err := h.Open(c, revier.Realization{Name: "exits", Launch: []string{"sh", "-c", `echo left-behind; while [ ! -e "$0" ]; do sleep 0.05; done`, done}})
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -454,20 +454,40 @@ func TestAProgramThatExitsLeavesNoRecord(t *testing.T) {
 	if err := os.WriteFile(done, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	waitForRecords(t, c, h, ref, 0)
+	waitForRecords(t, c, h, ref, "finished")
 
-	err = h.Request(c, "terminal.get", map[string]string{"terminal": panel.String()}, nil)
-	if err == nil || !strings.Contains(err.Error(), "not_found") {
-		t.Errorf("terminal.get of %s = %v, want not_found", panel, err)
+	if got, err := h.ReadPanel(c, ref, panel, false); err != nil || !strings.Contains(got, "left-behind") {
+		t.Errorf("ReadPanel of %s = %q, %v; want what it left", panel, got, err)
 	}
+	if got, err := h.Instances(c); err != nil || len(got) != 0 {
+		t.Errorf("Instances = %+v, %v; want none: a finished terminal is no instance", got, err)
+	}
+}
+
+// A shell that exits leaves no record: hc removes it at the exit, as the
+// kitty runtime holds no shell, and a read of it is a panel that is gone
+// (decisions.md D172).
+func TestAShellThatExitsLeavesNoRecord(t *testing.T) {
+	h, c := world(t), ctx(t)
+	ref, err := h.Open(c, revier.Realization{Name: "shell", Panels: []revier.PanelSpec{{Kind: revier.PanelShell}}})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	panel := waitFor(t, h, func(in []revier.Instance) bool { return len(in) == 1 })[0].Panels[0].ID
+	if err := h.SendText(c, ref, panel, "exit\n"); err != nil {
+		t.Fatalf("SendText: %v", err)
+	}
+	waitForRecords(t, c, h, ref, "")
+
 	if _, err := h.ReadPanel(c, ref, panel, false); !errors.Is(err, revier.ErrPanelGone) {
 		t.Errorf("ReadPanel of %s = %v, want ErrPanelGone", panel, err)
 	}
 }
 
-// A close of an instance one of whose programs exited, as a shutdown closes
-// each instance, ends the panel that runs and leaves no record.
-func TestCloseOfAnInstanceWithAnExitedPanelLeavesNoRecord(t *testing.T) {
+// A close of an instance one of whose programs ended, as a shutdown closes
+// each instance, ends the panel that runs and leaves no record, the
+// finished one's included.
+func TestCloseOfAnInstanceWithAnEndedPanelLeavesNoRecord(t *testing.T) {
 	h, c := world(t), ctx(t)
 	done := filepath.Join(t.TempDir(), "done")
 	ref, err := h.Open(c, revier.Realization{Name: "half", Panels: []revier.PanelSpec{
@@ -479,7 +499,7 @@ func TestCloseOfAnInstanceWithAnExitedPanelLeavesNoRecord(t *testing.T) {
 	if err := os.WriteFile(done, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	waitForRecords(t, c, h, ref, 1)
+	waitForRecords(t, c, h, ref, "finished live")
 	if err := h.Close(c, ref); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
@@ -494,30 +514,6 @@ func TestCloseOfAnInstanceWithAnExitedPanelLeavesNoRecord(t *testing.T) {
 // untilFile is a command that runs until the file exists.
 func untilFile(path string) []string {
 	return []string{"sh", "-c", `while [ ! -e "$0" ]; do sleep 0.05; done`, path}
-}
-
-// waitForRecords waits until hc holds n records of the instance, live or
-// finished.
-func waitForRecords(t *testing.T, c context.Context, h *hc.Host, ref revier.TargetRef, n int) {
-	t.Helper()
-	_, id, _ := strings.Cut(ref.ID, "/")
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		var list struct {
-			Terminals []any `json:"terminals"`
-		}
-		params := map[string]any{"all": true, "labels": map[string]string{"revier.instance": id}}
-		if err := h.Request(c, "terminal.list", params, &list); err != nil {
-			t.Fatalf("terminal.list: %v", err)
-		}
-		if len(list.Terminals) == n {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("records of %s = %+v, want %d", ref.ID, list.Terminals, n)
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
 }
 
 // A program hc cannot start, after a panel it started, and a program that is
