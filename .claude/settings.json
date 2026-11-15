@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "claude-dev-tools": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/hk9890/claude-dev-tools.git"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "werft@claude-dev-tools": true
+  }
+}
