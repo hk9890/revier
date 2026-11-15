@@ -165,7 +165,7 @@ func (c *Core) agentTabs(host revier.Host, p Project, layout []revier.PanelSpec,
 // agent it names is not running anywhere.
 func (c *Core) addAgents(ctx context.Context, host revier.Host, p Project, layout []revier.PanelSpec, ref revier.TargetRef, resumes []Resume) ([]AgentOutcome, error) {
 	tabs, outcomes := c.agentTabs(host, p, layout, resumes)
-	opener, ok := c.opener(host)
+	opener, ok := c.launchOpener(host)
 	if !ok {
 		return outcomes, nil
 	}
@@ -243,6 +243,9 @@ type Workspace struct {
 	// panel is the runtime's id of the panel PanelOwner found the workspace
 	// by, which is not the id a key passes where the view is not the runtime.
 	panel revier.PanelID
+	// beside says the id PanelOwner was handed is a window of a view that
+	// opens tabs of its own beside its windows.
+	beside bool
 }
 
 // AddressIn is the address of the panel a tab opened in the workspace w: the
@@ -287,10 +290,12 @@ func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.Target
 //
 // A panel id can be one runtime process's - a kitty window id is - so the
 // same id can name a window in each of two kitty processes. A runtime whose
-// ids are like that says which instance the id means, as a PanelFinder.
-// Without one, the id must be held by exactly one instance, and two are
-// refused rather than guessed at: a guess opens the tab in a workspace the key
-// was not pressed in.
+// ids are like that says which instance the id means, as a PanelFinder; so
+// does a view whose window ids are not the runtime's. Without one, and for an
+// id that is no window of the view's, as an hc address a script passes, the
+// id must be held by exactly one instance, and two are refused rather than
+// guessed at: a guess opens the tab in a workspace the key was not pressed
+// in.
 //
 // One instance can back two targets. The target is the first of them that
 // declares an agent panel, because only that one has an agent tab to give; a
@@ -298,8 +303,8 @@ func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.Target
 //
 // An instance that holds the panel but backs no project's target is
 // ErrNoWorkspace, and the Workspace that comes with it holds only that
-// instance: where PlaceTab opens a tab outside a workspace. So is a panel of
-// a view that opens tabs beside its own windows, which no instance holds,
+// instance: where PlaceTab opens a tab outside a workspace. So is a window
+// of a view that opens tabs beside its own windows, which no instance holds,
 // and its Workspace holds no instance (decisions.md D183).
 func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.PanelID) (Workspace, error) {
 	bound := c.state().Bound
@@ -311,30 +316,17 @@ func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.
 		return Workspace{}, err
 	}
 	instances := snap[c.Runtime.Name()]
-	var ref revier.TargetRef
-	own := panel
-	if finder, ok := c.finder(); ok {
-		var err error
-		if ref, own, err = finder.FindPanel(ctx, instances, panel); err != nil {
-			return Workspace{}, fmt.Errorf("%s: find panel %s: %w", c.View.Name(), panel, err)
-		}
-	} else {
-		var found []revier.TargetRef
-		for _, inst := range instances {
-			if holdsPanel(inst, panel) {
-				found = append(found, inst.Ref)
-			}
-		}
-		if len(found) > 1 {
-			return Workspace{}, fmt.Errorf("panel %s: %w: %d instances hold it", panel, ErrAmbiguous, len(found))
-		}
-		if len(found) == 1 {
-			ref = found[0]
-		}
+	ref, own, viewed, err := c.findPanel(ctx, instances, panel)
+	if err != nil {
+		return Workspace{}, err
 	}
+	// A window of the view's own beside the runtime's gets a tab of the
+	// view's, whatever instance the window is in (decisions.md D183).
+	_, beside := c.View.(revier.BesideOpener)
+	beside = beside && viewed
 	if ref.IsZero() {
-		if _, ok := c.View.(revier.BesideOpener); ok {
-			return Workspace{snap: snap, failed: failed}, fmt.Errorf("panel %s: %w", panel, ErrNoWorkspace)
+		if beside {
+			return Workspace{snap: snap, failed: failed, beside: true}, fmt.Errorf("panel %s: %w", panel, ErrNoWorkspace)
 		}
 		return Workspace{}, fmt.Errorf("%w %s", ErrNoPanel, panel)
 	}
@@ -362,9 +354,39 @@ func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.
 		}
 	}
 	if owner.Ref.IsZero() {
-		return Workspace{Ref: ref, snap: snap, failed: failed, panel: own}, fmt.Errorf("panel %s: %w", panel, ErrNoWorkspace)
+		return Workspace{Ref: ref, snap: snap, failed: failed, panel: own, beside: beside}, fmt.Errorf("panel %s: %w", panel, ErrNoWorkspace)
 	}
 	return owner, nil
+}
+
+// findPanel is the instance that holds the panel id a terminal key or a
+// script passes, the runtime's id of that panel, and whether the id named a
+// window of the view's. The view's finder maps its own window ids; an id
+// that is none of them, and every id with no finder, is the runtime's, held
+// by at most one instance.
+func (c *Core) findPanel(ctx context.Context, instances []revier.Instance, panel revier.PanelID) (ref revier.TargetRef, own revier.PanelID, viewed bool, err error) {
+	if finder, ok := c.finder(); ok {
+		ref, own, err = finder.FindPanel(ctx, instances, panel)
+		if err == nil {
+			return ref, own, true, nil
+		}
+		if !errors.Is(err, revier.ErrNoViewPanel) {
+			return revier.TargetRef{}, "", false, fmt.Errorf("%s: find panel %s: %w", c.View.Name(), panel, err)
+		}
+	}
+	var found []revier.TargetRef
+	for _, inst := range instances {
+		if holdsPanel(inst, panel) {
+			found = append(found, inst.Ref)
+		}
+	}
+	switch len(found) {
+	case 0:
+		return revier.TargetRef{}, panel, false, nil
+	case 1:
+		return found[0], panel, false, nil
+	}
+	return revier.TargetRef{}, "", false, fmt.Errorf("panel %s: %w: %d instances hold it", panel, ErrAmbiguous, len(found))
 }
 
 // Outside is what a terminal key does in a panel that no project's open

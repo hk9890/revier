@@ -9,6 +9,7 @@ package kitty_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"slices"
 	"strconv"
@@ -48,6 +49,7 @@ func (attaching) AttachPanel(panel revier.PanelID) ([]string, error) {
 func viewOn(t *testing.T, file string) (*kitty.View, *recorder) {
 	t.Helper()
 	t.Setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+	t.Setenv("REVIER_STATE_HOME", t.TempDir())
 	raw, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatal(err)
@@ -228,6 +230,8 @@ func TestTheViewMapsHcRefsAndKittyWindowsBothWays(t *testing.T) {
 // A key passes the kitty window id; the view maps it to the hc terminal that
 // window attaches, in the instance that holds it. kitty's own window beside
 // them attaches nothing, and is outside every workspace (decisions.md D183).
+// An id that is no window of that kitty, as an hc address, and any id from
+// a command outside kitty, is hc's to look up.
 func TestFindPanelMapsAKittyWindowToTheTerminalItAttaches(t *testing.T) {
 	v, _ := viewOn(t, "testdata/ls-hc-view.json")
 	ctx := t.Context()
@@ -243,9 +247,12 @@ func TestFindPanelMapsAKittyWindowToTheTerminalItAttaches(t *testing.T) {
 	if ref, _, err := v.FindPanel(ctx, instances[:1], "4"); err != nil || !ref.IsZero() {
 		t.Errorf("FindPanel of a terminal hc no longer lists = %+v, %v; want none", ref, err)
 	}
+	if _, _, err := v.FindPanel(ctx, instances, "t3"); !errors.Is(err, revier.ErrNoViewPanel) {
+		t.Errorf("FindPanel of an hc address = %v, want it hc's to look up", err)
+	}
 	v.Kitty().SetOwnSocket(func() string { return "" })
-	if _, _, err := v.FindPanel(ctx, instances, "4"); err == nil {
-		t.Error("FindPanel from no kitty passed")
+	if _, _, err := v.FindPanel(ctx, instances, "4"); !errors.Is(err, revier.ErrNoViewPanel) {
+		t.Errorf("FindPanel from no kitty = %v, want it hc's to look up", err)
 	}
 }
 

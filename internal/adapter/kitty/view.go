@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
+	"syscall"
 
+	"github.com/hk9890/revier/internal/state"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -77,12 +80,14 @@ type shown struct {
 }
 
 // windowsOf finds what shows the instance ref names in the workspace kitties
-// that answer. A kitty that does not answer shows nothing.
-func (v *View) windowsOf(ctx context.Context, ref revier.TargetRef) shown {
-	found := shown{panels: map[revier.PanelID]int{}}
+// that answer. A kitty that does not answer shows nothing, and failed is
+// why each did not.
+func (v *View) windowsOf(ctx context.Context, ref revier.TargetRef) (found shown, failed error) {
+	found = shown{panels: map[revier.PanelID]int{}}
 	for _, socket := range v.workspaces() {
 		windows, err := v.kitty.ls(ctx, socket)
 		if err != nil {
+			failed = errors.Join(failed, err)
 			continue
 		}
 		focused := slices.ContainsFunc(windows, func(w osWindow) bool { return w.IsFocused })
@@ -102,7 +107,7 @@ func (v *View) windowsOf(ctx context.Context, ref revier.TargetRef) shown {
 			}
 		}
 	}
-	return found
+	return found, failed
 }
 
 // workspaces is the sockets of the workspace kitties: the one kitty the view
@@ -122,19 +127,33 @@ func (v *View) workspaces() []string {
 // The keyboard stays where it is while a window of the kitty has it, as
 // OpenTab of the kitty runtime leaves it; the core focuses what a press asks
 // for. A new OS window takes the keyboard as kitty gives it one.
+//
+// Two windows of one title make every later raise of the instance fail, so
+// one Show runs at a time across revier's processes, under a lock in
+// revier's state directory, and lists the kitties once it holds it: two
+// presses at once open one window. A workspace kitty that does not answer
+// may show the instance, so with no window found the Show fails rather than
+// opening one more.
 func (v *View) Show(ctx context.Context, inst revier.Instance, open bool) (bool, error) {
 	if inst.Title == "" {
 		return false, fmt.Errorf("kitty: %s has no title to give its window", inst.Ref.ID)
 	}
-	at := v.windowsOf(ctx, inst.Ref)
+	unlock, err := showLock()
+	if err != nil {
+		return false, fmt.Errorf("kitty: show %s: %w", inst.Ref.ID, err)
+	}
+	defer unlock()
+	at, failed := v.windowsOf(ctx, inst.Ref)
 	socket, anchor := at.socket, 0
 	if at.window != nil {
 		anchor, _ = activeWindow(*at.window)
 	} else {
+		if failed != nil {
+			return false, fmt.Errorf("kitty: show %s: a workspace kitty did not answer, and may show it: %w", inst.Ref.ID, failed)
+		}
 		if !open {
 			return false, nil
 		}
-		var err error
 		if socket, err = v.kitty.workspaceKitty(ctx); err != nil {
 			return false, err
 		}
@@ -185,6 +204,35 @@ func (v *View) Show(ctx context.Context, inst revier.Instance, open bool) (bool,
 	return opened, nil
 }
 
+// showLockName is the file under revier's state directory whose lock one
+// Show holds at a time. It is one file for every instance: a Show is a few
+// launches, and a file per instance would stay behind for each.
+const showLockName = "kitty-view.lock"
+
+// showLock takes the lock Show runs under, waiting for a Show of another
+// process to end, and returns its release.
+func showLock() (func(), error) {
+	root, err := state.Root()
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(filepath.Join(root, showLockName), os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	return func() {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = f.Close()
+	}, nil
+}
+
 // tabsOf is the panels of an instance by tab, in the order of the first
 // panel of each, which is the runtime's order.
 func tabsOf(panels []revier.Panel) [][]revier.Panel {
@@ -210,7 +258,7 @@ var errNotShown = errors.New("no kitty window shows it")
 // Under GNOME on Wayland this does not raise the OS window; the core raises
 // it through the window host.
 func (v *View) Focus(ctx context.Context, ref revier.TargetRef) error {
-	at := v.windowsOf(ctx, ref)
+	at, _ := v.windowsOf(ctx, ref)
 	if at.window == nil {
 		return fmt.Errorf("kitty: %s: %w", ref.ID, errNotShown)
 	}
@@ -250,7 +298,7 @@ func (v *View) Focused(ctx context.Context) (revier.TargetRef, error) {
 // FocusPanel makes the kitty window that shows the panel current, switching
 // to its tab. The OS window is raised by the core.
 func (v *View) FocusPanel(ctx context.Context, ref revier.TargetRef, panel revier.PanelID) error {
-	at := v.windowsOf(ctx, ref)
+	at, _ := v.windowsOf(ctx, ref)
 	win, ok := at.panels[panel]
 	if !ok {
 		return fmt.Errorf("kitty: panel %s of %s: %w", panel, ref.ID, errNotShown)
@@ -262,7 +310,7 @@ func (v *View) FocusPanel(ctx context.Context, ref revier.TargetRef, panel revie
 // FocusedPanel reports the panel that the current kitty window of the
 // instance's OS window shows.
 func (v *View) FocusedPanel(ctx context.Context, ref revier.TargetRef) (revier.PanelID, error) {
-	at := v.windowsOf(ctx, ref)
+	at, _ := v.windowsOf(ctx, ref)
 	if at.window == nil {
 		return "", fmt.Errorf("kitty: %s: %w", ref.ID, errNotShown)
 	}
@@ -281,11 +329,13 @@ func (v *View) FocusedPanel(ctx context.Context, ref revier.TargetRef) (revier.P
 // pressed in, which KITTY_LISTEN_ON names, to the runtime panel that window
 // attaches, and to the instance of instances that holds it. A window that
 // attaches no panel, as kitty's own, is a zero ref: a tab outside a
-// workspace opens beside it (decisions.md D183).
+// workspace opens beside it (decisions.md D183). An id that is no window of
+// that kitty, or one passed from no kitty, is the runtime's to look up, as
+// an hc address a script passes is (revier.ErrNoViewPanel).
 func (v *View) FindPanel(ctx context.Context, instances []revier.Instance, panel revier.PanelID) (revier.TargetRef, revier.PanelID, error) {
 	socket := v.kitty.here()
 	if socket == "" {
-		return revier.TargetRef{}, "", errors.New("kitty: the command runs in no kitty: KITTY_LISTEN_ON is not set")
+		return revier.TargetRef{}, "", fmt.Errorf("kitty: the command runs in no kitty, as KITTY_LISTEN_ON is not set: %w", revier.ErrNoViewPanel)
 	}
 	windows, err := v.kitty.ls(ctx, socket)
 	if err != nil {
@@ -307,7 +357,7 @@ func (v *View) FindPanel(ctx context.Context, instances []revier.Instance, panel
 			}
 		}
 	}
-	return revier.TargetRef{}, "", nil
+	return revier.TargetRef{}, "", fmt.Errorf("kitty: window %s is none of %s: %w", panel, socket, revier.ErrNoViewPanel)
 }
 
 // OpenBeside opens a kitty tab beside the window panel, in the kitty the key

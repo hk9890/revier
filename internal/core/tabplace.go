@@ -174,9 +174,10 @@ func (c *Core) openPlaced(ctx context.Context, projects []Project, w Workspace, 
 
 // tabOutside is the tab a terminal key asks for in a panel the runtime holds
 // in the instance w, which no project's open workspace holds, or in a
-// window of the view's that no instance holds. The key is not refused for
-// that: it does what req.Outside says, a plain tab of the runtime's own
-// shell beside the panel, or of the view's beside its window, a tab of the
+// window of the view's that no project's workspace holds. The key is not
+// refused for that: it does what req.Outside says, a plain tab of the
+// runtime's own shell beside the panel, or of the view's beside its window,
+// also one that shows an instance, as a terminal started by hand, a tab of the
 // agent an agent key asks for, or nothing. Every other failure is returned,
 // so the key's own fallback runs (decisions.md D148, D164, D183); so is an
 // agent that cannot run there, as OutsideKey's agent says.
@@ -198,7 +199,7 @@ func (c *Core) tabOutside(ctx context.Context, w Workspace, req TabRequest) erro
 			slog.Warn("tab outside a workspace", "err", "config.toml declares no [[agent]] to run; the tab is a plain shell")
 		}
 	}
-	if beside, ok := c.View.(revier.BesideOpener); ok && w.Ref.IsZero() {
+	if beside, ok := c.View.(revier.BesideOpener); ok && w.beside {
 		if err := beside.OpenBeside(ctx, req.Panel, spec); err != nil {
 			return fmt.Errorf("%s: %s: %w", c.View.Name(), what, err)
 		}

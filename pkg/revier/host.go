@@ -228,9 +228,18 @@ type PanelFocuser interface {
 // address is the panel (D180). It is handed the runtime's listing rather than
 // taking its own, so a key press lists the runtime once. A view whose ids are
 // the runtime's, and unique, needs no finder.
+//
+// An id that is no window of the view's, as a runtime's own id a script
+// passes or one a command outside the view passes, is no failure: FindPanel
+// returns an error that wraps ErrNoViewPanel, and the core looks the id up
+// among the runtime's panels, as it does with no finder.
 type PanelFinder interface {
 	FindPanel(ctx context.Context, instances []Instance, panel PanelID) (TargetRef, PanelID, error)
 }
+
+// ErrNoViewPanel means the panel id FindPanel was handed names no window of
+// the view's, so it is the runtime's to look up.
+var ErrNoViewPanel = errors.New("no window of the view has this id")
 
 // Shower is an optional capability of a View, detected by type assertion. A
 // view that implements it draws a runtime's instances in windows it opens
@@ -243,9 +252,10 @@ type Shower interface {
 	// of its tabs, a pane for each panel, in the runtime's order. A panel
 	// shown already stays as it is, and only what is missing is added, so a
 	// view closed by hand opens again over the live panels and starts
-	// nothing (D181). Without open, only a window that shows the instance
-	// already gets what is missing, and none is opened. opened says a
-	// window was opened now, which the window host lists only after a wait.
+	// nothing (decisions.md D181). Without open, only a window that shows
+	// the instance already gets what is missing, and none is opened. opened
+	// says a window was opened now, which the window host lists only after
+	// a wait.
 	Show(ctx context.Context, inst Instance, open bool) (opened bool, err error)
 }
 

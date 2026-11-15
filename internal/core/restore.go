@@ -178,7 +178,8 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 // instance is the one it is inside. What fails is logged: the target runs,
 // and the next press shows it.
 func (c *Core) showRunning(ctx context.Context, p Project, name revier.TargetName) {
-	if _, ok := c.View.(revier.Shower); !ok {
+	shower, ok := c.View.(revier.Shower)
+	if !ok || c.Runtime == nil {
 		return
 	}
 	i, ok := p.index(name)
@@ -192,17 +193,23 @@ func (c *Core) showRunning(ctx context.Context, p Project, name revier.TargetNam
 		}
 	}
 	host, real, m, err := c.resolveAt(p, i)
-	if err != nil {
+	if err != nil || host.Name() != c.Runtime.Name() {
 		return
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*BindWait)
 	defer cancel()
-	snap, _ := c.listing(ctx)
-	inst, found := c.locate(snap, p, i, host, m, c.state().Bound[p.Name][name])
+	// The runtime alone is listed: the instance is the runtime's, and the
+	// view draws it from that listing.
+	instances, err := c.Runtime.Instances(ctx)
+	if err != nil {
+		slog.Warn("restore: show a running target", "project", p.Name, "target", name, "err", err)
+		return
+	}
+	inst, found := c.locate(snapshot{host.Name(): instances}, p, i, host, m, c.state().Bound[p.Name][name])
 	if !found {
 		return
 	}
-	opened, err := c.show(ctx, inst.Ref, true)
+	opened, err := shower.Show(ctx, inst, true)
 	if err != nil {
 		slog.Warn("restore: show a running target", "project", p.Name, "target", name, "err", err)
 	}

@@ -390,25 +390,11 @@ func (c *Core) closeStep(s CloseStep) CloseStep {
 }
 
 func (c *Core) closer(ref revier.TargetRef) (revier.Closer, bool) {
-	h, ok := c.hostNamed(ref.Host)
-	if !ok {
-		return nil, false
-	}
-	var closer revier.Closer
-	if t, isTerminal := h.(terminal); isTerminal {
-		closer, ok = t.Runtime.(revier.Closer)
-	} else {
-		closer, ok = h.(revier.Closer)
-	}
-	return closer, ok
+	return capability[revier.Closer](c, ref)
 }
 
 func (c *Core) panelCloser(ref revier.TargetRef) (revier.PanelCloser, bool) {
-	if c.Runtime == nil || c.Runtime.Name() != ref.Host {
-		return nil, false
-	}
-	closer, ok := c.Runtime.(revier.PanelCloser)
-	return closer, ok
+	return capability[revier.PanelCloser](c, ref)
 }
 
 // CloseLast moves the steps that would end the calling process to the end of

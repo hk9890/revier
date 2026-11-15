@@ -42,6 +42,24 @@ func (c *Core) terminal() revier.Host {
 	return terminal{Runtime: c.Runtime, view: c.View}
 }
 
+// capability is the optional capability T of the host that holds ref. The
+// host a runtime ref resolves to is the terminal, which wraps the runtime and
+// carries none of its optional capabilities, so a runtime ref asks the
+// runtime itself; every other ref asks its host.
+func capability[T any](c *Core, ref revier.TargetRef) (T, bool) {
+	var h any = c.Runtime
+	if c.Runtime == nil || ref.Host != c.Runtime.Name() {
+		named, ok := c.hostNamed(ref.Host)
+		if !ok {
+			var none T
+			return none, false
+		}
+		h = named
+	}
+	got, ok := h.(T)
+	return got, ok
+}
+
 // osWindows reports that the view gives each runtime instance an OS window of
 // the title the window host lists (decisions.md D177).
 func (c *Core) osWindows() bool {
@@ -58,15 +76,18 @@ type panelOpener interface {
 // focus a panel, a tab opens and stays where it is, and no panel is current.
 // A view that opens its own windows draws a tab that opened in an instance
 // it shows already; one it does not show it leaves alone, so a script's tab
-// opens no window (decisions.md D118).
+// opens no window (decisions.md D118). A tab of an instance being opened is
+// drawn by nothing: the launch draws the instance once every tab runs
+// (D180).
 type tabs struct {
 	revier.TabOpener
-	c *Core
+	c         *Core
+	launching bool
 }
 
 func (t tabs) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Realization, vars map[string]string) (revier.PanelID, error) {
 	panel, err := t.TabOpener.OpenTab(ctx, ref, r, vars)
-	if err != nil {
+	if err != nil || t.launching {
 		return panel, err
 	}
 	// The tab runs, and the next press that shows the instance draws it.
@@ -94,6 +115,16 @@ func (t tabs) FocusedPanel(ctx context.Context, ref revier.TargetRef) (revier.Pa
 
 // opener is the runtime's tabs when host is the runtime and it opens tabs.
 func (c *Core) opener(host revier.Host) (panelOpener, bool) {
+	return c.tabsOf(host, false)
+}
+
+// launchOpener is opener for the launch of an instance, whose tabs the view
+// draws only once they all run.
+func (c *Core) launchOpener(host revier.Host) (panelOpener, bool) {
+	return c.tabsOf(host, true)
+}
+
+func (c *Core) tabsOf(host revier.Host, launching bool) (panelOpener, bool) {
 	if host == nil || c.Runtime == nil || host.Name() != c.Runtime.Name() {
 		return nil, false
 	}
@@ -101,7 +132,7 @@ func (c *Core) opener(host revier.Host) (panelOpener, bool) {
 	if !ok {
 		return nil, false
 	}
-	return tabs{TabOpener: o, c: c}, true
+	return tabs{TabOpener: o, c: c, launching: launching}, true
 }
 
 // show has a view that opens windows of its own draw the runtime instance
@@ -110,8 +141,8 @@ func (c *Core) opener(host revier.Host) (panelOpener, bool) {
 // instance: a press, which raises it. Every other view shows every instance
 // it is the runtime of, and nothing is done (decisions.md D180, D181).
 func (c *Core) show(ctx context.Context, ref revier.TargetRef, open bool) (bool, error) {
-	shower, ok := c.View.(revier.Shower)
-	if !ok || c.Runtime == nil || ref.Host != c.Runtime.Name() {
+	shower, ok := c.shower(ref)
+	if !ok {
 		return false, nil
 	}
 	instances, err := c.Runtime.Instances(ctx)
@@ -125,6 +156,16 @@ func (c *Core) show(ctx context.Context, ref revier.TargetRef, open bool) (bool,
 	return shower.Show(ctx, instances[i], open)
 }
 
+// shower is the view that opens windows of its own, when ref is an
+// instance of the runtime it shows.
+func (c *Core) shower(ref revier.TargetRef) (revier.Shower, bool) {
+	shower, ok := c.View.(revier.Shower)
+	if !ok || c.Runtime == nil || ref.Host != c.Runtime.Name() {
+		return nil, false
+	}
+	return shower, true
+}
+
 // raisableShown is raisable for a press on an instance that is open: a view
 // that opens its own windows first opens one where none shows it, and the OS
 // window is then the new one, which the window host lists only after a
@@ -132,6 +173,11 @@ func (c *Core) show(ctx context.Context, ref revier.TargetRef, open bool) (bool,
 // (raiseNew). place is where the instance's target puts a window it starts,
 // "" for none: the window opened now is one revier starts, so it goes there
 // as a launch's does (decisions.md D24, D186).
+//
+// A new window can leave the last tab it drew current, as kitty's does, so
+// the instance's own tab, where a return home lands, is made current in it:
+// the window opens again as a launch leaves it, with the active tab current.
+// A press that goes to a panel makes that one current after.
 func (c *Core) raisableShown(ctx context.Context, snap snapshot, failed hostErrs, inst revier.Instance, name revier.TargetName, place string) (revier.TargetRef, error) {
 	opened, err := c.show(ctx, inst.Ref, true)
 	if err != nil {
@@ -141,6 +187,13 @@ func (c *Core) raisableShown(ctx context.Context, snap snapshot, failed hostErrs
 		return c.raisable(snap, failed, inst, name)
 	}
 	slog.Info("view opened again over a live instance", "view", c.View.Name(), "ref", inst.Ref, "target", name)
+	if opener, ok := c.opener(c.terminal()); ok {
+		if own, ok := ownPanel(inst); ok {
+			if err := opener.FocusPanel(ctx, inst.Ref, own); err != nil {
+				return revier.TargetRef{}, fmt.Errorf("%s: focus the own tab of %s: %w", c.View.Name(), name, err)
+			}
+		}
+	}
 	if !c.bridged(inst) {
 		return revier.TargetRef{}, nil
 	}

@@ -54,7 +54,9 @@ func (v *FakeView) Probe(context.Context) error { return nil }
 func (v *FakeView) Capabilities() revier.Capabilities { return revier.Capabilities{} }
 
 // Show opens a window for the instance when open says it may and none shows
-// it, and draws in its window every panel not shown yet.
+// it, and draws in its window every panel not shown yet. In a new window the
+// last panel drawn is current, as each window kitty launches takes the
+// keyboard.
 func (v *FakeView) Show(_ context.Context, inst revier.Instance, open bool) (bool, error) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -71,6 +73,9 @@ func (v *FakeView) Show(_ context.Context, inst revier.Instance, open bool) (boo
 	v.windows[inst.Ref.ID] = shown
 	if !ok {
 		v.Opened = append(v.Opened, inst.Ref)
+		if len(shown) > 0 {
+			v.current[inst.Ref.ID] = shown[len(shown)-1].ID
+		}
 	}
 	return !ok, nil
 }
@@ -137,12 +142,18 @@ func (v *FakeView) FocusedPanel(_ context.Context, ref revier.TargetRef) (revier
 }
 
 // FindPanel maps a key's window id through Keys to the instance that holds
-// the runtime panel behind it.
+// the runtime panel behind it. A runtime's own panel id is no window id of
+// the view's, as an hc address is none of kitty's.
 func (v *FakeView) FindPanel(_ context.Context, instances []revier.Instance, panel revier.PanelID) (revier.TargetRef, revier.PanelID, error) {
 	v.mu.Lock()
 	own, ok := v.Keys[panel]
 	v.mu.Unlock()
 	if !ok {
+		for _, in := range instances {
+			if slices.ContainsFunc(in.Panels, func(p revier.Panel) bool { return p.ID == panel }) {
+				return revier.TargetRef{}, "", fmt.Errorf("%s: %s is the runtime's: %w", v.name, panel, revier.ErrNoViewPanel)
+			}
+		}
 		return revier.TargetRef{}, "", nil
 	}
 	for _, in := range instances {

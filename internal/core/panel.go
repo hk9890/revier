@@ -47,7 +47,7 @@ func (c *Core) tabsHost(name revier.TargetName, real revier.Realization, host re
 	if len(real.Tabs) == 0 {
 		return nil, nil
 	}
-	opener, ok := c.opener(host)
+	opener, ok := c.launchOpener(host)
 	if !ok {
 		return nil, fmt.Errorf("%w: target %q lists tabs, and the %s runtime has no tabs; to open it without them, remove tabs and give it a launch",
 			ErrNoTabs, name, host.Name())

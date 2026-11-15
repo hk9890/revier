@@ -55,7 +55,7 @@ func panelIDs(t *testing.T, rt *hosttest.FakeRuntime, ref revier.TargetRef) []re
 }
 
 // The first press starts every tab in the runtime, then has the view open one
-// window over all of them, and makes the active tab current there.
+// window over all of them, once, and makes the active tab current there.
 func TestAPressOpensOneViewWindowOverEveryTab(t *testing.T) {
 	c, rt, view := viewed()
 
@@ -66,8 +66,8 @@ func TestAPressOpensOneViewWindowOverEveryTab(t *testing.T) {
 	if len(rt.Opened) != 1 || len(rt.Tabs) != 1 {
 		t.Fatalf("runtime opened %d, tabs %d; want the instance and the agent tab", len(rt.Opened), len(rt.Tabs))
 	}
-	if !slices.Equal(view.Opened, []revier.TargetRef{res.Ref}) {
-		t.Errorf("view opened %v, want one window for %v", view.Opened, res.Ref)
+	if !slices.Equal(view.Opened, []revier.TargetRef{res.Ref}) || view.Shows != 1 {
+		t.Errorf("view opened %v in %d shows, want one window for %v in one show, once every tab runs", view.Opened, view.Shows, res.Ref)
 	}
 	shown, _ := view.Showing(res.Ref)
 	if !slices.Equal(shown, panelIDs(t, rt, res.Ref)) {
@@ -83,7 +83,8 @@ func TestAPressOpensOneViewWindowOverEveryTab(t *testing.T) {
 
 // A view closed by hand ends no program: the next press finds the instance
 // running, opens a window over its tabs, and starts nothing (decisions.md
-// D181).
+// D181). The window ends with the active tab current, as a launch's does,
+// not the last tab it drew.
 func TestAPressOnAnInstanceNoViewShowsOpensAViewAndStartsNothing(t *testing.T) {
 	c, rt, view := viewed()
 	p := prepared(t, viewedProject())
@@ -109,13 +110,19 @@ func TestAPressOnAnInstanceNoViewShowsOpensAViewAndStartsNothing(t *testing.T) {
 	if focused, _ := view.Focused(t.Context()); focused != res.Ref {
 		t.Errorf("view focused %v, want %v", focused, res.Ref)
 	}
+	if cur, _ := view.FocusedPanel(t.Context(), res.Ref); cur != rt.Tabs[0].Panel {
+		t.Errorf("current panel %s, want the active agent tab's %s", cur, rt.Tabs[0].Panel)
+	}
 }
 
 // A restore that finds a workspace running, as after kitty closed, has the
 // view show it again over its live panels and starts nothing; a second
-// restore opens no second window.
+// restore opens no second window. It lists the runtime alone for that, not
+// the window host.
 func TestARestoreShowsARunningWorkspaceNoViewShows(t *testing.T) {
 	c, rt, view := viewed()
+	wm := hosttest.New("wm")
+	c.Window = wm
 	projects := []core.Project{prepared(t, viewedProject())}
 	res, err := press(t.Context(), c, projects[0], "home")
 	if err != nil {
@@ -126,9 +133,14 @@ func TestARestoreShowsARunningWorkspaceNoViewShows(t *testing.T) {
 	s := session.Session{Projects: []session.Project{{Name: "revier", Targets: []session.Target{{Name: "home"}}}}}
 
 	for range 2 {
-		out, back := c.Restore(t.Context(), s, survey(t, c, projects, nil), projects, core.RestoreOpts{})
+		report := survey(t, c, projects, nil)
+		listed := wm.InstancesCalls
+		out, back := c.Restore(t.Context(), s, report, projects, core.RestoreOpts{})
 		if back != nil || len(out) != 1 || out[0].Action != core.RestoreRunning {
 			t.Fatalf("restore = %+v, %v; want home running", out, back)
+		}
+		if wm.InstancesCalls != listed {
+			t.Errorf("the restore listed the window host %d times, want none", wm.InstancesCalls-listed)
 		}
 	}
 	if len(rt.Opened) != 1 || len(rt.Tabs) != 1 || len(view.Opened) != 2 {
@@ -262,6 +274,46 @@ func TestAKeyInAViewWindowReachesTheRuntimePanelBehindIt(t *testing.T) {
 	}
 	if len(view.Beside) != 1 || view.Beside[0].Panel != "8" || view.Beside[0].Spec.Kind != revier.PanelShell || view.Beside[0].Spec.Dir != dir {
 		t.Errorf("beside = %+v, want a plain shell beside window 8 in %s", view.Beside, dir)
+	}
+}
+
+// A panel id that is the runtime's own, as an hc address a script passes to
+// --panel, is no window of the view's: it reaches its workspace as it does
+// with no view.
+func TestARuntimePanelIDReachesItsWorkspaceUnderAView(t *testing.T) {
+	c, rt, _ := viewed()
+	p := prepared(t, viewedProject())
+	res, err := press(t.Context(), c, p, "home")
+	if err != nil {
+		t.Fatalf("press: %v", err)
+	}
+	tabs := len(rt.Tabs)
+	if _, err := c.PlaceTab(t.Context(), []core.Project{p}, core.TabRequest{Kind: revier.PanelShell, Panel: panelIDs(t, rt, res.Ref)[0]}); err != nil {
+		t.Fatalf("PlaceTab: %v", err)
+	}
+	if len(rt.Tabs) != tabs+1 || rt.Tabs[tabs].Ref != res.Ref {
+		t.Errorf("tabs = %+v, want a shell tab in %v", rt.Tabs[tabs:], res.Ref)
+	}
+}
+
+// A view window that shows a runtime instance no project holds, as a
+// terminal started by hand and shown through the picker, gets the view's
+// own tab beside it, as a window that shows nothing does: the runtime opens
+// no tab in a terminal it did not start (decisions.md D183).
+func TestAKeyInAViewWindowOfNoWorkspaceOpensTheViewsTab(t *testing.T) {
+	c, rt, view := viewed()
+	byHand := rt.AddInstance(revier.Instance{Title: "scratch", Panels: []revier.Panel{{ID: "t9"}}})
+	view.Keys = map[revier.PanelID]revier.PanelID{"7": "t9"}
+
+	placed, err := c.PlaceTab(t.Context(), nil, core.TabRequest{Kind: revier.PanelShell, Panel: "7", Outside: core.OutsideKey{Outside: core.OutsideTab}})
+	if err != nil || !placed.Outside {
+		t.Fatalf("PlaceTab = %+v, %v; want a tab outside a workspace", placed, err)
+	}
+	if len(rt.Tabs) != 0 {
+		t.Errorf("runtime tabs = %+v in %v, want none", rt.Tabs, byHand)
+	}
+	if len(view.Beside) != 1 || view.Beside[0].Panel != "7" {
+		t.Errorf("beside = %+v, want a tab beside window 7", view.Beside)
 	}
 }
 
