@@ -900,15 +900,15 @@ records no launch, claims nothing, saves nothing, and clears no shutdown
 stays in the core: a second press of that project and target goes home while
 the focus authority reports that window (D16). It is no home; a link has none.
 
-### D167 — the workspace kitty starts with the session's login environment
+### D167 — the workspace kitty and the hc core start with the session's login environment
 
-Extends D165. A kitty window gets its kitty's environment, and the workspace
-kitty was started by whichever process opened the first workspace: a shell's
-venv or credentials then reached every project's workspace until that kitty
-exited. revier now starts it through the user's service manager, so it has
-the login environment however it was asked, and starts it detached only where
-there is none. Rejected: a fixed list of variables, which drops what the
-desktop sets that revier does not know of.
+Extends D165 and D173. A kitty window gets its kitty's environment, and an hc
+program its core's, and each was started by whichever process asked first: a
+shell's venv or credentials then reached every workspace, or every agent,
+until that kitty or core exited. revier now starts both through the user's
+service manager, so each has the login environment however it was asked, and
+starts one detached only where there is none. Rejected: a fixed list of
+variables, which drops what the desktop sets that revier does not know of.
 
 ### D168 — a window opened by hand in the workspace kitty is no instance
 

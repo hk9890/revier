@@ -17,7 +17,8 @@ import (
 
 // world gives the test a private hc: its config, state, runtime directory and
 // socket in a scratch directory, set in this process's environment, which
-// the core Open starts takes. The user's own core is never reached. A
+// the core Open starts takes. The user's own core and service manager are
+// never reached. A
 // terminal's shell is sh, not the user's: their shell's startup files would
 // run in it. No core runs yet; the test's first Open starts it, and the
 // cleanup stops it and its holder.
@@ -37,10 +38,12 @@ func world(t *testing.T) *hc.Host {
 		t.Fatal(err)
 	}
 	sock := filepath.Join(dir, "s.sock")
-	// A private runtime directory also keeps the core off systemd. revier's
+	// No service manager is reached: the core starts detached, off the
+	// user's own manager, as Open starts it where there is none. revier's
 	// state directory holds what the core's start says.
+	testenv.NoServiceManager(t, run)
 	for name, value := range map[string]string{
-		"XDG_CONFIG_HOME": dir, "XDG_STATE_HOME": dir, "XDG_RUNTIME_DIR": run, "HC_SOCKET": sock, "SHELL": "/bin/sh",
+		"XDG_CONFIG_HOME": dir, "XDG_STATE_HOME": dir, "HC_SOCKET": sock, "SHELL": "/bin/sh",
 		"HC_SESSION": "", "HC_TERMINAL_ID": "", "HC_TERMINAL_SOCKET": "", "HC_SCOPE": "", "REVIER_STATE_HOME": filepath.Join(dir, "revier"),
 	} {
 		t.Setenv(name, value)

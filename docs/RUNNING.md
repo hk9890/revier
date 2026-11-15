@@ -271,7 +271,10 @@ command without it addresses their real sessions.
 
 Any `hc` command starts a core when none answers its socket, so set the
 scratch directory before the first one. A private `XDG_RUNTIME_DIR` also keeps
-the core off systemd. Keep the directory short: a socket path over 107 bytes
+the core off systemd. revier starts a core as the unit `revier-hc` of the
+user's service manager: run revier on a private core only with
+`env -u DBUS_SESSION_BUS_ADDRESS` and the private `XDG_RUNTIME_DIR`, so it
+reaches no manager and starts the core detached. Keep the directory short: a socket path over 107 bytes
 cannot be bound.
 
 ```bash

@@ -36,10 +36,17 @@ no terminal has to show them.
 3. From another terminal, run `revier` or `revier list` to see the agents.
 
 The core gives every program it starts the environment of the command that
-started the core: the revier command, or your `hc server start`. A core
-revier starts is started without the variables of the terminal, the
-multiplexer, the Claude Code session or the revier command it ran in, such as
-`KITTY_WINDOW_ID`, `TMUX` or `CLAUDE_CODE_SESSION_ID`. hc cannot remove a
+started the core, for as long as the core runs. Where systemd runs your
+session, revier starts the core as the user service `revier-hc`, with your
+desktop session's environment, wherever you run revier: a shell's own
+settings, such as an activated virtualenv or a credential, do not reach your
+agents. `hc server stop` stops the core, and ends every program in it.
+
+Without systemd, a core revier starts takes the environment of the revier
+command, without the variables of the terminal, the multiplexer, the Claude
+Code session or the revier command it ran in, such as `KITTY_WINDOW_ID`,
+`TMUX` or `CLAUDE_CODE_SESSION_ID`. A core you start yourself with
+`hc server start` takes your shell's environment. hc cannot remove a
 variable, so revier sets them empty in each program: the Claude Code
 session's always, and each of the others only when the core holds it, since
 an empty one reads as set. A core that `hc server restart` restarted keeps

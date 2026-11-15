@@ -109,6 +109,11 @@ that did not focus after `Open` passed L2 and failed L4.
 - Run hc in a live test on a private core only: `world` in
   `internal/adapter/hc/helpers_live_test.go`. Any `hc` command starts a core
   when none answers its socket, the user's own included.
+- Call `testenv.NoServiceManager(t, dir)` in a live test that reaches a start
+  through `internal/userunit` with the real `systemd-run` on PATH, as `world`
+  does: without it, the test starts a unit in the user's own service manager.
+  Test the start itself with scripts named `systemd-run` and `systemctl` first
+  on PATH, as `internal/userunit/live_test.go` does.
 - tmux leaves an inert socket file in `/tmp/tmux-$UID/` after `kill-server`.
   A `revier-test-*` entry there is a dead socket, not a leaked server; confirm
   with `tmux -L <name> list-sessions`, which reports no server running.

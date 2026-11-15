@@ -8,6 +8,13 @@ Each section is also the text of its release on the
 
 ## Unreleased
 
+- **Under hc, a shell's own settings no longer reach your agents.** The hc
+  core gives every program it runs the environment of the command that
+  started it, so an activated virtualenv or a credential of the shell you
+  first ran revier in reached every agent until the core stopped. Where
+  systemd runs your session, revier now starts the core as the user service
+  `revier-hc`, with your desktop session's environment, as it starts its
+  kitty.
 - **Action required: revier no longer runs workspaces in herdr.** Name
   `kitty`, `tmux` or `hc` in `[hosts] runtime` in place of `herdr`. A command
   that reaches `herdr` in that list stops with `the herdr runtime was removed;

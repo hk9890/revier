@@ -22,6 +22,7 @@ import (
 	"github.com/hk9890/revier/internal/adapter/proc"
 	"github.com/hk9890/revier/internal/panelstart"
 	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/internal/userunit"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -64,9 +65,9 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 	}
 	defer s.close()
 	// The core starts each program on its own PATH, which can differ from
-	// this process's: "hc server start" can hand the core to a systemd user
-	// unit, which gives it the PATH of the user's manager. So the core runs
-	// before a program is checked, and a core started here stays up when a
+	// this process's: the core runs as a service of the user's service
+	// manager, with the manager's PATH, or was started by hand. So the core
+	// is started before a program is checked, and a core started here stays up when a
 	// program is not on its PATH. /proc shows the environment the core was
 	// started with: after "hc server restart" the core sets the environment
 	// it saved, which /proc does not show, so the check can then use a stale
@@ -192,22 +193,27 @@ func keeps(vars map[string]string) error {
 // CLI waits as long for one it starts.
 const startWait = 15 * time.Second
 
+// coreUnit is the service the user's service manager runs the core as. One
+// name for it makes a second start while it runs fail, so two presses at once
+// start one core, and names it to stop.
+const coreUnit = "revier-hc"
+
 // startCore starts the core with "hc server start", which waits for the core
-// to answer, and returns a session with it. It runs in a session of its own,
-// with no terminal to write to; what it says on stderr is the reason a start
-// that fails gives.
+// to answer, and returns a session with it. What the start says on stderr is
+// the reason a start that fails gives.
 //
 // The core hands every program it starts its starter's environment, for its
-// whole life, so the core is started with coreEnv.
+// whole life: started from a shell, it would hand that shell's venv or
+// credentials to every agent. So the start runs as a service of the user's
+// service manager, with the session's login environment and the socket this
+// host dials (decisions.md D167). The start forks the core and exits, which
+// the service takes as its start. Where there is no service manager, it runs
+// detached, in a session of its own with no terminal to write to, and with
+// coreEnv.
 func (h *Host) startCore(ctx context.Context) (*session, error) {
 	bin, err := program()
 	if err != nil {
 		return nil, err
-	}
-	cmd := exec.CommandContext(ctx, bin, "server", "start")
-	cmd.Env = coreEnv(os.Environ())
-	if h.Socket != "" {
-		cmd.Env = append(cmd.Env, "HC_SOCKET="+h.Socket)
 	}
 	// stderr is a file, not a pipe: a core that keeps the start's stderr
 	// then holds neither the wait open nor a pipe whose reader went away,
@@ -220,9 +226,27 @@ func (h *Host) startCore(ctx context.Context) (*session, error) {
 		_ = syscall.Flock(int(stderr.Fd()), syscall.LOCK_UN)
 		_ = stderr.Close()
 	}()
-	cmd.Stderr = stderr
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	if err := cmd.Run(); err != nil {
+	service := userunit.Unit{
+		Name:       coreUnit,
+		Properties: []string{"Type=forking", "StandardOutput=null", "StandardError=append:" + stderr.Name()},
+		Env:        []string{"HC_SOCKET=" + h.socket()},
+	}
+	detached := func(ctx context.Context) error {
+		cmd := exec.CommandContext(ctx, bin, "server", "start")
+		cmd.Env = coreEnv(os.Environ())
+		if h.Socket != "" {
+			cmd.Env = append(cmd.Env, "HC_SOCKET="+h.Socket)
+		}
+		cmd.Stderr = stderr
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		return cmd.Run()
+	}
+	// The manager's PATH need not hold the one program found on.
+	path, err := exec.LookPath(bin)
+	if err != nil {
+		return nil, fmt.Errorf("hc: %w", err)
+	}
+	if err := userunit.Start(ctx, service, []string{path, "server", "start"}, detached); err != nil {
 		said, _ := io.ReadAll(io.NewSectionReader(stderr, 0, 64<<10))
 		return nil, fmt.Errorf("hc: %s server start: %w: %s", bin, err, strings.TrimSpace(string(said)))
 	}

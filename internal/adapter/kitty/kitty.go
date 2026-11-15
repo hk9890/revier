@@ -47,7 +47,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"maps"
 	"os"
 	"os/exec"
@@ -58,11 +57,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/hk9890/revier/internal/adapter/proc"
 	"github.com/hk9890/revier/internal/procgroup"
+	"github.com/hk9890/revier/internal/userunit"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -888,13 +887,11 @@ const workspaceUnit = "revier-kitty"
 // minKitty is the first kitty that starts hidden.
 const minKitty = "0.42"
 
-// startProcess starts the workspace kitty through the user's service manager
-// where there is one, so it has the session's login environment whatever
-// process asked first: started from a shell, it would hand that shell's
-// environment to every workspace after (decisions.md D167). A start that
-// fails because the service runs already is one another process made. Where
-// there is no systemd-run, or it cannot start the service, kitty is started
-// detached from this process.
+// startProcess starts the workspace kitty as a service of the user's service
+// manager, so it has the session's login environment whatever process asked
+// first: started from a shell, it would hand that shell's environment to
+// every workspace after (decisions.md D167). Where there is none, kitty is
+// started detached from this process.
 func (h *Host) startProcess(ctx context.Context, args ...string) error {
 	if h.start != nil {
 		return h.start(ctx, args...)
@@ -903,25 +900,11 @@ func (h *Host) startProcess(ctx context.Context, args ...string) error {
 	if err != nil {
 		return fmt.Errorf("kitty: start: %w", err)
 	}
-	if run, err := exec.LookPath("systemd-run"); err == nil {
-		err := runStart(ctx, run, append([]string{"--user", "--quiet", "--collect", "--unit=" + workspaceUnit, "--", kitty}, args...)...)
-		if err == nil || runStart(ctx, "systemctl", "--user", "--quiet", "is-active", workspaceUnit) == nil {
-			return nil
-		}
-		slog.Warn("kitty: the service manager did not start the workspace kitty; starting it detached", "err", err)
-	}
-	return runStart(ctx, kitty, append([]string{"--detach"}, args...)...)
-}
-
-// runStart runs a command that starts the workspace kitty, in a process group
-// of its own: the ctrl+c a terminal sends to revier's group cancels a shutdown
-// or a restore after its step, and must not end the step's command with it.
-func runStart(ctx context.Context, name string, args ...string) error {
-	c := exec.CommandContext(ctx, name, args...)
-	c.Stdin, c.Stdout, c.Stderr = nil, nil, nil
-	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	if err := c.Run(); err != nil {
-		return fmt.Errorf("kitty: start: %s: %w", filepath.Base(name), err)
+	err = userunit.Start(ctx, userunit.Unit{Name: workspaceUnit}, append([]string{kitty}, args...), func(ctx context.Context) error {
+		return userunit.Run(ctx, kitty, append([]string{"--detach"}, args...)...)
+	})
+	if err != nil {
+		return fmt.Errorf("kitty: start: %w", err)
 	}
 	return nil
 }
