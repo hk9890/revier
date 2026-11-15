@@ -106,15 +106,15 @@ func TestSessionRecordsNoAgentWithAShellInTheForeground(t *testing.T) {
 }
 
 // A save records the harness the probe read in the panel, not the probe's own
-// name, for the agent of the instance and of a tab target alike: the herdr
-// probe claims any agent herdr detected, such as codex.
+// name, for the agent of the instance and of a tab target alike: an exec
+// probe may claim any agent its program detects, such as codex.
 func TestSessionRecordsTheHarnessTheProbeRead(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.Add("session:revier", "kitty",
 		revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "codex"},
 		revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "codex", Vars: map[string]string{core.PanelTargetVar: "tickets"}},
 	)
-	probe := &hosttest.FakeProbe{Harness: "herdr", State: revier.AgentState{Harness: "codex", Status: revier.StatusIdle}}
+	probe := &hosttest.FakeProbe{Harness: "agents", State: revier.AgentState{Harness: "codex", Status: revier.StatusIdle}}
 	c := &core.Core{Runtime: rt, Probes: []revier.AgentProbe{probe}}
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, tabProject())})
 	if err != nil {

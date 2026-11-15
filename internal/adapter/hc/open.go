@@ -317,9 +317,7 @@ func (h *Host) waitCore(ctx context.Context) (*session, error) {
 // those the core holds, and the agent session's always (runEnv): a core
 // revier started holds none, and one started by hand from a terminal holds
 // that terminal's.
-var foreignVars = slices.Concat(proc.TerminalVars, []string{
-	"HERDR_ENV", "HERDR_SESSION", "HERDR_SOCKET_PATH", "HERDR_WORKSPACE_ID", "HERDR_TAB_ID", "HERDR_PANE_ID",
-}, proc.CommandVars, proc.AgentSessionVars)
+var foreignVars = slices.Concat(proc.TerminalVars, proc.CommandVars, proc.AgentSessionVars)
 
 // closeInstance kills and removes every terminal that carries the instance
 // id, live or finished, on the core called core, all at once: hc's kill can

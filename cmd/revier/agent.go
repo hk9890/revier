@@ -99,7 +99,7 @@ submits it, and returns once an idle agent has started on it, so
   revier agent prompt demo "..." && revier agent wait demo --until stopped
 waits for that turn. It refuses a panel that is not an agent's, an agent
 waiting for an answer, where the Enter would pick an option in its dialog,
-and an agent whose state is unknown, as an opencode agent's is outside herdr,
+and an agent whose state is unknown, as an opencode agent's is,
 since it may be showing such a dialog. send-keys reaches either.
 
 read prints the last thing the agent said, where its harness keeps a

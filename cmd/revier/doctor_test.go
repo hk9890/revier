@@ -341,14 +341,15 @@ func TestDoctorAdvisesALinkTargetTheRemoteTable(t *testing.T) {
 // doctor reports it, in any position: after a host that works and after
 // none too, where host selection never reaches it.
 func TestDoctorReportsAnUnknownHostName(t *testing.T) {
-	configRoot(t, "[hosts]\nruntime = [\"none\", \"ghostty\"]\nwindow = [\"sway\"]\n", map[string]string{"sound.toml": sound})
+	configRoot(t, "[hosts]\nruntime = [\"none\", \"ghostty\", \"herdr\"]\nwindow = [\"sway\"]\n", map[string]string{"sound.toml": sound})
 
 	var out strings.Builder
 	if err := cmdDoctor(&out, nil); !errors.As(err, new(problemsFound)) {
 		t.Fatalf("err = %v, want the silent non-zero end", err)
 	}
 	for _, want := range []string{
-		`hosts.runtime unknown host "ghostty"; known: hc, herdr, kitty, tmux, none`,
+		`hosts.runtime unknown host "ghostty"; known: hc, kitty, tmux, none`,
+		`hosts.runtime the herdr runtime was removed; use kitty, tmux or hc`,
 		`hosts.window  unknown host "sway"; known: gnome, none`,
 		"1 project, 1 file with problems",
 	} {

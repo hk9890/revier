@@ -7,8 +7,8 @@ import (
 	"github.com/hk9890/revier/internal/adapter/tmux"
 )
 
-// A kitty window id is a bare number and a herdr pane id names its workspace,
-// so neither may pass for a tmux pane.
+// A kitty window id is a bare number and an id may name its workspace before
+// a colon, so neither may pass for a tmux pane.
 func TestIsPaneTakesOnlyATmuxPaneID(t *testing.T) {
 	cases := map[string]bool{
 		"%5":    true,

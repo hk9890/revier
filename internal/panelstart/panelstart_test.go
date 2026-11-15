@@ -30,8 +30,8 @@ func TestStartableRefusesAProgramNotOnPATH(t *testing.T) {
 	}
 }
 
-// The PATH searched is the one given, not this process's: herdr starts a
-// panel with its server's. Only an executable file there is a program.
+// The PATH searched is the one given, not this process's: hc starts a
+// panel with its core's. Only an executable file there is a program.
 func TestStartableOnSearchesTheGivenPATH(t *testing.T) {
 	testenv.NoTools(t)
 	dir := t.TempDir()

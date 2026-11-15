@@ -255,7 +255,7 @@ func TestTheCoreStartsWithoutTheVariablesOfWhatStartedIt(t *testing.T) {
 	env := []string{"GIT_EDITOR=true"}
 	for _, name := range append([]string{
 		"KITTY_WINDOW_ID", "KITTY_SHELL_INTEGRATION", "WINDOWID", "TMUX", "HERDR_SESSION", "HERDR_WORKSPACE_ID",
-		"HERDR_TAB_ID", "REVIER_TAG", "REVIER_HERDR_OPEN", "HC_TERMINAL_ID", "HC_TERMINAL_SOCKET", "HC_SCOPE",
+		"HERDR_TAB_ID", "REVIER_TAG", "HC_TERMINAL_ID", "HC_TERMINAL_SOCKET", "HC_SCOPE",
 	}, proc.AgentSessionVars...) {
 		env = append(env, name+"=x")
 	}

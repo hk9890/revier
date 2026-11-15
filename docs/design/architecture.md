@@ -25,7 +25,6 @@ behind one of the five ports below.
  ────────┼───────       opencode
  kitty   │ gnome        aider*
  tmux    │ hyprland*
- herdr   │
  hc      │
  wezterm*│
 

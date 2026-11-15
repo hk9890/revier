@@ -1,9 +1,9 @@
 # opencode
 
 revier finds opencode in your workspace panels and counts it as an agent, but
-outside herdr its state is `unknown`. opencode shows nothing a panel can read:
-its title, its variables and its process stay the same when it works and when
-it is idle. revier shows it as present rather than guess.
+its state is `unknown`. opencode shows nothing a panel can read: its title,
+its variables and its process stay the same when it works and when it is
+idle. revier shows it as present rather than guess.
 
 ## What you need
 
@@ -29,9 +29,6 @@ To make it a workspace's agent, put it in the agent panel's `command` (see
 
 - `revier agent read` without `--screen`
   ([Agents](../agents.md#drive-an-agent-from-a-script)).
-
-Outside herdr:
-
 - State: always `unknown`, never `running`, `attention` or `idle`. An
   opencode agent never sorts first as one that needs you.
 - `revier agent prompt`: it refuses an agent in state `unknown`

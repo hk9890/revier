@@ -58,6 +58,18 @@ func TestSelectRuntimeRejectsAnUnknownName(t *testing.T) {
 	}
 }
 
+// A config written for a release that had the herdr runtime is told it was
+// removed and what to name instead, not that herdr is an unknown name.
+func TestSelectRuntimeSaysTheHerdrRuntimeWasRemoved(t *testing.T) {
+	_, err := selectHost(context.Background(), "runtime", []string{"herdr", "tmux"}, defaultRuntimeOrder, runtimeAdapters())
+	if !errors.Is(err, errHerdrRemoved) {
+		t.Fatalf("err = %v, want %v", err, errHerdrRemoved)
+	}
+	if want := "hosts.runtime: the herdr runtime was removed; use kitty, tmux or hc"; err.Error() != want {
+		t.Errorf("err = %q, want %q", err, want)
+	}
+}
+
 // "none" disables a host class even on a machine where an adapter would work.
 // It is how a test, or a user who wants their windows left alone, opts out.
 func TestHostNoneDisablesTheClass(t *testing.T) {
@@ -86,14 +98,14 @@ func TestSelectWindowWithNoDefaultsAvailable(t *testing.T) {
 }
 
 // A probe the configuration declares runs before every compiled-in probe but
-// Claude Code's: herdr's takes herdr's word and opencode's knows no state, so
-// a probe written for the same harness knows more.
-func TestAConfiguredProbeRunsBeforeHerdrAndOpencode(t *testing.T) {
+// Claude Code's: opencode's knows no state, so a probe written for the same
+// harness knows more.
+func TestAConfiguredProbeRunsBeforeOpencode(t *testing.T) {
 	var names []string
 	for _, p := range probes(&config.Config{Probes: []config.Probe{{Name: "codex", Exec: "codex-probe"}}}) {
 		names = append(names, p.Name())
 	}
-	if got, want := strings.Join(names, " "), "claude codex herdr opencode"; got != want {
+	if got, want := strings.Join(names, " "), "claude codex opencode"; got != want {
 		t.Errorf("probes = %q, want %q", got, want)
 	}
 }
