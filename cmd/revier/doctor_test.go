@@ -349,7 +349,7 @@ func TestDoctorReportsAnUnknownHostName(t *testing.T) {
 	}
 	for _, want := range []string{
 		`hosts.runtime unknown host "ghostty"; known: hc, kitty, tmux, none`,
-		`hosts.runtime the herdr runtime was removed; use kitty, tmux or hc`,
+		`hosts.runtime the herdr runtime was removed; use hc, kitty or tmux`,
 		`hosts.window  unknown host "sway"; known: gnome, none`,
 		"1 project, 1 file with problems",
 	} {

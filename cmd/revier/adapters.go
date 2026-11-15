@@ -65,16 +65,32 @@ var (
 // must not take over a machine that has it installed (decisions.md D174).
 var optInRuntimes = []string{"hc"}
 
-// errHerdrRemoved answers a config that still names the runtime an earlier
+// runtimeRemoved answers a config that still names a runtime an earlier
 // release had, so that its user learns what to name instead of "unknown host".
-var errHerdrRemoved = errors.New("the herdr runtime was removed; use kitty, tmux or hc")
+type runtimeRemoved struct{ name, use string }
 
-// unknownHost is the error for a name in [hosts] that no adapter carries.
-func unknownHost(kind, name string, known []string) error {
-	if kind == "runtime" && name == "herdr" {
-		return errHerdrRemoved
+func (e runtimeRemoved) Error() string {
+	return fmt.Sprintf("the %s runtime was removed; use %s", e.name, e.use)
+}
+
+// removedRuntimes are the runtimes an earlier release had (decisions.md D175).
+var removedRuntimes = []string{"herdr"}
+
+// unknownHost is the error for a name in [hosts] that none of the adapters
+// carries; it names theirs, and hostNone, as the names to use.
+func unknownHost(kind, name string, adapters []string) error {
+	if kind == "runtime" && slices.Contains(removedRuntimes, name) {
+		return runtimeRemoved{name: name, use: orList(adapters)}
 	}
-	return fmt.Errorf("unknown host %q; known: %s", name, strings.Join(known, ", "))
+	return fmt.Errorf("unknown host %q; known: %s", name, strings.Join(slices.Concat(adapters, []string{hostNone}), ", "))
+}
+
+// orList joins names as "a, b or c".
+func orList(names []string) string {
+	if len(names) < 2 {
+		return strings.Join(names, "")
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " or " + names[len(names)-1]
 }
 
 // hostNone disables a host class. Listing it is how a machine that HAS a usable
@@ -130,11 +146,10 @@ func atTmuxPane(order []string) []string {
 // does reach stops every command but doctor; doctor reads these instead.
 func hostProblems(cfg *config.Config) []error {
 	var errs []error
-	check := func(kind string, want, known []string) {
-		known = append(known, hostNone)
+	check := func(kind string, want, adapters []string) {
 		for _, name := range want {
-			if !slices.Contains(known, name) {
-				errs = append(errs, fmt.Errorf("hosts.%s: %w", kind, unknownHost(kind, name, known)))
+			if name != hostNone && !slices.Contains(adapters, name) {
+				errs = append(errs, fmt.Errorf("hosts.%s: %w", kind, unknownHost(kind, name, adapters)))
 			}
 		}
 	}
@@ -156,7 +171,7 @@ func selectHost[H revier.Host](ctx context.Context, kind string, want, defaults 
 			}
 			h, ok := adapters[name]
 			if !ok {
-				return none, fmt.Errorf("hosts.%s: %w", kind, unknownHost(kind, name, append(slices.Sorted(maps.Keys(adapters)), hostNone)))
+				return none, fmt.Errorf("hosts.%s: %w", kind, unknownHost(kind, name, slices.Sorted(maps.Keys(adapters))))
 			}
 			if err := h.Probe(ctx); err != nil {
 				errs = append(errs, fmt.Errorf("%s: %w", name, err))

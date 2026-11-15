@@ -62,10 +62,10 @@ func TestSelectRuntimeRejectsAnUnknownName(t *testing.T) {
 // removed and what to name instead, not that herdr is an unknown name.
 func TestSelectRuntimeSaysTheHerdrRuntimeWasRemoved(t *testing.T) {
 	_, err := selectHost(t.Context(), "runtime", []string{"herdr", "tmux"}, defaultRuntimeOrder, runtimeAdapters())
-	if !errors.Is(err, errHerdrRemoved) {
-		t.Fatalf("err = %v, want %v", err, errHerdrRemoved)
+	if !errors.As(err, new(runtimeRemoved)) {
+		t.Fatalf("err = %v, want a removed runtime", err)
 	}
-	if want := "hosts.runtime: the herdr runtime was removed; use kitty, tmux or hc"; err.Error() != want {
+	if want := "hosts.runtime: the herdr runtime was removed; use hc, kitty or tmux"; err.Error() != want {
 		t.Errorf("err = %q, want %q", err, want)
 	}
 }

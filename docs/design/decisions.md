@@ -983,7 +983,8 @@ kitty or tmux who also installs hc keeps the runtime they had.
 ### D175 — revier builds on hc, and the herdr runtime and its probe are gone
 
 Replaces D142, D143. hc comes from herdr's makers as the headless core of a
-terminal runtime, and it is the runtime revier builds on beside kitty and tmux.
+terminal runtime, and the runtime revier moves to, opted into while it is a
+prototype (D174).
 Keeping herdr as well kept a second host and a second probe for the same
 makers' product, pinned and tracked weekly, for what hc gives. A config that
 names herdr is refused with what to name instead, not taken as an unknown host.

@@ -32,7 +32,7 @@ func TestStartableRefusesAProgramNotOnPATH(t *testing.T) {
 
 // The PATH searched is the one given, not this process's: hc starts a
 // panel with its core's. Only an executable file there is a program.
-func TestStartableOnSearchesTheGivenPATH(t *testing.T) {
+func TestCommandsOnSearchesTheGivenPATH(t *testing.T) {
 	testenv.NoTools(t)
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "agent"), []byte("#!/bin/sh\n"), 0o755); err != nil {
@@ -43,23 +43,23 @@ func TestStartableOnSearchesTheGivenPATH(t *testing.T) {
 	}
 
 	agent := revier.PanelSpec{Kind: revier.PanelAgent, Command: []string{"agent"}}
-	if err := panelstart.StartableOn([]revier.PanelSpec{agent}, dir); err != nil {
-		t.Errorf("StartableOn(%s) = %v, want nil", dir, err)
+	if _, err := panelstart.CommandsOn([]revier.PanelSpec{agent}, dir); err != nil {
+		t.Errorf("CommandsOn(%s) = %v, want nil", dir, err)
 	}
-	err := panelstart.StartableOn([]revier.PanelSpec{agent}, "")
+	_, err := panelstart.CommandsOn([]revier.PanelSpec{agent}, "")
 	if want := `the agent panel's command "agent" is not on PATH`; err == nil || err.Error() != want {
-		t.Errorf("StartableOn on an empty PATH = %v, want %q", err, want)
+		t.Errorf("CommandsOn on an empty PATH = %v, want %q", err, want)
 	}
 	plain := revier.PanelSpec{Kind: revier.PanelTool, Command: []string{"plain"}}
-	err = panelstart.StartableOn([]revier.PanelSpec{plain}, dir)
+	_, err = panelstart.CommandsOn([]revier.PanelSpec{plain}, dir)
 	if want := `the tool panel's command "plain" is not on PATH`; err == nil || err.Error() != want {
-		t.Errorf("StartableOn with a file that is not executable = %v, want %q", err, want)
+		t.Errorf("CommandsOn with a file that is not executable = %v, want %q", err, want)
 	}
 }
 
 // A bare program is resolved to its file on the given PATH, its arguments
 // kept; a program named by a path is kept as written, and a panel with no
-// command has none. A program not on PATH is refused as StartableOn refuses
+// command has none. A program not on PATH is refused as Startable refuses
 // it.
 func TestCommandsOnResolvesEachBareProgram(t *testing.T) {
 	testenv.NoTools(t)

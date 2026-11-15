@@ -8,11 +8,15 @@ Each section is also the text of its release on the
 
 ## Unreleased
 
-- **Action required: revier no longer runs workspaces in herdr.** A config
-  whose `[hosts] runtime` names `herdr` stops every command that lists or
-  opens, with `the herdr runtime was removed; use kitty, tmux or hc`, and
-  `revier doctor` reports the same. Name `kitty`, `tmux` or `hc` instead. With
-  no `runtime` set, revier now tries kitty, then tmux.
+- **Action required: revier no longer runs workspaces in herdr.** Name
+  `kitty`, `tmux` or `hc` in `[hosts] runtime` in place of `herdr`. A command
+  that reaches `herdr` in that list stops with `the herdr runtime was removed;
+  use hc, kitty or tmux`, and `revier doctor` reports it wherever the list
+  names it. With no `runtime` set, revier now tries kitty, then tmux, and
+  finds no runtime on a machine that has only herdr.
+- A name in `[hosts]` that revier does not know now stops with
+  `hosts.runtime: unknown host "<name>"; known: ...` (or `hosts.window: ...`),
+  in place of `unknown runtime host "<name>"`.
 
 ## v0.27.0
 

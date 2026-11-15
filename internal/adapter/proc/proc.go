@@ -13,12 +13,11 @@
 //
 // The package is also the one reader of a process's parent and terminal on
 // this machine: Parent, which the kitty host walks a window's processes with,
-// Foreground, which the tmux host reads a pane's command with, EnvIn, one
-// variable of a process's environment, PeerPID and ServerPATH, the hc core behind its socket and the
-// PATH it starts a program with, RunsUnder, the panels a shutdown closes
-// last, and AgentSessionVars, TerminalVars, CommandVars, WithoutAgentSession,
-// Without and Cleared, what the hc host keeps from the programs its core
-// starts.
+// Foreground, which the tmux host reads a pane's command with, PeerPID and
+// ServerPATH, the hc core behind its socket and the PATH it starts a program
+// with, RunsUnder, the panels a shutdown closes last, and AgentSessionVars,
+// TerminalVars, CommandVars, WithoutAgentSession, Without and Cleared, what
+// the hc host keeps from the programs its core starts.
 package proc
 
 import (
