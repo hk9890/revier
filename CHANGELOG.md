@@ -6,65 +6,97 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
-## Unreleased
+## v0.28.0
 
-- **Action required: revier no longer runs workspaces in tmux.** Name
-  `kitty` or `hc` in `[hosts] runtime` in place of `tmux`, and remove `tmux`
-  from `[hosts] view`. A command that reaches `tmux` there stops with `the
-  tmux runtime was removed; use hc or kitty` (or `the tmux view was removed;
-  use kitty`), and `revier doctor` reports it wherever the list names it.
-  With no `runtime` set, revier now tries kitty alone. Close what runs in
-  tmux with `revier shutdown` before you switch, and reopen it with `revier
-  session restore`. Remove the tmux keys that ran `revier agent new --panel`
-  and `revier shell new --panel`. Over ssh, or with no display, run hc with
-  `view = ["none"]` and `revier open --attach`; Ghostty works the same way.
-- **The config screen (alt+c) offers hc as a runtime host**, beside kitty and
-  `none`.
+- **Action required: revier no longer runs workspaces in tmux or herdr.** Name
+  `kitty` or `hc` in `[hosts] runtime` in place of `tmux` or `herdr`. A command
+  that reaches either name there stops with `hosts.runtime: the tmux runtime was
+  removed; use hc or kitty` (or `hosts.runtime: the herdr runtime ...`), and
+  `revier doctor` reports it wherever the list names it. With no `runtime` set,
+  revier now tries kitty alone, and finds no runtime on a machine without kitty.
+  Close what runs in tmux with `revier shutdown` before you switch, and reopen
+  it with `revier session restore`. Remove the tmux keys that ran `revier agent
+  new --panel` and `revier shell new --panel`. Over ssh, or with no display, run
+  hc with `view = ["none"]` and `revier open --attach`; Ghostty works the same
+  way.
+- **Action required: `revier keys` and `revier term` are gone.** Either now
+  stops with `unknown command "keys"` (or `"term"`) and exits 1. Run `revier
+  setup install` in place of both. It writes the desktop keys, the terminal
+  keys and the popup's window rules in one run; `revier setup status` and
+  `revier setup uninstall` replace the `status` and `uninstall` commands of
+  both. A part this machine does not have is skipped and named, and the rest
+  still runs. Install exits 4 when it skips a part or holds a key or rule
+  back for want of `--force`.
+- **Action required: revier needs `wctl` 0.23.0 or later on GNOME.** With an
+  older `wctl`, revier has no GNOME host: a target with only a
+  `[target.window]` part is unavailable, `revier attach` and `revier popup`
+  do not work, and `revier setup install` skips the popup's rules and
+  exits 4. Upgrade `wctl`, and its extension to version 23 or later for the
+  popup's rules.
 - **Action required: the trigger key no longer switches a revier you run in
   a terminal of your own.** With that terminal focused, the key opens or
   raises the popup. Where the trigger key is alt+space, click `agents` in
-  the top line to switch lists there. The second press on the popup still switches its
-  lists, now whatever runs your workspaces, hc included. A popup that was
-  open before the upgrade only comes to the front on that press: quit it
-  once with ctrl+c, and the next press opens one that switches.
-- **Action required: revier no longer runs workspaces in herdr.** Name
-  `kitty` or `hc` in `[hosts] runtime` in place of `herdr`. A command
-  that reaches `herdr` in that list stops with `the herdr runtime was removed;
-  use hc or kitty`, and `revier doctor` reports it wherever the list
-  names it. With no `runtime` set, revier finds no runtime on a machine that
-  has only herdr.
-- **Under hc, your workspaces open in kitty, and your agents outlive it.**
-  With `runtime = ["hc"]` under `[hosts]`, a press opens the workspace in a
-  kitty window with its tabs, the active tab current, and its agent and shell
-  side by side. Targets with `inside`, `revier agent new`, `revier shell new`,
-  the kitty keys, a second press that goes home and `revier session restore`
-  work as on kitty. Closing kitty ends no agent: the next press opens the
-  window again over the running agents, where `place` puts a new one, and
-  starts nothing. When an agent or another panel's command ends, its window
-  stays open with what it printed and its exit code until you press Enter.
-  With no kitty or
-  no display, as over ssh, nothing shows hc, and `revier open --attach`
-  reaches a workspace. `revier doctor` says which view shows hc. Where
-  systemd runs your session, revier starts the hc core as a user service
-  named `revier-hc-` and a short hash of the core's socket, so your agents
-  get your desktop session's environment and not that of the shell you ran
-  revier in. Set a variable your agents need, such as `CLAUDE_CONFIG_DIR`,
-  with `systemctl --user set-environment`. That core stops at your last
-  logout, with every agent in it, unless you run `loginctl enable-linger`;
-  `revier doctor` says so. Without the setting, kitty runs your workspaces
-  as before. Images are gone once a
-  window opens again, and a program with a lot of output lags in its window.
-- **`[hosts] view` names what shows your workspaces.** Left out, kitty
-  shows the kitty runtime, as before, and kitty
-  shows hc where kitty and a display are, else nothing shows it. `view = ["none"]` shows nothing: revier opens and lists
-  your workspaces and focuses none. A view that cannot show the runtime in
-  use stops with an error, and `revier doctor` reports an unknown name. With
-  `runtime = ["none"]`, revier ignores the view.
-  `revier status` prints the view on a `view` line, between `runtime` and
-  `window`.
+  the top line to switch lists there. The second press on the popup still
+  switches its lists, now whatever runs your workspaces, hc included. A
+  popup that was open before the upgrade only comes to the front on that
+  press: quit it once with ctrl+c, and the next press opens one that
+  switches.
+- **The popup opens at its size, sized to the monitor it opens on.**
+  `revier setup install` writes three rules for the popup's window into
+  `~/.config/gnome-window-control/rules.json`, above your own: 1800 px wide
+  and centred on a monitor of 3400 px or more, 75% of the width from 2200
+  px, the whole screen below. Where the rules are not as revier wrote them,
+  revier places the popup by the same widths, against the primary monitor
+  less its panels. Below 3400 px this is a change: from 2200 px the popup is
+  now 75% of the width, and from 1800 to 2199 px it fills the screen, where
+  it was 1800 px wide on both. On GNOME older than 49 or under X11 the popup
+  still opens and then moves into place.
+- **Action required: a rule of yours for `revier-popup` holds `revier setup
+  install` back, unless it only keeps the popup on top.** Run `revier setup
+  install --force` to replace it. revier's rules keep the popup on top and
+  out of Alt+Tab, and hide it when another window takes the focus or the
+  overview opens, as an `"overlay": true` rule did; install replaces such a
+  rule of yours without `--force`. Install and uninstall print each rule
+  they removed that revier does not write, your overlay rule included, as
+  the file held it, for you to put back. An extension older than version 23
+  cannot read the rules, and install skips them.
+- **hc runs your workspaces, as an experimental runtime, and your agents
+  outlive kitty.** Install hc 0.1.21 as `herdr-core`, or as an `hc` that
+  links to it, close kitty's
+  workspaces with `revier shutdown`, and set `runtime = ["hc"]` under
+  `[hosts]`. A press then opens the workspace in a kitty window with its
+  tabs, the active tab current, and its agent and shell side by side.
+  Targets with `inside`, `revier agent new`, `revier shell new`, the kitty
+  keys, a second press that goes home and `revier session restore` work as
+  on kitty. Closing kitty ends no agent: the next press opens the window
+  again over the running agents and starts nothing. When an agent or
+  another panel's command ends, its window stays open with what it printed
+  and its exit code until you press Enter. Images are gone once a window
+  opens again, and a program with a lot of output lags in its window. The
+  config screen (alt+c) offers hc beside kitty and `none`. Without the
+  setting, kitty runs your workspaces as before.
+- **Under systemd, hc's agents get your desktop session's environment.**
+  revier starts the hc core as a user service named `revier-hc-` and a
+  short hash of the core's socket, not with the environment of the shell
+  you ran revier in. Set a variable your agents need, such as
+  `CLAUDE_CONFIG_DIR`, with `systemctl --user set-environment`. The core
+  stops at your last logout, with every agent in it, unless you run
+  `loginctl enable-linger`; `revier doctor` says so.
+- **`[hosts] view` names what shows your workspaces.** Left out, kitty shows
+  the kitty runtime, as before, and kitty shows hc where kitty and a display
+  are, else nothing shows it. `view = ["none"]` shows nothing: revier opens
+  and lists your workspaces and focuses none. A view that cannot show the
+  runtime in use stops with an error, and `revier doctor` reports an
+  unknown name and which view shows hc. With `runtime = ["none"]`, revier
+  ignores the view. `revier
+  status` prints the view on a `view` line, between `runtime` and `window`.
 - A name in `[hosts]` that revier does not know now stops with
   `hosts.runtime: unknown host "<name>"; known: ...` (or `hosts.window: ...`),
   in place of `unknown runtime host "<name>"`.
+- **`revier agent wait` takes `--json`, and then prints the agent's conversation
+  id beside its status**, as `{"status": "idle", "session": "..."}`. It is the
+  id the agent holds when the wait ends. A harness that does not name its
+  conversation leaves it empty.
 - **A probe reads the state a program reported with OSC 7501** in the
   `kitty_program_status` var of the panel it gets on stdin, with the kitty
   runtime and kitty 0.50 or later. It no longer needs to ask kitty itself.
