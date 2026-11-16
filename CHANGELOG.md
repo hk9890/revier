@@ -23,14 +23,16 @@ Each section is also the text of its release on the
   stops with `unknown command "keys"` (or `"term"`) and exits 1. Run `revier
   setup install` in place of both. It writes the desktop keys, the terminal
   keys and the popup's window rules in one run; `revier setup status` and
-  `revier setup uninstall` replace the two `status` and `uninstall`
-  commands. A part this machine does not have is skipped and named, the
-  rest still runs, and install then exits 4.
+  `revier setup uninstall` replace the `status` and `uninstall` commands of
+  both. A part this machine does not have is skipped and named, and the rest
+  still runs. Install exits 4 when it skips a part or holds a key or rule
+  back for want of `--force`.
 - **Action required: revier needs `wctl` 0.23.0 or later on GNOME.** With an
   older `wctl`, revier has no GNOME host: a target with only a
   `[target.window]` part is unavailable, `revier attach` and `revier popup`
   do not work, and `revier setup install` skips the popup's rules and
-  exits 4. Upgrade `wctl` and its extension.
+  exits 4. Upgrade `wctl`, and its extension to version 23 or later for the
+  popup's rules.
 - **Action required: the trigger key no longer switches a revier you run in
   a terminal of your own.** With that terminal focused, the key opens or
   raises the popup. Where the trigger key is alt+space, click `agents` in
@@ -43,22 +45,24 @@ Each section is also the text of its release on the
   `revier setup install` writes three rules for the popup's window into
   `~/.config/gnome-window-control/rules.json`, above your own: 1800 px wide
   and centred on a monitor of 3400 px or more, 75% of the width from 2200
-  px, the whole screen below. Without the rules, revier places the popup by
-  the same widths, against the primary monitor less its panels. Below 3400
-  px this is a change: from 2200 px the popup is now 75% of the width, and
-  from 1800 to 2199 px it fills the screen, where it was 1800 px wide on
-  both. On GNOME older than 49 or under X11 the popup still
-  opens and then moves into place.
-- **The popup's rules also keep it on top and out of Alt+Tab, and hide it
-  when another window takes the focus or the overview opens,** as an
-  `"overlay": true` rule did; install replaces such a rule of yours. Any
-  other rule of yours for `revier-popup` holds the install back until you
-  run `revier setup install --force`. Install and uninstall print each rule
+  px, the whole screen below. Where the rules are not as revier wrote them,
+  revier places the popup by the same widths, against the primary monitor
+  less its panels. Below 3400 px this is a change: from 2200 px the popup is
+  now 75% of the width, and from 1800 to 2199 px it fills the screen, where
+  it was 1800 px wide on both. On GNOME older than 49 or under X11 the popup
+  still opens and then moves into place.
+- **Action required: a rule of yours for `revier-popup` holds `revier setup
+  install` back, unless it only keeps the popup on top.** Run `revier setup
+  install --force` to replace it. revier's rules keep the popup on top and
+  out of Alt+Tab, and hide it when another window takes the focus or the
+  overview opens, as an `"overlay": true` rule did; install replaces such a
+  rule of yours without `--force`. Install and uninstall print each rule
   they removed that revier does not write, your overlay rule included, as
   the file held it, for you to put back. An extension older than version 23
   cannot read the rules, and install skips them.
 - **hc runs your workspaces, as an experimental runtime, and your agents
-  outlive kitty.** Install hc 0.1.21 as `herdr-core`, close kitty's
+  outlive kitty.** Install hc 0.1.21 as `herdr-core`, or as an `hc` that
+  links to it, close kitty's
   workspaces with `revier shutdown`, and set `runtime = ["hc"]` under
   `[hosts]`. A press then opens the workspace in a kitty window with its
   tabs, the active tab current, and its agent and shell side by side.
@@ -69,7 +73,8 @@ Each section is also the text of its release on the
   another panel's command ends, its window stays open with what it printed
   and its exit code until you press Enter. Images are gone once a window
   opens again, and a program with a lot of output lags in its window. The
-  config screen (alt+c) offers hc beside kitty and `none`.
+  config screen (alt+c) offers hc beside kitty and `none`. Without the
+  setting, kitty runs your workspaces as before.
 - **Under systemd, hc's agents get your desktop session's environment.**
   revier starts the hc core as a user service named `revier-hc-` and a
   short hash of the core's socket, not with the environment of the shell
@@ -82,7 +87,8 @@ Each section is also the text of its release on the
   are, else nothing shows it. `view = ["none"]` shows nothing: revier opens
   and lists your workspaces and focuses none. A view that cannot show the
   runtime in use stops with an error, and `revier doctor` reports an
-  unknown name. With `runtime = ["none"]`, revier ignores the view. `revier
+  unknown name and which view shows hc. With `runtime = ["none"]`, revier
+  ignores the view. `revier
   status` prints the view on a `view` line, between `runtime` and `window`.
 - A name in `[hosts]` that revier does not know now stops with
   `hosts.runtime: unknown host "<name>"; known: ...` (or `hosts.window: ...`),
