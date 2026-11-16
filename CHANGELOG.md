@@ -49,7 +49,8 @@ Each section is also the text of its release on the
   from 1800 to 2199 px it fills the screen, where it was 1800 px wide on
   both. On GNOME older than 49 or under X11 the popup still
   opens and then moves into place.
-- **The popup's rules also keep it on top and out of Alt+Tab,** as an
+- **The popup's rules also keep it on top and out of Alt+Tab, and hide it
+  when another window takes the focus or the overview opens,** as an
   `"overlay": true` rule did; install replaces such a rule of yours. Any
   other rule of yours for `revier-popup` holds the install back until you
   run `revier setup install --force`. Install and uninstall print each rule
