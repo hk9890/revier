@@ -6,6 +6,16 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## v0.28.1
+
+- **A `revier list` call that is cut off no longer leaves
+  `claude agents --json` running.** A program that polls `revier list`
+  and gives up on a slow call, or the call's own time limit, left one
+  behind each time. On a loaded machine dozens ran at once, and the
+  desktop stalled.
+- **`revier list --json --conversations` uses less CPU and ends
+  sooner.** It usually starts Claude Code once per call, not twice.
+
 ## v0.28.0
 
 - **Action required: revier no longer runs workspaces in tmux or herdr.** Name
