@@ -53,6 +53,8 @@ doc reads what it already did.
 | `assist` | `revier assist` replaces itself with the agent, with `exec` and `dir`. The agent's process writes no `command` line |
 | `resolve` | a command picks its project, `by` flag, directory, focused window or last project |
 | `go` | run-or-raise ends: `launched`, `landed`, `ref`, and `agents` for a resume. A toggle back writes a second line for the Go home, a tab target a second line for its workspace. A command target's line has `ran` and `focused`, the window the run left the focus on, empty when the focus did not move; its toggle back has `ran` false and `landed` the home, after the line of the Go home (`docs/design/decisions.md` D166). |
+| `go: launch still coming up, not launched again` | a press found the target's launch on record not up yet, and launched nothing |
+| `tab outside a workspace` | a terminal key asked for a tab beside a panel or window that no open workspace holds, with `panel`, `ref`, `outside`, `kind`, `agent` and `dir`. A `WARN` with `err` follows when `config.toml` declares no `[[agent]]` for an agent key: the tab is a plain shell |
 | `bind` | the wait for a launched window ends. A `WARN` `bind` with `err` comes first when no window appeared in the `wait`, or when more than one new window of the class did (`candidates`): the window is left for a `claim` |
 | `claim` | the TUI binds or attaches a window that appeared |
 | `claim: launch expired with no window claimed` | the launch on record passed its window, with `launched_at`, and no window was claimed for it |
@@ -66,6 +68,7 @@ doc reads what it already did.
 | `record line skipped` | one `WARN` per line of the state record that is not a line, with `file` and `line` |
 | `survey`, `remote survey` | a survey failed, or took 500 ms or more (at most once a minute per host); a fast one writes nothing. A `survey` that waited for linked hosts has `asked`, the hosts, and `unanswered`, why one gave no answer; a TUI refresh's has neither |
 | `probe` | an agent probe failed, and the agent shows unknown |
+| `detail` | one `WARN` per panel and different `err` when a probe failed to read an agent's conversation, with `probe`, `ref` and `panel`; the pane shows no detail for that agent, and its status is unchanged. An agent that has said nothing yet writes no line |
 | `mirror` | one `WARN` per panel the mirror could not read, with `panel`; the pane keeps the screen it last read. A panel that closed before the next survey writes no `recovered`. A read the runtime says crossed the panel's close writes `mirror: panel gone` at `INFO` instead, once per panel, with `panel` and `err` (`docs/design/decisions.md` D172) |
 | `panel mark` | one `WARN` per panel of a launch that could not be marked; the instance opened, and a return home from a tab falls back to its guess (`docs/design/decisions.md` D100) |
 | `session saved` | a save, with its counts and gaps; `by` is why: `saved` by hand, `shutdown`, `project-closed`, or `last-seen` for what a surface last saw, saved after an end with no shutdown. A plain restore never opens a `project-closed` save (`docs/design/decisions.md` D149) |
@@ -87,7 +90,7 @@ doc reads what it already did.
 | `popup: launched`, `popup: raise`, `popup: switch`, `popup: hide` | the popup key launched the popup, with `over`, the window it was pressed over, `workarea_width`, `place`, and `by_rules`: true when the window host's rules placed it, and revier did not place it again; raised it, with `minimized`; was handed to the surface it was pressed over; or Esc hid it. A `WARN` `popup: switch`, `popup: focused window`, `popup: mark the raise` or `popup: window rules` with `err` is a step of the key that failed; the key went on, and after `popup: window rules` revier placed the popup. `popup hide after go` and `popup hide, quitting instead` are `WARN`s of a hide that failed: after a Go the popup stays, otherwise it quits |
 | `action`, `clone`, `each project`, `agent new`, `shell new`, `go agent`, `agent focus`, `attach`, `focus attached` | the operation named |
 | `setup install: keys`, `setup install: term`, `setup install: rules`, and the same three of `setup uninstall` | a part of `revier setup` changed something: each desktop key's `step`; the terminal's `file` and `include`; the rules' `action`. An `ERROR` line carries the `err` the run printed |
-| `config written`, `project created`, `project file written`, `project deleted`, `runtime switched` | the file or setting changed |
+| `config written`, `kitty config written`, `project created`, `project file written`, `project renamed`, `project deleted`, `runtime switched` | the file or setting changed |
 
 ## The event file
 
