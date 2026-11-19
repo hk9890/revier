@@ -2,6 +2,7 @@ package claude_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -388,5 +389,31 @@ func TestDetailWithoutUsageSaysNoTokens(t *testing.T) {
 	d, err := p.Detail(t.Context(), revier.Panel{PID: 101})
 	if err != nil || d.Context != 0 || !d.CacheUntil.IsZero() {
 		t.Errorf("Detail = %+v, %v; want no tokens and no cache", d, err)
+	}
+}
+
+// A transcript tail none of whose lines parses is the format of a Claude Code
+// release the read does not know: it is an error the core logs, not nothing to
+// show (decisions.md D106). Lines that parse and hold no turn are still nothing
+// to show.
+func TestDetailOfATailWithNoLineThatParsesIsAnError(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		lines   []string
+		nothing bool
+	}{
+		{"no line is JSON", []string{`not json`, `{"type":"user",`}, false},
+		{"no line has the shape", []string{`{"type":"user","timestamp":12}`, `{"type":"assistant","message":"text"}`}, false},
+		{"lines parse and hold no turn", []string{`{"type":"system","subtype":"turn_duration"}`, ``, `{"kind":"x"}`}, true},
+		{"a broken line beside one that parses", []string{`not json`, `{"type":"system"}`}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, root := transcripts(t)
+			writeTranscript(t, root, "-demo", "s1", tc.lines...)
+			_, err := p.Detail(t.Context(), revier.Panel{PID: 101})
+			if err == nil || errors.Is(err, revier.ErrNoDetail) != tc.nothing {
+				t.Errorf("Detail = %v; want an error that is revier.ErrNoDetail: %v", err, tc.nothing)
+			}
+		})
 	}
 }
