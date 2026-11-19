@@ -382,6 +382,7 @@ func agents(out string, err error) func(context.Context) ([]byte, error) {
 // zero where nothing matched. A session listed with no id still gives its
 // directory, so its agent restores empty where it worked.
 func TestSessions(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	p := &claude.Probe{}
 	p.SetAgents(agents(agentsJSON, nil))
 	panels := []revier.Panel{
