@@ -23,7 +23,7 @@ func TestARestoresLaunchReachesTheSurfaceAtOnce(t *testing.T) {
 	m := bare(Model{stateRoot: root, core: &core.Core{Ledger: ledger.File{Root: root}}})
 
 	restoring.Update(func(st *state.State) bool {
-		st.Launched("work", "home", time.Now())
+		st.Launched("work", "home", "", time.Now())
 		return true
 	})
 	msg, ok := waitLedger(written)().(ledgerMsg)
@@ -61,7 +61,7 @@ func TestAToldLedgerDoesNotBlockOnAnUnreadWrite(t *testing.T) {
 	l := toldLedger{Ledger: ledger.File{Root: t.TempDir()}, written: written}
 	for range 2 {
 		l.Update(func(st *state.State) bool {
-			st.Launched("work", "home", time.Now())
+			st.Launched("work", "home", "", time.Now())
 			return true
 		})
 	}

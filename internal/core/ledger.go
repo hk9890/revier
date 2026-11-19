@@ -95,18 +95,21 @@ func (c *Core) ActivateAgentWaiting(ctx context.Context, p Project, a revier.Age
 // Settle is what a survey settles in state, under one write: refs to windows
 // the listing no longer holds are pruned; the window that appeared since the
 // previous listing is claimed for the last launch (claim-on-appear); a
-// launch past its window expires. It returns the state after it.
+// launch past its window expires, into the late launches when it is a
+// target's; a late launch is bound to the window it awaits, or ends past
+// LateWindow. It returns the state after it.
 //
 // A ref written since the survey started is to a window the listing may have
 // missed, and is kept. A launch written since now was read is kept too:
 // another process writes one while this waits for the lock, and it is not
 // past its window. The previous listing is the core's own, of the last
 // report it settled: with none no window is new, so the first settle of a
-// process claims nothing and expires nothing. The lock is taken only when
-// there is something to settle, since `revier list` settles on every refresh
-// of a surface that links to this machine.
+// process claims nothing and expires nothing of the launch on record; a late
+// launch needs no previous listing, as its window need not be new. The lock
+// is taken only when there is something to settle, since `revier list`
+// settles on every refresh of a surface that links to this machine.
 func (c *Core) Settle(r Report, projects []Project, now time.Time) *state.State {
-	prev, surveyed := c.lastWindows(r)
+	prev, surveyed := c.lastWindows(r, projects)
 	st := c.state()
 	// The first pass only asks whether there is something to settle, on a
 	// copy nobody keeps, so it says nothing: the pass under the lock does.
@@ -120,13 +123,14 @@ func (c *Core) Settle(r Report, projects []Project, now time.Time) *state.State 
 }
 
 // lastWindows is the window host's listing of the last report settled, and
-// whether there was one; r's listing takes its place. A report the window
-// host is missing from leaves the listing as it was: a missing listing is not
-// an empty one, and the next settle would take every window as new and claim
-// one of them.
-func (c *Core) lastWindows(r Report) ([]revier.Instance, bool) {
+// whether there was one; r's listing takes its place, and projects the place
+// of the projects settled. A report the window host is missing from leaves
+// the listing as it was: a missing listing is not an empty one, and the next
+// settle would take every window as new and claim one of them.
+func (c *Core) lastWindows(r Report, projects []Project) ([]revier.Instance, bool) {
 	c.seenMu.Lock()
 	defer c.seenMu.Unlock()
+	c.settled = projects
 	prev, surveyed := c.windows, c.listedWindows
 	if c.Window == nil || slices.Contains(r.Hosts, c.Window.Name()) {
 		c.windows, c.listedWindows = r.Windows, true
@@ -134,15 +138,27 @@ func (c *Core) lastWindows(r Report) ([]revier.Instance, bool) {
 	return prev, surveyed
 }
 
+// settledProjects is the projects of the last report settled, or nil before
+// the first.
+func (c *Core) settledProjects() []Project {
+	c.seenMu.Lock()
+	defer c.seenMu.Unlock()
+	return c.settled
+}
+
 // LogReplacedLaunch writes the line of a launch still pending that the launch
-// of p's target t, at at, replaced: the one launch on record is the only one
-// a window is claimed for, so the window of the replaced one, if it comes,
-// is bound by no claim.
+// of p's target t, at at, replaced. A target's launch is set aside as late,
+// and its window is still bound when it comes; an action's is lost, because
+// the one launch on record is the only one a window is attached for.
 func LogReplacedLaunch(replaced *state.Launch, p revier.ProjectName, t revier.TargetName, at time.Time) {
 	if replaced == nil {
 		return
 	}
-	slog.Info("claim: launch replaced", "project", replaced.Project, "target", replaced.Target, "launched_at", replaced.At,
+	msg := "claim: launch replaced"
+	if replaced.Target != "" {
+		msg = "claim: launch set aside"
+	}
+	slog.Info(msg, "project", replaced.Project, "target", replaced.Target, "launched_at", replaced.At,
 		"by_project", p, "by_target", t, "age_ms", at.Sub(replaced.At).Milliseconds())
 }
 
@@ -153,7 +169,7 @@ func (c *Core) settle(st *state.State, r Report, prev []revier.Instance, surveye
 	for _, d := range dropped {
 		say("binding dropped", "project", d.Project, "target", d.Target, "ref", d.Ref)
 	}
-	changed := len(dropped) > 0
+	changed := c.claimLate(st, r, projects, now, say) || len(dropped) > 0
 	l := st.Launch
 	if !surveyed || l == nil {
 		return changed
@@ -174,9 +190,81 @@ func (c *Core) settle(st *state.State, r Report, prev []revier.Instance, surveye
 		return true
 	}
 	if !l.Pending(now) {
-		say("claim: launch expired with no window claimed", "project", p.Name, "target", l.Target, "launched_at", l.At)
+		if l.Target != "" && l.Kept(now) {
+			say("claim: launch set aside", "project", p.Name, "target", l.Target, "launched_at", l.At, "age_ms", now.Sub(l.At).Milliseconds())
+			st.SetAside(*l)
+		} else {
+			say("claim: launch expired with no window claimed", "project", p.Name, "target", l.Target, "launched_at", l.At)
+		}
 		st.Launch = nil
 		return true
 	}
 	return changed
+}
+
+// claimLate ends each late launch past LateWindow, then binds each one that
+// awaits exactly one window of the window host's listing. No two late
+// launches await one window: a window either awaits is matched by no other
+// target's rule, and a launch ends the late one of its own target. It needs
+// no previous listing: a late launch's window may have been listed for
+// minutes, under a title its rule came to match only now.
+func (c *Core) claimLate(st *state.State, r Report, projects []Project, now time.Time, say func(msg string, args ...any)) bool {
+	n := len(st.Late)
+	st.Late = slices.DeleteFunc(st.Late, func(l state.Launch) bool {
+		if l.Kept(now) {
+			return false
+		}
+		say("claim: late launch expired with no window bound", "project", l.Project, "target", l.Target, "launched_at", l.At)
+		return true
+	})
+	changed := len(st.Late) < n
+	if len(st.Late) == 0 || c.Window == nil || !slices.Contains(r.Hosts, c.Window.Name()) {
+		return changed
+	}
+	// Backwards, so that a claim, which removes its launch, moves none of
+	// the launches still to be asked.
+	for i := len(st.Late) - 1; i >= 0; i-- {
+		l := st.Late[i]
+		// A launch stamped after now was written after the listing was
+		// taken, so no window in the listing is its.
+		if l.At.After(now) {
+			continue
+		}
+		var awaited []revier.TargetRef
+		for _, w := range r.Windows {
+			if c.awaits(l, w, st, projects) {
+				awaited = append(awaited, w.Ref)
+			}
+		}
+		if len(awaited) != 1 {
+			continue
+		}
+		say("claim: late launch bound", "project", l.Project, "target", l.Target, "ref", awaited[0], "age_ms", now.Sub(l.At).Milliseconds())
+		st.ClaimLate(i, awaited[0])
+		changed = true
+	}
+	return changed
+}
+
+// awaits reports whether w is the window the late launch l awaits: its
+// target's full window rule matches it, no binding or attachment holds it,
+// and no other target's window rule matches it. Its own rule is asked first,
+// so the rules of every project are asked only of the few windows it takes.
+func (c *Core) awaits(l state.Launch, w revier.Instance, st *state.State, projects []Project) bool {
+	p, ok := projectNamed(projects, l.Project)
+	if !ok {
+		return false
+	}
+	i, ok := p.index(l.Target)
+	if !ok || p.Targets[i].Window == nil || !p.compiled[i].window.Matches(w) || st.Held(w.Ref) {
+		return false
+	}
+	for _, q := range projects {
+		for j, t := range q.Targets {
+			if t.Window != nil && (q.Name != p.Name || j != i) && q.compiled[j].window.Matches(w) {
+				return false
+			}
+		}
+	}
+	return true
 }

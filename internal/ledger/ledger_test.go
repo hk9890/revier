@@ -28,7 +28,7 @@ func TestFileReadsAndWritesTheStateFile(t *testing.T) {
 		t.Fatal("a fresh root has nothing pending and nothing bound")
 	}
 	after := l.Update(func(st *state.State) bool {
-		st.Launched("work", "home", time.Now())
+		st.Launched("work", "home", "", time.Now())
 		return true
 	})
 	if !after.Pending("work", "home", time.Now()) || !l.State().Pending("work", "home", time.Now()) {
@@ -128,7 +128,7 @@ func TestFileHandsBackTheStateReadLastWhenTheFileCannotBeRead(t *testing.T) {
 	l.Update(func(st *state.State) bool {
 		st.Landed("work", "home", ref)
 		st.Attach("work", ref)
-		st.Launched("work", "editor", now)
+		st.Launched("work", "editor", "", now)
 		return true
 	})
 	l.State().Bound["work"]["home"] = own

@@ -13,7 +13,7 @@ import (
 
 // A press while the target's launch is still coming up does nothing - also
 // when a binding remains from a window of that target that has since closed,
-// which is what made the launch necessary (decisions.md D21).
+// which is what made the launch necessary.
 func TestActivateWaitingDoesNotLaunchATargetStillComingUp(t *testing.T) {
 	wm := hosttest.New("wm")
 	l := bindings("revier", core.Bindings{"editor": {Host: "wm", ID: "99"}})

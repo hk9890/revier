@@ -593,7 +593,7 @@ func TestGoPrefersTheBoundRef(t *testing.T) {
 	wm := hosttest.New("wm")
 	// The editor's title no longer matches the rule - it opened on the
 	// project and now names a file. The class is what a binding is made by
-	// (decisions.md D21) and re-checked against, so it still holds.
+	// (decisions.md D190) and re-checked against, so it still holds.
 	editor := wm.AddInstance(revier.Instance{Title: "main.go - somewhere else", Class: "code"})
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm, Ledger: bindings("revier", core.Bindings{"editor": editor})}
 
@@ -731,7 +731,7 @@ func TestADetachedLaunchBindsTheOneNewWindowOfTheClass(t *testing.T) {
 func TestSurveyUsesBindings(t *testing.T) {
 	wm := hosttest.New("wm")
 	// A title that moved, which is what a binding exists to survive
-	// (decisions.md D21).
+	// (decisions.md D190).
 	editor := wm.AddInstance(revier.Instance{Title: "renamed", Class: "code"})
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm, Ledger: bindings("revier", core.Bindings{"editor": editor})}
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})

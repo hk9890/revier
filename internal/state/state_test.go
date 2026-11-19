@@ -90,22 +90,115 @@ func TestAttachIsIdempotent(t *testing.T) {
 }
 
 // A launch says which launch of another target, still pending, it replaced:
-// the one launch on record is the only one a window is claimed for. A launch
-// past its window, or of the same target again, replaced nothing to claim.
+// a target's is set aside as late, and an action's is lost. A launch past its
+// window, or of the same target again, replaced nothing.
 func TestALaunchSaysWhichPendingLaunchItReplaced(t *testing.T) {
 	now := time.Now()
 	s := &state.State{}
-	if got := s.Launched("p", "editor", now); got != nil {
+	if got := s.Launched("p", "editor", "", now); got != nil {
 		t.Errorf("first launch replaced %+v, want nothing", got)
 	}
-	if got := s.Launched("p", "editor", now.Add(time.Second)); got != nil {
+	if got := s.Launched("p", "editor", "", now.Add(time.Second)); got != nil {
 		t.Errorf("same target again replaced %+v, want nothing", got)
 	}
-	if got := s.Launched("q", "editor", now.Add(2*time.Second)); got == nil || got.Project != "p" || got.Target != "editor" {
+	if got := s.Launched("q", "editor", "", now.Add(2*time.Second)); got == nil || got.Project != "p" || got.Target != "editor" {
 		t.Errorf("another target replaced %+v, want p's editor", got)
 	}
-	if got := s.Launched("r", "home", now.Add(2*time.Second+state.BindWindow+time.Second)); got != nil {
+	if got := s.Launched("r", "home", "", now.Add(2*time.Second+state.BindWindow+time.Second)); got != nil {
 		t.Errorf("a launch past its window replaced %+v, want nothing", got)
+	}
+}
+
+// A target's launch past its window that no survey set aside, as with no TUI
+// open, is set aside by the launch that replaces it: a restore step after
+// a slow one launches past the window of the step before.
+func TestALaunchSetsAsideOnePastItsWindowThatIsStillKept(t *testing.T) {
+	now := time.Now()
+	s := &state.State{}
+	s.Launched("a", "editor", "^idea", now)
+	if got := s.Launched("b", "editor", "^idea", now.Add(65*time.Second)); got != nil {
+		t.Errorf("replaced %+v, want nothing pending returned", got)
+	}
+	if len(s.Late) != 1 || s.Late[0].Project != "a" {
+		t.Errorf("late = %+v, want a's editor", s.Late)
+	}
+
+	s.Launched("c", "editor", "^idea", now.Add(65*time.Second+state.LateWindow))
+	if len(s.Late) != 1 || s.Late[0].Project != "a" {
+		t.Errorf("late = %+v, want a's editor alone: b's was past LateWindow", s.Late)
+	}
+}
+
+// A full shutdown ends every late launch: it closed what each launched.
+func TestAShutdownEndsTheLateLaunches(t *testing.T) {
+	s := &state.State{}
+	s.SetAside(state.Launch{Project: "a", Target: "editor", At: time.Now()})
+	s.MarkShutDown(time.Now(), "s1")
+	if len(s.Late) != 0 {
+		t.Errorf("late = %+v, want none", s.Late)
+	}
+}
+
+// A target's launch that another replaces is set aside as late, with its
+// class, for its window to be bound when it comes; an action's is lost, since
+// no rule says which window is its.
+func TestAReplacedTargetLaunchIsKeptAsLate(t *testing.T) {
+	now := time.Now()
+	s := &state.State{}
+	s.Launched("p", "editor", "^code$", now)
+	replaced := s.Launched("q", "editor", "^code$", now.Add(time.Second))
+	want := []state.Launch{{Project: "p", Target: "editor", Class: "^code$", At: now}}
+	if replaced == nil || !slices.Equal(s.Late, want) {
+		t.Fatalf("replaced %+v, late %+v; want p's editor returned and kept as %+v", replaced, s.Late, want)
+	}
+
+	s.Launched("q", "", "", now.Add(2*time.Second))
+	if s.Launched("r", "editor", "^code$", now.Add(3*time.Second)) == nil || len(s.Late) != 2 || s.Late[1].Project != "q" || s.Late[1].Target != "editor" {
+		t.Errorf("late = %+v, want q's editor kept and q's action lost", s.Late)
+	}
+}
+
+// A late launch is over once its target launches again or lands, and a
+// window claimed for it binds its target.
+func TestALateLaunchEndsAtARelaunchALandingOrItsClaim(t *testing.T) {
+	now := time.Now()
+	ref := revier.TargetRef{Host: "wm", ID: "7"}
+	late := func() *state.State {
+		s := &state.State{}
+		s.SetAside(state.Launch{Project: "p", Target: "editor", At: now})
+		s.SetAside(state.Launch{Project: "q", Target: "editor", At: now})
+		return s
+	}
+	keptOnly := func(s *state.State, name string) {
+		t.Helper()
+		if len(s.Late) != 1 || s.Late[0].Project != "q" {
+			t.Errorf("%s: late = %+v, want q's alone", name, s.Late)
+		}
+	}
+
+	s := late()
+	s.Launched("p", "editor", "", now.Add(time.Minute))
+	keptOnly(s, "relaunch")
+
+	s = late()
+	s.Landed("p", "editor", ref)
+	keptOnly(s, "landing")
+
+	s = late()
+	s.ClaimLate(0, ref)
+	keptOnly(s, "claim")
+	if s.Bound["p"]["editor"] != ref {
+		t.Errorf("bound = %v, want p's editor on %v", s.Bound, ref)
+	}
+}
+
+// A late launch is kept for LateWindow from its launch, and not after.
+func TestALateLaunchIsKeptForLateWindow(t *testing.T) {
+	now := time.Now()
+	l := state.Launch{Project: "p", Target: "editor", At: now}
+	if !l.Kept(now.Add(state.LateWindow-time.Second)) || l.Kept(now.Add(state.LateWindow)) {
+		t.Errorf("kept just inside / at LateWindow = %v / %v, want true / false",
+			l.Kept(now.Add(state.LateWindow-time.Second)), l.Kept(now.Add(state.LateWindow)))
 	}
 }
 
@@ -117,8 +210,9 @@ func TestCloneHoldsEveryFieldAndSharesNone(t *testing.T) {
 	s := &state.State{}
 	s.Attach("p", ref)
 	s.Bind("p", "editor", ref)
-	s.Launched("p", "home", time.Now())
+	s.Launched("p", "home", "", time.Now())
 	s.MarkShutDown(time.Now(), "s1")
+	s.SetAside(state.Launch{Project: "p", Target: "editor", At: time.Now()})
 	s.RanCommand("p", "web", ref)
 	fields := reflect.ValueOf(*s)
 	for i := range fields.NumField() {
@@ -132,8 +226,8 @@ func TestCloneHoldsEveryFieldAndSharesNone(t *testing.T) {
 		t.Fatalf("clone = %+v, want %+v", c, s)
 	}
 	other := revier.TargetRef{Host: "gnome", ID: "9"}
-	c.Attached["p"][0], c.Bound["p"]["editor"], c.Launch.Project, c.ShutDown.Session, c.LastRun.Focused = other, other, "q", "s2", other
-	if s.Attached["p"][0] != ref || s.Bound["p"]["editor"] != ref || s.Launch.Project != "p" || s.ShutDown.Session != "s1" || s.LastRun.Focused != ref {
+	c.Attached["p"][0], c.Bound["p"]["editor"], c.Launch.Project, c.Late[0].Project, c.ShutDown.Session, c.LastRun.Focused = other, other, "q", "q", "s2", other
+	if s.Attached["p"][0] != ref || s.Bound["p"]["editor"] != ref || s.Launch.Project != "p" || s.Late[0].Project != "p" || s.ShutDown.Session != "s1" || s.LastRun.Focused != ref {
 		t.Errorf("state = %+v, launch = %+v after its clone changed, want it as it was", s, s.Launch)
 	}
 }
@@ -142,7 +236,7 @@ func TestCloneHoldsEveryFieldAndSharesNone(t *testing.T) {
 // record.
 func TestAnOpenEndsTheShutdownOnRecord(t *testing.T) {
 	opens := map[string]func(*state.State){
-		"launch":  func(s *state.State) { s.Launched("p", "home", time.Now()) },
+		"launch":  func(s *state.State) { s.Launched("p", "home", "", time.Now()) },
 		"landing": func(s *state.State) { s.Landed("p", "home", revier.TargetRef{Host: "rt", ID: "1"}) },
 	}
 	for name, open := range opens {
@@ -161,12 +255,13 @@ func TestRenameMovesEverythingRecordedUnderTheProject(t *testing.T) {
 	s.Attach("old", ref)
 	s.Attach("other", ref)
 	s.Landed("old", "editor", ref)
-	s.Launched("old", "home", time.Now())
+	s.Launched("old", "notes", "", time.Now())
+	s.Launched("old", "home", "", time.Now())
 
 	s.Rename("old", "new")
 
-	if s.Current != "new" || s.Launch.Project != "new" {
-		t.Errorf("current %q, launch %q, want new", s.Current, s.Launch.Project)
+	if s.Current != "new" || s.Launch.Project != "new" || s.Late[0].Project != "new" {
+		t.Errorf("current %q, launch %q, late %+v, want new", s.Current, s.Launch.Project, s.Late)
 	}
 	if _, ok := s.Attached["old"]; ok || len(s.Attached["new"]) != 1 || len(s.Attached["other"]) != 1 {
 		t.Errorf("attached = %v, want old's moved to new and other's kept", s.Attached)

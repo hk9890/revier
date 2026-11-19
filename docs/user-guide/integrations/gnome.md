@@ -73,6 +73,12 @@ Many applications open their window a while after the command starts. revier
 binds the one new window whose class matches the target within 60 seconds,
 even before its title matches.
 
+An editor that starts cold can take minutes, and open the windows of several
+projects at once and in any order. While a TUI is open, revier keeps each such
+launch for 10 minutes and binds it to the window whose title matches that
+target's `match` and no other target's. Until then, a new window of that class
+is bound only to a target whose full `match` finds it, not by its class alone.
+
 An action can open a window too, such as a browser page. While a TUI is open,
 the one new window that appears in the first seconds after the action, and
 that no target matches, is attached to the project, as `revier attach` does.

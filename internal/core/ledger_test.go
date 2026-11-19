@@ -42,9 +42,9 @@ func TestActivateWaitingWritesTheLaunchThenTheLanding(t *testing.T) {
 	}
 }
 
-// A launch that replaces one still pending of another target says so: no
-// window can now be claimed for the one it replaced.
-func TestALaunchOverAPendingOneOfAnotherTargetSaysItReplacedIt(t *testing.T) {
+// A launch that replaces one still pending of another target says it set
+// that one aside: its window is bound as a late launch's when it comes.
+func TestALaunchOverAPendingOneOfAnotherTargetSaysItSetItAside(t *testing.T) {
 	shortBindWait(t)
 	var logged bytes.Buffer
 	previous := slog.Default()
@@ -56,9 +56,34 @@ func TestALaunchOverAPendingOneOfAnotherTargetSaysItReplacedIt(t *testing.T) {
 	if _, _, err := c.ActivateWaiting(t.Context(), prepared(t, project()), "editor", nil); err != nil {
 		t.Fatalf("ActivateWaiting: %v", err)
 	}
-	if !strings.Contains(logged.String(), `"msg":"claim: launch replaced","project":"other","target":"editor"`) ||
+	if !strings.Contains(logged.String(), `"msg":"claim: launch set aside","project":"other","target":"editor"`) ||
 		!strings.Contains(logged.String(), `"by_project":"revier","by_target":"editor"`) {
-		t.Errorf("log = %s, want other's editor launch replaced by revier's", logged.String())
+		t.Errorf("log = %s, want other's editor launch set aside by revier's", logged.String())
+	}
+	if late := l.State().Late; len(late) != 1 || late[0].Project != "other" {
+		t.Errorf("late = %+v, want other's editor", late)
+	}
+}
+
+// An action's launch that another replaces is lost, and says so: no rule
+// says which window is its.
+func TestALaunchOverAPendingActionSaysItReplacedIt(t *testing.T) {
+	shortBindWait(t)
+	var logged bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	l := &ledger{st: state.State{Launch: &state.Launch{Project: "other", At: time.Now()}}}
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.NewLateWindows("wm"), Ledger: l}
+
+	if _, _, err := c.ActivateWaiting(t.Context(), prepared(t, project()), "editor", nil); err != nil {
+		t.Fatalf("ActivateWaiting: %v", err)
+	}
+	if !strings.Contains(logged.String(), `"msg":"claim: launch replaced","project":"other","target":""`) {
+		t.Errorf("log = %s, want other's action launch replaced", logged.String())
+	}
+	if late := l.State().Late; len(late) != 0 {
+		t.Errorf("late = %+v, want none", late)
 	}
 }
 
@@ -196,7 +221,7 @@ func TestSettleKeepsALaunchWrittenSinceItsClockWasRead(t *testing.T) {
 	settle := settling(t, &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}, l, now)
 	settle()
 	l.Update(func(st *state.State) bool {
-		st.Launched("revier", "editor", now.Add(time.Millisecond))
+		st.Launched("revier", "editor", "", now.Add(time.Millisecond))
 		return true
 	})
 

@@ -162,7 +162,7 @@ func PlanAction(c *core.Core, p core.Project, name string, run []string) (Action
 	if a.here {
 		var replaced *state.Launch
 		a.ledger.Update(func(st *state.State) bool {
-			replaced = st.Launched(a.project, "", a.start)
+			replaced = st.Launched(a.project, "", "", a.start)
 			return true
 		})
 		core.LogReplacedLaunch(replaced, a.project, "", a.start)

@@ -66,7 +66,9 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 
 	// Drop attachments and bindings whose windows are gone, so state does not
 	// accumulate refs to closed windows forever. A list is the first settle
-	// of its process, so no window is new to it and it claims nothing.
+	// of its process, so no window is new to it and it claims nothing for the
+	// launch on record; it can bind a late launch, which needs no new window,
+	// or end one past its time.
 	a.core.Settle(report, a.projects, time.Now())
 
 	if *match != "" {
