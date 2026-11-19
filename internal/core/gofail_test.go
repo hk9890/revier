@@ -27,7 +27,7 @@ func TestGoReportsAnOpenThatFailed(t *testing.T) {
 
 // A new instance that cannot be focused still exists. Its ref comes back with
 // the error, so the caller pins it and the next press raises it instead of
-// opening a second (decisions.md D190).
+// opening a second.
 func TestGoKeepsTheRefOfAnOpenedInstanceItCouldNotFocus(t *testing.T) {
 	wm := hosttest.New("wm")
 	wm.FocusErr = errors.New("no such window")

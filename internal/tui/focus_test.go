@@ -171,13 +171,25 @@ func TestALateLaunchKeepsTheRefreshWhileItIsKept(t *testing.T) {
 	m := tui.NewWithoutWaits(c, projects, root, &config.Config{}, time.Second, theme.Default(), "").StaticCursors()
 	m, now := clocked(m)
 	m = survey(m)
-	st, _ := state.Load(root)
-	st.SetAside(state.Launch{Project: "not-here", Target: "editor", At: *now})
-	if err := st.Save(root); err != nil {
-		t.Fatal(err)
+	late := func(launches ...state.Launch) {
+		t.Helper()
+		st, _ := state.Load(root)
+		st.Late = launches
+		if err := st.Save(root); err != nil {
+			t.Fatal(err)
+		}
+		m = survey(m)
 	}
 	m, _ = update(m, tea.BlurMsg{})
-	m = survey(m)
+
+	// One this surface cannot bind keeps nothing: a project it does not
+	// hold, or a target of it with no window.
+	late(state.Launch{Project: "not-here", Target: "editor", At: *now}, state.Launch{Project: "project-00", Target: "home", At: *now})
+	if got := m.Interval(); got != 10*time.Second {
+		t.Errorf("interval without the focus with late launches this surface cannot bind = %v, want 10s", got)
+	}
+
+	late(state.Launch{Project: "project-00", Target: "editor", At: *now})
 	if got := m.Interval(); got != time.Second {
 		t.Errorf("interval without the focus with a late launch kept = %v, want the refresh", got)
 	}

@@ -175,6 +175,113 @@ func TestALaunchPastItsWindowIsLateThenEnds(t *testing.T) {
 	}
 }
 
+// A target's launch hours old was never late: it is past LateWindow as well,
+// and ends as a launch past its window, not set aside.
+func TestALaunchHoursOldIsNotSetAside(t *testing.T) {
+	out := logged(t)
+	now := time.Now()
+	l := &ledger{st: state.State{Launch: &state.Launch{Project: "revier", Target: "editor", At: now.Add(-3 * time.Hour)}}}
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.New("wm")}
+
+	settling(t, c, l, now)()
+	if st := settling(t, c, l, now)(); st.Launch != nil || len(st.Late) != 0 {
+		t.Errorf("launch %+v, late %+v; want the launch ended and none late", st.Launch, st.Late)
+	}
+	if !strings.Contains(out.String(), `"msg":"claim: launch expired with no window claimed","project":"revier","target":"editor"`) ||
+		strings.Contains(out.String(), "claim: launch set aside") {
+		t.Errorf("log = %s, want the launch expired, not set aside", out)
+	}
+}
+
+// pageProject is a project with two windows of one browser, told apart by
+// their titles.
+func pageProject(t *testing.T) core.Project {
+	t.Helper()
+	page := func(name revier.TargetName, title string) revier.Target {
+		return revier.Target{Name: name, Window: &revier.Realization{
+			Launch: []string{"firefox"}, Match: revier.Match{Class: "^firefox$", Title: title},
+		}}
+	}
+	return prepared(t, revier.Project{Name: "a", Path: "/home/user/dev/a", Targets: []revier.Target{
+		page("docs", "^Docs"), page("issues", "^Issues"),
+	}})
+}
+
+// A window a late launch's claim bound to one target is no other target's
+// by class, of the same project either: the claim of the launch still on
+// record does not bind it a second time.
+func TestAWindowBoundToALateLaunchIsNotClaimedForAnotherTargetOfItsProject(t *testing.T) {
+	now := time.Now()
+	wm := hosttest.New("wm")
+	l := &ledger{st: state.State{Launch: &state.Launch{Project: "a", Target: "issues", Class: "^firefox$", At: now}}}
+	l.st.SetAside(state.Launch{Project: "a", Target: "docs", Class: "^firefox$", At: now.Add(-time.Minute)})
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm, Ledger: l}
+	projects := []core.Project{pageProject(t)}
+	settleAt(t, c, projects, now)
+
+	docs := wm.Add("Docs - Wiki", "firefox")
+	st := settleAt(t, c, projects, now)
+	if st.Bound["a"]["docs"] != docs || !st.Bound["a"]["issues"].IsZero() || !st.Pending("a", "issues", now) {
+		t.Errorf("bound %v, launch %+v; want the window bound to docs alone and issues still on record", st.Bound, st.Launch)
+	}
+}
+
+// A window bound to one target of a project that appears during the wait of
+// another target's launch is not taken by class for that one.
+func TestABindTakesNoHeldWindowOfItsOwnProjectByClass(t *testing.T) {
+	shortBindWait(t)
+	wm := hosttest.NewLateWindows("wm")
+	l := &ledger{}
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm, Ledger: l}
+	var once sync.Once
+	wm.OnInstances = func() {
+		if len(wm.Opened) == 1 {
+			once.Do(func() {
+				docs := wm.Add("Docs - Wiki", "firefox")
+				l.Update(func(st *state.State) bool { st.Bind("a", "docs", docs); return true })
+			})
+		}
+	}
+
+	if ref, _, err := c.ActivateWaiting(t.Context(), pageProject(t), "issues", nil); err != nil || !ref.IsZero() {
+		t.Errorf("issues' press = %v, %v; want the window bound to docs left alone", ref, err)
+	}
+}
+
+// A late launch of a project this process does not know - deleted, or of
+// another configuration - is never bound here, so it holds back no window
+// of its class: a bind and a claim take one by class as before.
+func TestALateLaunchOfAnUnknownProjectHoldsBackNoWindow(t *testing.T) {
+	shortBindWait(t)
+	now := time.Now()
+	wm := hosttest.NewLateWindows("wm")
+	l := &ledger{}
+	l.st.SetAside(state.Launch{Project: "gone", Target: "editor", Class: "^" + ideaClass, At: now})
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm, Ledger: l}
+	a, b := ideaProject(t, "a"), ideaProject(t, "b")
+	projects := []core.Project{a, b}
+	var welcome revier.TargetRef
+	wm.OnInstances = func() {
+		if len(wm.Opened) == 1 && welcome.IsZero() {
+			welcome = wm.Add("Welcome to IntelliJ IDEA", ideaClass)
+		}
+	}
+	settleAt(t, c, projects, now)
+
+	if ref, _, err := c.ActivateWaiting(t.Context(), a, "editor", nil); err != nil || ref != welcome {
+		t.Fatalf("a's press = %v, %v; want the new window of the class %v bound", ref, err, welcome)
+	}
+
+	if _, err := press(t.Context(), &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: hosttest.NewLateWindows("wm2"), Ledger: l}, b, "editor"); err != nil {
+		t.Fatal(err)
+	}
+	settleAt(t, c, projects, time.Now())
+	stray := wm.Add("Welcome to IntelliJ IDEA", ideaClass)
+	if st := settleAt(t, c, projects, time.Now()); st.Bound["b"]["editor"] != stray {
+		t.Errorf("bound %v, want the new window of the class claimed for b", st.Bound)
+	}
+}
+
 // editorSession is a saved session of each project's editor.
 func editorSession(names ...revier.ProjectName) session.Session {
 	var s session.Session

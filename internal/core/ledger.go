@@ -109,7 +109,7 @@ func (c *Core) ActivateAgentWaiting(ctx context.Context, p Project, a revier.Age
 // is taken only when there is something to settle, since `revier list`
 // settles on every refresh of a surface that links to this machine.
 func (c *Core) Settle(r Report, projects []Project, now time.Time) *state.State {
-	prev, surveyed := c.lastWindows(r)
+	prev, surveyed := c.lastWindows(r, projects)
 	st := c.state()
 	// The first pass only asks whether there is something to settle, on a
 	// copy nobody keeps, so it says nothing: the pass under the lock does.
@@ -123,18 +123,27 @@ func (c *Core) Settle(r Report, projects []Project, now time.Time) *state.State 
 }
 
 // lastWindows is the window host's listing of the last report settled, and
-// whether there was one; r's listing takes its place. A report the window
-// host is missing from leaves the listing as it was: a missing listing is not
-// an empty one, and the next settle would take every window as new and claim
-// one of them.
-func (c *Core) lastWindows(r Report) ([]revier.Instance, bool) {
+// whether there was one; r's listing takes its place, and projects the place
+// of the projects settled. A report the window host is missing from leaves
+// the listing as it was: a missing listing is not an empty one, and the next
+// settle would take every window as new and claim one of them.
+func (c *Core) lastWindows(r Report, projects []Project) ([]revier.Instance, bool) {
 	c.seenMu.Lock()
 	defer c.seenMu.Unlock()
+	c.settled = projects
 	prev, surveyed := c.windows, c.listedWindows
 	if c.Window == nil || slices.Contains(r.Hosts, c.Window.Name()) {
 		c.windows, c.listedWindows = r.Windows, true
 	}
 	return prev, surveyed
+}
+
+// settledProjects is the projects of the last report settled, or nil before
+// the first.
+func (c *Core) settledProjects() []Project {
+	c.seenMu.Lock()
+	defer c.seenMu.Unlock()
+	return c.settled
 }
 
 // LogReplacedLaunch writes the line of a launch still pending that the launch
@@ -181,7 +190,7 @@ func (c *Core) settle(st *state.State, r Report, prev []revier.Instance, surveye
 		return true
 	}
 	if !l.Pending(now) {
-		if l.Target != "" {
+		if l.Target != "" && l.Kept(now) {
 			say("claim: launch set aside", "project", p.Name, "target", l.Target, "launched_at", l.At, "age_ms", now.Sub(l.At).Milliseconds())
 			st.SetAside(*l)
 		} else {

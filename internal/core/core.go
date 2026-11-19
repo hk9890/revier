@@ -101,6 +101,9 @@ type Core struct {
 	// since to be claimed. Guarded by seenMu.
 	windows       []revier.Instance
 	listedWindows bool
+	// settled is the projects of the last report Settle took: the late
+	// launches a bind can tell are this process's own. Guarded by seenMu.
+	settled []Project
 
 	// Ledger is the state and the events of this installation: where every
 	// operation reads what was learned at runtime, and where it writes
@@ -167,6 +170,7 @@ func (c *Core) clone() *Core {
 		NewRemote:     c.NewRemote,
 		windows:       c.windows,
 		listedWindows: c.listedWindows,
+		settled:       c.settled,
 		Ledger:        c.Ledger,
 		KeyBinder:     c.KeyBinder,
 		TermKeys:      c.TermKeys,
@@ -896,9 +900,9 @@ const BindPoll = 50 * time.Millisecond
 // a title settles later, which is exactly when a rule would miss it. A window
 // the full rule matches is taken at once; otherwise a single class candidate
 // is taken and two at once are left alone, because the launch does not say
-// which. A class candidate another project holds is not this launch's: a
-// press of that project in another process bound it while this one waited.
-// Nor is one of a class another target's launch awaits: a cold application
+// which. A class candidate a binding or an attachment holds is not this
+// launch's: a press in another process, or a late launch's claim, bound it
+// while this one waited. Nor is one of a class another target's launch awaits: a cold application
 // opens the windows of earlier launches late and in any order (decisions.md
 // D190). It gives up after wait and reports false. A window it found and
 // could not raise is reported with the failure, as goTo reports an instance it
@@ -916,14 +920,21 @@ func (c *Core) bind(ctx context.Context, p Project, name revier.TargetName, befo
 	if !ok || c.Window == nil || p.Targets[i].Window == nil {
 		return revier.Instance{}, false, nil
 	}
+	known := c.settledProjects()
 	w, found, err := c.awaitNew(ctx, before, wait, BindPoll, func(fresh []revier.Instance) (revier.Instance, bool, bool) {
 		var candidates []revier.Instance
-		st := c.state()
+		var st *state.State
 		for _, w := range fresh {
 			if p.compiled[i].window.Matches(w) {
 				return w, true, false
 			}
-			if c.classOK(p, i, w) && !st.HeldByAnother(p.Name, w.Ref) && !awaitedElsewhere(st, p.Name, name, w, time.Now()) {
+			if !c.classOK(p, i, w) {
+				continue
+			}
+			if st == nil {
+				st = c.state()
+			}
+			if !st.Held(w.Ref) && !awaitedElsewhere(st, p.Name, name, w, time.Now(), known) {
 				candidates = append(candidates, w)
 			}
 		}
@@ -1559,28 +1570,34 @@ func (c *Core) claim(before, after []revier.Instance, p Project, st *state.State
 
 // candidate reports whether inst may be the window of p's launch of target,
 // or of p's action when target is empty. Neither takes by class a window of
-// a class another launch awaits (decisions.md D190).
+// a class another launch awaits (decisions.md D190), and a target's launch
+// takes by class no window that any binding or attachment holds: a late
+// launch's claim may have bound it to another target of p.
 func (c *Core) candidate(inst revier.Instance, p Project, target revier.TargetName, st *state.State, now time.Time, projects []Project) bool {
 	if target == "" {
-		return !c.declared(inst, projects) && !awaitedElsewhere(st, p.Name, target, inst, now)
+		return !c.declared(inst, projects) && !awaitedElsewhere(st, p.Name, target, inst, now, projects)
 	}
 	i, ok := p.index(target)
 	if !ok || p.Targets[i].Window == nil {
 		return false
 	}
-	return p.compiled[i].window.Matches(inst) || (c.classOK(p, i, inst) && !awaitedElsewhere(st, p.Name, target, inst, now))
+	return p.compiled[i].window.Matches(inst) ||
+		(c.classOK(p, i, inst) && !st.Held(inst.Ref) && !awaitedElsewhere(st, p.Name, target, inst, now, projects))
 }
 
 // awaitedElsewhere reports whether a launch of a target other than p's t
 // awaits a window of w's class: the launch on record while it is pending, or
-// a late launch while it is kept. A launch whose rule has no class awaits no
-// class: it would hold back every window of every class.
-func awaitedElsewhere(st *state.State, p revier.ProjectName, t revier.TargetName, w revier.Instance, now time.Time) bool {
+// a late launch while it is kept and is of a window target of projects. A
+// late launch of a project or target projects lacks is never bound here, so
+// it holds back nothing; with no projects, as in a process that has not
+// settled, every late launch counts. A launch whose rule has no class awaits
+// no class: it would hold back every window of every class.
+func awaitedElsewhere(st *state.State, p revier.ProjectName, t revier.TargetName, w revier.Instance, now time.Time, projects []Project) bool {
 	if l := st.Launch; l.Pending(now) && awaitsClass(*l, p, t, w) {
 		return true
 	}
 	for _, l := range st.Late {
-		if l.Kept(now) && awaitsClass(l, p, t, w) {
+		if l.Kept(now) && (projects == nil || Bindable(projects, l)) && awaitsClass(l, p, t, w) {
 			return true
 		}
 	}
@@ -1591,8 +1608,35 @@ func awaitsClass(l state.Launch, p revier.ProjectName, t revier.TargetName, w re
 	if l.Class == "" || (l.Project == p && l.Target == t) {
 		return false
 	}
-	m, err := revier.Match{Class: l.Class}.Compile()
-	return err == nil && m.Matches(w)
+	m, ok := classMatch(l.Class)
+	return ok && m.Matches(w)
+}
+
+// classMatches is each launch's class pattern compiled, by pattern: the
+// patterns are the configuration's, few, and asked of every new window.
+var classMatches sync.Map
+
+func classMatch(pattern string) (revier.CompiledMatch, bool) {
+	if m, ok := classMatches.Load(pattern); ok {
+		return m.(revier.CompiledMatch), true
+	}
+	m, err := revier.Match{Class: pattern}.Compile()
+	if err != nil {
+		return revier.CompiledMatch{}, false
+	}
+	classMatches.Store(pattern, m)
+	return m, true
+}
+
+// Bindable reports whether the late launch l is of a window target of one
+// of projects: one whose window this process can bind.
+func Bindable(projects []Project, l state.Launch) bool {
+	p, ok := projectNamed(projects, l.Project)
+	if !ok {
+		return false
+	}
+	i, ok := p.index(l.Target)
+	return ok && p.Targets[i].Window != nil
 }
 
 // declared reports whether any project's rule matches the instance: it is

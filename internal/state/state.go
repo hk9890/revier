@@ -80,9 +80,12 @@ type ShutDown struct {
 }
 
 // MarkShutDown records a full shutdown. Only a shutdown of every project,
-// all of each, is one: a project's close leaves the others open.
+// all of each, is one: a project's close leaves the others open. It ends
+// every late launch: the shutdown closed what each launched, and a window
+// bound for one after it would leave the shutdown on record over an open.
 func (s *State) MarkShutDown(at time.Time, session string) {
 	s.ShutDown = &ShutDown{At: at, Session: session}
+	s.Late = nil
 }
 
 // ClearShutDown ends the shutdown on record and reports whether there was
@@ -274,14 +277,18 @@ func (s *State) Pending(p revier.ProjectName, t revier.TargetName, now time.Time
 // is an open, so it ends the shutdown on record. A late launch of the same
 // target is over: this one takes its place.
 //
-// There is one launch on record, so it returns the launch of another target
-// still pending at at, which no claim can now take a window for, or nil. A
-// target's launch it returns is set aside as late; an action's is lost.
+// There is one launch on record, so the launch of another target it replaces
+// is set aside as late while it is kept, also past its window when no survey
+// set it aside before; an action's is lost. It returns the launch it replaced
+// that was still pending at at, which no claim can now take a window for, or
+// nil.
 func (s *State) Launched(p revier.ProjectName, t revier.TargetName, class string, at time.Time) (replaced *Launch) {
-	if l := s.Launch; l.Pending(at) && (l.Project != p || l.Target != t) {
-		replaced = l
-		if l.Target != "" {
+	if l := s.Launch; l != nil && (l.Project != p || l.Target != t) {
+		if l.Target != "" && l.Kept(at) {
 			s.SetAside(*l)
+		}
+		if l.Pending(at) {
+			replaced = l
 		}
 	}
 	s.dropLate(p, t)

@@ -109,6 +109,36 @@ func TestALaunchSaysWhichPendingLaunchItReplaced(t *testing.T) {
 	}
 }
 
+// A target's launch past its window that no survey set aside, as with no TUI
+// open, is set aside by the launch that replaces it: a restore step after
+// a slow one launches past the window of the step before.
+func TestALaunchSetsAsideOnePastItsWindowThatIsStillKept(t *testing.T) {
+	now := time.Now()
+	s := &state.State{}
+	s.Launched("a", "editor", "^idea", now)
+	if got := s.Launched("b", "editor", "^idea", now.Add(65*time.Second)); got != nil {
+		t.Errorf("replaced %+v, want nothing pending returned", got)
+	}
+	if len(s.Late) != 1 || s.Late[0].Project != "a" {
+		t.Errorf("late = %+v, want a's editor", s.Late)
+	}
+
+	s.Launched("c", "editor", "^idea", now.Add(65*time.Second+state.LateWindow))
+	if len(s.Late) != 1 || s.Late[0].Project != "a" {
+		t.Errorf("late = %+v, want a's editor alone: b's was past LateWindow", s.Late)
+	}
+}
+
+// A full shutdown ends every late launch: it closed what each launched.
+func TestAShutdownEndsTheLateLaunches(t *testing.T) {
+	s := &state.State{}
+	s.SetAside(state.Launch{Project: "a", Target: "editor", At: time.Now()})
+	s.MarkShutDown(time.Now(), "s1")
+	if len(s.Late) != 0 {
+		t.Errorf("late = %+v, want none", s.Late)
+	}
+}
+
 // A target's launch that another replaces is set aside as late, with its
 // class, for its window to be bound when it comes; an action's is lost, since
 // no rule says which window is its.
@@ -180,9 +210,9 @@ func TestCloneHoldsEveryFieldAndSharesNone(t *testing.T) {
 	s := &state.State{}
 	s.Attach("p", ref)
 	s.Bind("p", "editor", ref)
-	s.Launched("p", "editor", "^code$", time.Now())
 	s.Launched("p", "home", "", time.Now())
 	s.MarkShutDown(time.Now(), "s1")
+	s.SetAside(state.Launch{Project: "p", Target: "editor", At: time.Now()})
 	s.RanCommand("p", "web", ref)
 	fields := reflect.ValueOf(*s)
 	for i := range fields.NumField() {

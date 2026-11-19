@@ -715,10 +715,13 @@ func (m *Model) interval() time.Duration {
 // claiming reports a launch whose window the next surveys may claim, the
 // launch on record or a late one. A launch past its window is not: one for a
 // project this surface does not hold is never settled, and would keep the
-// refresh for good.
+// refresh for good. Nor is a late launch of a target this surface does not
+// hold as a window: no survey here can bind it.
 func (m *Model) claiming() bool {
 	now := m.now()
-	return m.pending.Pending(now) || slices.ContainsFunc(m.late, func(l state.Launch) bool { return l.Kept(now) })
+	return m.pending.Pending(now) || slices.ContainsFunc(m.late, func(l state.Launch) bool {
+		return l.Kept(now) && core.Bindable(m.projects, l)
+	})
 }
 
 // nextTick starts the tick of the next refresh, and drops any that is out.

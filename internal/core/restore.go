@@ -315,8 +315,12 @@ func (c *Core) activateWaiting(ctx context.Context, p Project, name revier.Targe
 	}
 	if res.Launched && ref.IsZero() && err == nil {
 		at := time.Now()
+		var class string
+		if t, ok := p.Target(res.Target); ok && t.Window != nil {
+			class = t.Window.Match.Class
+		}
 		var replaced *state.Launch
-		c.update(func(st *state.State) { replaced = st.Launched(p.Name, res.Target, p.windowClass(res.Target), at) })
+		c.update(func(st *state.State) { replaced = st.Launched(p.Name, res.Target, class, at) })
 		LogReplacedLaunch(replaced, p.Name, res.Target, at)
 		var inst revier.Instance
 		var ok bool
