@@ -179,6 +179,54 @@ func TestRulesAheadPlaceThePopupWhenEachPlacesIt(t *testing.T) {
 	}
 }
 
+// A rule of the user's that places the popup on any monitor decides, also
+// where revier's file is not current: the host applies it first. One for
+// wide monitors alone leaves the rest to the rules after it.
+func TestARuleOfTheUsersOnAnyMonitorPlacesThePopupWhateverReviersFileHolds(t *testing.T) {
+	mine := revier.WindowRule{Class: core.PopupClass, Place: []string{"center", "top", "50%", "100%"}}
+	wide := revier.WindowRule{Class: core.PopupClass, MinWidth: 3000, Place: []string{"center", "top", "50%", "100%"}}
+	for _, tc := range []struct {
+		name   string
+		user   []revier.WindowRule
+		places bool
+	}{
+		{"any monitor", []revier.WindowRule{mine}, true},
+		{"wide monitors alone", []revier.WindowRule{wide}, false},
+		{"wide, then any", []revier.WindowRule{wide, mine}, true},
+	} {
+		report, err := (&core.Core{WindowRules: hosttest.NewWindowRules(tc.user...)}).PopupRuleReport(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if report.State != core.PopupRulesMissing || report.PlacesPopup() != tc.places {
+			t.Errorf("%s: state %s, places = %v, want missing and %v", tc.name, report.State, report.PlacesPopup(), tc.places)
+		}
+	}
+}
+
+// A user's file the host would not load does not stop revier's file, which
+// the host loads without it. While revier has no file, it stops the plan:
+// an older revier's rules in it cannot be found.
+func TestABrokenUsersFileStopsOnlyTheMove(t *testing.T) {
+	w := hosttest.NewWindowRuleWriter(handRule)
+	w.UserBroken = "rules.json: not valid JSON"
+	c := &core.Core{WindowRules: w}
+	if _, err := c.PlanInstallPopupRules(t.Context()); err == nil || err.Error() != w.UserBroken {
+		t.Errorf("install with no file: err = %v, want the user's file's error", err)
+	}
+	if _, err := c.PlanUninstallPopupRules(t.Context()); err == nil {
+		t.Error("uninstall with no file: err = nil, want the user's file's error")
+	}
+	w.Own = core.PopupRules()[1:]
+	plan := install(t, c)
+	if !plan.Done || !reflect.DeepEqual(w.Own, core.PopupRules()) || plan.Report.UserBroken == "" {
+		t.Errorf("install: done %v, err %q, own %+v", plan.Done, plan.Err, w.Own)
+	}
+	if !plan.Report.PlacesPopup() {
+		t.Error("a current file of revier's does not place the popup beside a broken user's file")
+	}
+}
+
 // Uninstall removes revier's file and leaves the user's.
 func TestUninstallRemovesRevierFile(t *testing.T) {
 	mine := revier.WindowRule{Class: core.PopupClass, Place: []string{"center", "top", "50%", "100%"}, Other: true}

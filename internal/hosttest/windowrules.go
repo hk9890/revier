@@ -19,6 +19,8 @@ const (
 // back, so layer L2 drives `revier setup` with no wctl.
 type FakeWindowRules struct {
 	User []revier.WindowRule
+	// UserBroken makes the user's file one the host would not load.
+	UserBroken string
 	// Earlier are the files of other programs the host tries before
 	// revier's.
 	Earlier []revier.WindowRuleFile
@@ -40,11 +42,15 @@ func (f *FakeWindowRules) Name() string { return "fake-rules" }
 
 func (f *FakeWindowRules) Read(context.Context) (revier.WindowRuleSet, error) {
 	set := revier.WindowRuleSet{
-		User:      revier.WindowRuleFile{Path: FakeUserRules, Rules: slices.Clone(f.User)},
-		Earlier:   slices.Clone(f.Earlier),
-		Own:       revier.WindowRuleFile{Path: FakeOwnRules},
-		OwnExists: f.Own != nil || f.OwnBroken != "",
-		OwnBroken: f.OwnBroken,
+		User:       revier.WindowRuleFile{Path: FakeUserRules},
+		UserBroken: f.UserBroken,
+		Earlier:    slices.Clone(f.Earlier),
+		Own:        revier.WindowRuleFile{Path: FakeOwnRules},
+		OwnExists:  f.Own != nil || f.OwnBroken != "",
+		OwnBroken:  f.OwnBroken,
+	}
+	if f.UserBroken == "" {
+		set.User.Rules = slices.Clone(f.User)
 	}
 	if f.OwnBroken == "" {
 		set.Own.Rules = slices.Clone(f.Own)

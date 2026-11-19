@@ -18,6 +18,7 @@ func printRuleReport(w io.Writer, r core.PopupRuleReport, unread string) {
 	if r.Broken != "" {
 		_, _ = fmt.Fprintf(w, "    %s\n", r.Broken)
 	}
+	printUserBroken(w, r)
 	printLegacyRules(w, r.Legacy)
 	printAheadRules(w, r.Ahead)
 	if unread != "" {
@@ -42,6 +43,14 @@ func ruleStateNote(r core.PopupRuleReport) string {
 		return fmt.Sprintf("stale: %s does not hold the rules this revier writes; `revier setup install` rewrites it", r.File)
 	}
 	return "not installed: no " + r.File
+}
+
+// printUserBroken warns that the user's file does not load, so that none
+// of its rules is read here, nor applied by the extension.
+func printUserBroken(w io.Writer, r core.PopupRuleReport) {
+	if r.UserBroken != "" {
+		_, _ = fmt.Fprintf(w, "  ! your rules file does not load, so none of its rules applies: %s\n", r.UserBroken)
+	}
 }
 
 // printLegacyRules lists an older revier's rules in the user's file, by
@@ -107,8 +116,11 @@ func printRulePlan(w io.Writer, plan core.PopupRulePlan, sub string, dryRun bool
 		}
 		_, _ = fmt.Fprintf(w, "  > %s %s with revier's %d rules\n", r.File, wouldBe("written", dryRun), len(r.Want))
 	}
-	if dryRun || plan.Err != "" {
+	switch {
+	case dryRun:
 		printLegacyRules(w, plan.Moved)
+	case plan.Err != "":
+		printLegacyRules(w, r.Legacy)
 	}
 	if sub == "install" {
 		printAheadRules(w, r.Ahead)

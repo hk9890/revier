@@ -72,11 +72,14 @@ type PopupRuleReport struct {
 	State PopupRuleState `json:"state"`
 	// File is revier's own rules file, Exists whether it is there, and Own
 	// the rules it holds. Broken is why the host would not load it.
-	File   string              `json:"file"`
-	Exists bool                `json:"exists"`
-	Own    []revier.WindowRule `json:"own"`
-	Broken string              `json:"broken,omitempty"`
-	Want   []revier.WindowRule `json:"want"`
+	File   string `json:"file"`
+	Exists bool   `json:"exists"`
+	// UserBroken is why the host would not load the user's file. Its rules
+	// are then not read: the host loads revier's file without them.
+	UserBroken string              `json:"user_broken,omitempty"`
+	Own        []revier.WindowRule `json:"own"`
+	Broken     string              `json:"broken,omitempty"`
+	Want       []revier.WindowRule `json:"want"`
 	// Legacy is each rule an older revier wrote into the user's file. It is
 	// read only while revier's file does not exist: after that, a rule in
 	// that shape is the user's.
@@ -87,13 +90,23 @@ type PopupRuleReport struct {
 }
 
 // PlacesPopup reports whether the host's rules place the popup, so that
-// revier need not: revier's file is current, and each rule ahead of it
-// places the window too, or holds something revier cannot read, which is
-// the user's to have chosen.
+// revier need not. The host applies the first rule that matches, so the
+// rules ahead of revier's file decide in their order: one that places
+// nothing leaves the popup unplaced on the monitors it matches, and one
+// that places it on any monitor, with nothing revier cannot read, ends the
+// question. A rule that holds something revier cannot read is the user's
+// choice of what the popup gets, and is taken to place it. Past them,
+// revier's file places it where it is current.
 func (r PopupRuleReport) PlacesPopup() bool {
-	return r.State == PopupRulesCurrent && !slices.ContainsFunc(r.Ahead, func(f PopupRuleFound) bool {
-		return len(f.Rule.Place) == 0 && !f.Rule.Other
-	})
+	for _, f := range r.Ahead {
+		if len(f.Rule.Place) == 0 && !f.Rule.Other {
+			return false
+		}
+		if f.Rule.MinWidth == 0 && !f.Rule.Other {
+			return true
+		}
+	}
+	return r.State == PopupRulesCurrent
 }
 
 // PopupRuleAction is what install or uninstall does to the rules.
@@ -150,7 +163,7 @@ func (c *Core) PopupRuleReport(ctx context.Context) (PopupRuleReport, error) {
 
 func popupRuleReport(host string, set revier.WindowRuleSet) PopupRuleReport {
 	r := PopupRuleReport{
-		Host: host, File: set.Own.Path, Exists: set.OwnExists, Own: slices.Clone(set.Own.Rules), Broken: set.OwnBroken,
+		Host: host, File: set.Own.Path, Exists: set.OwnExists, UserBroken: set.UserBroken, Own: slices.Clone(set.Own.Rules), Broken: set.OwnBroken,
 		Want: PopupRules(), Legacy: []PopupRuleFound{}, Ahead: []PopupRuleFound{},
 	}
 	if r.Own == nil {
@@ -193,7 +206,7 @@ func sameRule(a, b revier.WindowRule) bool {
 // current, and otherwise a write. A rule of the user's ahead of revier's
 // file changes neither: it is the user's to keep.
 func (c *Core) PlanInstallPopupRules(ctx context.Context) (PopupRulePlan, error) {
-	report, err := c.PopupRuleReport(ctx)
+	report, err := c.popupRulesToChange(ctx)
 	if err != nil {
 		return PopupRulePlan{}, err
 	}
@@ -204,11 +217,23 @@ func (c *Core) PlanInstallPopupRules(ctx context.Context) (PopupRulePlan, error)
 	return plan, nil
 }
 
+// popupRulesToChange is the report a plan starts from. While revier has no
+// file, a user's file the host would not load is an error: an older
+// revier's rules in it cannot be found, and the first file written would
+// mark them moved.
+func (c *Core) popupRulesToChange(ctx context.Context) (PopupRuleReport, error) {
+	report, err := c.PopupRuleReport(ctx)
+	if err == nil && report.UserBroken != "" && !report.Exists {
+		err = errors.New(report.UserBroken)
+	}
+	return report, err
+}
+
 // PlanUninstallPopupRules is what uninstall does: it removes revier's file,
 // or, where there is none, an older revier's rules in the user's file, and
 // never a rule of the user's.
 func (c *Core) PlanUninstallPopupRules(ctx context.Context) (PopupRulePlan, error) {
-	report, err := c.PopupRuleReport(ctx)
+	report, err := c.popupRulesToChange(ctx)
 	if err != nil {
 		return PopupRulePlan{}, err
 	}

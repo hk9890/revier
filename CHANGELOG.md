@@ -23,9 +23,17 @@ Each section is also the text of its release on the
   place: `--force` no longer replaces it. Add one to size the popup your own
   way.
 - **`revier setup status` reports the popup's rules file as current, stale
-  or missing,** and says when the extension would not apply it. In
-  `revier setup status --json`, a missing file is `"missing"`, where it was
-  `"absent"`.
+  or missing,** and says when the extension would not apply it, or when
+  your `rules.json` does not load. A broken `rules.json` no longer stops
+  the popup's rules: the extension loads `revier.json` without it.
+- **Action required for a script that reads the popup rules of `revier
+  setup status --json` or `install --json`.** The state `"absent"` is now
+  `"missing"`, and the state `"held"` and the action `"take-over"` are gone.
+  `found` is gone: `legacy` lists an older revier's rules in `rules.json`,
+  and `ahead` each rule that wins over revier's, each with `file`, `index`
+  and `rule`. New fields: `file`, `exists`, `own`, `broken` and
+  `user_broken` in the report, `moved` in the plan, and `rules_unread`
+  beside `rules` in the status.
 - **`revier setup uninstall` deletes `rules.d/revier.json`.** Before the
   first install of this version, it still takes an older revier's rules out
   of `rules.json`.

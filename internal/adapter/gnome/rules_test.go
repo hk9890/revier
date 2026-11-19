@@ -20,10 +20,10 @@ import (
 
 const allRuleCaps = `["rules","rules-overlay","rules-min-width","rules-dropin"]`
 
-// Listing the rules and removing revier's need a wctl that knows rules.d.
-// Writing needs a loaded extension that reads rules.d and every key revier
-// writes: a file it does not read would be reported installed and never
-// applied.
+// Listing the rules and removing an older revier's need any wctl the host
+// drives. Writing needs a wctl that knows rules.d, and a loaded extension
+// that reads it and every key revier writes: a file it does not read would
+// be reported installed and never applied.
 func TestRulesWriteOnlyWhereTheExtensionReadsRevierFile(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -35,7 +35,8 @@ func TestRulesWriteOnlyWhereTheExtensionReadsRevierFile(t *testing.T) {
 		{"no rules.d", `{"wctl":"0.24.0","extension":"23","capabilities":["rules","rules-overlay","rules-min-width"]}`, true, false},
 		{"no min_width", `{"wctl":"0.24.0","extension":"21","capabilities":["rules","rules-overlay","rules-dropin"]}`, true, false},
 		{"no extension", `{"wctl":"0.24.0","extension":null,"capabilities":[],"message":"not running"}`, true, false},
-		{"a wctl with no rules.d", `{"wctl":"0.23.0","extension":"24","capabilities":` + allRuleCaps + `}`, false, false},
+		{"a wctl with no rules.d", `{"wctl":"0.23.0","extension":"24","capabilities":` + allRuleCaps + `}`, true, false},
+		{"a wctl the host does not drive", `{"wctl":"0.22.0","extension":"24","capabilities":` + allRuleCaps + `}`, false, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -127,12 +128,52 @@ func TestReadTellsABrokenFileOfReviersFromNone(t *testing.T) {
 	}
 }
 
-// A user's file the extension would not load is the read's error, as the
-// listing's was: no rule of it can be told apart.
-func TestReadFailsOnABrokenUsersFile(t *testing.T) {
-	w, _ := files(t, `{"path":"/c/rules.json","valid":false,"error":"/c/rules.json: not valid JSON"}`, nil)
-	if _, err := w.rules().Read(t.Context()); err == nil || err.Error() != "/c/rules.json: not valid JSON" {
-		t.Errorf("err = %v", err)
+// A user's file the extension would not load is reported broken, and not
+// listed. The extension loads the drop-ins without it, so revier's file is
+// still read.
+func TestReadReportsABrokenUsersFileAndReadsReviers(t *testing.T) {
+	w, _ := files(t, `{"path":"/c/rules.json","valid":false,"error":"/c/rules.json: not valid JSON","dropins":[{"path":"DIR/revier.json","valid":true}]}`,
+		map[string]string{"revier.json": `[{"match":{"class":"revier-popup"},"overlay":true}]`})
+	set, err := w.rules().Read(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if set.UserBroken != "/c/rules.json: not valid JSON" || set.User.Rules != nil || !set.OwnExists || len(set.Own.Rules) != 1 {
+		t.Errorf("set = %+v", set)
+	}
+	if slices.Contains(w.calls, "rules list --json") {
+		t.Errorf("listed the broken file: %q", w.calls)
+	}
+}
+
+// On a wctl that knows no rules.d, the read lists the user's file alone,
+// so that an uninstall still finds an older revier's rules in it.
+func TestReadOnAWctlWithNoRulesDListsTheUsersFileAlone(t *testing.T) {
+	w := &wctl{reply: func(args string) ([]byte, error) {
+		switch args {
+		case "version --json":
+			return []byte(`{"wctl":"0.23.0","extension":"23","capabilities":["rules","rules-overlay","rules-min-width"]}`), nil
+		case "rules path":
+			return []byte("/c/rules.json\n"), nil
+		case "rules list --json":
+			return []byte(`[{"match":{"class":"revier-popup"},"overlay":true}]`), nil
+		}
+		return nil, refused(args, 2, "unknown option")
+	}}
+	r := w.rules()
+	if err := r.Probe(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	w.calls = nil
+	set, err := r.Read(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if set.User.Path != "/c/rules.json" || len(set.User.Rules) != 1 || set.OwnExists || set.Own.Path != "/c/rules.d/revier.json" {
+		t.Errorf("set = %+v", set)
+	}
+	if want := []string{"rules path", "rules list --json"}; !slices.Equal(w.calls, want) {
+		t.Errorf("calls = %q, want %q", w.calls, want)
 	}
 }
 
@@ -145,9 +186,9 @@ func TestWriteOwnChecksTheFileBeforeItIsInPlace(t *testing.T) {
 	if err := w.rules().WriteOwn(t.Context(), rules); err != nil {
 		t.Fatal(err)
 	}
-	tmp := filepath.Join(dir, ".revier.json.tmp")
-	if want := []string{"rules path --dir", "rules check --file " + tmp}; !slices.Equal(w.calls, want) {
-		t.Errorf("calls = %q\nwant    %q", w.calls, want)
+	tmp := "rules check --file " + filepath.Join(dir, ".revier.json.")
+	if len(w.calls) != 2 || w.calls[0] != "rules path --dir" || !strings.HasPrefix(w.calls[1], tmp) {
+		t.Errorf("calls = %q\nwant path --dir, then a check of %s*", w.calls, tmp)
 	}
 	got, err := os.ReadFile(filepath.Join(dir, "revier.json"))
 	if err != nil {

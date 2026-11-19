@@ -40,8 +40,11 @@ type WindowRuleFile struct {
 // revier's, in the order the host tries them: the first rule that matches a
 // window is the one it applies.
 type WindowRuleSet struct {
-	// User is the user's own rules file, which the host tries first.
-	User WindowRuleFile `json:"user"`
+	// User is the user's own rules file, which the host tries first. Its
+	// Rules are empty when UserBroken says why the host would not load it:
+	// the host then loads the other files without it.
+	User       WindowRuleFile `json:"user"`
+	UserBroken string         `json:"user_broken,omitempty"`
 	// Earlier is each file of another program's that the host tries after
 	// the user's and before revier's, in that order. A file the host would
 	// not load is left out: it hides nothing.

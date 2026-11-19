@@ -33,16 +33,21 @@ type Rules struct {
 	run func(ctx context.Context, args ...string) ([]byte, error)
 	// version is what Probe read, for CanAdd.
 	version versionDoc
+	// noDropins is a wctl older than minRulesWctl, which knows the user's
+	// file alone: Read then lists that, so that a status and an uninstall
+	// still find an older revier's rules in it.
+	noDropins bool
 }
 
 func (r *Rules) Name() string { return "gnome" }
 
-// ownRules is revier's drop-in file in rules.d, and ownTemp the name it is
-// written to first: a name that starts with a dot, which the extension does
-// not load, so it never reads half the file.
+// ownRules is revier's drop-in file in rules.d, and ownTemp the pattern of
+// the name it is written to first: a name that starts with a dot, which the
+// extension does not load, so it never reads half the file. The name is
+// unique, so two installs at once do not write one file.
 const (
 	ownRules = "revier.json"
-	ownTemp  = ".revier.json.tmp"
+	ownTemp  = ".revier.json.*"
 )
 
 // minRulesWctl is the oldest wctl that names rules.d and reads and checks
@@ -55,10 +60,9 @@ var minRulesWctl = [3]int{0, 24, 0}
 // the extension reads all of these.
 var ruleCapabilities = []string{"rules", "rules-overlay", "rules-min-width", "rules-dropin"}
 
-// Probe reports the rules usable when wctl is minRulesWctl or later.
-// Listing the rules and removing revier's need no running extension, so a
-// status and an uninstall work without one; CanAdd says whether an install
-// may write.
+// Probe reports the rules usable when wctl is minWctl or later. Listing the
+// rules and removing revier's need no running extension, so a status and an
+// uninstall work without one; CanAdd says whether an install may write.
 func (r *Rules) Probe(ctx context.Context) error {
 	if r.run == nil {
 		if _, err := exec.LookPath("wctl"); err != nil {
@@ -66,11 +70,8 @@ func (r *Rules) Probe(ctx context.Context) error {
 		}
 	}
 	doc, err := wctlVersion(ctx, r.wctl)
-	r.version = doc
-	if err != nil {
-		return err
-	}
-	return rulesWctl(doc)
+	r.version, r.noDropins = doc, rulesWctl(doc) != nil
+	return err
 }
 
 func rulesWctl(doc versionDoc) error {
@@ -118,6 +119,9 @@ type dropinDoc struct {
 // each such file.
 func (r *Rules) Read(ctx context.Context) (revier.WindowRuleSet, error) {
 	var set revier.WindowRuleSet
+	if r.noDropins {
+		return r.readUserAlone(ctx)
+	}
 	dir, err := r.dropinDir(ctx)
 	if err != nil {
 		return set, err
@@ -132,11 +136,10 @@ func (r *Rules) Read(ctx context.Context) (revier.WindowRuleSet, error) {
 		}
 		return set, fmt.Errorf("decode wctl rules check: %w", jerr)
 	}
-	if !check.Valid {
-		return set, errors.New(check.Error)
-	}
 	set.User.Path = check.Path
-	if set.User.Rules, err = r.list(ctx); err != nil {
+	if !check.Valid {
+		set.UserBroken = check.Error
+	} else if set.User.Rules, err = r.list(ctx); err != nil {
 		return set, err
 	}
 	for _, d := range check.Dropins {
@@ -159,6 +162,20 @@ func (r *Rules) Read(ctx context.Context) (revier.WindowRuleSet, error) {
 		}
 	}
 	return set, nil
+}
+
+// readUserAlone is Read on a wctl that knows no rules.d: the user's file,
+// and revier's where wctl 0.24 would name it, beside the user's file.
+func (r *Rules) readUserAlone(ctx context.Context) (revier.WindowRuleSet, error) {
+	var set revier.WindowRuleSet
+	raw, err := r.exec(ctx, "rules", "path")
+	if err != nil {
+		return set, err
+	}
+	set.User.Path = strings.TrimSpace(string(raw))
+	set.Own.Path = filepath.Join(filepath.Dir(set.User.Path), "rules.d", ownRules)
+	set.User.Rules, err = r.list(ctx)
+	return set, err
 }
 
 func (r *Rules) list(ctx context.Context, file ...string) ([]revier.WindowRule, error) {
@@ -207,11 +224,11 @@ func (w *RuleWriter) WriteOwn(ctx context.Context, rules []revier.WindowRule) er
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	tmp := filepath.Join(dir, ownTemp)
-	defer func() { _ = os.Remove(tmp) }()
-	if err := writeSynced(tmp, data); err != nil {
+	tmp, err := writeTemp(dir, data)
+	if err != nil {
 		return err
 	}
+	defer func() { _ = os.Remove(tmp) }()
 	if _, err := w.exec(ctx, "rules", "check", "--file", tmp); err != nil {
 		return fmt.Errorf("wctl refuses the rules revier writes: %w", err)
 	}
@@ -230,20 +247,28 @@ func (w *RuleWriter) RemoveOwn(ctx context.Context) error {
 	return nil
 }
 
-func writeSynced(path string, data []byte) error {
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+// writeTemp writes data to a new file named by ownTemp in dir, flushed to
+// disk and readable as the file it replaces, and returns its path.
+func writeTemp(dir string, data []byte) (string, error) {
+	f, err := os.CreateTemp(dir, ownTemp)
 	if err != nil {
-		return err
+		return "", err
 	}
-	if _, err := f.Write(data); err != nil {
-		_ = f.Close()
-		return err
+	_, err = f.Write(data)
+	if err == nil {
+		err = f.Chmod(0o644)
 	}
-	if err := f.Sync(); err != nil {
-		_ = f.Close()
-		return err
+	if err == nil {
+		err = f.Sync()
 	}
-	return f.Close()
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(f.Name())
+		return "", err
+	}
+	return f.Name(), nil
 }
 
 // ruleDoc is one rule of revier's as the file holds it, in the layout

@@ -141,7 +141,9 @@ func (h *Host) Probe(ctx context.Context) error {
 
 // Rules reads the rules through this host's wctl, with what Probe read of
 // the extension, so that CanAdd asks wctl nothing again.
-func (h *Host) Rules() *Rules { return &Rules{run: h.run, version: h.version} }
+func (h *Host) Rules() *Rules {
+	return &Rules{run: h.run, version: h.version, noDropins: rulesWctl(h.version) != nil}
+}
 
 // wctlVersion reads `wctl version --json` and refuses a wctl older than
 // minWctl. What it says of the extension is the caller's to read.
