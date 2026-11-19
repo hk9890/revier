@@ -17,7 +17,7 @@ A findability map: where things live, and how to search for them.
 | `internal/session/` | The saved sets of open projects `revier session` writes and reads, under the state root, and `seen.toml`, what a surface last saw, which an end with no shutdown saves. |
 | `internal/checkout/` | git and mise on a project's directory: the origin a new project records, the clone of a missing one. |
 | `internal/userunit/` | The start of a long-lived program as a service of the user's service manager, with the session's login environment: the workspace kitty and the hc core. |
-| `internal/procgroup/` | The process group each host command runs in, the end of the whole group when a command's context ends, and the end of every group still running when a second ctrl+c ends revier. |
+| `internal/procgroup/` | The process group each host command runs in, the end of the whole group when a command's context ends, the end of every group still running when a second ctrl+c ends revier, and the end of each command when revier is killed. |
 | `internal/plain/` | The text an agent, a tool or a status command wrote, with every escape sequence and control character taken off, for the TUI and the command line. |
 | `internal/shell/` | The quoting that keeps a word one word for a POSIX shell and for fish: the line `ssh` runs on a host, the command `revier each` lists, the assistant's status line. |
 | `internal/fsutil/` | The atomic file write every store uses, the write through a link that config.toml and the terminal's configuration use, and `RealPath`, the path behind every link, which the core and `revier doctor` compare a directory with a project's path by. |
