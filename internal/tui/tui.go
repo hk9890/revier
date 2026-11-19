@@ -138,6 +138,7 @@ type Model struct {
 	attached map[revier.ProjectName][]revier.TargetRef
 	bound    map[revier.ProjectName]core.Bindings // where targets last landed, from state
 	pending  *state.Launch                        // the launch still coming up, from state
+	late     []state.Launch                       // the late launches still awaiting a window, from state
 	// Two failures, because they end differently. err is what a key or an
 	// activation ran into, and it stays until the next key: a refusal that
 	// the next refresh wiped would be on screen for under a second.
@@ -711,11 +712,13 @@ func (m *Model) interval() time.Duration {
 	return m.refresh
 }
 
-// claiming reports a launch whose window the next surveys may claim. A launch
-// past its window is not: one for a project this surface does not hold is
-// never settled, and would keep the refresh for good.
+// claiming reports a launch whose window the next surveys may claim, the
+// launch on record or a late one. A launch past its window is not: one for a
+// project this surface does not hold is never settled, and would keep the
+// refresh for good.
 func (m *Model) claiming() bool {
-	return m.pending.Pending(m.now())
+	now := m.now()
+	return m.pending.Pending(now) || slices.ContainsFunc(m.late, func(l state.Launch) bool { return l.Kept(now) })
 }
 
 // nextTick starts the tick of the next refresh, and drops any that is out.
@@ -1221,7 +1224,7 @@ func (m Model) keyIn(msg keyPress) (tea.Model, tea.Cmd) {
 // a shutdown recorded since, or a restore or a save made since, has taken its
 // place.
 func (m *Model) keep(st *state.State) {
-	m.attached, m.bound, m.pending = st.Attached, st.Bound, st.Launch
+	m.attached, m.bound, m.pending, m.late = st.Attached, st.Bound, st.Launch, st.Late
 	m.onRecord = st.ShutDown != nil
 	if sd := st.ShutDown; sd != nil && m.uncleanOffer != nil && sd.At.After(m.uncleanOffer.At) {
 		m.uncleanOffer = nil

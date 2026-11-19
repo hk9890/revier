@@ -88,7 +88,7 @@ func TestPendingIsTheTargetsLaunchInsideItsWindow(t *testing.T) {
 func TestLandedConsumesOnlyItsOwnLaunch(t *testing.T) {
 	ref := revier.TargetRef{Host: "wm", ID: "7"}
 	s := &state.State{}
-	s.Launched("demo", "editor", time.Now())
+	s.Launched("demo", "editor", "", time.Now())
 	s.Landed("demo", "home", revier.TargetRef{Host: "rt", ID: "1"})
 	if s.Launch == nil {
 		t.Fatal("home landing consumed the editor's launch")
@@ -103,12 +103,12 @@ func TestLandedConsumesOnlyItsOwnLaunch(t *testing.T) {
 func TestClaimBindsATargetAndAttachesAnAction(t *testing.T) {
 	ref := revier.TargetRef{Host: "wm", ID: "7"}
 	s := &state.State{}
-	s.Launched("demo", "editor", time.Now())
+	s.Launched("demo", "editor", "", time.Now())
 	s.Claim("editor", ref)
 	if s.Launch != nil || s.Bound["demo"]["editor"] != ref {
 		t.Errorf("state = %+v, want the editor bound and the launch consumed", s)
 	}
-	s.Launched("demo", "", time.Now())
+	s.Launched("demo", "", "", time.Now())
 	s.Claim("", ref)
 	if s.Launch != nil || len(s.Attached["demo"]) != 1 {
 		t.Errorf("state = %+v, want the window attached and the launch consumed", s)

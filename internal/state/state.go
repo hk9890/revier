@@ -47,6 +47,12 @@ type State struct {
 	// reads this and finishes the job.
 	Launch *Launch `json:"launch,omitempty"`
 
+	// Late is every target's launch that left Launch with no window: another
+	// launch replaced it, or it passed its window. A cold application opens
+	// its windows minutes late and in any order, so each is kept for
+	// LateWindow and bound to the one window its full rule alone matches.
+	Late []Launch `json:"late,omitempty"`
+
 	// ShutDown is the full shutdown on record, until anything opens again:
 	// the next surface offers to restore what it closed (decisions.md D141).
 	ShutDown *ShutDown `json:"shutdown,omitempty"`
@@ -104,6 +110,7 @@ func (s *State) Clone() *State {
 		l := *s.Launch
 		c.Launch = &l
 	}
+	c.Late = slices.Clone(s.Late)
 	if s.ShutDown != nil {
 		d := *s.ShutDown
 		c.ShutDown = &d
@@ -115,10 +122,13 @@ func (s *State) Clone() *State {
 	return c
 }
 
-// Launch is one detached launch: which project, which target if any, when.
+// Launch is one detached launch: which project, which target if any, when,
+// and the class pattern of the target's window rule, so that a window of the
+// class can be known for awaited without the project's rules.
 type Launch struct {
 	Project revier.ProjectName `json:"project"`
 	Target  revier.TargetName  `json:"target,omitempty"`
+	Class   string             `json:"class,omitempty"`
 	At      time.Time          `json:"at"`
 }
 
@@ -227,6 +237,14 @@ const ClaimWindow = 5 * time.Second
 // a wrong binding unlikely and an editor's cold start takes this long.
 const BindWindow = 60 * time.Second
 
+// LateWindow is how long after a target's launch a late launch is kept for
+// its window. It covers the cold start of an editor that opens several
+// projects' windows at once, measured at six minutes.
+const LateWindow = 10 * time.Minute
+
+// Kept reports whether a late launch is still inside LateWindow at now.
+func (l Launch) Kept(now time.Time) bool { return now.Before(l.At.Add(LateWindow)) }
+
 // Pending reports whether l, the launch on record if any, is still inside its
 // window at now: a window that appears can still be claimed for it, and until
 // then it is not over. A launch stamped after now is pending: another process
@@ -252,20 +270,41 @@ func (s *State) Pending(p revier.ProjectName, t revier.TargetName, now time.Time
 }
 
 // Launched records a launch whose window has not appeared, and makes its
-// project the current one. An action's launch has no target. It is an open,
-// so it ends the shutdown on record.
+// project the current one. An action's launch has no target and no class. It
+// is an open, so it ends the shutdown on record. A late launch of the same
+// target is over: this one takes its place.
 //
 // There is one launch on record, so it returns the launch of another target
-// still pending at at, which no window can now be claimed for, or nil.
-func (s *State) Launched(p revier.ProjectName, t revier.TargetName, at time.Time) (replaced *Launch) {
+// still pending at at, which no claim can now take a window for, or nil. A
+// target's launch it returns is set aside as late; an action's is lost.
+func (s *State) Launched(p revier.ProjectName, t revier.TargetName, class string, at time.Time) (replaced *Launch) {
 	if l := s.Launch; l.Pending(at) && (l.Project != p || l.Target != t) {
 		replaced = l
+		if l.Target != "" {
+			s.SetAside(*l)
+		}
 	}
+	s.dropLate(p, t)
 	s.ClearShutDown()
 	s.Current = p
 	s.LastRun = nil
-	s.Launch = &Launch{Project: p, Target: t, At: at}
+	s.Launch = &Launch{Project: p, Target: t, Class: class, At: at}
 	return replaced
+}
+
+// SetAside keeps a target's launch that left Launch with no window as late.
+func (s *State) SetAside(l Launch) { s.Late = append(s.Late, l) }
+
+// ClaimLate binds the window that appeared for the i-th late launch to its
+// target, and ends that launch.
+func (s *State) ClaimLate(i int, ref revier.TargetRef) {
+	l := s.Late[i]
+	s.Bind(l.Project, l.Target, ref)
+	s.Late = slices.Delete(s.Late, i, i+1)
+}
+
+func (s *State) dropLate(p revier.ProjectName, t revier.TargetName) {
+	s.Late = slices.DeleteFunc(s.Late, func(l Launch) bool { return l.Project == p && l.Target == t })
 }
 
 // Landed records the instance a target landed on and makes its project the
@@ -279,6 +318,7 @@ func (s *State) Landed(p revier.ProjectName, t revier.TargetName, ref revier.Tar
 	if s.Launch != nil && s.Launch.Project == p && s.Launch.Target == t {
 		s.Launch = nil
 	}
+	s.dropLate(p, t)
 }
 
 // Claim settles the pending launch with the window that appeared for it: bound
@@ -338,6 +378,11 @@ func (s *State) Rename(from, to revier.ProjectName) {
 	}
 	if s.Launch != nil && s.Launch.Project == from {
 		s.Launch.Project = to
+	}
+	for i := range s.Late {
+		if s.Late[i].Project == from {
+			s.Late[i].Project = to
+		}
 	}
 	if s.LastRun != nil && s.LastRun.Project == from {
 		s.LastRun.Project = to
@@ -437,6 +482,9 @@ func (s *State) HeldByAnother(p revier.ProjectName, ref revier.TargetRef) bool {
 	}
 	return false
 }
+
+// Held reports whether a binding or an attachment of any project holds ref.
+func (s *State) Held(ref revier.TargetRef) bool { return s.refs()[key(ref)] }
 
 // refs is every attached and bound ref, by key. A nil state holds none.
 func (s *State) refs() map[string]bool {

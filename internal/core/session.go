@@ -523,7 +523,7 @@ func (c *Core) conversations(ctx context.Context, agents []agentPanel) ([]revier
 // every RestoreLaunch, in order.
 //
 // Order is the file's, and the caller keeps it: a launch is bound to the
-// window that appears after it (decisions.md D21), so two launches at once are
+// window that appears after it (decisions.md D190), so two launches at once are
 // two windows neither can be attributed to.
 func (c *Core) RestorePlan(s session.Session, r Report) []RestoreStep {
 	views := make(map[revier.ProjectName]revier.ProjectView, len(r.Views))

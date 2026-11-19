@@ -79,13 +79,6 @@ gets the focus back.
 A workspace that opens in kitty's own directory is the one thing a session file
 never got wrong.
 
-### D21 — a key binds to the instance it landed on, and a launch waits for its window
-
-Replaces the claim-on-appear rule for targets. Titles move after launch, so a
-rule matched on every press is weakest right after the launch. The new window is
-bound by class. Claim-on-appear remains for actions only, in the TUI, within
-seconds, and never for a window that is ambiguous or that a target matches.
-
 ### D22 — a window with no name of its own is identified by the window manager
 
 kitty windows opened from a session file carry no name. The core pairs such a
@@ -543,7 +536,7 @@ is never in.
 
 ### D120 — the core holds the one ledger, and no caller hands it state
 
-Replaces D91. The launch rule of D21 was written four times, and twelve core
+Replaces D91. The launch rule of D190 was written four times, and twelve core
 operations took bindings and attachments from a caller, which the command line
 filled from the state it loaded at startup. `Core.Ledger` is the one way state
 reaches the core: an operation reads it once at its start, a press is
@@ -873,7 +866,7 @@ workspace, which costs a kitty's memory for each.
 
 ### D166 — a command target runs its command and binds nothing
 
-Extends D12, D15, D21 and D145. A target may name a command in place of a
+Extends D12, D15, D145 and D190. A target may name a command in place of a
 window or runtime part, never beside one: the command does the run-or-raise
 and the focus, so it must be idempotent. revier runs it to its end within its
 timeout, waits for no window, and records the window focus moved to. It
@@ -1105,3 +1098,14 @@ the popup only where its rules are not current. A rule for the class in another
 shape is the user's, replaced only with --force (D27), which prints it: no tool
 writes it again. `revier setup` writes the desktop keys, the terminal keys and
 the rules in one run, because a user sets up a machine, not one store.
+
+### D190 — a key binds to the instance it landed on, and a launch's window may come minutes late
+
+Replaces D21. Titles move after launch, so a key binds to the instance it
+landed on, and the window that appears in a launch's wait is bound by class. A
+class claim takes the last launch's window within its window, never an
+ambiguous one. A target's launch that another replaces, or that outlives its
+window, is kept for ten minutes and bound to the one unheld window its full
+rule alone matches, because a cold editor opens its windows minutes late and
+in any order. While it is kept, no class-only bind or claim takes a window of
+its class.

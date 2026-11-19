@@ -135,6 +135,15 @@ func (p Project) index(name revier.TargetName) (int, bool) {
 	return 0, false
 }
 
+// windowClass is the rendered class pattern of the named target's window
+// rule, empty for a target with no window part or a rule with no class.
+func (p Project) windowClass(name revier.TargetName) string {
+	if i, ok := p.index(name); ok && p.Targets[i].Window != nil {
+		return p.Targets[i].Window.Match.Class
+	}
+	return ""
+}
+
 // Prepare prepares every project. Preparing cannot fail: a target that does
 // not render or compile is kept and marked, and the project keeps the rest.
 func Prepare(projects []revier.Project) []Project {

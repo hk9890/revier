@@ -163,6 +163,30 @@ func TestALaunchPastItsWindowKeepsNoRefresh(t *testing.T) {
 	}
 }
 
+// A late launch is bound by the survey too, so it keeps the refresh while it
+// is kept, and not after.
+func TestALateLaunchKeepsTheRefreshWhileItIsKept(t *testing.T) {
+	_, _, c, projects := world(t, 2)
+	root := stateWith(t, nil)
+	m := tui.NewWithoutWaits(c, projects, root, &config.Config{}, time.Second, theme.Default(), "").StaticCursors()
+	m, now := clocked(m)
+	m = survey(m)
+	st, _ := state.Load(root)
+	st.SetAside(state.Launch{Project: "not-here", Target: "editor", At: *now})
+	if err := st.Save(root); err != nil {
+		t.Fatal(err)
+	}
+	m, _ = update(m, tea.BlurMsg{})
+	m = survey(m)
+	if got := m.Interval(); got != time.Second {
+		t.Errorf("interval without the focus with a late launch kept = %v, want the refresh", got)
+	}
+	*now = now.Add(state.LateWindow)
+	if got := m.Interval(); got != 10*time.Second {
+		t.Errorf("interval without the focus with a late launch past its window = %v, want 10s", got)
+	}
+}
+
 // The popup can hide while a tick set without the focus is out, ten seconds
 // long. The raise drops it and surveys once the files are read again, as it
 // does when the chain had ended.

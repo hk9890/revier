@@ -591,7 +591,7 @@ func (c *Core) locate(snap snapshot, p Project, i int, host revier.Host, m revie
 // be noticed.
 //
 // Only the class is re-checked, never the title. The whole point of a binding
-// is to survive a title the rule no longer matches (decisions.md D21): an
+// is to survive a title the rule no longer matches (decisions.md D190): an
 // editor window is bound while its title still says the file it opened with.
 // A target that declares no class is trusted as before, and so is a runtime
 // binding: a runtime id is never handed back out, because the kitty and hc
@@ -897,7 +897,10 @@ const BindPoll = 50 * time.Millisecond
 // the full rule matches is taken at once; otherwise a single class candidate
 // is taken and two at once are left alone, because the launch does not say
 // which. A class candidate another project holds is not this launch's: a
-// press of that project in another process bound it while this one waited. It gives up after wait and reports false. A window it found and
+// press of that project in another process bound it while this one waited.
+// Nor is one of a class another target's launch awaits: a cold application
+// opens the windows of earlier launches late and in any order (decisions.md
+// D190). It gives up after wait and reports false. A window it found and
 // could not raise is reported with the failure, as goTo reports an instance it
 // launched and could not focus, so the activation pins it.
 func (c *Core) bindWindow(ctx context.Context, p Project, name revier.TargetName, before []revier.Instance, wait time.Duration, raise bool) (inst revier.Instance, ok bool, err error) {
@@ -915,11 +918,12 @@ func (c *Core) bind(ctx context.Context, p Project, name revier.TargetName, befo
 	}
 	w, found, err := c.awaitNew(ctx, before, wait, BindPoll, func(fresh []revier.Instance) (revier.Instance, bool, bool) {
 		var candidates []revier.Instance
+		st := c.state()
 		for _, w := range fresh {
 			if p.compiled[i].window.Matches(w) {
 				return w, true, false
 			}
-			if c.classOK(p, i, w) && !c.state().HeldByAnother(p.Name, w.Ref) {
+			if c.classOK(p, i, w) && !st.HeldByAnother(p.Name, w.Ref) && !awaitedElsewhere(st, p.Name, name, w, time.Now()) {
 				candidates = append(candidates, w)
 			}
 		}
@@ -1543,7 +1547,7 @@ func (c *Core) claim(before, after []revier.Instance, p Project, st *state.State
 	}
 	var candidates []revier.Instance
 	for _, inst := range after {
-		if !seen[key(inst.Ref)] && !st.HeldByAnother(p.Name, inst.Ref) && c.candidate(inst, p, l.Target, projects) {
+		if !seen[key(inst.Ref)] && !st.HeldByAnother(p.Name, inst.Ref) && c.candidate(inst, p, l.Target, st, now, projects) {
 			candidates = append(candidates, inst)
 		}
 	}
@@ -1553,15 +1557,42 @@ func (c *Core) claim(before, after []revier.Instance, p Project, st *state.State
 	return candidates[0].Ref, true
 }
 
-func (c *Core) candidate(inst revier.Instance, p Project, target revier.TargetName, projects []Project) bool {
+// candidate reports whether inst may be the window of p's launch of target,
+// or of p's action when target is empty. Neither takes by class a window of
+// a class another launch awaits (decisions.md D190).
+func (c *Core) candidate(inst revier.Instance, p Project, target revier.TargetName, st *state.State, now time.Time, projects []Project) bool {
 	if target == "" {
-		return !c.declared(inst, projects)
+		return !c.declared(inst, projects) && !awaitedElsewhere(st, p.Name, target, inst, now)
 	}
 	i, ok := p.index(target)
 	if !ok || p.Targets[i].Window == nil {
 		return false
 	}
-	return p.compiled[i].window.Matches(inst) || c.classOK(p, i, inst)
+	return p.compiled[i].window.Matches(inst) || (c.classOK(p, i, inst) && !awaitedElsewhere(st, p.Name, target, inst, now))
+}
+
+// awaitedElsewhere reports whether a launch of a target other than p's t
+// awaits a window of w's class: the launch on record while it is pending, or
+// a late launch while it is kept. A launch whose rule has no class awaits no
+// class: it would hold back every window of every class.
+func awaitedElsewhere(st *state.State, p revier.ProjectName, t revier.TargetName, w revier.Instance, now time.Time) bool {
+	if l := st.Launch; l.Pending(now) && awaitsClass(*l, p, t, w) {
+		return true
+	}
+	for _, l := range st.Late {
+		if l.Kept(now) && awaitsClass(l, p, t, w) {
+			return true
+		}
+	}
+	return false
+}
+
+func awaitsClass(l state.Launch, p revier.ProjectName, t revier.TargetName, w revier.Instance) bool {
+	if l.Class == "" || (l.Project == p && l.Target == t) {
+		return false
+	}
+	m, err := revier.Match{Class: l.Class}.Compile()
+	return err == nil && m.Matches(w)
 }
 
 // declared reports whether any project's rule matches the instance: it is

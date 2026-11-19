@@ -265,7 +265,7 @@ func TestAFullShutdownWhoseRecordAnOpenEndedIsNotRecorded(t *testing.T) {
 	c, rt, report, projects := desktop(t)
 	rt.OnClose = func(revier.TargetRef) {
 		c.Ledger.Update(func(st *state.State) bool {
-			st.Launched("demo", "notes", time.Now())
+			st.Launched("demo", "notes", "", time.Now())
 			return true
 		})
 	}

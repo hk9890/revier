@@ -206,7 +206,7 @@ func TestAShutdownThatSavedNoSessionOffersNone(t *testing.T) {
 func TestAnOpenElsewhereTakesTheStartDialogDown(t *testing.T) {
 	m, _, root, _ := shutDownWorld(t)
 	if _, err := state.Update(root, func(st *state.State) bool {
-		st.Launched("project-00", "home", time.Now())
+		st.Launched("project-00", "home", "", time.Now())
 		return true
 	}); err != nil {
 		t.Fatal(err)

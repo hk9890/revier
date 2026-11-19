@@ -14,7 +14,7 @@ var chrome = revier.TargetRef{Host: "gnome", ID: "42"}
 // current. It is no open: the launch and the shutdown on record stay.
 func TestRanCommandKeepsTheRunAndLeavesTheLaunchAndTheShutdown(t *testing.T) {
 	s := &state.State{}
-	s.Launched("other", "editor", time.Now())
+	s.Launched("other", "editor", "", time.Now())
 	s.MarkShutDown(time.Now(), "s1")
 
 	s.RanCommand("p", "web", chrome)
@@ -54,7 +54,7 @@ func TestRanCommandWithNoFocusClearsTheRun(t *testing.T) {
 // runs it.
 func TestEveryOtherPressClearsTheRun(t *testing.T) {
 	presses := map[string]func(*state.State){
-		"launch":  func(s *state.State) { s.Launched("p", "editor", time.Now()) },
+		"launch":  func(s *state.State) { s.Launched("p", "editor", "", time.Now()) },
 		"landing": func(s *state.State) { s.Landed("p", "home", revier.TargetRef{Host: "rt", ID: "1"}) },
 		"claim": func(s *state.State) {
 			s.Launch = &state.Launch{Project: "p", Target: "editor", At: time.Now()}
