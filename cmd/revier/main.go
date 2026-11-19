@@ -80,9 +80,9 @@ usage:
                                 keys and the popup's window rules - and what
                                 holds each now
   revier setup install [--force] [-n] [--json]
-                                write all of it; --force takes a key or a rule
-                                something else holds; -n prints the plan and
-                                changes nothing
+                                write all of it; --force takes a key something
+                                else holds; -n prints the plan and changes
+                                nothing
   revier setup uninstall [-n] [--json]
                                 remove what revier wrote
   revier agent wait <agent> --until <status> [--timeout s] [--json]

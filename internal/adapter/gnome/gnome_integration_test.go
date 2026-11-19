@@ -151,7 +151,7 @@ func TestReadTakesTheRecordedCheck(t *testing.T) {
 		}
 		return nil, nil
 	}}
-	set, err := w.rules().Read(context.Background())
+	set, err := w.rules().Read(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func TestReadTakesTheRecordedCheck(t *testing.T) {
 // rules.d and every key revier writes, so revier may write its file.
 func TestRulesCanWriteOnTheRecordedVersion(t *testing.T) {
 	r := (&wctl{reply: versionReply(string(read(t, "version-0.24.json")), 0)}).rules()
-	if err := r.Probe(context.Background()); err != nil {
+	if err := r.Probe(t.Context()); err != nil {
 		t.Fatalf("Probe: %v", err)
 	}
 	if err := r.CanAdd(); err != nil {

@@ -5,7 +5,6 @@
 package gnome_test
 
 import (
-	"context"
 	"errors"
 	"io/fs"
 	"os"
@@ -18,20 +17,6 @@ import (
 	"github.com/hk9890/revier/internal/adapter/gnome"
 	"github.com/hk9890/revier/pkg/revier"
 )
-
-// rules is a rules writer that runs w in place of wctl.
-func (w *wctl) rules() *gnome.RuleWriter {
-	r := &gnome.RuleWriter{}
-	r.SetRunner(func(_ context.Context, args ...string) ([]byte, error) {
-		joined := strings.Join(args, " ")
-		w.calls = append(w.calls, joined)
-		if w.reply == nil {
-			return nil, nil
-		}
-		return w.reply(joined)
-	})
-	return r
-}
 
 const allRuleCaps = `["rules","rules-overlay","rules-min-width","rules-dropin"]`
 
