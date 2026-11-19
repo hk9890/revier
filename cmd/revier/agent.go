@@ -288,12 +288,11 @@ func cmdAgentRead(out io.Writer, args []string) error {
 		return err
 	}
 	if !*screen {
+		// A message that cannot be read, for nothing to read or for a probe
+		// that broke, names the read that still works (decisions.md D116).
 		said, err := a.core.Said(ctx, ag)
-		if errors.Is(err, core.ErrNoMessage) {
-			return fmt.Errorf("%s: %w; --screen prints what its panel shows", pos[0], err)
-		}
 		if err != nil {
-			return fmt.Errorf("%s: %w", pos[0], err)
+			return fmt.Errorf("%s: %w; --screen prints what its panel shows", pos[0], err)
 		}
 		_, _ = fmt.Fprintln(out, strings.TrimRight(plain.Text(said.Message), "\n"))
 		return nil

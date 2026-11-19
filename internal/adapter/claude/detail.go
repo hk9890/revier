@@ -315,26 +315,37 @@ const briefRunes = 300
 // and an answer whose usage does not parse ends the count too: an older one's
 // would read as now.
 //
-// A tail none of whose lines parses is an error, not errNoMessage: it is the
-// format of a Claude Code release this read does not know, and the core logs
-// it (decisions.md D106).
+// A tail that gives no detail is errFormat, not errNoMessage, where no line of
+// it parses, or where it holds lines of the conversation and none of them
+// parses: it is the format of a Claude Code release this read does not know,
+// and the core logs it (decisions.md D106). The last line is not counted
+// while Claude Code is still writing it.
 func lastSaid(tail []byte) (revier.AgentDetail, error) {
 	var d revier.AgentDetail
 	failed := map[string]bool{}
 	inTurn, counting := true, true
-	written, parsed := 0, 0
-	lines := bytes.Split(tail, []byte("\n"))
-	for i := len(lines) - 1; i >= 0 && (inTurn || d.Message == "" || counting); i-- {
-		if len(bytes.TrimSpace(lines[i])) == 0 {
+	var lines, parsed, turns, broken int
+	split := bytes.Split(tail, []byte("\n"))
+	for i := len(split) - 1; i >= 0 && (inTurn || d.Message == "" || counting); i-- {
+		line := split[i]
+		if len(bytes.TrimSpace(line)) == 0 {
 			continue
 		}
-		written++
 		var e entry
-		if json.Unmarshal(lines[i], &e) != nil {
-			continue
+		err := json.Unmarshal(line, &e)
+		if i < len(split)-1 {
+			lines++
+			switch {
+			case err == nil:
+				parsed++
+				if e.Type == "user" || e.Type == "assistant" {
+					turns++
+				}
+			case conversationLine(line):
+				broken++
+			}
 		}
-		parsed++
-		if e.Type != "user" && e.Type != "assistant" || e.IsSidechain || e.IsMeta {
+		if err != nil || e.Type != "user" && e.Type != "assistant" || e.IsSidechain || e.IsMeta {
 			continue
 		}
 		if e.IsCompactSummary {
@@ -380,13 +391,26 @@ func lastSaid(tail []byte) (revier.AgentDetail, error) {
 		}
 	}
 	switch {
-	case d.IsZero() && written > 0 && parsed == 0:
-		return revier.AgentDetail{}, fmt.Errorf("none of the %d lines of the transcript's tail parses", written)
+	case d.IsZero() && (lines > 0 && parsed == 0 || broken > 0 && turns == 0):
+		return revier.AgentDetail{}, errFormat
 	case d.IsZero():
 		return revier.AgentDetail{}, errNoMessage
 	}
 	slices.Reverse(d.Tools)
 	return d, nil
+}
+
+// errFormat is a transcript tail in a format this read does not know. Its text
+// is the same for every tail, so an outage writes one line per panel.
+var errFormat = errors.New("no line of the transcript's tail parses: a Claude Code transcript format this read does not know")
+
+// conversationLine is whether a line that did not parse names itself a line of
+// the conversation.
+func conversationLine(line []byte) bool {
+	var typed struct {
+		Type string `json:"type"`
+	}
+	return json.Unmarshal(line, &typed) == nil && (typed.Type == "user" || typed.Type == "assistant")
 }
 
 // contentOf is a message's content: its text, which is a plain string or the

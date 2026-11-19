@@ -12,12 +12,12 @@ import (
 )
 
 // detailWait bounds one read of what a project's agents said, and one read of
-// the mirror's screen. A detail read is a host listing and the end of a file
-// per agent, which answer in milliseconds, and for a Claude agent the claude
+// the mirror's screen. A detail read asks no host: it is the end of a file per
+// agent, which answers in milliseconds, and for a Claude agent the claude
 // probe's `claude agents --json`, which can take seconds on a loaded machine.
 // That command has its own, longer bound (listWait in internal/adapter/claude):
-// this one ends it first, the agents not yet read keep what they said before,
-// and the core logs the cut walk once.
+// this one ends it first, the agents of that probe not yet read keep what they
+// said before, and the core logs the cut once for the probe.
 const detailWait = 2 * time.Second
 
 // agentKey names one agent across surveys: the instance that holds it, by

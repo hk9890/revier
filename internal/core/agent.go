@@ -655,10 +655,11 @@ func (c *Core) reread(ctx context.Context, a Agent) (revier.AgentState, error) {
 // is logged rather than shown (decisions.md D106). A probe with nothing to
 // read (revier.ErrNoDetail) has not failed, and is not logged either.
 //
-// A walk whose ctx ends stops there, and the agents not yet read stay empty.
-// The end is logged once for the walk, not once per agent: a probe that
-// shares one slow listing among its panels, as the claude one does, would
-// otherwise log the same deadline for every agent left.
+// A read that fails once the ctx has ended cuts its probe: the probe is not
+// asked again in this walk, and its agents not yet read stay empty. The cut
+// is logged once per probe, not once per agent: the claude probe reads every
+// panel through one listing, and a listing the ctx killed fails each read
+// after it at once. Another probe's agents are still read.
 func (c *Core) Details(ctx context.Context, agents []revier.AgentView) []revier.AgentDetail {
 	c.seenMu.Lock()
 	seen := c.seen
@@ -672,8 +673,7 @@ func (c *Core) Details(ctx context.Context, agents []revier.AgentView) []revier.
 		wanted[at] = append(wanted[at], i)
 	}
 	out := make([]revier.AgentDetail, len(agents))
-	read, cut := 0, ""
-walk:
+	walked := map[string]*probeWalk{}
 	for _, instances := range seen {
 		for _, inst := range instances {
 			for _, panel := range inst.Panels {
@@ -681,49 +681,61 @@ walk:
 				if !ok {
 					continue
 				}
-				if ctx.Err() != nil {
-					break walk
+				probe, ok := c.agentProbe(panel)
+				if !ok {
+					continue
 				}
-				var d revier.AgentDetail
-				if d, cut = c.detail(ctx, inst.Ref, panel); cut != "" {
-					break walk
+				detailed, ok := probe.(revier.Detailed)
+				if !ok {
+					continue
 				}
-				for _, i := range at {
-					out[i] = d
+				w := walked[probe.Name()]
+				if w == nil {
+					w = &probeWalk{}
+					walked[probe.Name()] = w
 				}
-				read += len(at)
+				if w.cut != "" {
+					w.unread += len(at)
+					continue
+				}
+				d, err := detailed.Detail(ctx, panel)
+				switch {
+				// A probe with nothing to read is a normal outcome and says
+				// nothing to the log: a panel whose harness lists no session,
+				// and a session that has not spoken yet, are both ordinary.
+				case errors.Is(err, revier.ErrNoDetail):
+				case err != nil && ctx.Err() != nil:
+					w.cut, w.unread = err.Error(), w.unread+len(at)
+					continue
+				default:
+					logging.Repeat("detail\x00"+probe.Name()+"\x00"+key(inst.Ref)+"\x00"+string(panel.ID), "detail", err, "probe", probe.Name(), "ref", inst.Ref, "panel", panel.ID)
+					if err == nil {
+						for _, i := range at {
+							out[i] = d
+						}
+					}
+				}
+				w.read += len(at)
 			}
 		}
 	}
-	logging.Repeat("detail\x00walk", "detail", ctx.Err(), "read", read, "unread", len(agents)-read, "cut", cut)
+	for name, w := range walked {
+		var err error
+		if w.cut != "" {
+			err = errCut
+		}
+		logging.Repeat("detail\x00cut\x00"+name, "detail", err, "probe", name, "read", w.read, "unread", w.unread, "cut", w.cut)
+	}
 	return out
 }
 
-// detail is one panel's detail. A read the ctx's end cut short is not logged
-// here: its error comes back as cut, for the one line Details writes for the
-// walk.
-func (c *Core) detail(ctx context.Context, ref revier.TargetRef, panel revier.Panel) (d revier.AgentDetail, cut string) {
-	probe, ok := c.agentProbe(panel)
-	if !ok {
-		return revier.AgentDetail{}, ""
-	}
-	detailed, ok := probe.(revier.Detailed)
-	if !ok {
-		return revier.AgentDetail{}, ""
-	}
-	d, err := detailed.Detail(ctx, panel)
-	if err != nil && ctx.Err() != nil {
-		return revier.AgentDetail{}, probe.Name() + ": " + err.Error()
-	}
-	// A probe with nothing to read is a normal outcome and says nothing to
-	// the log: a panel whose harness lists no session, and a session that has
-	// not spoken yet, are both ordinary. Only a probe that broke is logged.
-	if errors.Is(err, revier.ErrNoDetail) {
-		return revier.AgentDetail{}, ""
-	}
-	logging.Repeat("detail\x00"+probe.Name()+"\x00"+key(ref)+"\x00"+string(panel.ID), "detail", err, "probe", probe.Name(), "ref", ref, "panel", panel.ID)
-	if err != nil {
-		return revier.AgentDetail{}, ""
-	}
-	return d, ""
+// errCut is the err of the line for a probe a walk's ctx cut: one text
+// whatever the read that was cut said, so an outage writes one line.
+var errCut = errors.New("the walk's deadline passed: its agents not yet read keep what they said before")
+
+// probeWalk is what one walk of Details read through one probe: the agents
+// read, the agents left unread after a cut, and the error of the cut read.
+type probeWalk struct {
+	read, unread int
+	cut          string
 }
