@@ -651,8 +651,8 @@ func (c *Core) reread(ctx context.Context, a Agent) (revier.AgentState, error) {
 // agent that listing did not hold has no detail until the next survey.
 //
 // A detail is empty for an agent whose probe does not say, one on another
-// machine, and one whose probe failed: the detail is display, and the failure
-// is logged rather than shown (decisions.md D106). A probe with nothing to
+// machine, and one whose probe failed: the detail is display (decisions.md
+// D106), and the failure is logged rather than shown. A probe with nothing to
 // read (revier.ErrNoDetail) has not failed, and is not logged either.
 //
 // A read that fails once the ctx has ended cuts its probe: the probe is not

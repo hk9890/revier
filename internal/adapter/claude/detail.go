@@ -317,8 +317,8 @@ const briefRunes = 300
 //
 // A tail that gives no detail is errFormat, not errNoMessage, where no line of
 // it parses, or where it holds lines of the conversation and none of them
-// parses: it is the format of a Claude Code release this read does not know,
-// and the core logs it (decisions.md D106). The last line is not counted
+// parses: it is the format of a Claude Code release this read does not know
+// (decisions.md D106), and the core logs it. The last line is not counted
 // while Claude Code is still writing it.
 func lastSaid(tail []byte) (revier.AgentDetail, error) {
 	var d revier.AgentDetail
