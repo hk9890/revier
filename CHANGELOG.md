@@ -8,14 +8,13 @@ Each section is also the text of its release on the
 
 ## v0.28.1
 
-- **A program that polls `revier list` no longer piles up Claude Code
-  processes.** A call that its caller killed at a deadline left the
-  `claude agents --json` it had started running, and the next poll started
-  one more. On a loaded machine, dozens ran at once and the desktop stalled
-  for seconds. They now end with the call.
-- **`revier list --json --conversations` starts Claude Code once per call, not
-  twice.** It costs about a third less CPU, and on a loaded machine it ends
-  sooner.
+- **A `revier list` call that is cut off no longer leaves
+  `claude agents --json` running.** A program that polls `revier list`
+  and gives up on a slow call, or the call's own time limit, left one
+  behind each time. On a loaded machine dozens ran at once, and the
+  desktop stalled.
+- **`revier list --json --conversations` uses less CPU and ends
+  sooner.** It usually starts Claude Code once per call, not twice.
 
 ## v0.28.0
 
