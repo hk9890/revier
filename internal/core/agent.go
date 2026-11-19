@@ -654,6 +654,11 @@ func (c *Core) reread(ctx context.Context, a Agent) (revier.AgentState, error) {
 // machine, and one whose probe failed: the detail is display, and the failure
 // is logged rather than shown (decisions.md D106). A probe with nothing to
 // read (revier.ErrNoDetail) has not failed, and is not logged either.
+//
+// A walk whose ctx ends stops there, and the agents not yet read stay empty.
+// The end is logged once for the walk, not once per agent: a probe that
+// shares one slow listing among its panels, as the claude one does, would
+// otherwise log the same deadline for every agent left.
 func (c *Core) Details(ctx context.Context, agents []revier.AgentView) []revier.AgentDetail {
 	c.seenMu.Lock()
 	seen := c.seen
@@ -667,6 +672,8 @@ func (c *Core) Details(ctx context.Context, agents []revier.AgentView) []revier.
 		wanted[at] = append(wanted[at], i)
 	}
 	out := make([]revier.AgentDetail, len(agents))
+	read, cut := 0, ""
+walk:
 	for _, instances := range seen {
 		for _, inst := range instances {
 			for _, panel := range inst.Panels {
@@ -674,35 +681,49 @@ func (c *Core) Details(ctx context.Context, agents []revier.AgentView) []revier.
 				if !ok {
 					continue
 				}
-				d := c.detail(ctx, inst.Ref, panel)
+				if ctx.Err() != nil {
+					break walk
+				}
+				var d revier.AgentDetail
+				if d, cut = c.detail(ctx, inst.Ref, panel); cut != "" {
+					break walk
+				}
 				for _, i := range at {
 					out[i] = d
 				}
+				read += len(at)
 			}
 		}
 	}
+	logging.Repeat("detail\x00walk", "detail", ctx.Err(), "read", read, "unread", len(agents)-read, "cut", cut)
 	return out
 }
 
-func (c *Core) detail(ctx context.Context, ref revier.TargetRef, panel revier.Panel) revier.AgentDetail {
+// detail is one panel's detail. A read the ctx's end cut short is not logged
+// here: its error comes back as cut, for the one line Details writes for the
+// walk.
+func (c *Core) detail(ctx context.Context, ref revier.TargetRef, panel revier.Panel) (d revier.AgentDetail, cut string) {
 	probe, ok := c.agentProbe(panel)
 	if !ok {
-		return revier.AgentDetail{}
+		return revier.AgentDetail{}, ""
 	}
 	detailed, ok := probe.(revier.Detailed)
 	if !ok {
-		return revier.AgentDetail{}
+		return revier.AgentDetail{}, ""
 	}
 	d, err := detailed.Detail(ctx, panel)
+	if err != nil && ctx.Err() != nil {
+		return revier.AgentDetail{}, probe.Name() + ": " + err.Error()
+	}
 	// A probe with nothing to read is a normal outcome and says nothing to
 	// the log: a panel whose harness lists no session, and a session that has
 	// not spoken yet, are both ordinary. Only a probe that broke is logged.
 	if errors.Is(err, revier.ErrNoDetail) {
-		return revier.AgentDetail{}
+		return revier.AgentDetail{}, ""
 	}
 	logging.Repeat("detail\x00"+probe.Name()+"\x00"+key(ref)+"\x00"+string(panel.ID), "detail", err, "probe", probe.Name(), "ref", ref, "panel", panel.ID)
 	if err != nil {
-		return revier.AgentDetail{}
+		return revier.AgentDetail{}, ""
 	}
-	return d
+	return d, ""
 }
