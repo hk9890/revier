@@ -236,12 +236,12 @@ func (p *Probe) list(ctx context.Context) (map[int]listedSession, error) {
 	return byPID, nil
 }
 
-// Sessions names the conversation each pane holds, from one run of `claude
-// agents --json`: Claude Code's scripting interface, which lists every active
-// interactive session with the pid of its process. A pane is matched by that
-// pid and nothing else, so two agents in one repository are told apart - the
-// case this feature exists for, and the one a guess from the newest transcript
-// under ~/.claude/projects gets wrong.
+// Sessions names the conversation each pane holds, from the listing of
+// `claude agents --json` that Inspect reads: Claude Code's scripting
+// interface, which lists every active interactive session with the pid of its
+// process. A pane is matched by that pid and nothing else, so two agents in
+// one repository are told apart - the case this feature exists for, and the
+// one a guess from the newest transcript under ~/.claude/projects gets wrong.
 //
 // The pid is the Claude process itself. kitty and hc report the foreground
 // process, which is Claude when it is the panel's command - as revier
@@ -256,10 +256,14 @@ func (p *Probe) list(ctx context.Context) (map[int]listedSession, error) {
 // transcript only at the first prompt: it may be prompted after the save, and
 // the restore asks Holds whether there is a conversation to resume.
 //
-// It always runs the command rather than reuse the listing Inspect keeps: a
-// save records what holds now, and runs once.
+// The listing is run again by the rule Inspect keeps (decisions.md D57):
+// when a session file changed, or the last run is MaxAge old. The session
+// file holds the sessionId and the cwd the listing gives, so a save still
+// records what holds now. A `revier list --conversations` that already
+// surveyed then runs the command once, not twice: a poll that ran it twice
+// outlasted its caller's deadline on a loaded machine.
 func (p *Probe) Sessions(ctx context.Context, panels []revier.Panel) ([]revier.Conversation, error) {
-	listed, err := p.list(ctx)
+	listed, err := p.listing(ctx)
 	if err != nil {
 		return nil, err
 	}

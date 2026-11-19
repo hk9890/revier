@@ -407,6 +407,41 @@ func TestSessions(t *testing.T) {
 	}
 }
 
+// Sessions reads the listing Inspect read, so a `revier list --conversations`
+// runs the command once. A session file written after that listing runs it
+// again: the save records the conversation the session holds now.
+func TestSessionsReusesTheListingUntilASessionChanged(t *testing.T) {
+	dir := t.TempDir()
+	start := time.Unix(1_800_000_000, 0)
+	file := filepath.Join(dir, "101.json")
+	touch(t, file, start)
+	src := &counted{out: `[{"pid": 101, "status": "idle", "sessionId": "first", "cwd": "/a"}]`}
+	clk := &clock{t: start}
+	p := &claude.Probe{SessionsDir: dir}
+	p.SetAgents(src.agents)
+	p.SetNow(clk.now)
+	panels := []revier.Panel{{ID: "1", PID: 101}}
+
+	inspect(t, p, 101)
+	got, err := p.Sessions(t.Context(), panels)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (revier.Conversation{ID: "first", Dir: "/a"}); got[0] != want || src.runs != 1 {
+		t.Fatalf("after Inspect: %+v after %d runs, want %+v after 1", got[0], src.runs, want)
+	}
+
+	src.out = `[{"pid": 101, "status": "idle", "sessionId": "second", "cwd": "/a"}]`
+	touch(t, file, start.Add(time.Second))
+	got, err = p.Sessions(t.Context(), panels)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (revier.Conversation{ID: "second", Dir: "/a"}); got[0] != want || src.runs != 2 {
+		t.Fatalf("file rewritten: %+v after %d runs, want %+v after 2", got[0], src.runs, want)
+	}
+}
+
 // A restore resumes only a conversation Claude Code still keeps: one filed
 // under the directory the agent worked in, or under any other.
 func TestHolds(t *testing.T) {
