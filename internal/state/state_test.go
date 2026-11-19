@@ -90,8 +90,8 @@ func TestAttachIsIdempotent(t *testing.T) {
 }
 
 // A launch says which launch of another target, still pending, it replaced:
-// the one launch on record is the only one a window is claimed for. A launch
-// past its window, or of the same target again, replaced nothing to claim.
+// a target's is set aside as late, and an action's is lost. A launch past its
+// window, or of the same target again, replaced nothing.
 func TestALaunchSaysWhichPendingLaunchItReplaced(t *testing.T) {
 	now := time.Now()
 	s := &state.State{}

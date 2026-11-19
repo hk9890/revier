@@ -5,7 +5,6 @@ package core_test
 
 import (
 	"bytes"
-	"context"
 	"log/slog"
 	"strings"
 	"sync"
@@ -53,7 +52,7 @@ func logged(t *testing.T) *bytes.Buffer {
 // settleAt surveys the projects and settles the survey at now.
 func settleAt(t *testing.T, c *core.Core, projects []core.Project, now time.Time) *state.State {
 	t.Helper()
-	r, err := c.Survey(context.Background(), projects)
+	r, err := c.Survey(t.Context(), projects)
 	if err != nil {
 		t.Fatal(err)
 	}

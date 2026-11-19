@@ -43,8 +43,9 @@ func cmdRename(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 	// The first settle of this process: no window is new to it, so it claims
-	// nothing and expires no launch, and it prunes the refs to windows that
-	// are gone, which the guard would otherwise read as running.
+	// nothing and expires nothing for the launch on record, and it prunes the
+	// refs to windows that are gone, which the guard would otherwise read as
+	// running. It can bind a late launch, or end one past its time.
 	st := a.core.Settle(report, a.projects, time.Now())
 	settled := core.Settled{Surveyed: true, Bound: st.Bound, Attached: st.Attached, Launch: st.Launch}
 	renamed, err := usecase.RenameProject(a.core, a.cfgRoot, a.stateRoot, report.Views[0], settled, to, a.cfg.Inherited())
