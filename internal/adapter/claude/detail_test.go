@@ -2,6 +2,7 @@ package claude_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -388,5 +389,36 @@ func TestDetailWithoutUsageSaysNoTokens(t *testing.T) {
 	d, err := p.Detail(t.Context(), revier.Panel{PID: 101})
 	if err != nil || d.Context != 0 || !d.CacheUntil.IsZero() {
 		t.Errorf("Detail = %+v, %v; want no tokens and no cache", d, err)
+	}
+}
+
+// A transcript tail in a format the read does not know - no line parses, or
+// no line of the conversation does - is an error the core logs, not nothing
+// to show (decisions.md D106). Lines that parse and hold no turn are still
+// nothing to show, and so is a last line Claude Code is still writing.
+func TestDetailOfATailWithNoLineThatParsesIsAnError(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		file    string
+		nothing bool
+	}{
+		{"no line is JSON", "not json\n{\"type\":\"user\",\n", false},
+		{"no line has the shape", `{"type":"user","timestamp":12}` + "\n" + `{"type":"assistant","message":"text"}` + "\n", false},
+		{"no line of the conversation has the shape", `{"type":"system","subtype":"turn_duration"}` + "\n" + `{"type":"assistant","message":"text"}` + "\n", false},
+		{"lines parse and hold no turn", `{"type":"system","subtype":"turn_duration"}` + "\n\n" + `{"kind":"x"}` + "\n", true},
+		{"a broken line beside one that parses", "not json\n" + `{"type":"system"}` + "\n", true},
+		{"a first line not yet written whole", `{"type":"user","message":{"role":"user","content":"hal`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, root := transcripts(t)
+			writeTranscript(t, root, "-demo", "s1")
+			if err := os.WriteFile(filepath.Join(root, "projects", "-demo", "s1.jsonl"), []byte(tc.file), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			_, err := p.Detail(t.Context(), revier.Panel{PID: 101})
+			if err == nil || errors.Is(err, revier.ErrNoDetail) != tc.nothing {
+				t.Errorf("Detail = %v; want an error that is revier.ErrNoDetail: %v", err, tc.nothing)
+			}
+		})
 	}
 }

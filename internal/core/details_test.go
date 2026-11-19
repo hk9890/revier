@@ -1,8 +1,12 @@
 package core_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -74,6 +78,96 @@ func TestDetailsAreEmptyWhenTheProbeCannotSay(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// listingProbe reads each detail through one listing, as the claude probe's
+// `claude agents --json` is. With slow set, the listing outlasts the read's
+// ctx: the first read is killed at the deadline, and every later one fails at
+// once. With late set, the first read waits for the deadline and then
+// answers, as a read that waited on the listing a survey was running does.
+type listingProbe struct {
+	*hosttest.FakeDetailedProbe
+	slow, late bool
+	asked      int
+}
+
+func (p *listingProbe) Detail(ctx context.Context, panel revier.Panel) (revier.AgentDetail, error) {
+	p.asked++
+	if (p.slow || p.late) && p.asked == 1 {
+		<-ctx.Done()
+		if p.slow {
+			return revier.AgentDetail{}, errors.New("claude agents --json: signal: killed")
+		}
+	}
+	if p.slow {
+		return revier.AgentDetail{}, fmt.Errorf("claude agents --json: %w", ctx.Err())
+	}
+	return p.Said[panel.ID], nil
+}
+
+func captureLog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var logged bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	return &logged
+}
+
+// A read that fails once the ctx has ended cuts its probe: the probe is not
+// asked again, its agents stay empty, and the cut is one line for the probe,
+// not one per agent. The next walk that reads the probe in time writes the
+// one recovered line.
+func TestDetailsCutByTheirDeadlineLogItOncePerProbe(t *testing.T) {
+	logged := captureLog(t)
+	probe := &listingProbe{FakeDetailedProbe: hosttest.NewDetailedProbe("claude", "claude"), slow: true}
+	probe.Said["1"] = revier.AgentDetail{Message: "one said this"}
+	probe.Said["2"] = revier.AgentDetail{Message: "two said that"}
+	c, _, agents := detailWorld(t, probe)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer cancel()
+	for i, d := range c.Details(ctx, agents) {
+		if !d.IsZero() {
+			t.Errorf("detail %d = %+v, want it empty", i, d)
+		}
+	}
+	if probe.asked != 1 {
+		t.Errorf("the probe was asked %d times, want once: the cut read stops it", probe.asked)
+	}
+	if n := strings.Count(logged.String(), `"msg":"detail"`); n != 1 ||
+		!strings.Contains(logged.String(), `"probe":"claude","read":0,"unread":2,"cut":"claude agents --json: signal: killed"`) {
+		t.Errorf("logged %d detail lines, want one for the probe with its counts and the cut read:\n%s", n, logged.String())
+	}
+
+	probe.slow, probe.asked = false, 0
+	got := c.Details(t.Context(), agents)
+	if got[0].Message != "one said this" || got[1].Message != "two said that" {
+		t.Errorf("Details after the cut = %+v, want what each agent said", got)
+	}
+	if !strings.Contains(logged.String(), `"msg":"detail: recovered","probe":"claude","read":2,"unread":0`) {
+		t.Errorf("a walk that read the probe in time wrote no recovered line:\n%s", logged.String())
+	}
+}
+
+// A read that answers after the ctx ended has not failed: the walk goes on,
+// and the reads after it that need no ctx answer too.
+func TestDetailsReadOnPastTheDeadlineWhileReadsAnswer(t *testing.T) {
+	logged := captureLog(t)
+	probe := &listingProbe{FakeDetailedProbe: hosttest.NewDetailedProbe("claude", "claude"), late: true}
+	probe.Said["1"] = revier.AgentDetail{Message: "one said this"}
+	probe.Said["2"] = revier.AgentDetail{Message: "two said that"}
+	c, _, agents := detailWorld(t, probe)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer cancel()
+	got := c.Details(ctx, agents)
+	if got[0].Message != "one said this" || got[1].Message != "two said that" {
+		t.Errorf("Details = %+v, want what each agent said", got)
+	}
+	if strings.Contains(logged.String(), `"msg":"detail"`) {
+		t.Errorf("a walk with no failed read logged a detail line:\n%s", logged.String())
 	}
 }
 

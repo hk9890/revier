@@ -44,6 +44,8 @@ Call the Skill tool with `commit-commands:commit` for the standard flow.
 - A change to behaviour updates every place that describes it: `README.md`,
   the page of `docs/user-guide/` that covers it, package doc comments, test
   comments.
+- A new or renamed log `msg` has its row in the Operations table of
+  [MONITORING.md](MONITORING.md#operations), with the fields it carries.
 
 ## Push and PR
 
