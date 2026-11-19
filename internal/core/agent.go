@@ -655,8 +655,9 @@ func (c *Core) reread(ctx context.Context, a Agent) (revier.AgentState, error) {
 // D106), and the failure is logged rather than shown. A probe with nothing to
 // read (revier.ErrNoDetail) has not failed, and is not logged either.
 //
-// A read that fails once the ctx has ended cuts its probe: the probe is not
-// asked again in this walk, and its agents not yet read stay empty. The cut
+// A read whose error is the ctx's end cuts its probe: the probe is not asked
+// again in this walk, and its agents not yet read stay empty. A read that
+// fails for another cause after the deadline is logged as its own. The cut
 // is logged once per probe, not once per agent: the claude probe reads every
 // panel through one listing, and a listing the ctx killed fails each read
 // after it at once. Another probe's agents are still read.
@@ -704,15 +705,17 @@ func (c *Core) Details(ctx context.Context, agents []revier.AgentView) []revier.
 				// nothing to the log: a panel whose harness lists no session,
 				// and a session that has not spoken yet, are both ordinary.
 				case errors.Is(err, revier.ErrNoDetail):
-				case err != nil && ctx.Err() != nil:
+				case ctx.Err() != nil && errors.Is(err, ctx.Err()):
 					w.cut, w.unread = err.Error(), w.unread+len(at)
 					continue
 				default:
 					logging.Repeat("detail\x00"+probe.Name()+"\x00"+key(inst.Ref)+"\x00"+string(panel.ID), "detail", err, "probe", probe.Name(), "ref", inst.Ref, "panel", panel.ID)
-					if err == nil {
-						for _, i := range at {
-							out[i] = d
-						}
+					if err != nil {
+						w.failed += len(at)
+						continue
+					}
+					for _, i := range at {
+						out[i] = d
 					}
 				}
 				w.read += len(at)
@@ -724,7 +727,7 @@ func (c *Core) Details(ctx context.Context, agents []revier.AgentView) []revier.
 		if w.cut != "" {
 			err = errCut
 		}
-		logging.Repeat("detail\x00cut\x00"+name, "detail", err, "probe", name, "read", w.read, "unread", w.unread, "cut", w.cut)
+		logging.Repeat("detail\x00cut\x00"+name, "detail", err, "probe", name, "read", w.read, "failed", w.failed, "unread", w.unread, "cut", w.cut)
 	}
 	return out
 }
@@ -734,8 +737,9 @@ func (c *Core) Details(ctx context.Context, agents []revier.AgentView) []revier.
 var errCut = errors.New("the walk's deadline passed: its agents not yet read keep what they said before")
 
 // probeWalk is what one walk of Details read through one probe: the agents
-// read, the agents left unread after a cut, and the error of the cut read.
+// read, whose reads failed, and left unread after a cut, and the error of the
+// cut read.
 type probeWalk struct {
-	read, unread int
-	cut          string
+	read, failed, unread int
+	cut                  string
 }

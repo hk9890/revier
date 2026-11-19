@@ -277,6 +277,23 @@ func TestInspectDoesNotKeepARunItsCallerCancelled(t *testing.T) {
 	}
 }
 
+// The error of a run the caller's context cut short is the context's, though
+// the command killed at the deadline says only that it was killed: the core
+// tells a cut read from a read that failed by it.
+func TestDetailOfARunItsCallerCutIsTheContextsError(t *testing.T) {
+	run := func(context.Context) ([]byte, error) {
+		return nil, errors.New("claude agents --json: signal: killed")
+	}
+	p := &claude.Probe{SessionsDir: filepath.Join(t.TempDir(), "absent")}
+	p.SetAgents(run)
+
+	cancelled, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := p.Detail(cancelled, revier.Panel{PID: 101}); !errors.Is(err, context.Canceled) || !strings.Contains(err.Error(), "signal: killed") {
+		t.Errorf("Detail = %v, want the context's error with the command's", err)
+	}
+}
+
 // A change the directory does not show is still seen, MaxAge late.
 func TestInspectRunsTheListingAtLeastEveryMaxAge(t *testing.T) {
 	start := time.Unix(1_800_000_000, 0)
