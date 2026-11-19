@@ -443,6 +443,58 @@ func TestSessionsReusesTheListingUntilASessionChanged(t *testing.T) {
 	}
 }
 
+// scripted answers each run with the next of its results, and counts the
+// runs.
+type scripted struct {
+	results []error
+	out     string
+	runs    int
+}
+
+func (s *scripted) agents(context.Context) ([]byte, error) {
+	err := s.results[s.runs]
+	s.runs++
+	if err != nil {
+		return nil, err
+	}
+	return []byte(s.out), nil
+}
+
+// A save does not take the failure the survey's listing kept: Sessions runs
+// the command again, and the agents keep their conversations.
+func TestSessionsRunsAgainAfterAKeptFailure(t *testing.T) {
+	src := &scripted{
+		results: []error{errors.New("claude agents --json: signal: killed"), nil},
+		out:     `[{"pid": 101, "status": "idle", "sessionId": "s1", "cwd": "/a"}]`,
+	}
+	p := &claude.Probe{SessionsDir: t.TempDir()}
+	p.SetAgents(src.agents)
+	if _, err := p.Inspect(t.Context(), revier.Panel{PID: 101}); err == nil {
+		t.Fatal("Inspect returned no error")
+	}
+	got, err := p.Sessions(t.Context(), []revier.Panel{{ID: "1", PID: 101}})
+	if err != nil {
+		t.Fatalf("Sessions after a kept failure: %v", err)
+	}
+	if want := (revier.Conversation{ID: "s1", Dir: "/a"}); got[0] != want || src.runs != 2 {
+		t.Errorf("Sessions = %+v after %d runs, want %+v after 2", got[0], src.runs, want)
+	}
+}
+
+// A run of Sessions' own that fails is not run again: a listing that timed
+// out would wait its bound a second time.
+func TestSessionsDoesNotRunAgainAfterItsOwnRunFailed(t *testing.T) {
+	src := &scripted{results: []error{errors.New("claude agents --json: signal: killed"), nil}}
+	p := &claude.Probe{SessionsDir: t.TempDir()}
+	p.SetAgents(src.agents)
+	if _, err := p.Sessions(t.Context(), []revier.Panel{{ID: "1", PID: 101}}); err == nil {
+		t.Error("Sessions returned no error")
+	}
+	if src.runs != 1 {
+		t.Errorf("Sessions ran the listing %d times, want 1", src.runs)
+	}
+}
+
 // A restore resumes only a conversation Claude Code still keeps: one filed
 // under the directory the agent worked in, or under any other.
 func TestHolds(t *testing.T) {
@@ -472,7 +524,7 @@ func TestAConversationThatCannotBeLookedForIsHeld(t *testing.T) {
 // A background session has no pid. It must not become the conversation of a
 // panel that reports none.
 func TestSessionsIgnoresBackgroundSessions(t *testing.T) {
-	p := &claude.Probe{}
+	p := &claude.Probe{SessionsDir: t.TempDir()}
 	p.SetAgents(agents(agentsJSON, nil))
 	got, err := p.Sessions(context.Background(), []revier.Panel{{ID: "1"}})
 	if err != nil {
@@ -491,7 +543,7 @@ func TestSessionsReportsWhatItCannotRead(t *testing.T) {
 		"not json":           agents("Usage: claude agents [options]", nil),
 	} {
 		t.Run(name, func(t *testing.T) {
-			p := &claude.Probe{}
+			p := &claude.Probe{SessionsDir: t.TempDir()}
 			p.SetAgents(run)
 			if _, err := p.Sessions(context.Background(), []revier.Panel{{PID: 583601}}); err == nil {
 				t.Error("Sessions returned no error")

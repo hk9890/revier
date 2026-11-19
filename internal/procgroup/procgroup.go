@@ -10,9 +10,10 @@
 // A command made by CommandContext ends with its whole group when its context
 // ends: a child it started would otherwise hold its output open past it.
 //
-// A command also ends when revier is killed, which KillAll cannot see: a
-// caller that kills a slow `revier list` at its deadline left `claude agents
-// --json` running, and its next poll started one more.
+// The process Run starts also ends when revier is killed, which KillAll
+// cannot see: a caller that kills a slow `revier list` at its deadline left
+// `claude agents --json` running, and its next poll started one more. The
+// kernel ends that process alone, not a child it started.
 package procgroup
 
 import (
@@ -46,7 +47,8 @@ func CommandContext(ctx context.Context, name string, arg ...string) *exec.Cmd {
 }
 
 // Run runs c as Cmd.Run does, in a process group of its own, and keeps the
-// group known until c has ended. The kernel kills c when revier dies.
+// group known until c has ended. The kernel kills c, not a child of c, when
+// revier dies.
 func Run(c *exec.Cmd) error {
 	if c.SysProcAttr == nil {
 		c.SysProcAttr = &syscall.SysProcAttr{}
