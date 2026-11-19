@@ -51,6 +51,43 @@ func TestKillAllEndsTheGroupsThatRunAndRefusesNewOnes(t *testing.T) {
 	}
 }
 
+// deathPidFile names, in the environment of the test binary started as a
+// stand-in for revier, the file its command writes its pid to.
+const deathPidFile = "PROCGROUP_TEST_DEATH_PIDFILE"
+
+// A command ends when revier is killed: SIGKILL runs no KillAll, and a
+// caller that kills a slow `revier list` at its deadline left the listing
+// running. The test binary starts itself as the stand-in for revier.
+func TestRunEndsTheCommandWhenRevierIsKilled(t *testing.T) {
+	if path := os.Getenv(deathPidFile); path != "" {
+		_ = Run(exec.Command("sh", "-c", `echo $$ > "$0"; exec sleep 300`, path))
+		return
+	}
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("no sh on PATH")
+	}
+	pidFile := filepath.Join(t.TempDir(), "child")
+	stand := exec.Command(os.Args[0], "-test.run=^TestRunEndsTheCommandWhenRevierIsKilled$")
+	stand.Env = append(os.Environ(), deathPidFile+"="+pidFile)
+	if err := stand.Start(); err != nil {
+		t.Fatal(err)
+	}
+	child := waitForPid(t, pidFile)
+	t.Cleanup(func() { _ = syscall.Kill(child, syscall.SIGKILL) })
+
+	if err := stand.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	_ = stand.Wait()
+	deadline := time.Now().Add(5 * time.Second)
+	for alive(child) {
+		if time.Now().After(deadline) {
+			t.Fatalf("the command %d outlived the revier that was killed", child)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 // waitForPid is the pid the command wrote to path, once it has.
 func waitForPid(t *testing.T, path string) int {
 	t.Helper()

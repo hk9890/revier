@@ -9,12 +9,17 @@
 //
 // A command made by CommandContext ends with its whole group when its context
 // ends: a child it started would otherwise hold its output open past it.
+//
+// A command also ends when revier is killed, which KillAll cannot see: a
+// caller that kills a slow `revier list` at its deadline left `claude agents
+// --json` running, and its next poll started one more.
 package procgroup
 
 import (
 	"context"
 	"errors"
 	"os/exec"
+	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -41,12 +46,19 @@ func CommandContext(ctx context.Context, name string, arg ...string) *exec.Cmd {
 }
 
 // Run runs c as Cmd.Run does, in a process group of its own, and keeps the
-// group known until c has ended.
+// group known until c has ended. The kernel kills c when revier dies.
 func Run(c *exec.Cmd) error {
 	if c.SysProcAttr == nil {
 		c.SysProcAttr = &syscall.SysProcAttr{}
 	}
 	c.SysProcAttr.Setpgid = true
+	c.SysProcAttr.Pdeathsig = syscall.SIGKILL
+	// The kernel sends Pdeathsig when the thread that started c ends, not
+	// only the process, and Go ends a thread when a goroutine exits locked
+	// to it. Holding the thread until c ends keeps every other goroutine
+	// off it, so the signal comes only at revier's end.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	// The start is made under the lock, so KillAll never runs between a
 	// start and the group being known.
 	groups.Lock()
