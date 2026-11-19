@@ -4,7 +4,8 @@ import "context"
 
 // WindowRule is one placement rule of the window host's: the host places a
 // window that matches it as the window appears, before revier finds it.
-// revier writes the rules for the popup's class alone (decisions.md D189).
+// revier writes the rules for the popup's class alone, into a file of its
+// own (decisions.md D191).
 type WindowRule struct {
 	// Class is the window class the rule matches. Empty for a rule that
 	// matches by something else.
@@ -23,9 +24,33 @@ type WindowRule struct {
 	// a second match, a tile, a workspace. Such a rule is the user's.
 	Other bool `json:"other,omitempty"`
 	// Raw is the rule as the host stores it, all of it, so that the user can
-	// put back a rule of theirs that `revier setup install --force`
-	// replaced. Empty in a rule revier builds to write.
+	// put back a rule that `revier setup install` removed. Empty in a rule
+	// revier builds to write.
 	Raw string `json:"raw,omitempty"`
+}
+
+// WindowRuleFile is one rules file of the window host's and the rules in it,
+// in file order.
+type WindowRuleFile struct {
+	Path  string       `json:"path"`
+	Rules []WindowRule `json:"rules"`
+}
+
+// WindowRuleSet is every rules file of the window host's that bears on
+// revier's, in the order the host tries them: the first rule that matches a
+// window is the one it applies.
+type WindowRuleSet struct {
+	// User is the user's own rules file, which the host tries first.
+	User WindowRuleFile `json:"user"`
+	// Earlier is each file of another program's that the host tries after
+	// the user's and before revier's, in that order. A file the host would
+	// not load is left out: it hides nothing.
+	Earlier []WindowRuleFile `json:"earlier"`
+	// Own is revier's own file. Its Rules are empty when OwnExists is false,
+	// and when OwnBroken says why the host would not load it.
+	Own       WindowRuleFile `json:"own"`
+	OwnExists bool           `json:"own_exists"`
+	OwnBroken string         `json:"own_broken,omitempty"`
 }
 
 // WindowRules reads the window host's placement rules.
@@ -36,17 +61,17 @@ type WindowRule struct {
 type WindowRules interface {
 	// Name is the host this reads, for messages.
 	Name() string
-	// Read returns every rule, in the order the host tries them: the first
-	// rule that matches a window is the one it applies.
-	Read(ctx context.Context) ([]WindowRule, error)
+	Read(ctx context.Context) (WindowRuleSet, error)
 }
 
 // WindowRuleWriter changes the window host's placement rules.
 type WindowRuleWriter interface {
 	WindowRules
-	// Add inserts the rule before the rule at index at; at equal to the
-	// number of rules appends it.
-	Add(ctx context.Context, at int, rule WindowRule) error
-	// Remove deletes the rule at index.
-	Remove(ctx context.Context, index int) error
+	// RemoveUser deletes the rule at index in the user's file.
+	RemoveUser(ctx context.Context, index int) error
+	// WriteOwn replaces revier's own file with rules, whole: the host never
+	// reads half of it, and never a file it would refuse.
+	WriteOwn(ctx context.Context, rules []WindowRule) error
+	// RemoveOwn deletes revier's own file. A file already gone is no error.
+	RemoveOwn(ctx context.Context) error
 }

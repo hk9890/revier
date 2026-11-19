@@ -311,7 +311,7 @@ func sshRemote(host string) revier.Remote { return ssh.New(host) }
 
 // popupRules reads the window host's rules where its extension reads the
 // rules revier writes for the popup, so that a launch leaves the popup's
-// place to them (decisions.md D189). Elsewhere it is nil, and the launch
+// place to them (decisions.md D191). Elsewhere it is nil, and the launch
 // places the popup.
 func popupRules(win revier.WindowController) revier.WindowRules {
 	h, ok := win.(*gnome.Host)

@@ -6,6 +6,30 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## v0.29.0
+
+- **Action required: the popup's window rules move to
+  `~/.config/gnome-window-control/rules.d/revier.json`, and need `wctl`
+  0.24.0 and extension 24 or later.** Upgrade both, log out and in, and run
+  `revier setup install`. The install takes revier's rules out of your
+  `rules.json`, the overlay rule for `revier-popup` you may have written by
+  hand included, prints each one it took that it does not write now, and
+  writes `rules.d/revier.json`. After that it never edits `rules.json`, so
+  an install leaves no change to commit in a dotfiles repository that holds
+  it. With an older extension, install skips the rules and says why.
+- **A rule of yours for `revier-popup` in `rules.json` now wins over
+  revier's.** The extension reads `rules.json` first. `revier setup status`
+  and `revier setup install` name each such rule, and install leaves it in
+  place: `--force` no longer replaces it. Add one to size the popup your own
+  way.
+- **`revier setup status` reports the popup's rules file as current, stale
+  or missing,** and says when the extension would not apply it. In
+  `revier setup status --json`, a missing file is `"missing"`, where it was
+  `"absent"`.
+- **`revier setup uninstall` deletes `rules.d/revier.json`.** Before the
+  first install of this version, it still takes an older revier's rules out
+  of `rules.json`.
+
 ## v0.28.1
 
 - **A `revier list` call that is cut off no longer leaves

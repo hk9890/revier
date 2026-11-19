@@ -28,13 +28,14 @@ The parts:
                  [[agent]], in revier.conf in kitty's configuration directory
                  and one include of it at the top of kitty.conf
   popup rules    the window control extension's rules for the popup's
-                 window, which size and place it before it is drawn
+                 window, which size and place it before it is drawn, in
+                 rules.d/revier.json beside your rules.json. A rule of yours
+                 for the window in rules.json wins over them.
 
 A part this machine cannot do is skipped, and the line says why.
 
-  --force  take a key another shortcut holds, and replace a rule of yours
-           for the popup's window. Without it, install writes what is free
-           and reports the rest.
+  --force  take a key another shortcut holds. Without it, install writes
+           what is free and reports the rest.
   -n, --dry-run  print what would happen and change nothing
   --json   print the report, or the plan and what became of it, as JSON
 `
@@ -56,8 +57,9 @@ type setupStores struct {
 	term     revier.TermKeys
 	rules    revier.WindowRules
 	rulesWhy error
-	// addWhy is why an install may not add the rules, nil where it may. A
-	// status and an uninstall read and remove, and need no running extension.
+	// addWhy is why an install may not write the rules, nil where it may: the
+	// extension would not apply them. A status reads and an uninstall
+	// removes, and neither needs a running extension.
 	addWhy error
 }
 
@@ -86,7 +88,7 @@ func machineStores(ctx context.Context, write bool) setupStores {
 	rules := &gnome.Rules{}
 	probe(func(ctx context.Context) { s.rulesWhy = rules.Probe(ctx) })
 	if s.rulesWhy == nil {
-		s.rules = rules
+		s.rules, s.addWhy = rules, rules.CanAdd()
 	}
 	return s
 }
@@ -109,7 +111,7 @@ func cmdSetup(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("setup "+sub, flag.ContinueOnError)
 	var force, dryRun bool
 	if sub == "install" {
-		fs.BoolVar(&force, "force", false, "take a key or a rule something else holds")
+		fs.BoolVar(&force, "force", false, "take a key something else holds")
 	}
 	if sub != "status" {
 		fs.BoolVar(&dryRun, "dry-run", false, "print what would happen and change nothing")
@@ -168,11 +170,14 @@ type setupRun struct {
 // is null, and Skipped says why; one that could not be read is null too, and
 // Failed says why.
 type setupReport struct {
-	Keys    *core.KeyReport       `json:"keys"`
-	Term    *core.TermKeyReport   `json:"term"`
-	Rules   *core.PopupRuleReport `json:"rules"`
-	Skipped map[string]string     `json:"skipped"`
-	Failed  map[string]string     `json:"failed"`
+	Keys  *core.KeyReport       `json:"keys"`
+	Term  *core.TermKeyReport   `json:"term"`
+	Rules *core.PopupRuleReport `json:"rules"`
+	// RulesUnread is why the extension would not apply revier's rules
+	// file, empty when it would.
+	RulesUnread string            `json:"rules_unread,omitempty"`
+	Skipped     map[string]string `json:"skipped"`
+	Failed      map[string]string `json:"failed"`
 }
 
 // setupPlan is what install and uninstall print as JSON: each part's plan
@@ -223,6 +228,9 @@ func (r setupRun) status(ctx context.Context, asJSON bool) error {
 	rules, err := a.core.PopupRuleReport(ctx)
 	if parts.ok("rules", err, core.ErrNoWindowRules, r.skipped(err)) {
 		out.Rules = &rules
+		if r.addWhy != nil {
+			out.RulesUnread = r.addWhy.Error()
+		}
 	}
 
 	if asJSON {
@@ -246,7 +254,7 @@ func (r setupRun) status(ctx context.Context, asJSON bool) error {
 	}
 	_, _ = fmt.Fprintln(w, "\npopup rules:")
 	if out.Rules != nil {
-		printRuleReport(w, *out.Rules)
+		printRuleReport(w, *out.Rules, out.RulesUnread)
 	} else {
 		parts.print(w, "rules")
 	}

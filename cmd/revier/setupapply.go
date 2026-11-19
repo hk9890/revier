@@ -47,7 +47,7 @@ func (r setupRun) apply(ctx context.Context, asJSON bool) error {
 	if (r.sub == "install" && len(out.Skipped) > 0) ||
 		(out.Keys != nil && keysIncomplete(*out.Keys, r.force)) ||
 		(out.Term != nil && termIncomplete(*out.Term, r.sub)) ||
-		(out.Rules != nil && rulesIncomplete(*out.Rules, r.force)) {
+		(out.Rules != nil && out.Rules.Err != "") {
 		return errSetupIncomplete
 	}
 	return nil
@@ -72,7 +72,7 @@ func (r setupRun) print(w io.Writer, out setupPlan, termBefore core.TermKeyPlan,
 	}
 	_, _ = fmt.Fprintln(w, "\npopup rules:")
 	if out.Rules != nil {
-		printRulePlan(w, *out.Rules, r.sub, r.dryRun, r.force)
+		printRulePlan(w, *out.Rules, r.sub, r.dryRun)
 	} else {
 		parts.print(w, "rules")
 	}
@@ -167,20 +167,21 @@ func (r setupRun) applyRules(ctx context.Context) (core.PopupRulePlan, error) {
 	if err != nil || r.dryRun {
 		return plan, err
 	}
-	plan = a.core.ApplyPopupRules(ctx, plan, r.force)
+	plan = a.core.ApplyPopupRules(ctx, plan)
 	switch {
 	case plan.Err != "":
-		slog.Error("setup "+r.sub+": rules", "action", plan.Action, "err", plan.Err)
+		slog.Error("setup "+r.sub+": rules", "action", plan.Action, "file", plan.Report.File, "moved", len(plan.Moved), "err", plan.Err)
 	case plan.Done:
-		slog.Info("setup "+r.sub+": rules", "action", plan.Action)
+		slog.Info("setup "+r.sub+": rules", "action", plan.Action, "file", plan.Report.File, "moved", len(plan.Moved))
 	}
 	return plan, nil
 }
 
-// keysIncomplete, termIncomplete and rulesIncomplete report whether a part
-// is not what was asked for: a step that failed, or one held back for want
-// of --force. A caller reading JSON is the one most likely to be a script,
-// so the exit status says it too, and the script need not parse the plan.
+// keysIncomplete and termIncomplete report whether a part is not what was
+// asked for: a step that failed, or one held back for want of --force; the
+// rules are not when their plan has an error. A caller reading JSON is the
+// one most likely to be a script, so the exit status says it too, and the
+// script need not parse the plan.
 func keysIncomplete(plan core.KeyPlan, force bool) bool {
 	for _, s := range plan.Steps {
 		if s.Err != "" || (s.Action.Blocked() && !force) {
@@ -202,8 +203,4 @@ func termIncomplete(plan core.TermKeyPlan, sub string) bool {
 		}
 	}
 	return false
-}
-
-func rulesIncomplete(plan core.PopupRulePlan, force bool) bool {
-	return plan.Err != "" || (plan.Action.Blocked() && !force)
 }

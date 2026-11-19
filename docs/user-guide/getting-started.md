@@ -123,7 +123,7 @@ terminal keys:
   ...
 
 popup rules:
-  > 3 rules would be written first
+  > /home/you/.config/gnome-window-control/rules.d/revier.json would be written with revier's 3 rules
 ```
 
 `revier: popup` is the **trigger key**. It opens the popup: the TUI in a
