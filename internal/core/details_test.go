@@ -20,10 +20,18 @@ import (
 // agents the survey found.
 func detailWorld(t *testing.T, probe revier.AgentProbe) (*core.Core, *hosttest.FakeRuntime, []revier.AgentView) {
 	t.Helper()
+	return agentsWorld(t, probe, 2)
+}
+
+// agentsWorld is detailWorld with n agent panels, with ids "1" to n.
+func agentsWorld(t *testing.T, probe revier.AgentProbe, n int) (*core.Core, *hosttest.FakeRuntime, []revier.AgentView) {
+	t.Helper()
 	rt := hosttest.NewRuntime("rt")
-	rt.Add("session:demo", "kitty",
-		revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "claude one"},
-		revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "claude two"})
+	panels := make([]revier.Panel, n)
+	for i := range panels {
+		panels[i] = revier.Panel{ID: revier.PanelID(fmt.Sprint(i + 1)), Kind: revier.PanelTool, Title: fmt.Sprintf("claude %d", i+1)}
+	}
+	rt.Add("session:demo", "kitty", panels...)
 	projects := core.Prepare([]revier.Project{{Name: "demo", Path: "/p/demo", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{
 			Name: "session:demo", Launch: []string{"x"}, Match: revier.Match{Title: "^session:demo$"}}},
@@ -33,8 +41,8 @@ func detailWorld(t *testing.T, probe revier.AgentProbe) (*core.Core, *hosttest.F
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(r.Views) != 1 || len(r.Views[0].Agents) != 2 {
-		t.Fatalf("survey found %+v, want one project with two agents", r.Views)
+	if len(r.Views) != 1 || len(r.Views[0].Agents) != n {
+		t.Fatalf("survey found %+v, want one project with %d agents", r.Views, n)
 	}
 	return c, rt, r.Views[0].Agents
 }
@@ -118,13 +126,14 @@ func captureLog(t *testing.T) *bytes.Buffer {
 // A read that fails once the ctx has ended cuts its probe: the probe is not
 // asked again, its agents stay empty, and the cut is one line for the probe,
 // not one per agent. The next walk that reads the probe in time writes the
-// one recovered line.
+// one recovered line. Four agents, as the home tab that showed it held.
 func TestDetailsCutByTheirDeadlineLogItOncePerProbe(t *testing.T) {
 	logged := captureLog(t)
 	probe := &listingProbe{FakeDetailedProbe: hosttest.NewDetailedProbe("claude", "claude"), slow: true}
-	probe.Said["1"] = revier.AgentDetail{Message: "one said this"}
-	probe.Said["2"] = revier.AgentDetail{Message: "two said that"}
-	c, _, agents := detailWorld(t, probe)
+	for i := 1; i <= 4; i++ {
+		probe.Said[revier.PanelID(fmt.Sprint(i))] = revier.AgentDetail{Message: fmt.Sprintf("agent %d said this", i)}
+	}
+	c, _, agents := agentsWorld(t, probe, 4)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
 	defer cancel()
@@ -137,16 +146,17 @@ func TestDetailsCutByTheirDeadlineLogItOncePerProbe(t *testing.T) {
 		t.Errorf("the probe was asked %d times, want once: the cut read stops it", probe.asked)
 	}
 	if n := strings.Count(logged.String(), `"msg":"detail"`); n != 1 ||
-		!strings.Contains(logged.String(), `"probe":"claude","read":0,"unread":2,"cut":"claude agents --json: signal: killed"`) {
+		!strings.Contains(logged.String(), `"probe":"claude","read":0,"unread":4,"cut":"claude agents --json: signal: killed"`) {
 		t.Errorf("logged %d detail lines, want one for the probe with its counts and the cut read:\n%s", n, logged.String())
 	}
 
 	probe.slow, probe.asked = false, 0
-	got := c.Details(t.Context(), agents)
-	if got[0].Message != "one said this" || got[1].Message != "two said that" {
-		t.Errorf("Details after the cut = %+v, want what each agent said", got)
+	for i, d := range c.Details(t.Context(), agents) {
+		if want := fmt.Sprintf("agent %s said this", agents[i].Panel); d.Message != want {
+			t.Errorf("detail %d after the cut = %+v, want %q", i, d, want)
+		}
 	}
-	if !strings.Contains(logged.String(), `"msg":"detail: recovered","probe":"claude","read":2,"unread":0`) {
+	if !strings.Contains(logged.String(), `"msg":"detail: recovered","probe":"claude","read":4,"unread":0`) {
 		t.Errorf("a walk that read the probe in time wrote no recovered line:\n%s", logged.String())
 	}
 }
