@@ -95,11 +95,11 @@ the one agent new --no-focus prints before its harness has started, wait
 waits for the harness to start, within --timeout. prompt types one line and
 submits it, and returns once an idle agent has started on it, so
   revier agent prompt demo "..." && revier agent wait demo --until stopped
-waits for that turn. It refuses an empty or blank prompt, which starts no
-turn, a panel that is not an agent's, an agent
+waits for that turn. It refuses a panel that is not an agent's, an agent
 waiting for an answer, where the Enter would pick an option in its dialog,
 and an agent whose state is unknown, as an opencode agent's is,
-since it may be showing such a dialog. send-keys reaches either.
+since it may be showing such a dialog: send-keys reaches an agent in either
+state. It refuses an empty or blank prompt too, which starts no turn.
 
 read prints the last thing the agent said, where its harness keeps a
 conversation revier can read: Claude Code's does. --screen prints the text

@@ -412,8 +412,11 @@ func TestPromptRefusesMoreThanOneLine(t *testing.T) {
 func TestPromptRefusesAnEmptyOrBlankText(t *testing.T) {
 	for _, text := range []string{"", "   "} {
 		c, rt := agentCore(agentPanel("1", "idle"))
-		a, _ := c.Agent(t.Context(), prepared(t, project()), "")
-		if _, err := c.Prompt(t.Context(), a, text, time.Millisecond); err == nil || len(rt.Sent) != 0 {
+		a, err := c.Agent(t.Context(), prepared(t, project()), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.Prompt(t.Context(), a, text, time.Millisecond); err == nil || !strings.Contains(err.Error(), "a prompt has text") || len(rt.Sent) != 0 {
 			t.Errorf("Prompt(%q): err = %v, sent %+v; want a refusal and nothing sent", text, err, rt.Sent)
 		}
 	}
@@ -484,9 +487,10 @@ func TestAPanelOfATabInsideHomeIsNotAddressedThroughHome(t *testing.T) {
 	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
 	p := placeProject(t, "demo")
 
-	for _, addr := range []string{"home:2", "home:3"} {
-		if _, err := c.Agent(t.Context(), p, addr); err == nil || !strings.Contains(err.Error(), "home has no running panel") {
-			t.Errorf("Agent(%s) err = %v, want home to have no such panel", addr, err)
+	for _, panel := range []string{"2", "3"} {
+		want := "its address is demo:agent:" + panel
+		if _, err := c.Agent(t.Context(), p, "home:"+panel); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("Agent(home:%s) err = %v, want the refusal to give %q", panel, err, want)
 		}
 	}
 	if a, err := c.Agent(t.Context(), p, "agent:2"); err != nil || a.Panel.ID != "2" {
@@ -494,5 +498,33 @@ func TestAPanelOfATabInsideHomeIsNotAddressedThroughHome(t *testing.T) {
 	}
 	if a, err := c.Agent(t.Context(), p, "home:4"); err != nil || a.Panel.ID != "4" {
 		t.Errorf("Agent(home:4) = %+v, %v; want the agent of a tab no target holds", a, err)
+	}
+}
+
+// A refused tab target places no panel: the survey labels the agent of its
+// open tab as the home's, and that address names it back.
+func TestTheAgentOfARefusedTabIsAddressedAsTheSurveyLabelsIt(t *testing.T) {
+	p := prepared(t, revier.Project{Name: "demo", Path: "/srv/demo", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{
+			Name: "session:demo", Match: revier.Match{Title: "^session:demo$"}, Tabs: []revier.TargetName{"agent"}}},
+		{Name: "agent", Runtime: &revier.Realization{Inside: "home", Panels: []revier.PanelSpec{
+			{Kind: revier.PanelAgent, Command: []string{"agent", "{{.Vars.extra}}"}}, {Kind: revier.PanelShell}}}},
+	}})
+	if p.TargetErr(1) == nil {
+		t.Fatal("the agent tab must be refused for the key it renders")
+	}
+	tabbed := agentPanel("2", "idle")
+	tabbed.Vars = map[string]string{core.PanelTargetVar: "agent"}
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:demo", "", shellPanel("1"), tabbed)
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+
+	agents := agentsOf(t, c, p)
+	if len(agents) != 1 {
+		t.Fatalf("agents = %+v, want one", agents)
+	}
+	_, rest, _ := strings.Cut(core.Address(p.Name, agents[0].Target, agents[0].Panel), ":")
+	if a, err := c.Agent(t.Context(), p, rest); err != nil || a.Panel.ID != "2" {
+		t.Errorf("Agent(%s) = %+v, %v; want the agent the survey listed", rest, a, err)
 	}
 }
