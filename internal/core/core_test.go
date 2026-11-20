@@ -854,7 +854,7 @@ func TestClaimBounds(t *testing.T) {
 // first step bound is still new to the next survey, and the class rule of the
 // second launch accepts it while its title is empty: a window another
 // project's binding or attachment holds is not the launch's to claim. One the
-// launch's own project holds still is.
+// launch's own project attached still is; one it bound is not.
 func TestClaimSkipsAWindowAnotherProjectHolds(t *testing.T) {
 	projects := []core.Project{prepared(t, project())}
 	now := time.Now()
