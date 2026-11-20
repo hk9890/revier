@@ -10,12 +10,14 @@ import (
 
 // Settled is what a surface knows of what runs here beside a project's view:
 // whether a survey has answered, and what the state it settled says landed,
-// was attached by hand, or was launched and has no window yet.
+// was attached by hand, or was launched and has no window yet: the launch on
+// record and the late launches.
 type Settled struct {
 	Surveyed bool
 	Bound    map[revier.ProjectName]map[revier.TargetName]revier.TargetRef
 	Attached map[revier.ProjectName][]revier.TargetRef
 	Launch   *state.Launch
+	Late     []state.Launch
 }
 
 // RefuseChange refuses deleting or renaming a project with a target running
@@ -37,7 +39,7 @@ func (c *Core) RefuseChange(v revier.ProjectView, s Settled, doing string) error
 	if c.RunsHere(v, s.Bound[name]) {
 		return fmt.Errorf("%s is running; close its targets before %s it", name, doing)
 	}
-	if err := RefuseUnsettled(v, s.Launch, doing); err != nil {
+	if err := RefuseUnsettled(v, s, doing); err != nil {
 		return err
 	}
 	if c.AttachedHere(s.Attached[name]) {
@@ -48,16 +50,25 @@ func (c *Core) RefuseChange(v revier.ProjectView, s Settled, doing string) error
 
 // RefuseUnsettled refuses the change while what of the project runs is not
 // known: a target whose host could not list may be running (decisions.md
-// D89), and launch, the launch on record, may be the project's with its
-// window still to appear. The change waits for either, not for a guess.
-func RefuseUnsettled(v revier.ProjectView, launch *state.Launch, doing string) error {
+// D89), and the launch on record, or a late launch while it is kept (D190),
+// may be the project's with its window still to appear: a rename moves the
+// late launch to a name its window's title never carries. The change waits
+// for either, not for a guess.
+func RefuseUnsettled(v revier.ProjectView, s Settled, doing string) error {
+	name := v.Project.Name
 	for _, t := range v.Targets {
 		if t.Unknown != "" {
-			return fmt.Errorf("%s: %s; wait for the host before %s it", v.Project.Name, t.Unknown, doing)
+			return fmt.Errorf("%s: %s; wait for the host before %s it", name, t.Unknown, doing)
 		}
 	}
-	if launch.Pending(time.Now()) && launch.Project == v.Project.Name {
-		return fmt.Errorf("%s is coming up; wait for its window before %s it", v.Project.Name, doing)
+	now := time.Now()
+	if s.Launch.Pending(now) && s.Launch.Project == name {
+		return fmt.Errorf("%s is coming up; wait for its window before %s it", name, doing)
+	}
+	for _, l := range s.Late {
+		if l.Kept(now) && l.Project == name {
+			return fmt.Errorf("%s: the late launch of %s waits for its window; wait for it before %s the project", name, l.Target, doing)
+		}
 	}
 	return nil
 }

@@ -44,6 +44,9 @@ func TestRefuseChange(t *testing.T) {
 		{"a launch of it still to show its window", idle, core.Settled{Surveyed: true, Launch: &state.Launch{Project: "demo", Target: "home", At: time.Now()}}, "demo is coming up; wait for its window before renaming it"},
 		{"a launch of it past its window", idle, core.Settled{Surveyed: true, Launch: &state.Launch{Project: "demo", Target: "home", At: time.Now().Add(-time.Hour)}}, ""},
 		{"a launch of another project", idle, core.Settled{Surveyed: true, Launch: &state.Launch{Project: "other", Target: "home", At: time.Now()}}, ""},
+		{"a late launch of it kept", idle, core.Settled{Surveyed: true, Late: lateEditor("demo", time.Now())}, "demo: the late launch of editor waits for its window; wait for it before renaming the project"},
+		{"a late launch of it past LateWindow", idle, core.Settled{Surveyed: true, Late: lateEditor("demo", time.Now().Add(-state.LateWindow-time.Second))}, ""},
+		{"a late launch of another project", idle, core.Settled{Surveyed: true, Late: lateEditor("other", time.Now())}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := c.RefuseChange(tc.view, tc.settled, "renaming")
@@ -55,4 +58,20 @@ func TestRefuseChange(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A delete closes what runs first, but a close cannot reach a window still to
+// appear: a kept late launch refuses the delete too, and names its target.
+func TestRefuseUnsettledRefusesADeleteForAKeptLateLaunch(t *testing.T) {
+	v := revier.ProjectView{Project: revier.Project{Name: "demo"}, Targets: []revier.TargetView{{Name: "editor"}}}
+	err := core.RefuseUnsettled(v, core.Settled{Surveyed: true, Late: lateEditor("demo", time.Now())}, "deleting")
+	want := "demo: the late launch of editor waits for its window; wait for it before deleting the project"
+	if err == nil || err.Error() != want {
+		t.Errorf("RefuseUnsettled = %v, want %q", err, want)
+	}
+}
+
+// lateEditor is the late launches with one, of project p's editor, launched at.
+func lateEditor(p revier.ProjectName, at time.Time) []state.Launch {
+	return []state.Launch{{Project: p, Target: "editor", Class: "^code$", At: at}}
 }

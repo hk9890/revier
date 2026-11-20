@@ -314,14 +314,14 @@ func (m Model) refuseRunning(v revier.ProjectView, doing string) error {
 
 // settled is what the surface knows of what runs here beside its views.
 func (m Model) settled() core.Settled {
-	return core.Settled{Surveyed: m.surveyed, Bound: m.bound, Attached: m.attached, Launch: m.pending}
+	return core.Settled{Surveyed: m.surveyed, Bound: m.bound, Attached: m.attached, Launch: m.pending, Late: m.late}
 }
 
 // refuseUnsettled refuses the change while what of the project runs is not
 // known, as core.RefuseUnsettled says. A close cannot reach it, so a delete
 // that closes first is refused for it too.
 func (m Model) refuseUnsettled(v revier.ProjectView, doing string) error {
-	return core.RefuseUnsettled(v, m.pending, doing)
+	return core.RefuseUnsettled(v, m.settled(), doing)
 }
 
 // refuseStartedTarget refuses deleting the entry of a target that runs, or
