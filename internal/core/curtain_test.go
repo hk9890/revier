@@ -39,9 +39,8 @@ func TestCurtainTitleNamesTheMainCurtain(t *testing.T) {
 	}
 }
 
-// One curtain opens on each monitor, the primary one first, each covers its
-// own monitor, and the primary one is focused last, so its keys reach it
-// (decisions.md D192).
+// One curtain opens on each monitor and covers it (decisions.md D192). The
+// primary one opens first and is focused last, so its keys reach it.
 func TestOpenCurtainsCoversEachMonitorPrimaryFirst(t *testing.T) {
 	wm := twoMonitors()
 	c := &core.Core{Window: wm}

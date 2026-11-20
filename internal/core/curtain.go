@@ -51,8 +51,8 @@ func (c *Core) curtainHost() (revier.Coverer, revier.Hider, error) {
 	return cov, hider, nil
 }
 
-// OpenCurtains opens one curtain on each monitor, the primary one first, and
-// focuses the primary one, so that its keys reach it (decisions.md D192).
+// OpenCurtains opens one curtain on each monitor (decisions.md D192). It
+// opens the primary one first, and focuses it, so that its keys reach it.
 // argv is the launch of the curtain for a monitor: a terminal of class
 // CurtainClass with the title CurtainTitle gives it. Each curtain is waited
 // for by its class and title, then covers its monitor. It returns the refs,
