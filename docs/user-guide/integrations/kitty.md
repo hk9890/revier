@@ -86,7 +86,7 @@ leaves it empty when `kitty.conf` itself is a link.
 - A map of your own below the include wins: for example a
   `map --when-focus-on var:in_tmux ctrl+shift+t ...` for windows that run
   tmux. `revier setup status` names each such map by its line.
-- A terminal key on the same chord as another key is left out; see
+- Which terminal keys revier refuses or leaves out is in
   [`[terminal]`](../configuration.md#terminal).
 - A shell tab starts in the directory of the window you pressed the key in.
   An agent tab starts in the project, so from a worktree the agent can still
