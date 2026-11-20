@@ -910,8 +910,9 @@ const BindPoll = 50 * time.Millisecond
 // awaits. Nor is one of a class another target's late launch awaits: a cold
 // application opens the windows of earlier launches late and in any order
 // (decisions.md D190). It gives up after wait and reports false. A window it found and
-// could not raise is reported with the failure, as goTo reports an instance it
-// launched and could not focus, so the activation pins it.
+// could not raise is placed and reported with the failure, as goTo reports an
+// instance it launched and could not focus, so the activation pins it: the
+// window is a launch's either way (D24).
 func (c *Core) bindWindow(ctx context.Context, p Project, name revier.TargetName, before []revier.Instance, wait time.Duration, raise bool) (inst revier.Instance, ok bool, err error) {
 	start := time.Now()
 	defer func() {
@@ -959,12 +960,12 @@ func (c *Core) bind(ctx context.Context, p Project, name revier.TargetName, befo
 	if err != nil || !found {
 		return revier.Instance{}, false, err
 	}
+	c.place(ctx, *p.Targets[i].Window, w.Ref)
 	if raise {
 		if err := c.Window.Focus(ctx, w.Ref); err != nil {
 			return w, true, fmt.Errorf("%s: raise new %s: %w", c.Window.Name(), name, err)
 		}
 	}
-	c.place(ctx, *p.Targets[i].Window, w.Ref)
 	return w, true, nil
 }
 
@@ -1597,10 +1598,13 @@ func (c *Core) claim(before, after []revier.Instance, p Project, st *state.State
 // window of a class another target's late launch awaits (decisions.md D190).
 // An action's launch takes no window of such a class at all. A target's
 // launch takes by class no window that any binding or attachment holds: a
-// late launch's claim may have bound it to another target of p.
+// late launch's claim may have bound it to another target of p. An action's
+// launch takes no window a binding of p holds either: a launch's bind takes
+// its window by class, before the title its rule matches has settled. A
+// window p attached by hand before the survey is still the action's.
 func (c *Core) candidate(inst revier.Instance, p Project, target revier.TargetName, st *state.State, now time.Time, projects []Project) bool {
 	if target == "" {
-		return !c.declared(inst, projects) && !awaitedElsewhere(st, p.Name, target, inst, now, projects)
+		return !c.declared(inst, projects) && !boundTo(st, p.Name, inst.Ref) && !awaitedElsewhere(st, p.Name, target, inst, now, projects)
 	}
 	i, ok := p.index(target)
 	if !ok || p.Targets[i].Window == nil {
@@ -1608,6 +1612,16 @@ func (c *Core) candidate(inst revier.Instance, p Project, target revier.TargetNa
 	}
 	return p.compiled[i].window.Matches(inst) ||
 		(c.classOK(p, i, inst) && !st.Held(inst.Ref) && !awaitedElsewhere(st, p.Name, target, inst, now, projects))
+}
+
+// boundTo reports whether a binding of the project p holds ref.
+func boundTo(st *state.State, p revier.ProjectName, ref revier.TargetRef) bool {
+	for _, bound := range st.Bound[p] {
+		if key(bound) == key(ref) {
+			return true
+		}
+	}
+	return false
 }
 
 // awaitedElsewhere reports whether a launch of a target other than p's t
