@@ -416,11 +416,11 @@ func TestNameConversationsTakesWhatTheSurveyRead(t *testing.T) {
 	served.Add("session:revier", "", agent("box.1", "abc-123", ""), agent("box.2", "def-456", "/srv/wt"))
 	probe := resumable()
 	c := &core.Core{Served: served, Probes: []revier.AgentProbe{probe}}
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, proj)})
+	report, err := c.Survey(t.Context(), []core.Project{prepared(t, proj)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.NameConversations(context.Background(), report)
+	c.NameConversations(t.Context(), report)
 	got := conversationsByPanel(report)
 	if c := got["box.1"]; c == nil || c.ID != "abc-123" || c.Dir != proj.Path {
 		t.Errorf("box.1 conversation = %+v, want abc-123 in the project's directory %s", c, proj.Path)
@@ -440,11 +440,11 @@ func TestNameConversationsAsksTheProbeForWhatTheSurveyCouldNotName(t *testing.T)
 	served.Add("session:revier", "", agent("box.1", "abc-123", ""), agent("box.2", "", "/srv/wt"))
 	probe := resumable()
 	c := &core.Core{Served: served, Probes: []revier.AgentProbe{probe}}
-	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
+	report, err := c.Survey(t.Context(), []core.Project{prepared(t, project())})
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.NameConversations(context.Background(), report)
+	c.NameConversations(t.Context(), report)
 	if c := conversationsByPanel(report)["box.2"]; c == nil || c.ID != "" || c.Dir != "/srv/wt" {
 		t.Errorf("box.2 conversation = %+v, want none yet, in /srv/wt", c)
 	}
