@@ -107,6 +107,20 @@ func TestNewAgentRefusesAnUnknownName(t *testing.T) {
 	}
 }
 
+// A name in a project that declares no agents opens nothing, and the refusal
+// says the project declares none.
+func TestNewAgentRefusesANameWhenTheProjectDeclaresNone(t *testing.T) {
+	c, rt, p, _ := openWorkspace(t)
+
+	outcome, err := newAgent(t, c, p, "home", core.Resume{Agent: "nope"})
+	if !errors.Is(err, core.ErrUnknownAgent) || !strings.Contains(err.Error(), "the project declares no named agent") || outcome != core.AgentNotAdded {
+		t.Errorf("NewAgent = %v, %v; want ErrUnknownAgent saying the project declares none, and not added", outcome, err)
+	}
+	if len(rt.Tabs) != 0 {
+		t.Errorf("Tabs = %+v, want nothing opened", rt.Tabs)
+	}
+}
+
 // With no conversation and no directory, the agent starts empty where the
 // workspace starts.
 func TestNewAgentStartsEmptyInTheProject(t *testing.T) {

@@ -106,6 +106,31 @@ func TestEnsureReportsAFailedClone(t *testing.T) {
 	}
 }
 
+// A clone that ends with no fatal line, as one interrupted does, gives its
+// exit status, and then git's last line when git said anything.
+func TestEnsureReportsACloneWithNoFatalLine(t *testing.T) {
+	for _, tc := range []struct {
+		says, want string
+	}{
+		{"echo 'error: something'\n", "exit status 1: error: something"},
+		{"", "exit status 1"},
+	} {
+		t.Run(tc.want, func(t *testing.T) {
+			bin := t.TempDir()
+			if err := os.WriteFile(filepath.Join(bin, "git"), []byte("#!/bin/sh\n"+tc.says+"exit 1\n"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", bin)
+			p := revier.Project{Name: "demo", Path: filepath.Join(t.TempDir(), "demo"), GitURL: filepath.Join(t.TempDir(), "origin.git")}
+			_, err := checkout.Ensure(p, &bytes.Buffer{})
+			var ce *checkout.CloneError
+			if !errors.As(err, &ce) || ce.Reason != tc.want {
+				t.Fatalf("err = %v, want a clone failure with the reason %q", err, tc.want)
+			}
+		})
+	}
+}
+
 func TestOriginReadsTheRemote(t *testing.T) {
 	repo := bare(t)
 	work := filepath.Join(t.TempDir(), "w")
