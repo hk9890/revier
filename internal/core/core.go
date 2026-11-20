@@ -902,9 +902,10 @@ const BindPoll = 50 * time.Millisecond
 // is taken and two at once are left alone, because the launch does not say
 // which. A class candidate a binding or an attachment holds is not this
 // launch's: a press in another process, or a late launch's claim, bound it
-// while this one waited. Nor is one of a class another target's launch awaits: a cold application
-// opens the windows of earlier launches late and in any order (decisions.md
-// D190). It gives up after wait and reports false. A window it found and
+// while this one waited. Nor is one of a class another target's pending launch
+// awaits. Nor is one of a class a late launch awaits: a cold application opens
+// the windows of earlier launches late and in any order (decisions.md D190).
+// It gives up after wait and reports false. A window it found and
 // could not raise is reported with the failure, as goTo reports an instance it
 // launched and could not focus, so the activation pins it.
 func (c *Core) bindWindow(ctx context.Context, p Project, name revier.TargetName, before []revier.Instance, wait time.Duration, raise bool) (inst revier.Instance, ok bool, err error) {
@@ -1569,11 +1570,10 @@ func (c *Core) claim(before, after []revier.Instance, p Project, st *state.State
 }
 
 // candidate reports whether inst may be the window of p's launch of target,
-// or of p's action when target is empty. Neither takes by class a window of
-// a class another target's pending launch awaits, or a late launch awaits
-// (decisions.md D190), and a target's launch
-// takes by class no window that any binding or attachment holds: a late
-// launch's claim may have bound it to another target of p.
+// or of p's action when target is empty. Neither takes by class a window of a
+// class a late launch awaits (decisions.md D190). A target's launch takes by
+// class no window that any binding or attachment holds: a late launch's claim
+// may have bound it to another target of p.
 func (c *Core) candidate(inst revier.Instance, p Project, target revier.TargetName, st *state.State, now time.Time, projects []Project) bool {
 	if target == "" {
 		return !c.declared(inst, projects) && !awaitedElsewhere(st, p.Name, target, inst, now, projects)
