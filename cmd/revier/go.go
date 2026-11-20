@@ -33,6 +33,10 @@ func cmdGo(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 	landed := describe(ref)
+	if res.Tab != "" {
+		// A tab is inside the instance ref names; the press reached the tab.
+		landed = string(res.Tab) + " in " + landed
+	}
 	if res.Ran {
 		// A command target binds nothing, so there is no instance to name.
 		landed = "ran " + string(res.Target)
