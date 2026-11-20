@@ -21,5 +21,6 @@ with the correct form.
 - **Decision citation, outside Go**: a commit message, a PR title or a PR
   body cites a decision as `decisions.md Dnn`, several together as
   `decisions.md Dnn, Dnn`, and only for a fact that its entry or the design
-  text tagged `(Dnn)` carries. Flag a citation in any other form or on any
-  other fact.
+  text tagged `(Dnn)` carries. A mention of the decision itself, as in a fix
+  to its citations, takes the same form. Flag a citation or mention in any
+  other form, or a citation on any other fact.
