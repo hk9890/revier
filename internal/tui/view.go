@@ -541,10 +541,13 @@ func (m Model) footer() string {
 	if m.agents.shown {
 		return " " + m.help.ShortHelpView(m.agents.help(m.keys))
 	}
-	keys := m.keys.helpFor(m.focus)
-	if v, ok := m.selected(); ok {
-		keys = append(keys, m.keys.targetHelp(m.targetKeysOf(v))...)
+	v, ok := m.selected()
+	if !ok {
+		// A filter that matches no project leaves no row for enter, the
+		// actions, the target keys or the file keys to act on.
+		return " " + m.help.ShortHelpView(m.keys.helpFor(m.focus, false))
 	}
+	keys := append(m.keys.helpFor(m.focus, true), m.keys.targetHelp(m.targetKeysOf(v))...)
 	// alt+t is offered only where it does something: a project with no target
 	// row has no Targets section to reach.
 	if len(m.targetRows()) > 0 {

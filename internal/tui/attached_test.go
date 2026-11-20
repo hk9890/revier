@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -50,6 +51,33 @@ func TestTheFooterOffersTheTargetsKeyOnlyWhereThereAreTargets(t *testing.T) {
 	}
 	if strings.Contains(footer(m), "alt+t") {
 		t.Errorf("footer = %q with no project selected, want no alt+t", footer(m))
+	}
+}
+
+// A filter that matches no project leaves no row under the cursor, and the
+// footer offers no key that acts on one: each would answer nothing. A filter
+// that matches the project offers them again.
+func TestTheFooterOffersTheRowKeysOnlyWhereThereIsARow(t *testing.T) {
+	_, _, c, projects := world(t, 1)
+	actions := []config.Action{{Key: "ctrl-y", Name: "sync", Run: []string{"true"}}}
+	m := resize(refreshed(t, c, projects, stateWith(t, nil), actions), 400, 24)
+
+	none := typeInto(m, "zzz")
+	got := footer(none)
+	if !strings.Contains(got, "esc") {
+		t.Errorf("footer = %q with no project selected, want esc", got)
+	}
+	for _, k := range []string{"open", "close", "alt+e", "alt+del", "ctrl+y"} {
+		if strings.Contains(got, k) {
+			t.Errorf("footer = %q with no project selected, want no %q", got, k)
+		}
+	}
+
+	got = footer(typeInto(m, "00"))
+	for _, k := range []string{"enter open", "del close", "alt+e edit", "alt+del delete"} {
+		if !strings.Contains(got, k) {
+			t.Errorf("footer = %q on a project, want %q", got, k)
+		}
 	}
 }
 
