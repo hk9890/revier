@@ -52,7 +52,7 @@ Each section is also the text of its release on the
   when an agent changed state during the call, which a working agent often
   does. That second run could push the call past a caller's time limit. Now
   the second run comes only for an agent that has had no prompt yet, or
-  after the first run failed.
+  whose first read failed.
 - **The logs say why revier shows nothing that a Claude agent said.** After
   a Claude Code release that changes its transcript format, the agent's pane
   had no last message, and the logs said nothing. The logs screen now shows
