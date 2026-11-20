@@ -71,7 +71,7 @@ promise, which is why the two tiers exist (D12).
 
 | Mechanism | Reliability | Used for |
 |---|---|---|
-| revier launches it | Deterministic. revier launches, waits for the window to appear, and binds it by its id, whatever its title becomes. A window that comes minutes late, as a cold application opens it, is bound at best effort: while the launch is kept, a surface binds the one unheld window that the target's full rule alone matches (D190) | Keyed targets |
+| revier launches it | Deterministic when the window the full rule matches, or the one new window of its class, appears in the wait. revier launches, waits for the window to appear, and binds it by its id, whatever its title becomes. A window that comes later is bound at best effort: while the launch is pending, a survey claims it by class; once a cold application opens it minutes late, a surface binds the one unheld window that the target's full rule alone matches (D190) | Keyed targets |
 | You attach it | Deterministic. You bind the focused instance to the current project | Anything |
 | Claim on appear | Best effort. After an action runs, revier claims the one new instance that no target matches | An action that opens a link |
 
