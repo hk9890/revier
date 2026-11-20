@@ -3,7 +3,7 @@
 `revier` with no command opens the TUI. Every other command does one thing and
 exits. `revier help` lists the commands and their flags. `revier <command>
 --help` gives the usage of one command. `revier agent help`, `shell help`,
-`session help`, `keys help`, `term help`, `each help`, `events help` and `state help` give each family
+`session help`, `setup help`, `each help`, `events help` and `state help` give each family
 in full.
 
 - `-p <name>` names the project. Without it, revier finds the project as

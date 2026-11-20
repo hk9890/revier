@@ -87,7 +87,9 @@ revier new      # created /home/you/.config/revier/projects/demo.toml
 
 The project takes the name of the directory. The file declares `home`, a
 terminal window called `session:demo`, and `agent`, a tab in it with Claude
-Code beside a shell. Your shared `editor` is the third target.
+Code beside a shell. Your shared `editor` is the third target. When
+`config.toml` has no shared target, the file declares an IntelliJ IDEA
+`editor` instead.
 
 Run `revier status` to check which hosts revier found: the `runtime` line
 names the terminal host, the `view` line what shows it, the `window` line
@@ -152,8 +154,8 @@ key, or run `revier` in a terminal.
 
 The project with an agent that needs you is at the top, and the pane shows
 the agent's terminal. For the list of all agents, press the trigger key
-again in the popup. In a terminal, press Alt+Space, or click `agents` where
-the trigger key is Alt+Space. Select the agent and press Enter. revier raises
+again in the popup. In a terminal, click `agents` in the top line, or press
+Alt+Space where nothing on the desktop holds it. Select the agent and press Enter. revier raises
 its tab and window.
 
 From a shell, `revier list` prints one line per project with its most urgent

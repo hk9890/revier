@@ -63,8 +63,8 @@ For a project on another machine, see
 
 ## Open more agent and shell tabs
 
-`revier agent new` adds a tab to an open workspace, with a copy of the
-panels of the project's agent tab. It goes to the new tab, unless you give
+`revier agent new` adds a tab to an open workspace, with the project's agent
+panel and its first shell panel. It goes to the new tab, unless you give
 `--no-focus`. `revier shell new` adds a tab with the shell alone.
 
 ```bash

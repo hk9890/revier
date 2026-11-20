@@ -28,9 +28,7 @@ territory.
   window and hides when you bring a window to the front.
   See [The popup](docs/user-guide/tui.md#the-popup).
 - **All agents in one list.** In the popup, press the trigger key again to
-  see every agent of every open project in one list. In a terminal, press
-  alt+space, or click `agents` where the trigger key is alt+space. Agents
-  that need you are on top, then working, idle and `unknown` agents. The
+  see every agent of every open project in one list. Agents that need you are on top, then working, idle and `unknown` agents. The
   project list shows each project with its agents
   counted by state. See [The agent list](docs/user-guide/tui.md#the-agent-list).
 - **Jump to an agent.** Select an agent and press Enter. revier raises its
@@ -63,8 +61,7 @@ territory.
 **Stop and start again**
 
 - **Shut everything down.** `revier shutdown` saves the session, then closes
-  every open project. In the TUI, alt+s opens the sessions, and alt+q there
-  shows the plan first. An agent that works or waits for you blocks the
+  every open project. The TUI shows the plan first. An agent that works or waits for you blocks the
   close until you add `--force`.
   See [Shut everything down](docs/user-guide/projects.md#shut-everything-down).
 - **Restore a session.** `revier session restore` opens the saved projects

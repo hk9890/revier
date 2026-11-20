@@ -9,7 +9,7 @@ A findability map: where things live, and how to search for them.
 | `pkg/revier/` | The ports and every type that crosses them, the project model included. Public, because out-of-tree adapters import it. |
 | `internal/core/` | All policy: resolution, matching, run-or-raise, toggle-back, survey. |
 | `internal/app/` | The use cases that cross stores, written once for both surfaces: create, link and rename a project, run an action, save a session. |
-| `internal/adapter/<tool>/` | One tool each. No policy. `kitty` (runtime, the view of itself and of hc, and the terminal keys), `hc` (runtime, with tabs as labels; opt-in, a prototype), `gnome` (window, key binder and window rules), `proc` (what a link on another machine started here, a process's parent on this machine, and the agent session variables a server must not hand on), `claude` (probe, and the assistant launcher), `opencode` and `execprobe` (probes), `ssh` (remote). |
+| `internal/adapter/<tool>/` | One tool each. No policy. `kitty` (runtime, view, terminal keys), `hc` (runtime), `gnome` (window, key binder, window rules), `proc` (a link's processes here, a process's parent, and the agent session variables a server must not hand on), `claude` (probe, assistant launcher), `opencode` and `execprobe` (probes), `ssh` (remote). |
 | `internal/panelstart/` | What the hc host and the core say about a panel whose command does not start: not on the PATH the runtime starts it with, or ended at once. |
 | `internal/config/` | TOML loading and the validation that rejects a project before a keypress can fail on it; the template `revier new` writes. |
 | `internal/state/` | What revier learned at runtime: the last project, and hand-attached instances. |
@@ -17,10 +17,10 @@ A findability map: where things live, and how to search for them.
 | `internal/session/` | The saved sets of open projects `revier session` writes and reads, under the state root, and `seen.toml`, what a surface last saw, which an end with no shutdown saves. |
 | `internal/checkout/` | git and mise on a project's directory: the origin a new project records, the clone of a missing one. |
 | `internal/userunit/` | The start of a long-lived program as a service of the user's service manager, with the session's login environment: the workspace kitty and the hc core. |
-| `internal/procgroup/` | The process group each host command runs in, the end of the whole group when a command's context ends, the end of every group still running when a second ctrl+c ends revier, and the end of each command when revier is killed. |
+| `internal/procgroup/` | The process group of each host command, and its end: when its context ends, at a second ctrl+c, and when revier is killed. |
 | `internal/plain/` | The text an agent, a tool or a status command wrote, with every escape sequence and control character taken off, for the TUI and the command line. |
 | `internal/shell/` | The quoting that keeps a word one word for a POSIX shell and for fish: the line `ssh` runs on a host, the command `revier each` lists, the assistant's status line. |
-| `internal/fsutil/` | The atomic file write the stores use (the popup's window rules write their own, to check the file before the rename), the write through a link that config.toml and the terminal's configuration use, and `RealPath`, the path behind every link, which the core and `revier doctor` compare a directory with a project's path by. |
+| `internal/fsutil/` | Atomic and through-link file writes (the popup's window rules write their own), and `RealPath`. |
 | `internal/logging/` | The daily log file every process appends to, the helpers that time an operation, and the reader the TUI's logs screen lists. |
 | `internal/events/` | The event file `revier events` prints: what revier did in each project, never pruned. |
 | `internal/record/` | The state record `revier state` replays: what each operation did, failed or not, and what each surface's survey saw, never pruned. |

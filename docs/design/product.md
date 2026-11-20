@@ -25,7 +25,7 @@ territory. revier is how you walk it.
 | **Panel** | One terminal of a runtime target: an agent, a shell, a tool |
 | **Tab** | The panels of one instance that share a tab mark. The runtime keeps the mark, so a view that opens again draws the same tabs (D179) |
 | **Agent** | A program an agent panel runs. The layout's first agent panel is the project's default agent; a named agent is declared once and opened by its name (D145) |
-| **Agent state** | What an agent panel is doing: idle, running, or waiting for you |
+| **Agent state** | What an agent panel is doing: idle, running, waiting for you, or unknown |
 | **Session** | A recorded set: which projects were open, which of their targets, and each agent's conversation, directory and named agent (D46, D146) |
 
 A target is reached one way: **run-or-raise it, revier's or its command's; a
@@ -71,7 +71,7 @@ promise, which is why the two tiers exist (D12).
 
 | Mechanism | Reliability | Used for |
 |---|---|---|
-| revier launches it | Deterministic when the window the full rule matches, or the one new window of its class, appears in the wait. revier launches, waits for the window to appear, and binds it by its id, whatever its title becomes. A window that comes later is bound at best effort: while the launch is pending, a survey claims it by class; once a cold application opens it minutes late, a surface binds the one unheld window that the target's full rule alone matches (D190) | Keyed targets |
+| revier launches it | Deterministic in the launch's wait; a late window is bound at best effort (D190) | Keyed targets |
 | You attach it | Deterministic. You bind the focused instance to the current project | Anything |
 | Claim on appear | Best effort. After an action runs, revier claims the one new instance that no target matches | An action that opens a link |
 
@@ -122,11 +122,9 @@ is too slow for the one keystroke the product promises. A full shutdown is the
 exception: it quits the popup, because nothing is left to raise it over, and
 the next press is a cold start that offers the restore (D141).
 
-A shutdown saves the session first, because it is the moment before a
-restart, and refuses while an agent works or waits for an answer, because that
-agent would lose its turn (D78). The guard sits in the close path, so every way
-to close passes it, and it reads the agents again at the close: the plan the
-user confirmed is older than the press (D99). Nothing is killed; a window an
+A shutdown saves the session first, and refuses while an agent works or waits
+for an answer (D78). The guard sits in the close path, so every way to close
+passes it (D99). Nothing is killed, except under hc (D173); a window an
 application keeps open stays open.
 
 A full shutdown is remembered until anything opens again (D141). The surface
@@ -141,7 +139,7 @@ machine's rows never wait for a linked host (D114).
 
 ## Scope
 
-**In, for the first version**
+**In**
 
 - Project inventory from TOML files
 - Run-or-raise for every target, both realizations
@@ -153,10 +151,10 @@ machine's rows never wait for a linked host (D114).
   raised again (D86)
 - JSON output
 - Projects on another machine, surveyed by the revier installed there (D40)
-
-Saved sessions (D46), shutdown (D78), `revier doctor` (D85), `revier each`
-(D32), `revier events` (D112), the config assistant (D135) and the hc
-runtime, shown by kitty or by no view (D178), extend it.
+- Saved sessions (D46) and shutdown (D78)
+- `revier doctor` (D85), `revier each` (D32) and `revier events` (D112)
+- The config assistant (D135)
+- The hc runtime, shown by kitty or by no view (D178)
 
 **Out, deliberately**
 
@@ -200,6 +198,4 @@ so by which realizations it declares.
 A mistake in the configuration degrades the same way: what is wrong is
 disabled, and nothing above it is (D85). A rule about one target disables that
 target, a rule about the project disables that project, and neither disables
-the rest. revier is how you reach a broken project, so it must not break with
-one, and what is disabled stays listed with its reason, because the surface is
-the one place the reason can be read.
+the rest. What is disabled stays listed with its reason.

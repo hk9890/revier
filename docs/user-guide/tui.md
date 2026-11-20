@@ -86,11 +86,9 @@ keys, so every letter goes to the query.
 
 While a shutdown, a close or a restore runs, the TUI shows each step as it
 runs and what came of it. No other key and no click does anything until it
-ends. ctrl+c lets the step that runs finish, then stops, and the TUI stays
-open to show what was done and what was not reached. After the last step,
-ctrl+c ends the wait for what was closed to go. A restore stopped after
-its last target says `return home cancelled`. When a step hangs, press ctrl+c
-again to quit: the command the step waits for ends too.
+ends. ctrl+c stops it after the step that runs, and the TUI stays open to
+show what was done and what was not reached; see
+[Shut everything down](projects.md#shut-everything-down).
 
 While a shutdown or a close runs, its title says to wait until it ends. After
 the last step it waits for what it closed to go: each such step shows
@@ -100,13 +98,8 @@ says in the footer when it is complete.
 
 A restore ends on the project list, with the cursor on the project the
 session was left on. The footer names what did not open, or how many targets
-a cancel did not reach. revier does not bring a window target a restore
-opens, such as an editor, to the front, but the desktop brings most of them
-up over the TUI. A terminal a restore opens is focused, so its tabs come up
-as saved. When the restore ends, failed or cancelled too, the TUI brings its
-own window back to the front once. A restore that stopped before its first
-step opened nothing, and raises nothing. A TUI in a terminal that revier does
-not list stays where it is.
+a cancel did not reach. When the restore ends, failed or cancelled too, the
+TUI brings its own window to the front once.
 
 Closing a whole project saves the session first. You cannot rename a project
 while something in it runs: close it first.
@@ -216,16 +209,14 @@ fields are those of [configuration.md](configuration.md).
 
 A full shutdown shows what it closed for about 1.5 seconds, then the TUI
 quits. Press any key to quit at once. A project shutdown, a close with del,
-and a full shutdown that is not remembered when it ends keep the TUI open,
-and the next start does not show the dialog. A full shutdown is not
-remembered when it found nothing left to close, when revier could not write
-its state, or when you opened something while it ran.
+and a full shutdown that is not remembered keep the TUI open, and the next
+start does not show the dialog. Which full shutdowns are remembered is in
+[Shut everything down](projects.md#shut-everything-down).
 
 The next start of the TUI, or of the popup, opens on a dialog:
 `revier was shut down at 18:30.` The pane shows what the saved session holds.
-A TUI that stays open while `revier shutdown` runs elsewhere shows the same
-dialog at its next refresh, once you are back on the project list with no
-query.
+A TUI left open while `revier shutdown` runs elsewhere shows the dialog at its
+next refresh, on the project list with no query.
 
 - **Restore this session** restores the session the shutdown saved. The
   sessions screen shows each step, then the project list opens.
@@ -245,10 +236,9 @@ open as a `last seen` session, if something of it is not open now. It then
 opens on a dialog: `revier ended without a shutdown; last changed 18:30.`
 If you already typed a query or opened a screen, the dialog waits until you
 are back on the plain project list. The pane shows what that session holds.
-The choices are those of the dialog after a full shutdown. If you restore or
-save a session from the sessions screen while the dialog waits, it does not
-show. If `revier shutdown` runs elsewhere meanwhile, the dialog after that
-shutdown shows in its place.
+The choices are those of the dialog after a full shutdown. A restore or save
+from the sessions screen stops the dialog, and a later shutdown shows its own
+dialog in its place.
 The dialog stays until you choose, and shows once: a later start does not
 offer the session again. See
 [Save and restore sessions](projects.md#save-and-restore-sessions).

@@ -69,24 +69,24 @@ the same name that holds only the fields it changes; see
 [Shared targets](configuration.md#shared-targets).
 
 An action is a command that opens nothing to return to, such as a copy to the
-clipboard. Actions live in `config.toml` only:
+clipboard:
 
 ```toml
+# config.toml
 [[action]]
 key  = "ctrl-y"
 name = "copy path"
 run  = ["wl-copy", "{{.Path}}"]
 ```
 
-In the TUI, the action's `key` runs it on the selected project. From a shell:
+From a shell:
 
 ```bash
 revier run "copy path"            # in the project of this directory
 revier run "copy path" -p shop    # in the project shop
 ```
 
-The command runs in the project's directory. The fields are in
-[Actions](configuration.md#actions).
+The fields and rules are in [Actions](configuration.md#actions).
 
 ## Run one command in every project
 
@@ -116,9 +116,9 @@ revier session restore work --dry-run
 
 A shutdown, and closing a whole project in the TUI, save a session for you.
 `revier session list` shows why each session was saved in its REASON column:
-`shutdown`, `project closed`, `saved by hand` or `last seen`. The TUI
-sessions screen shows it in place of a missing name. A session saved by a
-revier older than this label reads `unknown`.
+`shutdown`, `project closed`, `saved by hand`, `last seen`, or `unknown`
+when the save did not record why. The TUI
+sessions screen shows it in place of a missing name.
 
 `revier session restore` with no argument opens the newest session that
 holds every open project: one saved by hand, by a full shutdown, or as
@@ -178,7 +178,11 @@ press alt+q in the project list: it shows the plan before anything closes.
 A shutdown of every project, all of each, is remembered. The TUI quits after
 it, and its next start offers to restore the saved session or to start
 fresh; see [After a full shutdown](tui.md#after-a-full-shutdown). Anything
-you open first ends that offer.
+you open first ends that offer. A full shutdown is not remembered when it
+found nothing left to close, when revier could not write its state, when you
+opened something while it ran, or when you stopped it before its last step.
+One you stopped before it saved the session leaves an earlier full shutdown
+remembered.
 
 A shutdown and a restore print one line per step as they run: its name
 before the step, what came of it after. A step that hangs is the last line
@@ -187,14 +191,11 @@ on the screen. A shutdown then waits for what it closed to go, and says
 cancel, its last line is `shutdown complete; safe to leave`. Otherwise it
 exits `1`, so `revier shutdown && poweroff` powers off only when it is safe.
 
-To stop a shutdown or a restore, press ctrl+c. The step that runs finishes,
-the rest is not reached, and revier prints how many steps it left. ctrl+c
-also ends the wait for what was closed to go: what has not gone yet is named
-`still open`. A full
-shutdown you stop is not remembered, because what it did not reach is still
-open; one you stop after its last step ran is, and one you stop before it
-saved the session leaves an earlier one remembered. When a step hangs, press
-ctrl+c again to quit at once: the command the step waits for ends too.
+To stop a shutdown or a restore, press ctrl+c: the step that runs finishes,
+and the rest is not reached. After the last step, ctrl+c ends the wait for
+what was closed to go, and names what has not gone `still open`. When a step
+hangs, press ctrl+c again to quit at once: the command the step waits for
+ends too.
 
 - A window its application keeps open, for example to ask about unsaved
   work, is named `still open`. revier does not kill it.

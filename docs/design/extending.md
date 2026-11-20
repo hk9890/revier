@@ -9,10 +9,8 @@ the format is the user guide's [configuration reference](../user-guide/configura
 
 The format is built to keep three things true:
 
-- Every target is a run-or-raise binding, revier's or its command's, never a
-  launcher: revier starts a program only when it finds nothing to raise, and
-  a command target's command shows what is already there (D166). Agent and
-  shell tabs are launchers, and they are not targets (D145).
+- Every target is a run-or-raise binding, never a launcher, as the
+  [model](product.md#model) says (D145, D166).
 - Every command is an argument list, never a shell string, so there is no
   quoting to get wrong and no shell to inject into.
 - Anything one person needs — an editor, a ticket viewer, a browser, a
@@ -25,7 +23,7 @@ An external probe lets a user add a coding agent revier does not know yet,
 without writing Go. The contract is the user guide's
 [agent probes](../user-guide/extending/probes.md) page. A probe runs for every
 panel on every refresh, so it stays cheap or it becomes the reason the surface
-feels slow. It wins over every compiled-in probe except the Claude probe.
+feels slow.
 
 Of the ports, only the agent probe has a subprocess form. A runtime, a view
 and a window host are stateful and sit in the latency path of every

@@ -25,7 +25,7 @@ Which file can hold which table:
 |---|---|---|---|
 | `path`, `git_url`, `[vars]` | no | yes | yes |
 | `[remote]` | no | no (it makes the file a link) | yes |
-| `[[target]]` with `[target.window]`, `[target.runtime]` | yes, shared | yes | no |
+| `[[target]]` with `[target.window]`, `[target.runtime]`, `[target.command]` | yes, shared | yes | no |
 | `[[target]]` with `[target.remote.window]`, `[target.remote.runtime]` | yes, shared | no | yes |
 | `[[status]]` at `rule-left`, `rule-right` | yes | no | no |
 | `[[status]]` at `project-line`, `project` | yes, shared with local projects only | yes | yes |
@@ -527,8 +527,7 @@ does not work, without a message. `hc` is experimental, and revier uses it
 only where you name it. A list you write is strict: revier tries the names in
 order and stops at the first that works, or at `none`, which turns that kind
 off. When it reaches an unknown name first, or no name works, every
-command that opens, raises or lists stops with an error. tmux and herdr are
-no longer runtimes: a list that names one stops with what to name instead.
+command that opens, raises or lists stops with an error.
 `revier doctor`
 reports every unknown name, wherever it is in the list; it does not check
 whether a host works.

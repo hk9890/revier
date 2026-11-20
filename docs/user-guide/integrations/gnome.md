@@ -29,14 +29,14 @@ revier uses GNOME when `XDG_CURRENT_DESKTOP` names GNOME (or is not set) and
 4. Run `revier setup install`, as
    [Install the desktop keys](../getting-started.md#install-the-desktop-keys)
    shows. `revier setup status` shows who holds each key. The trigger key is
-   `revier: popup` in GNOME Settings; an install renames one that an older
-   revier wrote as `revier: picker`.
+   `revier: popup` in GNOME Settings.
 
 ## The popup's window
 
 `revier setup install` writes three rules for the popup's window into a file
-of its own, `~/.config/gnome-window-control/rules.d/revier.json`. It never
-edits your `rules.json`. The rules set the popup's size by the width of the
+of its own, `~/.config/gnome-window-control/rules.d/revier.json`. It edits
+your `rules.json` only to take out the rules an older revier wrote there, and
+prints each one. The rules set the popup's size by the width of the
 monitor it opens on:
 
 | Monitor width | Popup |
@@ -60,12 +60,6 @@ hide it when another window takes the focus or the overview opens.
   your rule wins over revier's. `revier setup status` and `revier setup
   install` name each rule of yours that wins, and install leaves it. Do not
   edit `revier.json`: the next install writes it again.
-- revier 0.28 wrote its rules into `rules.json`, and an older guide had you
-  copy `{ "match": { "class": "revier-popup" }, "overlay": true }` there.
-  Install takes those rules out, because they would hide revier's file, and
-  prints each one that revier does not write now. A rule you changed from
-  them is yours: install leaves it, and status says it wins. Delete it if you
-  want revier's sizes.
 - An extension older than version 24 does not read `rules.d`, and
   `revier setup install` skips the rules and says so. Upgrade the extension
   and `wctl`. `revier setup uninstall` deletes `revier.json`, with or without
@@ -94,6 +88,10 @@ that no target matches, is attached to the project, as `revier attach` does.
 To give a project a window no target describes, focus it and run
 `revier attach -p demo`.
 
+**The key launches a second window.** `match` does not find the window that
+`launch` opened. Compare it with `wctl list --json`. Give a browser window a
+`--class` of its own.
+
 ## Without GNOME
 
 On another desktop, or with no display, a target with only a
@@ -101,7 +99,3 @@ On another desktop, or with no display, a target with only a
 `[target.runtime]` part uses that. `revier attach` and `revier popup` do not
 work, and `revier setup` writes no desktop keys and no rules. Workspaces,
 agent state and the TUI in a terminal still work.
-
-**The key launches a second window.** `match` does not find the window that
-`launch` opened. Compare it with `wctl list --json`. Give a browser window a
-`--class` of its own.
