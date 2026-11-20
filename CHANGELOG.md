@@ -11,12 +11,14 @@ Each section is also the text of its release on the
 - **Action required: the popup's window rules move to
   `~/.config/gnome-window-control/rules.d/revier.json`, and need `wctl`
   0.24.0 and extension 24 or later.** Upgrade both, log out and in, and run
-  `revier setup install`. The install takes revier's rules out of your
-  `rules.json`, the overlay rule for `revier-popup` you may have written by
-  hand included, prints each one it took that it does not write now, and
-  writes `rules.d/revier.json`. After that it never edits `rules.json`, so
-  an install leaves no change to commit in a dotfiles repository that holds
-  it. With an older extension, install skips the rules and says why.
+  `revier setup install`. It writes `rules.d/revier.json`, and takes out of
+  your `rules.json` the rules revier 0.28 wrote there and the overlay rule
+  the guide had you copy, printing each one it does not write now. A popup
+  rule you changed from them stays, and now wins over revier's: `revier
+  setup status` names it, and you delete it to get revier's sizes. After
+  that, an install leaves no change to commit in a dotfiles repository that
+  holds `rules.json`. With an older extension, install skips the rules and
+  says why.
 - **A rule of yours for `revier-popup` in `rules.json` now wins over
   revier's.** The extension reads `rules.json` first. `revier setup status`
   and `revier setup install` name each such rule, and install leaves it in
@@ -34,9 +36,8 @@ Each section is also the text of its release on the
   and `rule`. New fields: `file`, `exists`, `own`, `broken` and
   `user_broken` in the report, `moved` in the plan, and `rules_unread`
   beside `rules` in the status.
-- **`revier setup uninstall` deletes `rules.d/revier.json`.** Before the
-  first install of this version, it still takes an older revier's rules out
-  of `rules.json`.
+- **`revier setup uninstall` deletes `rules.d/revier.json`,** and takes an
+  older revier's rules out of `rules.json`, as install does.
 
 ## v0.28.1
 

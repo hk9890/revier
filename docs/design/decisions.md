@@ -1104,8 +1104,8 @@ its class.
 Replaces D189. Extends D30 and D147. The popup's class is revier's (D76), so
 its rules place it by its monitor before its first frame; D24's place after
 that frame jumps, so revier places it only where its rules are not current.
-revier owns its rules as a whole drop-in file, as the terminal's keys, and never
-edits the user's file, often a link into dotfiles, except to move an older
-revier's rules out once, printing each. The user's file loads first, so a rule
-of the user's for the class wins and is reported, never taken over. `revier
-setup` writes all three stores in one run: a user sets up a machine, not one store.
+revier owns its rules as a whole drop-in file, as the terminal's keys. It edits
+the user's file, often a link into dotfiles, only to take out a rule an older
+revier put there, known by its exact shape, printing each. The user's file loads
+first, so any other rule for the class is the user's: it wins, and is reported,
+never taken. One `revier setup` writes all three: a user sets up a machine.

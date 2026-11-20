@@ -38,7 +38,7 @@ func ruleStateNote(r core.PopupRuleReport) string {
 	case r.State == core.PopupRulesCurrent:
 		return fmt.Sprintf("ok: %s holds revier's %d rules", r.File, len(r.Want))
 	case len(r.Legacy) > 0:
-		return fmt.Sprintf("stale: an older revier's rules are in your rules file; `revier setup install` moves them to %s", r.File)
+		return "stale: an older revier's rules are in your rules file, where they hide revier's; `revier setup install` takes them out"
 	case r.State == core.PopupRulesStale:
 		return fmt.Sprintf("stale: %s does not hold the rules this revier writes; `revier setup install` rewrites it", r.File)
 	}

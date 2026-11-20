@@ -84,27 +84,29 @@ func TestSetupInstallLeavesARuleOfTheUsersAndSaysItWins(t *testing.T) {
 	}
 }
 
-// The first install takes the overlay rule the guide had users write out of
-// their file, where it would hide revier's, and prints it as the file held
-// it.
-func TestSetupInstallMovesTheHandWrittenRule(t *testing.T) {
+// An install takes the overlay rule the guide had users copy out of their
+// file, where it would hide revier's, and prints it as the file held it. A
+// rule of the user's in revier's shape with a size of their own stays, and
+// status and install say it wins.
+func TestSetupInstallTakesTheGuidesRuleOutAndLeavesTheUsers(t *testing.T) {
+	guide := revier.WindowRule{Class: core.PopupClass, Overlay: true, Raw: `{"match":{"class":"revier-popup"},"overlay":true}`}
 	hand := revier.WindowRule{
 		Class: core.PopupClass, Place: []string{"center", "top", "1800", "100%"}, Overlay: true,
 		Raw: `{"match":{"class":"revier-popup"},"place":["center","top",1800,"100%"],"overlay":true}`,
 	}
-	a, w := rulesApp(t, hand)
+	a, w := rulesApp(t, hand, guide)
 	out, err := runSetup(t, a, "status")
-	if err != nil || !strings.Contains(out, "stale: an older revier's rules are in your rules file") {
+	if err != nil || !strings.Contains(out, "stale: an older revier's rules are in your rules file") || !strings.Contains(out, "! rule 0 of "+hosttest.FakeUserRules+" comes first and wins over revier's") {
 		t.Errorf("status before: err %v:\n%s", err, out)
 	}
 	out, err = runSetup(t, a, "install")
 	if err != nil {
 		t.Fatalf("install: %v", err)
 	}
-	if !strings.Contains(out, "1 rule of an older revier removed from your rules file") || !strings.Contains(out, "wins over revier's:\n    "+hand.Raw+"\n") {
+	if !strings.Contains(out, "1 rule of an older revier removed from your rules file") || !strings.Contains(out, "wins over revier's:\n    "+guide.Raw+"\n") {
 		t.Errorf("install does not print the rule it removed:\n%s", out)
 	}
-	if len(w.User) != 0 || !reflect.DeepEqual(w.Own, core.PopupRules()) {
+	if !reflect.DeepEqual(w.User, []revier.WindowRule{hand}) || !reflect.DeepEqual(w.Own, core.PopupRules()) {
 		t.Errorf("user = %+v, own = %+v", w.User, w.Own)
 	}
 }

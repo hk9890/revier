@@ -13,10 +13,11 @@ import (
 // beside the desktop's keys and the terminal's (decisions.md D191). The
 // window host places a window its rules match before the window's first
 // frame, so a popup that a rule places does not jump into place. revier
-// writes them as a file of its own, whole, and never writes the user's
-// file, except once, to take out the rules an older revier wrote there. The
-// host tries the user's file first, so a rule of the user's for the popup's
-// class wins over revier's, and revier reports it and leaves it.
+// writes them as a file of its own, whole, and writes the user's file only
+// to take out a rule an older revier wrote there, which it knows by its
+// exact shape. The host tries the user's file first, so any other rule of
+// the user's for the popup's class wins over revier's, and revier reports it
+// and leaves it.
 
 // ErrNoWindowRules means this machine has no window host whose rules revier
 // writes.
@@ -36,24 +37,26 @@ func PopupRules() []revier.WindowRule {
 	return out
 }
 
-// popupRuleOwned reports whether a rule in the user's file is in the shape
-// revier wrote there for the popup before it had a file of its own: its
-// class alone, with or without a width, an overlay, and a place or none. A
-// rule of an older revier, with other sizes, is one, and so is the overlay
-// rule the guide had users write by hand.
-func popupRuleOwned(r revier.WindowRule) bool {
-	return r.Class == PopupClass && !r.Other && r.Overlay
+// olderPopupRule reports whether a rule in the user's file is one an older
+// revier put there: a tier revier 0.28 wrote, which are PopupRules, or the
+// overlay rule its guide had users copy, the class and an overlay alone. A
+// rule in any other shape is the user's, even one revier's could have been:
+// revier cannot tell an override of the user's from it.
+func olderPopupRule(r revier.WindowRule) bool {
+	guide := revier.WindowRule{Class: PopupClass, Overlay: true}
+	return sameRule(r, guide) || slices.ContainsFunc(PopupRules(), func(w revier.WindowRule) bool { return sameRule(r, w) })
 }
 
 // PopupRuleState is what revier's own rules file holds.
 type PopupRuleState string
 
 const (
-	// PopupRulesCurrent: revier's file holds the rules this revier writes.
+	// PopupRulesCurrent: revier's file holds the rules this revier writes,
+	// and no older revier's rule is in the user's file.
 	PopupRulesCurrent PopupRuleState = "current"
 	// PopupRulesStale: revier's file holds other rules, or the host would
-	// not load it, or there is no file and an older revier's rules are in
-	// the user's file. `revier setup install` writes the file.
+	// not load it, or an older revier's rules are in the user's file.
+	// `revier setup install` writes the file and takes them out.
 	PopupRulesStale PopupRuleState = "stale"
 	// PopupRulesMissing: no file, and no rule of an older revier's.
 	PopupRulesMissing PopupRuleState = "missing"
@@ -75,14 +78,13 @@ type PopupRuleReport struct {
 	File   string `json:"file"`
 	Exists bool   `json:"exists"`
 	// UserBroken is why the host would not load the user's file. Its rules
-	// are then not read: the host loads revier's file without them.
+	// are then not read: the host loads revier's file without them, and an
+	// older revier's rules in it wait for the next run after it is fixed.
 	UserBroken string              `json:"user_broken,omitempty"`
 	Own        []revier.WindowRule `json:"own"`
 	Broken     string              `json:"broken,omitempty"`
 	Want       []revier.WindowRule `json:"want"`
-	// Legacy is each rule an older revier wrote into the user's file. It is
-	// read only while revier's file does not exist: after that, a rule in
-	// that shape is the user's.
+	// Legacy is each rule an older revier put into the user's file.
 	Legacy []PopupRuleFound `json:"legacy"`
 	// Ahead is each rule of another file for the popup's class that the
 	// host tries before revier's file. The first one that matches wins.
@@ -114,10 +116,10 @@ type PopupRuleAction string
 
 const (
 	PopupRuleOK PopupRuleAction = "ok"
-	// PopupRuleWrite takes an older revier's rules out of the user's file
-	// and writes revier's file.
+	// PopupRuleWrite writes revier's file where it is not current, and takes
+	// an older revier's rules out of the user's file.
 	PopupRuleWrite PopupRuleAction = "write"
-	// PopupRuleRemove deletes revier's file, or takes an older revier's
+	// PopupRuleRemove deletes revier's file, and takes an older revier's
 	// rules out of the user's file.
 	PopupRuleRemove PopupRuleAction = "remove"
 	// PopupRuleAbsent: uninstall finds no rule of revier's.
@@ -142,10 +144,9 @@ type PopupRulePlan struct {
 	Done bool   `json:"done"`
 	Err  string `json:"error,omitempty"`
 	// Removed is each rule the run took out of the user's file that revier
-	// does not write now, as the host stored it, such as the overlay rule
-	// the guide had users write by hand. revier keeps no copy, so this is
-	// the user's one way to put it back: no tool writes it again
-	// (decisions.md D191).
+	// does not write now, as the host stored it: the overlay rule the guide
+	// had users copy. revier prints each rule it takes out (decisions.md
+	// D191) and keeps no copy, so this is the user's one way to put it back.
 	Removed []revier.WindowRule `json:"removed,omitempty"`
 }
 
@@ -174,7 +175,7 @@ func popupRuleReport(host string, set revier.WindowRuleSet) PopupRuleReport {
 			continue
 		}
 		found := PopupRuleFound{File: set.User.Path, Index: i, Rule: rule}
-		if !set.OwnExists && popupRuleOwned(rule) {
+		if olderPopupRule(rule) {
 			r.Legacy = append(r.Legacy, found)
 		} else {
 			r.Ahead = append(r.Ahead, found)
@@ -188,7 +189,7 @@ func popupRuleReport(host string, set revier.WindowRuleSet) PopupRuleReport {
 		}
 	}
 	switch {
-	case set.OwnExists && set.OwnBroken == "" && slices.EqualFunc(set.Own.Rules, r.Want, sameRule):
+	case r.ownCurrent() && len(r.Legacy) == 0:
 		r.State = PopupRulesCurrent
 	case set.OwnExists || len(r.Legacy) > 0:
 		r.State = PopupRulesStale
@@ -196,6 +197,12 @@ func popupRuleReport(host string, set revier.WindowRuleSet) PopupRuleReport {
 		r.State = PopupRulesMissing
 	}
 	return r
+}
+
+// ownCurrent reports whether revier's file holds the rules this revier
+// writes.
+func (r PopupRuleReport) ownCurrent() bool {
+	return r.Exists && r.Broken == "" && slices.EqualFunc(r.Own, r.Want, sameRule)
 }
 
 func sameRule(a, b revier.WindowRule) bool {
@@ -206,7 +213,7 @@ func sameRule(a, b revier.WindowRule) bool {
 // current, and otherwise a write. A rule of the user's ahead of revier's
 // file changes neither: it is the user's to keep.
 func (c *Core) PlanInstallPopupRules(ctx context.Context) (PopupRulePlan, error) {
-	report, err := c.popupRulesToChange(ctx)
+	report, err := c.PopupRuleReport(ctx)
 	if err != nil {
 		return PopupRulePlan{}, err
 	}
@@ -217,23 +224,11 @@ func (c *Core) PlanInstallPopupRules(ctx context.Context) (PopupRulePlan, error)
 	return plan, nil
 }
 
-// popupRulesToChange is the report a plan starts from. While revier has no
-// file, a user's file the host would not load is an error: an older
-// revier's rules in it cannot be found, and the first file written would
-// mark them moved.
-func (c *Core) popupRulesToChange(ctx context.Context) (PopupRuleReport, error) {
-	report, err := c.PopupRuleReport(ctx)
-	if err == nil && report.UserBroken != "" && !report.Exists {
-		err = errors.New(report.UserBroken)
-	}
-	return report, err
-}
-
-// PlanUninstallPopupRules is what uninstall does: it removes revier's file,
-// or, where there is none, an older revier's rules in the user's file, and
-// never a rule of the user's.
+// PlanUninstallPopupRules is what uninstall does: it removes revier's file
+// and an older revier's rules in the user's file, and never a rule of the
+// user's.
 func (c *Core) PlanUninstallPopupRules(ctx context.Context) (PopupRulePlan, error) {
-	report, err := c.popupRulesToChange(ctx)
+	report, err := c.PopupRuleReport(ctx)
 	if err != nil {
 		return PopupRulePlan{}, err
 	}
@@ -245,9 +240,9 @@ func (c *Core) PlanUninstallPopupRules(ctx context.Context) (PopupRulePlan, erro
 }
 
 // ApplyPopupRules carries out a plan and returns it with its report read
-// again. An older revier's rules leave the user's file before revier's file
-// is written, since revier's file existing is what marks them moved: a run
-// that stops between the two leaves no file, and the next install writes it.
+// again. revier's file is written before an older revier's rules leave the
+// user's file: a run that stops between the two leaves rules that place the
+// popup, and the next install takes the old ones out.
 func (c *Core) ApplyPopupRules(ctx context.Context, plan PopupRulePlan) PopupRulePlan {
 	if !plan.Action.Writes() {
 		return plan
@@ -272,10 +267,7 @@ func (c *Core) ApplyPopupRules(ctx context.Context, plan PopupRulePlan) PopupRul
 	plan.Report = popupRuleReport(w.Name(), set)
 	settled := plan.Report.State == PopupRulesCurrent
 	if plan.Action == PopupRuleRemove {
-		// With revier's file gone, a rule of the user's in revier's shape
-		// reads as an older revier's again, so only the rules the plan took
-		// out are checked.
-		settled = !plan.Report.Exists && (len(plan.Moved) == 0 || len(plan.Report.Legacy) == 0)
+		settled = plan.Report.State == PopupRulesMissing
 	}
 	switch {
 	case plan.Err != "":
@@ -291,6 +283,16 @@ func (c *Core) ApplyPopupRules(ctx context.Context, plan PopupRulePlan) PopupRul
 // revier does not write now, also when a later step fails: they are gone
 // either way.
 func applyPopupRules(ctx context.Context, w revier.WindowRuleWriter, plan PopupRulePlan) ([]revier.WindowRule, error) {
+	var err error
+	switch {
+	case plan.Action == PopupRuleRemove:
+		err = w.RemoveOwn(ctx)
+	case !plan.Report.ownCurrent():
+		err = w.WriteOwn(ctx, plan.Report.Want)
+	}
+	if err != nil {
+		return nil, err
+	}
 	var removed []revier.WindowRule
 	legacy := plan.Moved
 	for i := len(legacy) - 1; i >= 0; i-- {
@@ -301,8 +303,5 @@ func applyPopupRules(ctx context.Context, w revier.WindowRuleWriter, plan PopupR
 			removed = slices.Insert(removed, 0, legacy[i].Rule)
 		}
 	}
-	if plan.Action == PopupRuleRemove {
-		return removed, w.RemoveOwn(ctx)
-	}
-	return removed, w.WriteOwn(ctx, plan.Report.Want)
+	return removed, nil
 }

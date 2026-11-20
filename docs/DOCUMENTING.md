@@ -41,7 +41,8 @@ user guide or the code; write them there, not in `product.md`,
 - Every `Dnn` cited in the tree names a `### Dnn` heading of
   `decisions.md`, and no two headings share a number. A "Replaces Dnn" is no
   citation. After a rebase onto `main`, check the number of a new entry
-  against `main`'s headings.
+  against `main`'s headings. When the number changes, change it in the
+  commit message, the PR title and the PR body too.
 - After you resolve a conflict in `decisions.md`, check that no conflict
   marker is left: `rg -n '^(<<<<<<<|\|\|\|\|\|\|\||=======|>>>>>>>)' docs`.
 - Never reuse a number.

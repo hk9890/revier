@@ -60,10 +60,12 @@ hide it when another window takes the focus or the overview opens.
   your rule wins over revier's. `revier setup status` and `revier setup
   install` name each rule of yours that wins, and install leaves it. Do not
   edit `revier.json`: the next install writes it again.
-- An older revier wrote its rules into `rules.json`. The first install takes
-  them out, with the overlay rule for `revier-popup` that you may have
-  written by hand, and prints each one that revier does not write now, as
-  the file held it. Those rules would hide revier's file.
+- revier 0.28 wrote its rules into `rules.json`, and an older guide had you
+  copy `{ "match": { "class": "revier-popup" }, "overlay": true }` there.
+  Install takes those rules out, because they would hide revier's file, and
+  prints each one that revier does not write now. A rule you changed from
+  them is yours: install leaves it, and status says it wins. Delete it if you
+  want revier's sizes.
 - An extension older than version 24 does not read `rules.d`, and
   `revier setup install` skips the rules and says so. Upgrade the extension
   and `wctl`. `revier setup uninstall` deletes `revier.json`, with or without

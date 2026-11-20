@@ -17,8 +17,15 @@ func popupRule(minWidth int, place ...string) revier.WindowRule {
 
 var kittyRule = revier.WindowRule{Class: "kitty", Place: []string{"center", "top", "50%", "100%"}}
 
-// handRule is the overlay rule the guide had users write into their own
-// file by hand, with no width.
+// guideRule is the overlay rule the guide of revier 0.27 had users copy
+// into their own file.
+var guideRule = revier.WindowRule{
+	Class: core.PopupClass, Overlay: true,
+	Raw: `{"match":{"class":"revier-popup"},"overlay":true}`,
+}
+
+// handRule is a rule of the user's in revier's shape with a size of the
+// user's own: an override, or a rule written by hand from an older guide.
 var handRule = revier.WindowRule{
 	Class: core.PopupClass, Place: []string{"center", "top", "1800", "100%"}, Overlay: true,
 	Raw: `{"match":{"class":"revier-popup"},"place":["center","top",1800,"100%"],"overlay":true}`,
@@ -102,12 +109,13 @@ func TestInstallRewritesAStaleFile(t *testing.T) {
 	}
 }
 
-// The first install takes an older revier's rules out of the user's file:
-// its sizes, and the hand-written overlay rule, which the host would try
-// before revier's file and so hide it. It keeps every other rule, and
-// carries each it took that revier does not write now, for the user.
-func TestTheFirstInstallMovesAnOlderReviersRulesOutOfTheUsersFile(t *testing.T) {
-	w := hosttest.NewWindowRuleWriter(handRule, kittyRule, core.PopupRules()[2])
+// An install takes an older revier's rules out of the user's file, known by
+// their exact shape: a tier revier 0.28 wrote, and the guide's overlay
+// rule. The host would try them before revier's file and so hide it. It
+// writes revier's file first, keeps every other rule, and carries each it
+// took that revier does not write now, for the user.
+func TestInstallTakesAnOlderReviersRulesOutOfTheUsersFile(t *testing.T) {
+	w := hosttest.NewWindowRuleWriter(guideRule, kittyRule, core.PopupRules()[2])
 	c := &core.Core{WindowRules: w}
 	plan, err := c.PlanInstallPopupRules(t.Context())
 	if err != nil {
@@ -123,34 +131,52 @@ func TestTheFirstInstallMovesAnOlderReviersRulesOutOfTheUsersFile(t *testing.T) 
 	if !reflect.DeepEqual(w.User, []revier.WindowRule{kittyRule}) || !reflect.DeepEqual(w.Own, core.PopupRules()) {
 		t.Errorf("user =\n%+v\nown =\n%+v", w.User, w.Own)
 	}
-	if want := []revier.WindowRule{handRule}; !reflect.DeepEqual(plan.Removed, want) {
+	if want := []revier.WindowRule{guideRule}; !reflect.DeepEqual(plan.Removed, want) {
 		t.Errorf("removed =\n%+v\nwant\n%+v", plan.Removed, want)
 	}
-	// The removes from the last one up, then the file.
-	if want := []string{"remove user 2", "remove user 0", "write own"}; !slices.Equal(w.Calls, want) {
+	// The file first, then the removes from the last one up.
+	if want := []string{"write own", "remove user 2", "remove user 0"}; !slices.Equal(w.Calls, want) {
 		t.Errorf("calls = %v, want %v", w.Calls, want)
 	}
 }
 
-// Once revier's file exists, a rule for the popup in the user's file is the
-// user's, also in revier's shape: it wins over revier's, so install leaves
-// it and the report names it.
-func TestOnceRevierHasAFileARuleOfTheUsersWinsAndStays(t *testing.T) {
+// An older revier's rule is one wherever it is, also after revier wrote its
+// file: another machine that shares the user's file can put it back. The
+// install then takes it out and leaves revier's current file alone.
+func TestAnOlderReviersRuleIsTakenOutBesideACurrentFile(t *testing.T) {
+	w := hosttest.NewWindowRuleWriter(core.PopupRules()...)
+	w.Own = core.PopupRules()
+	plan := install(t, &core.Core{WindowRules: w})
+	if !plan.Done || len(w.User) != 0 || len(plan.Removed) != 0 {
+		t.Errorf("done %v, user %+v, removed %+v", plan.Done, w.User, plan.Removed)
+	}
+	if want := []string{"remove user 2", "remove user 1", "remove user 0"}; !slices.Equal(w.Calls, want) {
+		t.Errorf("calls = %v, want %v", w.Calls, want)
+	}
+}
+
+// A rule for the popup in any other shape is the user's, also one in
+// revier's shape with a size of the user's own: it wins over revier's, so
+// install leaves it, with revier's file there or not, and the report names
+// it.
+func TestARuleOfTheUsersWinsAndStays(t *testing.T) {
 	mine := revier.WindowRule{Class: core.PopupClass, Place: []string{"center", "top", "50%", "100%"}, Other: true}
 	other := revier.WindowRuleFile{Path: "rules.d/a.json", Rules: []revier.WindowRule{kittyRule, popupRule(0)}}
-	w := hosttest.NewWindowRuleWriter(handRule, mine)
-	w.Own, w.Earlier = core.PopupRules(), []revier.WindowRuleFile{other}
-	plan := install(t, &core.Core{WindowRules: w})
-	if plan.Action != core.PopupRuleOK || len(w.Calls) != 0 {
-		t.Fatalf("action = %s, calls %v; want ok and none", plan.Action, w.Calls)
-	}
-	want := []core.PopupRuleFound{
-		{File: hosttest.FakeUserRules, Index: 0, Rule: handRule},
-		{File: hosttest.FakeUserRules, Index: 1, Rule: mine},
-		{File: "rules.d/a.json", Index: 1, Rule: popupRule(0)},
-	}
-	if !reflect.DeepEqual(plan.Report.Ahead, want) || len(plan.Report.Legacy) != 0 {
-		t.Errorf("ahead =\n%+v\nwant\n%+v\nlegacy %+v", plan.Report.Ahead, want, plan.Report.Legacy)
+	for _, own := range [][]revier.WindowRule{nil, core.PopupRules()} {
+		w := hosttest.NewWindowRuleWriter(handRule, mine)
+		w.Own, w.Earlier = own, []revier.WindowRuleFile{other}
+		plan := install(t, &core.Core{WindowRules: w})
+		if (plan.Action != core.PopupRuleOK && !plan.Done) || !reflect.DeepEqual(w.User, []revier.WindowRule{handRule, mine}) {
+			t.Fatalf("own %v: done %v, err %q, user %+v", own != nil, plan.Done, plan.Err, w.User)
+		}
+		want := []core.PopupRuleFound{
+			{File: hosttest.FakeUserRules, Index: 0, Rule: handRule},
+			{File: hosttest.FakeUserRules, Index: 1, Rule: mine},
+			{File: "rules.d/a.json", Index: 1, Rule: popupRule(0)},
+		}
+		if !reflect.DeepEqual(plan.Report.Ahead, want) || len(plan.Report.Legacy) != 0 {
+			t.Errorf("own %v: ahead =\n%+v\nwant\n%+v\nlegacy %+v", own != nil, plan.Report.Ahead, want, plan.Report.Legacy)
+		}
 	}
 }
 
@@ -205,25 +231,22 @@ func TestARuleOfTheUsersOnAnyMonitorPlacesThePopupWhateverReviersFileHolds(t *te
 }
 
 // A user's file the host would not load does not stop revier's file, which
-// the host loads without it. While revier has no file, it stops the plan:
-// an older revier's rules in it cannot be found.
-func TestABrokenUsersFileStopsOnlyTheMove(t *testing.T) {
-	w := hosttest.NewWindowRuleWriter(handRule)
+// the host loads without it. An older revier's rules in it wait for the
+// install after it is fixed.
+func TestABrokenUsersFileDoesNotStopReviersFile(t *testing.T) {
+	w := hosttest.NewWindowRuleWriter(guideRule)
 	w.UserBroken = "rules.json: not valid JSON"
 	c := &core.Core{WindowRules: w}
-	if _, err := c.PlanInstallPopupRules(t.Context()); err == nil || err.Error() != w.UserBroken {
-		t.Errorf("install with no file: err = %v, want the user's file's error", err)
-	}
-	if _, err := c.PlanUninstallPopupRules(t.Context()); err == nil {
-		t.Error("uninstall with no file: err = nil, want the user's file's error")
-	}
-	w.Own = core.PopupRules()[1:]
 	plan := install(t, c)
-	if !plan.Done || !reflect.DeepEqual(w.Own, core.PopupRules()) || plan.Report.UserBroken == "" {
-		t.Errorf("install: done %v, err %q, own %+v", plan.Done, plan.Err, w.Own)
+	if !plan.Done || !reflect.DeepEqual(w.Own, core.PopupRules()) || plan.Report.UserBroken == "" || len(plan.Moved) != 0 {
+		t.Errorf("install: done %v, err %q, own %+v, moved %+v", plan.Done, plan.Err, w.Own, plan.Moved)
 	}
 	if !plan.Report.PlacesPopup() {
 		t.Error("a current file of revier's does not place the popup beside a broken user's file")
+	}
+	w.UserBroken = ""
+	if plan = install(t, c); !plan.Done || len(w.User) != 0 {
+		t.Errorf("install after the fix: done %v, user %+v", plan.Done, w.User)
 	}
 }
 
@@ -272,23 +295,19 @@ func TestUninstallBeforeAnInstallRemovesAnOlderReviersRules(t *testing.T) {
 	}
 }
 
-// A run that stops after it took the old rules out leaves no file of
-// revier's, and the next install writes it: the old rules are gone, so
-// nothing is left to hide it.
-func TestARunThatStopsAfterTheMoveIsFinishedByTheNext(t *testing.T) {
-	w := hosttest.NewWindowRuleWriter(handRule)
+// A run that stops after it wrote revier's file leaves the older revier's
+// rules where they were, and the next install takes them out.
+func TestARunThatStopsAfterTheFileIsFinishedByTheNext(t *testing.T) {
+	w := hosttest.NewWindowRuleWriter(guideRule)
 	w.FailAt = 2
 	c := &core.Core{WindowRules: w}
 	plan := install(t, c)
-	if plan.Done || plan.Err == "" || plan.Report.State != core.PopupRulesMissing {
-		t.Fatalf("done %v, err %q, state %s; want a failure that left no file", plan.Done, plan.Err, plan.Report.State)
-	}
-	if want := []revier.WindowRule{handRule}; !reflect.DeepEqual(plan.Removed, want) {
-		t.Errorf("removed = %+v, want the rule the failed run took out", plan.Removed)
+	if plan.Done || plan.Err == "" || plan.Report.State != core.PopupRulesStale || len(plan.Report.Legacy) != 1 {
+		t.Fatalf("done %v, err %q, state %s, legacy %d; want a failure that left the old rule", plan.Done, plan.Err, plan.Report.State, len(plan.Report.Legacy))
 	}
 	w.FailAt = 0
-	if plan = install(t, c); !plan.Done || !reflect.DeepEqual(w.Own, core.PopupRules()) {
-		t.Errorf("second install: done %v, own %+v", plan.Done, w.Own)
+	if plan = install(t, c); !plan.Done || len(w.User) != 0 || !reflect.DeepEqual(w.Own, core.PopupRules()) {
+		t.Errorf("second install: done %v, user %+v, own %+v", plan.Done, w.User, w.Own)
 	}
 }
 
