@@ -748,6 +748,9 @@ func agentOp(th theme.Theme, r core.RestoreResult, i int) (op, reason string) {
 	case core.AgentResumed:
 		return startOp(th, tense("resume", "resumed")), ""
 	case core.AgentEmpty:
+		if r.Resumes[i].Session != "" {
+			return startOp(th, tense("start", "started")), "empty: it never got a prompt"
+		}
 		return startOp(th, tense("start", "started")), ""
 	case core.AgentDirGone:
 		return startOp(th, tense("start", "started")), "empty: its directory is gone"

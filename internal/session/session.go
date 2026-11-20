@@ -463,7 +463,9 @@ func (s Session) Targets() int {
 // SameAs reports whether two sessions hold the same projects, targets and
 // agents: what a restore of either would open. The id, the name, the reason,
 // the moment and the project ended on are not what is open, and the order of the
-// projects is the survey's; the order of the agents is their identity.
+// projects is the survey's; the order of the agents is their identity. The
+// unfiled mark of an agent is not what is open either: what a surface last
+// saw never carries it, and that snapshot is the same as the save it follows.
 func (s Session) SameAs(o Session) bool {
 	byName := func(ps []Project) []Project {
 		out := slices.Clone(ps)
@@ -472,7 +474,10 @@ func (s Session) SameAs(o Session) bool {
 	}
 	return slices.EqualFunc(byName(s.Projects), byName(o.Projects), func(a, b Project) bool {
 		return a.Name == b.Name && slices.EqualFunc(a.Targets, b.Targets, func(x, y Target) bool {
-			return x.Name == y.Name && slices.Equal(x.Agents, y.Agents)
+			return x.Name == y.Name && slices.EqualFunc(x.Agents, y.Agents, func(p, q Agent) bool {
+				p.Unfiled, q.Unfiled = false, false
+				return p == q
+			})
 		})
 	})
 }

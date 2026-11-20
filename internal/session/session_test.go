@@ -411,7 +411,8 @@ func TestListOfMissingStore(t *testing.T) {
 
 // Two saves of one desktop are the same session whenever they were made and
 // whatever they were called; the survey's project order does not count, and
-// the agents' order does, because a restore lays them out by it.
+// the agents' order does, because a restore lays them out by it. The unfiled
+// mark of an agent does not count: what a surface last saw never carries it.
 func TestSameAsComparesWhatIsOpen(t *testing.T) {
 	a := sample(1, "before")
 	b := sample(2, "")
@@ -437,6 +438,11 @@ func TestSameAsComparesWhatIsOpen(t *testing.T) {
 	moved.Projects[0].Targets[0].Agents[0].Session = "other-id"
 	if sample(1, "").SameAs(moved) {
 		t.Error("another conversation is the same session")
+	}
+	marked := sample(1, "")
+	marked.Projects[0].Targets[0].Agents[0].Unfiled = true
+	if !sample(1, "").SameAs(marked) {
+		t.Error("the unfiled mark made two sessions differ")
 	}
 }
 

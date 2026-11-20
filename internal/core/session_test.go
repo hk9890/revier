@@ -945,7 +945,8 @@ func TestASaveMarksAnAgentNeverPromptedUnfiled(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			probe := resumable()
 			probe.Gone = tc.gone
-			restorer := &core.Core{Runtime: hosttest.NewRuntime("rt"), View: rt, Probes: []revier.AgentProbe{probe}}
+			restoring := hosttest.NewRuntime("rt")
+			restorer := &core.Core{Runtime: restoring, View: restoring, Probes: []revier.AgentProbe{probe}}
 			if got := restorer.Resumes(prepared(t, agentProject()), "home", plan[0].Resumes); !slices.Equal(got, tc.want) {
 				t.Errorf("Resumes = %v, want %v", got, tc.want)
 			}

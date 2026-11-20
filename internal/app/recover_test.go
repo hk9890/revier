@@ -113,6 +113,34 @@ func TestASaveThatHoldsTheSameIsOfferedAndTheSnapshotDropped(t *testing.T) {
 	}
 }
 
+// A save marks an agent never prompted unfiled, and what a surface last saw
+// does not. That save still holds the same, so it is offered with its mark,
+// and no copy without the mark is written (decisions.md D194).
+func TestASaveThatMarksAnAgentUnfiledHoldsTheSameAsTheSnapshot(t *testing.T) {
+	root := t.TempDir()
+	saved := lastSeen(t, root)
+	saved.Reason, saved.At = session.ReasonShutdown, seenAt.Add(-time.Hour)
+	saved.Projects = []session.Project{{Name: "demo", Targets: []session.Target{
+		{Name: "home", Agents: []session.Agent{{Harness: "claude", Session: "abc-123", Dir: "/src/demo", Unfiled: true}}}, {Name: "notes"},
+	}}}
+	held, _, err := session.Save(root, saved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, report := bare(t, state.State{})
+
+	offer, ok, err := app.Recover(c, root, report)
+	if err != nil || !ok || offer.ID != held.ID {
+		t.Fatalf("Recover = %q, %v, %v, want the save %q", offer.ID, ok, err, held.ID)
+	}
+	if !offer.Projects[0].Targets[0].Agents[0].Unfiled {
+		t.Error("the offer lost the unfiled mark")
+	}
+	if all, _ := session.List(root); len(all) != 1 {
+		t.Errorf("sessions = %d, want the one save", len(all))
+	}
+}
+
 // The offer is made once: the second start finds what was last seen taken.
 func TestTheOfferIsMadeOnce(t *testing.T) {
 	root := t.TempDir()

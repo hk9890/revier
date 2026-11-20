@@ -7,8 +7,27 @@ import (
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
+
+// An agent that starts empty with a recorded id never got a prompt, so the
+// plan says so rather than show the id as a conversation it resumes; one with
+// no id recorded needs no word (decisions.md D194).
+func TestAnUnfiledAgentStartsEmptyWithItsReason(t *testing.T) {
+	r := core.RestoreResult{
+		RestoreStep: core.RestoreStep{Action: core.RestoreLaunch, Resumes: []core.Resume{
+			{Harness: "claude", Session: "never-prompted", Unfiled: true}, {Harness: "claude"},
+		}},
+		Agents: []core.AgentOutcome{core.AgentEmpty, core.AgentEmpty},
+	}
+	if _, reason := agentOp(theme.Default(), r, 0); reason != "empty: it never got a prompt" {
+		t.Errorf("reason with an id = %q, want it never got a prompt", reason)
+	}
+	if _, reason := agentOp(theme.Default(), r, 1); reason != "" {
+		t.Errorf("reason with no id = %q, want none", reason)
+	}
+}
 
 // A launch a restore writes reaches the surface on its update loop, before
 // the next survey: a press on that target in between must find it coming up,
