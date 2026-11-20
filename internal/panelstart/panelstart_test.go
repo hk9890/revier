@@ -57,6 +57,34 @@ func TestCommandsOnSearchesTheGivenPATH(t *testing.T) {
 	}
 }
 
+// A relative or empty PATH entry is passed over, also when this directory
+// holds the program: hc reads it against the panel's directory. The search
+// goes on past it.
+func TestCommandsOnPassesOverARelativePATHEntry(t *testing.T) {
+	here, abs, empty := t.TempDir(), t.TempDir(), t.TempDir()
+	for _, dir := range []string{here, filepath.Join(here, "sub"), abs} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "agent"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(here)
+	agent := []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"agent"}}}
+
+	for _, path := range []string{".", ":", empty + ":.", empty + "::", "sub"} {
+		_, err := panelstart.CommandsOn(agent, path)
+		if want := `the agent panel's command "agent" is not on PATH`; err == nil || err.Error() != want {
+			t.Errorf("CommandsOn on PATH %q = %v, want %q", path, err, want)
+		}
+	}
+	got, err := panelstart.CommandsOn(agent, ".:"+abs)
+	if want := [][]string{{filepath.Join(abs, "agent")}}; err != nil || !slices.EqualFunc(got, want, slices.Equal) {
+		t.Errorf("CommandsOn on PATH .:%s = %q, %v; want %q", abs, got, err, want)
+	}
+}
+
 // A bare program is resolved to its file on the given PATH, its arguments
 // kept; a program named by a path is kept as written, and a panel with no
 // command has none. A program not on PATH is refused before any panel

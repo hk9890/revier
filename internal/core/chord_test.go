@@ -141,6 +141,7 @@ func TestTheChordATerminalReports(t *testing.T) {
 		legacy core.Chord // a terminal without key disambiguation
 	}{
 		{"ctrl+shift+o", "ctrl+o"},
+		{"ctrl+shift+z", "ctrl+z"},
 		{"ctrl+alt+shift+o", "ctrl+alt+o"},
 		{"ctrl+shift+i", "tab"},
 		{"ctrl+i", "tab"},
