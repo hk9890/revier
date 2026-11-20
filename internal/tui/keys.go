@@ -127,8 +127,10 @@ func (k keyMap) own() []key.Binding {
 
 // helpFor is the footer for a focus. Enter means something different in each
 // section - a project opens, a target runs, an agent comes to the front - so
-// the label comes from the focus and not from the binding.
-func (k keyMap) helpFor(f focus) []key.Binding {
+// the label comes from the focus and not from the binding. With no row under
+// the cursor, enter, tab and the actions are left out: there is no row to act
+// on and no section to step to, so each would answer nothing.
+func (k keyMap) helpFor(f focus, row bool) []key.Binding {
 	enter, esc, tab := "open", "clear/quit", "next section"
 	switch f {
 	case focusTargets:
@@ -138,11 +140,17 @@ func (k keyMap) helpFor(f focus) []key.Binding {
 	case focusAgents:
 		enter, esc = "go to agent", "clear/back"
 	}
-	out := []key.Binding{helpKey("enter", enter), helpKey("tab", tab)}
+	var out []key.Binding
+	if row {
+		out = append(out, helpKey("enter", enter), helpKey("tab", tab))
+	}
 	if f != focusTargets {
 		out = append(out, helpKey("type", "filter"))
 	}
 	out = append(out, helpKey("esc", esc), k.Quit)
+	if !row {
+		return out
+	}
 	return append(out, k.actions...)
 }
 
