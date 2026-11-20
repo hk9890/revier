@@ -3,6 +3,8 @@ package core_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -405,6 +407,97 @@ func TestNameConversationsFillsInWhatEachAgentHolds(t *testing.T) {
 	if got == nil || got.ID != "abc-123" || got.Dir != "/srv/wt" {
 		t.Errorf("conversation = %+v, want abc-123 in /srv/wt", got)
 	}
+}
+
+// The survey already read each agent's conversation: naming them asks the
+// probe nothing, so a poll does not pay the probe's process twice. The
+// directory is the one the probe gave, also where the view left it out for
+// being the project's own.
+func TestNameConversationsTakesWhatTheSurveyRead(t *testing.T) {
+	proj := project()
+	served := hosttest.New("proc")
+	served.Add("session:revier", "", agent("box.1", "abc-123", proj.Path), agent("box.2", "def-456", "/srv/wt"))
+	probe := resumable()
+	c := &core.Core{Served: served, Probes: []revier.AgentProbe{probe}}
+	report, err := c.Survey(t.Context(), []core.Project{prepared(t, proj)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.NameConversations(t.Context(), report)
+	got := conversationsByPanel(report)
+	if c := got["box.1"]; c == nil || c.ID != "abc-123" || c.Dir != proj.Path {
+		t.Errorf("box.1 conversation = %+v, want abc-123 in %s", c, proj.Path)
+	}
+	if c := got["box.2"]; c == nil || c.ID != "def-456" || c.Dir != "/srv/wt" {
+		t.Errorf("box.2 conversation = %+v, want def-456 in /srv/wt", c)
+	}
+	if probe.Calls != 0 {
+		t.Errorf("Sessions asked %d times, want never", probe.Calls)
+	}
+}
+
+// An agent the survey read no conversation or no directory for is asked
+// about, alone: the read may have failed, an agent not yet prompted still
+// says where it works, and a probe that names no directory in its read may
+// name one when asked.
+func TestNameConversationsAsksTheProbeForWhatTheSurveyCouldNotName(t *testing.T) {
+	proj := project()
+	served := hosttest.New("proc")
+	served.Add("session:revier", "", agent("box.1", "abc-123", proj.Path), agent("box.2", "", "/srv/wt"), agent("box.3", "ghi-789", ""))
+	probe := resumable()
+	c := &core.Core{Served: served, Probes: []revier.AgentProbe{probe}}
+	report, err := c.Survey(t.Context(), []core.Project{prepared(t, proj)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.NameConversations(t.Context(), report)
+	if want := []revier.PanelID{"box.2", "box.3"}; !slices.Equal(probe.Asked, want) {
+		t.Errorf("Sessions asked about %v, want %v", probe.Asked, want)
+	}
+	got := conversationsByPanel(report)
+	if c := got["box.1"]; c == nil || c.ID != "abc-123" || c.Dir != proj.Path {
+		t.Errorf("box.1 conversation = %+v, want abc-123 in %s, as the survey read it", c, proj.Path)
+	}
+	if c := got["box.2"]; c == nil || c.ID != "" || c.Dir != "/srv/wt" {
+		t.Errorf("box.2 conversation = %+v, want none yet, in /srv/wt", c)
+	}
+}
+
+// A project reached through a link: the view leaves out the agent's
+// directory, the link's target, as the project's own, and the conversation
+// keeps the directory the probe gave, not the link.
+func TestNameConversationsKeepsTheDirectoryTheProbeGaveForALinkedProject(t *testing.T) {
+	real := t.TempDir()
+	link := filepath.Join(t.TempDir(), "proj")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	proj := project()
+	proj.Path = link
+	served := hosttest.New("proc")
+	served.Add("session:revier", "", agent("box.1", "abc-123", real))
+	c := &core.Core{Served: served, Probes: []revier.AgentProbe{resumable()}}
+	report, err := c.Survey(t.Context(), []core.Project{prepared(t, proj)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dir := report.Views[0].Agents[0].State.Dir; dir != "" {
+		t.Fatalf("view's directory = %q, want it left out as the project's own", dir)
+	}
+	c.NameConversations(t.Context(), report)
+	if got := report.Views[0].Agents[0].Conversation; got == nil || got.ID != "abc-123" || got.Dir != real {
+		t.Errorf("conversation = %+v, want abc-123 in %s", got, real)
+	}
+}
+
+func conversationsByPanel(r core.Report) map[revier.PanelID]*revier.Conversation {
+	out := map[revier.PanelID]*revier.Conversation{}
+	for _, v := range r.Views {
+		for _, a := range v.Agents {
+			out[a.Panel] = a.Conversation
+		}
+	}
+	return out
 }
 
 // An agent this machine serves to a terminal elsewhere ends with that

@@ -272,9 +272,7 @@ func (p *Probe) list(ctx context.Context) (map[int]listedSession, error) {
 // when a session file changed, or the last run is MaxAge old. The session
 // file holds the sessionId and the cwd the listing gives, so a save records
 // what holds now, or what held MaxAge ago where Claude Code did not rewrite
-// the file. A `revier list --conversations` that already surveyed then runs
-// the command once while no session file changes, not twice: a poll that ran
-// it twice outlasted its caller's deadline on a loaded machine.
+// the file.
 //
 // A failure kept from an earlier run is not the save's: the command runs
 // again, once. A run that fails here is not run again, which would double

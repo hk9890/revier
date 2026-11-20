@@ -28,8 +28,9 @@ type Remote interface {
 	Survey(ctx context.Context, names []ProjectName) ([]ProjectView, error)
 
 	// Conversations is Survey with each agent's Conversation filled in, for a
-	// save. It is a call of its own because naming the conversations costs
-	// the remote a process a survey does not pay for.
+	// save. It is a call of its own because naming an agent its survey read
+	// no conversation for can cost the remote a process a survey does not pay
+	// for.
 	Conversations(ctx context.Context, names []ProjectName) ([]ProjectView, error)
 
 	// Events is what the remote revier recorded in the last days, about every
