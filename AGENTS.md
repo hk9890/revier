@@ -4,10 +4,8 @@
 
 revier is a project-grouped control surface for running coding agents: it shows
 what every agent across every project is doing and reaches the one that needs
-you. A target is reached one way — run-or-raise it, revier's or its command's;
-a second press returns to the project's home. An agent or shell tab is a
-launcher: each press opens one more. Go, ports-and-adapters, with the policy in
-`internal/core` and every tool-specific fact behind a port in `pkg/revier`.
+you. Go, ports-and-adapters, with the policy in `internal/core` and every
+tool-specific fact behind a port in `pkg/revier`.
 
 ## Use-case routing
 
@@ -31,16 +29,14 @@ owns a decision is not guessable from the tree.
 
 **MUST read [docs/CODING.md](docs/CODING.md) before creating or editing ANY file
 under `cmd/`, `pkg/`, `internal/`, or `scripts/`, or `docs/user-guide/embed.go`.**
-What a host must never do, and two invariants the code does not show: what
-`Open` owes `Match`, and what `Instances` costs.
+Its rules are not visible from the code.
 
 ### Design intent, and any change to the model
 
 **MUST read [docs/design/README.md](docs/design/README.md) before the first edit
-under `pkg/revier/`, `internal/core/` or `docs/design/`, and before writing a
-plan that changes what a `docs/design/decisions.md` entry describes.** The
-design set carries the decision log, including which earlier models were
-superseded and why, so a rejected idea is not re-proposed as new.
+under `pkg/revier/`, `internal/core/` or `docs/design/`, and before writing any
+plan that touches `pkg/revier/` or `internal/core/`.** The decision log names
+the models it rejected, so a rejected idea is not proposed again.
 
 ### Testing and verification
 
@@ -51,18 +47,16 @@ machine with no display.
 
 ### Reviewing a change
 
-**MUST read [docs/REVIEWING.md](docs/REVIEWING.md) before reviewing a PR or a
-diff.** It carries the quality rules that no tool checks: today, how a Go
-comment cites a decision, and how a commit message or a PR writes a
-decision number.
+**MUST read [docs/REVIEWING.md](docs/REVIEWING.md) before your first
+`gh pr view`, `gh pr diff` or `git diff` of a change under review, and before
+you invoke a review skill.** No tool checks its quality rules.
 
 ### Running revier by hand
 
 **MUST read [docs/RUNNING.md](docs/RUNNING.md) before running anything that
 opens a window, starts a terminal, or talks to a window manager** — for
 example `./bin/revier`, `revier`, `go run ./scripts/drive`, or any `hc`,
-`kitten` or `wctl` command. revier acts on the user's live
-desktop; the doc carries the substrates that verify a change without touching it.
+`kitten` or `wctl` command. revier acts on the user's live desktop.
 
 ### Finding out what revier did
 

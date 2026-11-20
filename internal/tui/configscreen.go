@@ -145,6 +145,8 @@ func (m Model) runtimeSwitched(msg runtimeMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.core = m.core.WithRuntime(msg.runtime, msg.view)
+	// Logs "runtime switched" with want, the runtime asked for, empty for
+	// auto, and runtime and view, the hosts the core uses now, none for no host.
 	slog.Info("runtime switched", "want", msg.want, "runtime", hostName(msg.runtime), "view", hostName(msg.view))
 	return m, nil
 }

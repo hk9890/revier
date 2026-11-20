@@ -227,6 +227,16 @@ func projectEnv(p core.Project) []string {
 // runStatus runs one command. Like an agent probe, it runs in its own
 // process group, and the timeout ends the whole group: a child the command
 // started would otherwise hold the output open past it.
+//
+// It logs "status" through logging.Poll, keyed by place and project, when
+// the run failed or took 500 ms or more (slow true, at most once a minute
+// per key); a fast run writes nothing. The line carries at, the place (a
+// core.StatusPlace: rule-left, rule-right, project-line or project), and
+// project, empty for a place on the rule, and duration_ms. A failure is one
+// WARN per key and different err, such as "timed out after 5s", and the
+// first success after it writes "status: recovered" with was, last_failed
+// and failures. The place then keeps what takeStatus keeps. The TUI and the
+// popup run it, except while runDue holds a hidden popup.
 func runStatus(key statusKey, s core.Status, env []string) tea.Cmd {
 	return func() tea.Msg {
 		start := time.Now()

@@ -384,23 +384,23 @@ remote host stop eighty-nine projects until `--force` turned the guard off.
 
 ### D100 — the workspace's own panel is marked, not guessed at
 
-`ownPanel` took the first panel carrying no tab mark, so in a workspace whose
-tab holds a shell beside the tab target's panel it picked that shell: a return
-home from a tab landed in the wrong pane, and the own-tab rule of a shutdown
-(D94) read the same guess. revier now marks the panels `Open` makes with the
-target the instance was opened for, through `Realization.Vars`, as `OpenTab`
+revier took the first panel with no tab mark as the workspace's own. In a
+workspace whose tab holds a shell beside a tab target's panel, that was the
+shell: a return home from a tab landed in the wrong pane, and the own-tab
+rule of a shutdown (D94) read the same guess. revier now marks the panels it
+opens for an instance with the target the instance was opened for, as it
 marks a tab's (D64); the own panel is the first one of the marked tab. In an
 instance that opens with its tabs (D126), that tab is the active one. The
 guess stays only for an instance opened before the mark.
 
 ### D101 — a link's view is the host's agents and this machine's, added together
 
-`local := p.Remote == nil` skipped the probe for a link, and the host's answer
-then replaced the view's agents outright, so a terminal attached to a link by
-hand reported none and a shutdown ended a busy agent in it unasked. An
-attachment is probed for a link too, and the host's agents are added to what
-was read here. Where both name one agent, the local reading stands: it read
-the panel itself, and the host's word crossed a machine.
+A link's view skipped the probe here and took the host's agents as its
+whole answer, so a terminal attached to a link by hand reported none, and a
+shutdown ended a busy agent in it unasked. An attachment is probed for a
+link too, and the host's agents are added to what was read here. Where both
+name one agent, the local reading stands: it read the panel itself, and the
+host's word crossed a machine.
 
 ### D102 — an agent's state is what it does now, not since when
 
@@ -936,13 +936,13 @@ the read of a panel its own close ended, which misses a panel closed by hand.
 
 ### D173 — an hc instance is the set of terminals that share revier's instance label
 
-hc has no workspace object, only terminals with labels. Open gives each
-terminal it starts the same random instance id as a label, and the instance
-is every live terminal carrying it; its ref names the id behind hc's core id,
-which a core restart keeps, so a stale binding never names another core's
-terminal. Terminals are not kept: hc brings a kept one back after a reboot as
-a bare shell under the agent's labels, so a restore opens again instead. A
-close kills each terminal, as hc offers no polite close.
+hc has no workspace object, only terminals with labels. So Open gives each
+terminal it starts one id of the instance, and the instance is every live
+terminal that carries it. A ref also names the hc core, whose id a core
+restart keeps, so a stale binding never names another core's terminal.
+Terminals are not kept: hc brings a kept one back after a reboot as a bare
+shell under the agent's labels, so a restore opens again instead. A close
+kills each terminal, as hc offers no polite close.
 
 ### D174 — a prototype runtime runs only where [hosts] names it
 
@@ -1002,12 +1002,13 @@ own, since the runtime draws it.
 
 ### D180 — under hc the kitty view gives each panel a kitty window that attaches its terminal
 
-Extends D165 and D179. hc's attach shows one terminal, so a tab of an agent and
-a shell is two kitty windows in one kitty tab, and an instance is one kitty OS
-window of the workspace kitty, titled as its match expects. Each kitty window
-carries the hc address it attaches, which maps a key's kitty window id to its
-terminal and a terminal to its window. A window ends with its panel, and a
-tab with its last one (D94), past the hold of a command that ended (D187).
+Extends D165 and D179. hc's attach shows one terminal, so a tab of an agent
+and a shell is two kitty windows in one kitty tab, and an instance is one
+kitty OS window of the workspace kitty, titled as its match expects. Each
+kitty window records the terminal it attaches, so a key pressed in it reaches
+that terminal, and the view finds the windows that show an instance. A window
+ends with its panel, and a tab with its last one (D94), past the hold of a
+command that ended (D187).
 
 ### D181 — under hc a view that closes ends no agent, and the next press opens a view again
 
@@ -1079,14 +1080,14 @@ window ends at once.
 
 ### D188 — a kitty panel carries the window's program status unread, and a probe reads it
 
-Extends D119, D144. kitty 0.50 keeps the OSC 7501 records each program in a
-window sends, and the listing revier already takes reports them, so the panel
-carries them as a var and a probe that needs them starts no kitten of its own.
-The records name a program, not an agent: rsync sends them too. So the host
-neither filters nor maps them, and drops a user var of the same name, so the
-var holds only what kitty reports; any program can still send a record. Rejected:
-the socket to the probe, which hands it all of kitty's remote control; a
-built-in mapping, until a second agent sends the records.
+Extends D119, D144. kitty 0.50 reports the status records each program in a
+window sends in the listing revier already takes, so the panel carries them
+and a probe that needs them starts no kitten of its own. The records name a
+program, not an agent: rsync sends them too. So the host neither filters nor
+maps them, and the panel holds only what kitty reports, never a user var of
+the same name; any program can still send a record. Rejected: the socket to
+the probe, which hands it all of kitty's remote control; a built-in mapping,
+until a second agent sends the records.
 
 ### D190 — a key binds to the instance it landed on, and a launch's window may come minutes late
 

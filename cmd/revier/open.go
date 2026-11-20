@@ -101,7 +101,7 @@ func (a *app) attach(ref revier.TargetRef) error {
 		return err
 	}
 	// The exec replaces the process, so the command's own line is never
-	// written: this one stands for it.
+	// written: this "attach" line, at Info with ref and argv, stands for it.
 	slog.Info("attach", "ref", ref, "argv", argv)
 	return execve(path, argv, os.Environ())
 }

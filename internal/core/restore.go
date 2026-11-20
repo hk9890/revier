@@ -118,6 +118,16 @@ func (c *Core) RestorePreview(s session.Session, r Report, projects []Project) R
 // return, and back is ErrHomeCancelled; one cancelled during that launch lets
 // it finish.
 func (c *Core) Restore(ctx context.Context, s session.Session, r Report, projects []Project, opts RestoreOpts) (out Restored, back error) {
+	// A restore logs "session restore" with id, name, saved_at and dry_run,
+	// then "restore step" per step with project, target, action and dry_run,
+	// written before the launch, and "restore agent" per recorded agent of a
+	// launch with project, target, dry_run, harness, agent, as, session, dir and
+	// outcome. as is RestoreResult.As, empty for every other agent. The state
+	// record's "restore step" line carries the same as for each of its agents.
+	// It ends with "session restored" with id and the counts opened, pending
+	// and failed. A WARN "restore step" with err "planned project not loaded"
+	// is a launch whose project no file loads now. showRunning logs what it
+	// could not show.
 	slog.Info("session restore", "id", s.ID, "name", s.Name, "saved_at", s.At, "dry_run", false)
 	plan := c.RestorePlan(s, r)
 	// Each step, and the launch that returns home, runs on a context the
@@ -151,6 +161,10 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 		out = append(out, res)
 		opts.report(Progress{Phase: PhaseLaunch, N: i + 1, Of: len(plan), Label: string(step.Target), Done: true, Restored: res})
 	}
+	// A cancel by ctrl+c in the TUI (decisions.md D140) or on revier session
+	// restore logs "session restore cancelled" with id, walked and steps.
+	// walked is equal to steps when the cancel came during the last step. The
+	// "session restored" line still follows, with its counts.
 	cancelled := ctx.Err() != nil
 	if cancelled {
 		slog.Info("session restore cancelled", "id", s.ID, "walked", len(out), "steps", len(plan))
@@ -187,9 +201,12 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 // target the restore found running, as a press would: a view closed since
 // the save comes back over the live terminals with its own tab current, and
 // starts nothing. The window host does not raise it, as no step of a restore
-// is raised (decisions.md D15, D181). A tab's
-// instance is the one it is inside. What fails is logged: the target runs,
-// and the next press shows it.
+// is raised (decisions.md D15, D181). A tab's instance is the one it is
+// inside. What fails is a WARN "restore: show a running target" with
+// project, target and err: the runtime did not list, or the view's window
+// did not open over it again, or its own tab did not become current. For a
+// tab, target is the target the tab is inside. The target runs, and the next
+// press shows it.
 func (c *Core) showRunning(ctx context.Context, p Project, name revier.TargetName) {
 	shower, ok := c.View.(revier.Shower)
 	if !ok || c.Runtime == nil {
@@ -356,6 +373,8 @@ func LogRestore(r RestoreResult) {
 	logAgents(r)
 }
 
+// logStep and logAgents write the "restore step" and "restore agent" lines
+// that Restore's comments describe.
 func logStep(step RestoreStep, dry bool) {
 	slog.Info("restore step", "project", step.Project, "target", step.Target, "action", step.Action.String(), "dry_run", dry)
 }

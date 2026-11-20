@@ -51,6 +51,7 @@ func Rename(root string, from, to revier.ProjectName, inh Inherited) (core.Proje
 		_ = os.Remove(p.File)
 		return core.Project{}, err
 	}
+	// Logs "project renamed" with from and to, and no project field.
 	slog.Info("project renamed", "from", from, "to", to)
 	return p, nil
 }

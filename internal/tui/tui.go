@@ -484,6 +484,7 @@ func (m Model) awaitSwitch() tea.Cmd {
 	return func() tea.Msg {
 		if err := popupswitch.Await(ln); err != nil {
 			if !errors.Is(err, net.ErrClosed) {
+				// Logs "popup: switch socket" at Warn with err.
 				slog.Warn("popup: switch socket", "err", err)
 				_ = ln.Close()
 			}
@@ -1000,13 +1001,14 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case hiddenMsg:
 		if msg.err != nil && msg.went {
 			// The go landed; the popup stays where it is, with its query
-			// and cursor, as it did before a go hid it.
+			// and cursor, as it did before a go hid it. Logs "popup hide
+			// after go" at Warn with err.
 			slog.Warn("popup hide after go", "err", msg.err)
 			return m, nil
 		}
 		if msg.err != nil {
-			// The popup cannot leave the screen, so it leaves the way it
-			// did before it could hide.
+			// The popup cannot leave the screen, so it quits. Logs "popup
+			// hide, quitting instead" at Warn with err.
 			slog.Warn("popup hide, quitting instead", "err", msg.err)
 			return m, m.quit()
 		}
@@ -1095,7 +1097,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = fail("config load", "", msg.err)
 		default:
 			// The old list stands: a file broken while hidden must not
-			// empty the popup.
+			// empty the popup. Logs "reload on raise" at Warn with err: the
+			// read of config.toml and the project files on the raise failed.
 			slog.Warn("reload on raise", "err", msg.err)
 		}
 		status := m.retakeStatuses(statuses)
@@ -1651,6 +1654,8 @@ func (m Model) goRow(i int) tea.Cmd {
 			defer cancel()
 			start := time.Now()
 			err := c.Focus(ctx, ref)
+			// Logs "focus attached" with ref and duration_ms, at Error with
+			// err when the focus failed.
 			logging.Op("focus attached", start, err, "ref", ref)
 			return actedMsg{err: fail("focus", project, err), went: true, errands: errands}
 		}
@@ -1710,6 +1715,9 @@ func (m Model) action(msg keyPress) (tea.Cmd, bool) {
 		// nothing to run, and its own text says why in the footer.
 		run, err := app.PlanAction(m.core, p, act.Name, act.Run)
 		if err != nil {
+			// Logs "action" at Error with project, action and err: the
+			// plan failed, so the line has no argv or duration_ms, unlike
+			// the one app.Action.Done writes.
 			slog.Error("action", "project", p.Name, "action", act.Name, "err", err)
 			return func() tea.Msg { return actedMsg{err: err} }, true
 		}

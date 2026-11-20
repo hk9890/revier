@@ -133,6 +133,11 @@ func panelTabDir(w Workspace, req TabRequest, outside bool) string {
 // outside the project that holds it is dropped too: a panel's shell can sit
 // anywhere.
 func (c *Core) openPlaced(ctx context.Context, projects []Project, w Workspace, req TabRequest, dir string) (PlacedTab, error) {
+	// op is the log's msg: "shell new" for a shell tab, "agent new" for an
+	// agent tab. Both carry project, target, ref and dir; an agent tab also
+	// carries agent, session and outcome. A --panel directory outside the
+	// project logs op at Warn with err, project and dir, and the tab opens
+	// in the project.
 	op := "shell new"
 	if req.Kind == revier.PanelAgent {
 		op = "agent new"
@@ -181,6 +186,14 @@ func (c *Core) openPlaced(ctx context.Context, projects []Project, w Workspace, 
 // agent an agent key asks for, or nothing. Every other failure is returned,
 // so the key's own fallback runs (decisions.md D148, D164, D183); so is an
 // agent that cannot run there, as OutsideKey's agent says.
+//
+// Before anything opens, it logs "tab outside a workspace" at Info in place
+// of the "shell new" or "agent new" line, with panel, ref (empty for a
+// window of the view), outside, kind, agent (empty for the default agent and
+// for a shell key) and dir. With outside "none" nothing opens. With outside
+// "agent", an agent key that names no agent where config.toml declares no
+// [[agent]] to run logs the same msg at Warn with err, and the tab is a
+// plain shell.
 func (c *Core) tabOutside(ctx context.Context, w Workspace, req TabRequest) error {
 	dir, outside := panelTabDir(w, req, true), req.Outside
 	slog.Info("tab outside a workspace", "panel", req.Panel, "ref", w.Ref, "outside", string(outside.Outside), "kind", string(req.Kind), "agent", outside.Agent, "dir", dir)

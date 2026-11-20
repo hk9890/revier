@@ -79,9 +79,11 @@ func Origin(dir string) string {
 // No deadline: the clone of a large repository outlasts any timeout a keypress
 // command sets for its host calls.
 //
-// Every failure is a clone line of the log, one refused before git ran too.
-// The TUI's footer names a failed clone alone and leaves why to the log
-// (decisions.md D157); its detail pane says why.
+// Every clone logs "clone" with project, git_url, path and duration_ms.
+// Every failure logs it at Error with err, also a refusal before git runs. A
+// directory that is there logs nothing. The TUI's footer names a
+// failed clone alone and leaves why to the log (decisions.md D157); its
+// detail pane says why.
 func Ensure(p revier.Project, out io.Writer) (bool, error) {
 	start := time.Now()
 	cloned, err := ensure(p, out)

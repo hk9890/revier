@@ -239,9 +239,16 @@ func (c *Core) AskRemotes(ctx context.Context, projects []Project) RemoteAnswers
 }
 
 // askRemote surveys one host's projects, by the names they have there, and
-// answers by the names the links have here. A host that fails answers for
-// all of them with the failure; one that answers but leaves a project out
-// answers for that project with that.
+// answers by the names the links have here. A host that fails answers for all
+// of them with the failure; one that answers but leaves a project out answers
+// for that project with that.
+//
+// It logs "remote survey" through logging.PollAt, keyed by host, with host,
+// projects, the count asked for, and duration_ms. A fast success writes
+// nothing; one that took logging.SlowRemotePoll or more writes an INFO line
+// with slow true, at most once a minute per host. A failure is one WARN per
+// distinct err of a run of failures, and the first success after it writes
+// "remote survey: recovered".
 func (c *Core) askRemote(ctx context.Context, host string, links []Project) map[revier.ProjectName]remoteAnswer {
 	out := make(map[revier.ProjectName]remoteAnswer, len(links))
 	names := make([]revier.ProjectName, len(links))
@@ -402,6 +409,10 @@ func (c *Core) eventsOn(ctx context.Context, host string, days int) ([]revier.Ev
 		return nil, err
 	}
 	recorded, err := r.Events(ctx, days)
+	// One line per linked host that RemoteEvents asks, which only
+	// `revier events` does: at Info with host, days, events and duration_ms, or
+	// at Error with err as well. A host that no remote is wired for fails at
+	// c.remote and writes no line.
 	logging.Op("remote events", start, err, "host", host, "days", days, "events", len(recorded))
 	return recorded, err
 }

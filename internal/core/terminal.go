@@ -91,7 +91,9 @@ func (t tabs) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Realiz
 	if err != nil || t.launching {
 		return panel, err
 	}
-	// The tab runs, and the next press that shows the instance draws it.
+	// When the view cannot draw the tab, OpenTab logs a WARN "show the new
+	// tab" with view, ref and err. The tab runs, and the next press that shows the
+	// instance draws it.
 	if _, err := t.c.show(ctx, ref, false); err != nil {
 		slog.Warn("show the new tab", "view", t.c.View.Name(), "ref", ref, "err", err)
 	}
@@ -206,6 +208,14 @@ func (c *Core) raisableShown(ctx context.Context, snap snapshot, failed hostErrs
 // shownAgain sets up the OS window a view opened again over the live
 // instance inst, as raisableShown says, and returns it: zero when the window
 // host never lists it, or cannot pair it with inst.
+//
+// It logs "view opened again over a live instance" at Info with view, ref and
+// target. The view opened a window over an instance that no window of the
+// view showed. A press of a target or of a tab, a restore, and an agent or
+// shell tab opened with the focus pass the place of the instance's target
+// (decisions.md D186). An agent focus, a focus of a ref and a surface raise
+// (RaiseSelf) pass none, and nothing is placed. The window host must then
+// list the window within PlaceWait (placeShown).
 func (c *Core) shownAgain(ctx context.Context, inst revier.Instance, name revier.TargetName, place string) (revier.TargetRef, error) {
 	slog.Info("view opened again over a live instance", "view", c.View.Name(), "ref", inst.Ref, "target", name)
 	if opener, ok := c.opener(c.terminal()); ok {
@@ -223,7 +233,9 @@ func (c *Core) shownAgain(ctx context.Context, inst revier.Instance, name revier
 
 // placeShown waits for the OS window a view opened again over the live
 // instance ref, puts it where place says, and returns it: zero when the
-// window host never lists it.
+// window host never lists it. A window the host never lists within
+// PlaceWait logs a WARN "raise: the window host never listed the new
+// window" with ref and target: it is not placed and not raised.
 func (c *Core) placeShown(ctx context.Context, ref revier.TargetRef, name revier.TargetName, place string) revier.TargetRef {
 	osw, ok := c.windowOfNew(ctx, ref)
 	if !ok {

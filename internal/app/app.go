@@ -122,6 +122,7 @@ func DeleteProject(ledger core.Ledger, p core.Project) error {
 	err := os.Remove(p.File)
 	ledger.Note(record.Line{Kind: record.KindProjectDeleted, Project: p.Name, Dir: p.File}.Failed(err))
 	if err == nil {
+		// path is the file removed.
 		slog.Info("project deleted", "project", p.Name, "path", p.File)
 	}
 	return err
@@ -170,12 +171,13 @@ func PlanAction(c *core.Core, p core.Project, name string, run []string) (Action
 	return a, nil
 }
 
-// Done takes how the command ended. An action that succeeded is one event,
-// stamped with its start as the launch is: an action runs as long as it runs,
-// and it was asked for when it began. A link's action is the event of the
-// revier that ran it on its host, which `revier events` prints with that
-// host, so it is no second one here. The state record has every action,
-// failed or not, a link's too.
+// Done takes how the command ended. It logs "action" with project, action,
+// argv and duration_ms: at Info when it succeeded, at Error with err when it
+// failed. An action that succeeded is one event, stamped with its start as
+// the launch is: an action runs as long as it runs, and it was asked for when
+// it began. A link's action is the event of the revier that ran it on its
+// host, which `revier events` prints with that host, so it is no second one
+// here. The state record has every action, failed or not, a link's too.
 func (a Action) Done(err error) {
 	logging.Op("action", a.start, err, "project", a.project, "action", a.name, "argv", a.Argv)
 	if err == nil && a.here {

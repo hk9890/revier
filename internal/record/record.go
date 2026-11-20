@@ -251,6 +251,10 @@ func write(lines []Line) {
 			l.Time = now()
 		}
 		l.Pid, l.Cmd = pid, cmd
+		// A line that cannot be appended logs "record" at WARN with kind and err,
+		// once per distinct err of a run of failures, and the next append that
+		// succeeds logs "record: recovered" at INFO (logging.Repeat). The
+		// operation goes on.
 		logging.Repeat("record", "record", appendLine(filepath.Join(dir, day(l.Time)+".jsonl"), l), "kind", l.Kind)
 	}
 }
@@ -325,6 +329,9 @@ func readDay(path string) ([]Line, error) {
 		if len(line) == 0 {
 			continue
 		}
+		// A line that does not decode is skipped with one WARN "record line
+		// skipped": file, the base name of the day file, line, its number
+		// from 1, and err. A blank line is skipped and writes nothing.
 		var l Line
 		if err := json.Unmarshal(line, &l); err != nil {
 			slog.Warn("record line skipped", "file", filepath.Base(path), "line", n, "err", err)

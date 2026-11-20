@@ -374,6 +374,9 @@ func cmdAgentFocus(out io.Writer, args []string) error {
 	}
 	name, _, _ := strings.Cut(address, ":")
 	err = a.core.FocusAgent(ctx, revier.ProjectName(name), revier.AgentView{Ref: ag.Ref, Panel: ag.Panel.ID, State: ag.State})
+	// Logs "agent focus" with address, ref and panel, and err when the focus
+	// failed. An address a.agent cannot resolve returns before it and logs no
+	// line here.
 	logging.Op("agent focus", start, err, "address", address, "ref", ag.Ref, "panel", ag.Panel.ID)
 	return err
 }
@@ -399,6 +402,11 @@ func cmdAgentClose(out io.Writer, args []string) error {
 	}
 	start := time.Now()
 	err = a.closeAgent(ctx, pos[0], *force)
+	// Logs "agent close" with address and force, and err when the close failed
+	// or was refused. An address that names an agent first writes "shutdown
+	// survey". A close past the busy check in closeAgent adds "shutdown
+	// recheck", then "shutdown refused", or "shutdown step" and "shutdown". It
+	// writes no "shutdown save" or "session saved".
 	logging.Op("agent close", start, err, "address", pos[0], "force", *force)
 	return err
 }

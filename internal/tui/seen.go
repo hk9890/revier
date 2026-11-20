@@ -74,6 +74,9 @@ func (m *Model) keepSeen(surveyed bool) tea.Cmd {
 	root := m.stateRoot
 	return func() tea.Msg {
 		err := app.SaveSeen(root, s)
+		// A write that fails writes one WARN "session seen" with err and path,
+		// $STATE/seen.toml. A run of failures writes one line per distinct err, and
+		// the next write that succeeds writes "session seen: recovered".
 		logging.Repeat("session seen", "session seen", err, "path", session.SeenPath(root))
 		return nil
 	}
@@ -97,6 +100,9 @@ func (m Model) recover() tea.Cmd {
 // replace what the end before left with what is open now.
 func (m *Model) takeRecovered(msg recoveredMsg) {
 	m.checking = false
+	// A check that fails writes one WARN "unclean end" with err alone per
+	// distinct err of a run of failures, and the next check that answers writes
+	// "unclean end: recovered". The line of an end found is app.Recover's.
 	logging.Repeat("unclean end", "unclean end", msg.err)
 	if msg.err != nil {
 		return

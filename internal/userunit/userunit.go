@@ -34,6 +34,11 @@ type Unit struct {
 // forking unit is starting until its program has forked. Where there is no
 // systemd-run, or it cannot start u, Start calls detached, which starts the
 // program apart from the service manager.
+//
+// When systemd-run fails and u neither runs nor is starting, Start writes one
+// WARN "the service manager did not start the unit; starting it detached",
+// with unit and err. With no systemd-run it writes nothing. Its callers
+// start the workspace kitty and the hc core.
 func Start(ctx context.Context, u Unit, argv []string, detached func(context.Context) error) error {
 	run, err := exec.LookPath("systemd-run")
 	if err != nil {

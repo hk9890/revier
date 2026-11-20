@@ -630,6 +630,8 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	opts.report(Progress{Phase: PhaseRecheck, Of: len(plan)})
 	r, plan := c.recheck(ctx, plan, opts)
 	if busy := Busy(plan); len(busy) > 0 && !opts.Force {
+		// Logs "shutdown refused" at Info with the plan's steps and busy
+		// counts (decisions.md D99): nothing closes and nothing is saved.
 		slog.Info("shutdown refused", "steps", len(plan), "busy", len(busy))
 		c.note(record.Line{Kind: record.KindShutdownRefused, Counts: map[string]int{"steps": len(plan), "busy": len(busy)}})
 		return nil, &BusyRefusal{Plan: plan}
@@ -647,6 +649,10 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 		saved := time.Now()
 		err := opts.Before(saving, r)
 		stop()
+		// Logs "shutdown save" with duration_ms, at Error with err when the
+		// save failed: the shutdown then ends with no "shutdown" line. A save
+		// made before a cancel logs no err: the cancel is "shutdown cancelled"
+		// with walked 0.
 		logging.Op("shutdown save", saved, err)
 		if err != nil {
 			return nil, err
@@ -678,6 +684,10 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 				res.Err = errors.Join(res.Err, closer.ClosePanel(closing, s.Ref, p))
 			}
 		}
+		// One Info line for each step the walk reached, also one that failed:
+		// its project, target, ref and panel; panels, the count of panels the
+		// step closes; agents, its agent count; busy; unsupported, true when no
+		// host can close it; unread, why its agents could not be read; and err.
 		slog.Info("shutdown step", "project", s.Project, "target", s.Target, "ref", s.Ref, "panel", s.Panel, "panels", len(res.closes()),
 			"agents", len(s.Agents), "busy", s.Busy(), "unsupported", res.Action == CloseUnsupported,
 			"unread", s.Unread, "err", res.Err)
@@ -698,10 +708,16 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	closed, open, failed := out.Counts()
 	// A cancel stopped something when it left a step unreached, or ended the
 	// wait with a step still listed; one after the last step stopped nothing
-	// else.
+	// else. ctrl+c in the TUI or on revier shutdown cancels (decisions.md
+	// D140). A cancel that stopped something logs "shutdown cancelled" with
+	// walked of steps; walked equal to steps is a cancel that ended the wait
+	// after the last step. The "shutdown" line still follows.
 	if cancelled() && (len(out) < len(plan) || open > 0) {
 		slog.Info("shutdown cancelled", "walked", len(out), "steps", len(plan))
 	}
+	// The closing line of a shutdown that the guard let through and whose
+	// save, if any, succeeded: the closed, open and failed counts, and
+	// duration_ms from the start of the recheck to the end of the wait.
 	logging.Op("shutdown", start, nil, "closed", closed, "open", open, "failed", failed)
 	c.note(record.Line{Kind: record.KindShutdown, Counts: map[string]int{"closed": closed, "open": open, "failed": failed}})
 	return out, nil
@@ -730,6 +746,10 @@ func (c *Core) recheck(ctx context.Context, plan []CloseStep, opts ShutdownOpts)
 			unread++
 		}
 	}
+	// Logs "shutdown recheck" at Info when the recheck survey ends: steps;
+	// unread, the count of steps whose agents it could not read; asked, the
+	// linked hosts waited for; unanswered, why a host gave no answer for a
+	// link; and duration_ms.
 	logging.Op("shutdown recheck", start, nil, "steps", len(plan), "unread", unread, "asked", answers.hosts(), "unanswered", answers.failures())
 	return r, plan
 }

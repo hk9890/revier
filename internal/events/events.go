@@ -63,6 +63,8 @@ func record(e revier.Event) {
 		e.Time = now()
 	}
 	if err := appendLine(file, e); err != nil {
+		// Logs "event" at WARN with event, project and err, one line for
+		// each event that cannot be appended.
 		slog.Warn("event", "event", e.Kind, "project", e.Project, "err", err)
 	}
 }
@@ -153,6 +155,9 @@ func Read(stateRoot string, since time.Time) ([]revier.Event, error) {
 		}
 		var e revier.Event
 		if err := json.Unmarshal(line, &e); err != nil {
+			// Logs "event line skipped" at WARN, one line for each line of
+			// the file that is not blank and is not an event, with line, its
+			// number from 1, and err.
 			slog.Warn("event line skipped", "line", n, "err", err)
 			continue
 		}

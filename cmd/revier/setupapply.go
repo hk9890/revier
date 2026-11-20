@@ -119,6 +119,9 @@ func (r setupRun) applyKeys(ctx context.Context) (core.KeyPlan, error) {
 	if err != nil || r.dryRun {
 		return plan, err
 	}
+	// Each step that changed something logs "setup install: keys" or
+	// "setup uninstall: keys" with step. A step that failed logs it at
+	// Error; its error is inside step.
 	plan = a.core.ApplyKeys(ctx, plan, r.force)
 	for _, s := range plan.Steps {
 		if s.Err != "" {
@@ -143,6 +146,10 @@ func (r setupRun) applyTerm(ctx context.Context) (before, after core.TermKeyPlan
 	if err != nil || r.dryRun {
 		return plan, plan, err
 	}
+	// A run that changed something logs "setup install: term" or "setup
+	// uninstall: term" with file and include, the actions on revier's key
+	// file and on the include line, and path, the key file. A run that
+	// failed logs it at Error with err in place of path.
 	after = a.core.ApplyTermKeys(ctx, plan)
 	switch {
 	case after.Err != "":
@@ -167,6 +174,11 @@ func (r setupRun) applyRules(ctx context.Context) (core.PopupRulePlan, error) {
 	if err != nil || r.dryRun {
 		return plan, err
 	}
+	// A run that changed something logs "setup install: rules" or "setup
+	// uninstall: rules" with action; file, revier's own rules file; and
+	// moved, the number of an older revier's rules taken out of the user's
+	// file (decisions.md D191). A run that failed logs it at Error with err
+	// as well.
 	plan = a.core.ApplyPopupRules(ctx, plan)
 	switch {
 	case plan.Err != "":

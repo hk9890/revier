@@ -10,6 +10,10 @@ import (
 // outlives it: once it is removed, every process started from here inherits a
 // directory that no longer exists, and git, claude and a probe script each
 // refuse to run in one (decisions.md D92).
+//
+// A home it cannot move into writes one WARN "start directory" with err
+// for each call. Every process calls it through leaveLostStartDir, and the
+// surface also calls it once more in tuiStart.
 func leaveStartDir() {
 	home, err := os.UserHomeDir()
 	if err == nil {

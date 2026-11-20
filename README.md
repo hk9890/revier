@@ -76,7 +76,7 @@ territory.
 
 - **Projects on another machine.** `revier link buildbox far` adds a project
   on an ssh host as a row in your list. Its agents run on the host and show in
-  your local terminal. In the TUI, press alt+r.
+  your local terminal.
   See [Link a project](docs/user-guide/links.md#link-a-project).
 - **Drive agents from a script.** `revier agent prompt`, `wait`, `read` and
   `send-keys` work with an agent, and none of them raises a window.
