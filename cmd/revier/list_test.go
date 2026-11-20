@@ -65,6 +65,24 @@ func TestListMatchTakesNoNames(t *testing.T) {
 	}
 }
 
+// --conversations has effect only on the projects' JSON, so anywhere else it
+// is refused rather than ignored.
+func TestListConversationsNeedsTheProjectsJSON(t *testing.T) {
+	a := listApp(t)
+	for _, args := range [][]string{{"--conversations"}, {"--agents", "--conversations"}, {"--agents", "--json", "--conversations"}} {
+		var out bytes.Buffer
+		a.out = &out
+		err := cmdList(context.Background(), a, args)
+		if err == nil || !strings.HasPrefix(err.Error(), "usage:") || out.Len() != 0 {
+			t.Errorf("list %q: err = %v, printed %q; want a usage error and nothing printed", args, err, out.String())
+		}
+	}
+	a.out = &bytes.Buffer{}
+	if err := cmdList(context.Background(), a, []string{"--json", "--conversations"}); err != nil {
+		t.Errorf("list --json --conversations: %v", err)
+	}
+}
+
 // Names a list does not know cost the names it knows nothing: those are
 // listed, each unknown one has its line on stderr with the project it
 // probably meant, and the exit fails, so a revier on another machine still

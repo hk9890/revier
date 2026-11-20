@@ -38,10 +38,11 @@ usage:
                                 name is no project's; --match lists the
                                 projects whose name, directory, repository,
                                 name on a link's host or agent activity holds
-                                the word, or whose agent the harness names so;
-                                --agents prints one row per agent, with the
-                                address revier agent takes; --conversations
-                                names the conversation each agent holds
+                                the word, or whose agent has the word as the
+                                whole name its harness gives it; --agents
+                                prints one row per agent, with the address
+                                revier agent takes; --conversations names the
+                                conversation each agent holds
   revier open [name] [--attach] run-or-raise a project's workspace; an unknown name
                                 becomes a new project for this directory, and a
                                 missing directory is cloned from git_url; --attach

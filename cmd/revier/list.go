@@ -23,7 +23,7 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "emit the view as JSON")
 	conversations := fs.Bool("conversations", false, "with --json, name the conversation each agent holds")
-	match := fs.String("match", "", "only the projects this word finds")
+	match := fs.String("match", "", "only the projects this word finds; see revier --help")
 	agents := fs.Bool("agents", false, "one row per agent, with its address")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
@@ -31,6 +31,9 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	}
 	if *match != "" && len(pos) > 0 {
 		return errors.New("usage: revier list --match <word> takes no project names")
+	}
+	if *conversations && (!*asJSON || *agents) {
+		return errors.New("usage: revier list --conversations needs --json and no --agents")
 	}
 	// Named, the list is those projects alone. This is how a revier on
 	// another machine is asked about the projects that live there
