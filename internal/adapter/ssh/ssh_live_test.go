@@ -124,6 +124,25 @@ func TestASurveyThatFailsForOneNameKeepsTheOthers(t *testing.T) {
 	}
 }
 
+// The line for a name the host does not know comes before the remote
+// survey. When the connection drops after it, ssh exits 255 and the host
+// failed, though the last line the remote revier wrote is that refusal.
+func TestASurveyWhoseConnectionDroppedAfterARefusalFailsTheHost(t *testing.T) {
+	bin := t.TempDir()
+	script := "#!/bin/sh\n" +
+		`echo 'revier: no project named "gone"' >&2` + "\n" +
+		`echo 'Connection to box closed by remote host.' >&2` + "\nexit 255\n"
+	if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("XDG_RUNTIME_DIR", "")
+
+	if views, err := ssh.New("box").Survey(t.Context(), []revier.ProjectName{"demo", "gone"}); err == nil {
+		t.Errorf("Survey = %+v, nil; want the host's failure", views)
+	}
+}
+
 // awkward are names a user may give a project or an agent that each shell
 // on the way reads in its own way: a backtick, a backslash, a trailing
 // backslash, quotes, a dollar and spaces.

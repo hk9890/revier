@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -109,7 +110,7 @@ func quiet(line string) string {
 // shell joins the words ssh is given back into one line, so each is quoted
 // here to reach the remote revier as the one argument it was. A failure is
 // classified: what ssh or the remote shell said, in one line that says what
-// to do about it.
+// to do about it. A failure the remote revier ended itself is a failedThere.
 func (r *Remote) exec(ctx context.Context, args ...string) ([]byte, []byte, error) {
 	words := make([]string, len(args))
 	for i, a := range args {
@@ -125,10 +126,25 @@ func (r *Remote) exec(ctx context.Context, args ...string) ([]byte, []byte, erro
 	// its context, so the wait for its output is bounded too.
 	c.WaitDelay = waitDelay
 	if err := procgroup.Run(c); err != nil {
-		return out.Bytes(), errb.Bytes(), classify(ctx, r.host, args, errb.String(), err)
+		failed := classify(ctx, r.host, args, errb.String(), err)
+		if status(err) == revierStatus {
+			failed = failedThere{failed}
+		}
+		return out.Bytes(), errb.Bytes(), failed
 	}
 	return out.Bytes(), errb.Bytes(), nil
 }
+
+// revierStatus is the status a remote revier exits with when it fails. ssh
+// passes it through. A call that was killed, a connection that dropped and
+// a revier that panicked each end with another status.
+const revierStatus = 1
+
+// failedThere is a call that the remote revier ended itself, with
+// revierStatus: what it wrote is all it had to say.
+type failedThere struct{ error }
+
+func (f failedThere) Unwrap() error { return f.error }
 
 // waitDelay is how long a call whose context ended waits for its output to
 // close.
@@ -251,9 +267,12 @@ func (r *Remote) list(ctx context.Context, names []revier.ProjectName, flags ...
 // some of the names lists those and fails for the others, and one that knows
 // none lists nothing: a name it does not know is one link's fault, which the
 // core reports for that link alone (decisions.md D85). Every other
-// failure is the host's.
+// failure is the host's. The remote revier writes the line for a name it
+// does not know before its survey starts, so the line counts only when that
+// revier ended the call itself: a call that was killed or lost its
+// connection after the line has no answer.
 func partial(out, stderr []byte, err error) ([]revier.ProjectView, error) {
-	if !refusedNamesOnly(stderr) {
+	if !errors.As(err, new(failedThere)) || !refusedNamesOnly(stderr) {
 		return nil, err
 	}
 	if len(bytes.TrimSpace(out)) == 0 {

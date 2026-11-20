@@ -149,8 +149,12 @@ func answer(r *ssh.Remote, out, stderr string, err error) {
 }
 
 // errFailed is a call that failed in the remote revier, as classify passes it
-// through when it does not know the reason: the exit status is gone.
+// through when it does not know the reason.
 var errFailed = errors.New("buildbox: revier list --json demo gone: exit status 1")
+
+// failedThere is errFailed as the call returns it when the remote revier
+// ended the call itself.
+var failedThere = ssh.FailedThere(errFailed)
 
 // A remote revier that does not know one of the names lists the others, says
 // why for that one, and exits 1. The others are the answer, so a stale link
@@ -159,7 +163,7 @@ var errFailed = errors.New("buildbox: revier list --json demo gone: exit status 
 func TestSurveyListsTheKnownNamesWhenTheHostDoesNotKnowOne(t *testing.T) {
 	r := ssh.New("buildbox")
 	answer(r, `[{"project":{"name":"demo","path":"/x"},"targets":[]}]`,
-		"welcome\nrevier: no project named \"gone\"; did you mean \"demo\"?\nrevier: no project named \"gone\"\nbye\n", errFailed)
+		"welcome\nrevier: no project named \"gone\"; did you mean \"demo\"?\nrevier: no project named \"gone\"\nbye\n", failedThere)
 	views, err := r.Survey(t.Context(), []revier.ProjectName{"demo", "gone"})
 	if err != nil {
 		t.Fatalf("Survey: %v", err)
@@ -171,7 +175,7 @@ func TestSurveyListsTheKnownNamesWhenTheHostDoesNotKnowOne(t *testing.T) {
 
 func TestSurveyListsNothingWhenTheHostKnowsNoName(t *testing.T) {
 	r := ssh.New("buildbox")
-	answer(r, "", "revier: no project named \"gone\"\nrevier: no project named \"gone\"\n", errFailed)
+	answer(r, "", "revier: no project named \"gone\"\nrevier: no project named \"gone\"\n", failedThere)
 	views, err := r.Survey(t.Context(), []revier.ProjectName{"gone"})
 	if err != nil || len(views) != 0 {
 		t.Errorf("Survey = %+v, %v; want nothing and no error", views, err)
@@ -188,7 +192,26 @@ func TestSurveyFailsTheHostForAnyOtherFailure(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := ssh.New("buildbox")
-			answer(r, tc.out, tc.stderr, errFailed)
+			answer(r, tc.out, tc.stderr, failedThere)
+			if _, err := r.Survey(t.Context(), []revier.ProjectName{"demo", "gone"}); !errors.Is(err, errFailed) {
+				t.Errorf("err = %v, want the call's failure", err)
+			}
+		})
+	}
+}
+
+// The remote revier writes the line for a name it does not know before its
+// survey starts. A call that ended after that line and before the remote
+// revier ended it has no answer, so the host failed: one that was killed at
+// the end of its wait, and one whose connection dropped.
+func TestSurveyFailsTheHostWhenTheCallEndedAfterTheRefusal(t *testing.T) {
+	for _, tc := range []struct{ name, stderr string }{
+		{"killed", "revier: no project named \"gone\"\n"},
+		{"connection dropped", "revier: no project named \"gone\"\nConnection to buildbox closed by remote host.\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := ssh.New("buildbox")
+			answer(r, "", tc.stderr, errFailed)
 			if _, err := r.Survey(t.Context(), []revier.ProjectName{"demo", "gone"}); !errors.Is(err, errFailed) {
 				t.Errorf("err = %v, want the call's failure", err)
 			}
