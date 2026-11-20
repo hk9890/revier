@@ -17,8 +17,8 @@ Each section is also the text of its release on the
   rule you changed from them stays, and now wins over revier's: `revier
   setup status` names it, and you delete it to get revier's sizes. After
   that, an install leaves no change to commit in a dotfiles repository that
-  holds `rules.json`. With an older extension, install skips the rules and
-  says why.
+  holds `rules.json`. With an older `wctl` or extension, install skips the
+  rules and says why.
 - **A rule of yours for `revier-popup` in `rules.json` now wins over
   revier's.** The extension reads `rules.json` first. `revier setup status`
   and `revier setup install` name each such rule, and install leaves it in
@@ -38,6 +38,33 @@ Each section is also the text of its release on the
   beside `rules` in the status.
 - **`revier setup uninstall` deletes `rules.d/revier.json`,** and takes an
   older revier's rules out of `rules.json`, as install does.
+- **A restore with an editor that starts slowly now binds each of its
+  windows.** A restore that opened several projects in a cold editor, such
+  as IntelliJ, left every editor window of the session unbound. The windows
+  came minutes after the launch, and by then revier had stopped waiting for
+  them. Now, while a TUI is open, revier waits up to 10 minutes for each
+  such launch. It binds the window whose title matches that target's `match`
+  and no other target's. During that time, a new window of that class is
+  bound only to a target whose full `match` finds it, not by its class
+  alone.
+- **`revier list --json --conversations` no longer starts Claude Code twice
+  while an agent is busy.** In 0.28.1 a call still started it a second time
+  when an agent changed state during the call, which a working agent often
+  does. That second run could push the call past a caller's time limit. Now
+  the second run comes only for an agent that has had no prompt yet, or
+  whose first read failed.
+- **The logs say why revier shows nothing that a Claude agent said.** After
+  a Claude Code release that changes its transcript format, the agent's pane
+  had no last message, and the logs said nothing. The logs screen now shows
+  one WARN for each such agent, which says that revier does not know the
+  transcript format. When `claude agents --json` is slow, the logs screen
+  showed one "context deadline exceeded" WARN for each Claude agent. It now
+  shows one line, with the number of agents read and not read, and the
+  agents of other harnesses are still read.
+- **`revier agent read` names `--screen` each time it cannot read what the
+  agent said.** Before, it did so only for an agent that had said nothing
+  yet. After a transcript format change, it now says that it does not know
+  the format.
 
 ## v0.28.1
 
