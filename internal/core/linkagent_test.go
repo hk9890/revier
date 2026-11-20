@@ -393,6 +393,26 @@ func TestASaveRecordsALinksConversationsFromItsHost(t *testing.T) {
 	}
 }
 
+// A host that answers a save and does not list a link, for a project file
+// gone there, gives that link no conversations. The save says so, as it does
+// for a host that does not answer, and records the link's agents by nothing.
+func TestASaveSaysALinkItsHostDidNotList(t *testing.T) {
+	c, _, remote, _ := linked(t, hostAgent("box.4242", revier.StatusIdle))
+	report, err := c.Survey(context.Background(), []core.Project{linkProject(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	remote.Named = nil
+
+	s, gaps := c.Session(context.Background(), report)
+	if len(gaps.Failed) != 1 || !strings.Contains(gaps.Failed[0].Error(), `did not list project "far-there"`) {
+		t.Errorf("Failed = %v, want the link the host did not list said", gaps.Failed)
+	}
+	if len(s.Projects) != 1 || len(s.Projects[0].Targets) == 0 || len(s.Projects[0].Targets[0].Agents) != 0 {
+		t.Errorf("session = %+v, want the link's home with no agent", s)
+	}
+}
+
 // The answer a host gives a save: the conversation of each agent it surveyed.
 func TestNameConversationsFillsInWhatEachAgentHolds(t *testing.T) {
 	served := hosttest.New("proc")

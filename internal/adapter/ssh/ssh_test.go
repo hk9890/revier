@@ -173,6 +173,42 @@ func TestSurveyListsTheKnownNamesWhenTheHostDoesNotKnowOne(t *testing.T) {
 	}
 }
 
+// A remote revier whose own survey degraded warns after the refusal and
+// before it prints the JSON. The warning is no failure of the list.
+func TestSurveyListsTheKnownNamesWhenTheHostWarnsAfterTheRefusal(t *testing.T) {
+	r := ssh.New("buildbox")
+	answer(r, `[{"project":{"name":"demo","path":"/x"},"targets":[]}]`,
+		"revier: no project named \"gone\"\nrevier: warning: farbox: connection timed out\n", failedThere)
+	views, err := r.Survey(t.Context(), []revier.ProjectName{"demo", "gone"})
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	if len(views) != 1 || views[0].Project.Name != "demo" {
+		t.Errorf("views = %+v, want demo alone", views)
+	}
+}
+
+// A remote revier older than 0.23 ended at the first name it did not know
+// and listed nothing, also the names it knows. A name left out with no line
+// of its own is not known to be unknown there, so the host failed.
+func TestSurveyFailsTheHostWhenANameIsLeftOutWithNoRefusal(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		names []revier.ProjectName
+	}{
+		{"a known name before the unknown one", []revier.ProjectName{"demo", "gone"}},
+		{"a name after the unknown one", []revier.ProjectName{"gone", "later"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := ssh.New("buildbox")
+			answer(r, "", "revier: no project named \"gone\"\n", failedThere)
+			if _, err := r.Survey(t.Context(), tc.names); !errors.Is(err, errFailed) {
+				t.Errorf("err = %v, want the call's failure", err)
+			}
+		})
+	}
+}
+
 func TestSurveyListsNothingWhenTheHostKnowsNoName(t *testing.T) {
 	r := ssh.New("buildbox")
 	answer(r, "", "revier: no project named \"gone\"\nrevier: no project named \"gone\"\n", failedThere)

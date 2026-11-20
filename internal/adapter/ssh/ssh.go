@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -254,7 +255,7 @@ func (r *Remote) list(ctx context.Context, names []revier.ProjectName, flags ...
 	}
 	out, stderr, err := r.run(ctx, args...)
 	if err != nil {
-		return partial(out, stderr, err)
+		return partial(names, out, stderr, err)
 	}
 	var views []revier.ProjectView
 	if err := json.Unmarshal(out, &views); err != nil {
@@ -263,39 +264,64 @@ func (r *Remote) list(ctx context.Context, names []revier.ProjectName, flags ...
 	return views, nil
 }
 
-// partial is the answer of a list that failed. A remote revier that knows
-// some of the names lists those and fails for the others, and one that knows
-// none lists nothing: a name it does not know is one link's fault, which the
-// core reports for that link alone (decisions.md D85). Every other
-// failure is the host's. The remote revier writes the line for a name it
-// does not know before its survey starts, so the line counts only when that
-// revier ended the call itself: a call that was killed or lost its
-// connection after the line has no answer.
-func partial(out, stderr []byte, err error) ([]revier.ProjectView, error) {
-	if !errors.As(err, new(failedThere)) || !refusedNamesOnly(stderr) {
+// partial is the answer of a list of names that failed. A remote revier that
+// knows some of the names lists those and fails for the others, and one that
+// knows none lists nothing: a name it does not know is one link's fault,
+// which the core reports for that link alone (decisions.md D85). Every other
+// failure is the host's.
+//
+// The answer counts only when each name it leaves out has a line of its own
+// that says the remote revier does not know it: a revier older than 0.23
+// ended at the first name it did not know and listed nothing, also the names
+// it knows. It counts only when nothing revier wrote after those lines is
+// more than a warning, since a survey that failed after them has no answer.
+// And it counts only when that revier ended the call itself: it writes the
+// lines before its survey starts, so a call that was killed or lost its
+// connection after them has no answer either.
+func partial(names []revier.ProjectName, out, stderr []byte, err error) ([]revier.ProjectView, error) {
+	if !errors.As(err, new(failedThere)) {
 		return nil, err
 	}
-	if len(bytes.TrimSpace(out)) == 0 {
-		return nil, nil
+	refused, ok := refusedNames(stderr)
+	if !ok {
+		return nil, err
 	}
 	var views []revier.ProjectView
-	if json.Unmarshal(out, &views) != nil {
+	if len(bytes.TrimSpace(out)) != 0 && json.Unmarshal(out, &views) != nil {
 		return nil, err
+	}
+	for _, n := range names {
+		listed := slices.ContainsFunc(views, func(v revier.ProjectView) bool { return v.Project.Name == n })
+		if !listed && !refused[n] {
+			return nil, err
+		}
 	}
 	return views, nil
 }
 
-// noProjectNamed is how the remote revier's last line starts when the names
-// it did not know are why it failed. A login profile can write to stderr
-// too, so only the lines revier wrote count.
+// noProjectNamed is how the remote revier starts the line for a name it does
+// not know, before the quoted name. A login profile can write to stderr too,
+// so only the lines revier wrote count.
 const noProjectNamed = "revier: no project named "
 
-func refusedNamesOnly(stderr []byte) bool {
+// refusedNames is the names the remote revier said it does not know, and
+// whether those lines are the last it wrote that are not a warning.
+func refusedNames(stderr []byte) (map[revier.ProjectName]bool, bool) {
+	refused := map[revier.ProjectName]bool{}
 	last := ""
 	for line := range strings.Lines(string(stderr)) {
-		if strings.HasPrefix(line, "revier: ") {
-			last = line
+		if !strings.HasPrefix(line, "revier: ") || strings.HasPrefix(line, "revier: warning: ") {
+			continue
+		}
+		last = line
+		quoted, ok := strings.CutPrefix(line, noProjectNamed)
+		if !ok {
+			continue
+		}
+		if prefix, err := strconv.QuotedPrefix(quoted); err == nil {
+			name, _ := strconv.Unquote(prefix)
+			refused[revier.ProjectName(name)] = true
 		}
 	}
-	return strings.HasPrefix(last, noProjectNamed)
+	return refused, strings.HasPrefix(last, noProjectNamed)
 }

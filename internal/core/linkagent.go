@@ -290,7 +290,8 @@ func linkDir(r Resume) []string {
 // conversationsThere asks each link's host which conversation each of its
 // agents holds, one call per host, and answers by link and by the tag the
 // host names the agent with. A host that does not answer is returned as a
-// failure of the save, and its agents are recorded by nothing.
+// failure of the save, and its agents are recorded by nothing; so is a link
+// its host answered for and did not list.
 //
 // A link is asked about while anything here holds it, not while its home
 // target alone runs: a save records every target with a live instance, so a
@@ -311,13 +312,10 @@ func (c *Core) conversationsThere(ctx context.Context, views []revier.ProjectVie
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			named, err := c.conversationsOn(ctx, host, links)
+			named, errs := c.conversationsOn(ctx, host, links)
 			mu.Lock()
 			defer mu.Unlock()
-			if err != nil {
-				failed = append(failed, fmt.Errorf("%s: %w", host, err))
-				return
-			}
+			failed = append(failed, errs...)
 			maps.Copy(out, named)
 		}()
 	}
@@ -325,38 +323,41 @@ func (c *Core) conversationsThere(ctx context.Context, views []revier.ProjectVie
 	return out, failed
 }
 
-// conversationsOn is one host's answer, by link.
-func (c *Core) conversationsOn(ctx context.Context, host string, links []revier.ProjectView) (map[revier.ProjectName]map[revier.PanelID]session.Agent, error) {
+// conversationsOn is one host's answer, by link, and what it could not
+// answer: the host, when it failed, or each link it did not list, which is
+// recorded by nothing as the links of a host that failed are.
+func (c *Core) conversationsOn(ctx context.Context, host string, links []revier.ProjectView) (map[revier.ProjectName]map[revier.PanelID]session.Agent, []error) {
 	names := make([]revier.ProjectName, len(links))
 	for i, v := range links {
 		names[i] = v.Project.Remote.Project
 	}
 	r, err := c.remote(host)
 	if err != nil {
-		return nil, err
+		return nil, []error{fmt.Errorf("%s: %w", host, err)}
 	}
 	named, err := r.Conversations(ctx, names)
 	if err != nil {
-		return nil, err
+		return nil, []error{fmt.Errorf("%s: %w", host, err)}
 	}
 	out := map[revier.ProjectName]map[revier.PanelID]session.Agent{}
+	var unlisted []error
 	for _, v := range links {
+		at := slices.IndexFunc(named, func(there revier.ProjectView) bool { return there.Project.Name == v.Project.Remote.Project })
+		if at < 0 {
+			unlisted = append(unlisted, fmt.Errorf("%s did not list project %q", host, v.Project.Remote.Project))
+			continue
+		}
 		agents := map[revier.PanelID]session.Agent{}
-		for _, there := range named {
-			if there.Project.Name != v.Project.Remote.Project {
-				continue
+		for _, a := range named[at].Agents {
+			agent := session.Agent{Harness: a.State.Harness}
+			if a.Conversation != nil {
+				agent.Session, agent.Dir = a.Conversation.ID, a.Conversation.Dir
 			}
-			for _, a := range there.Agents {
-				agent := session.Agent{Harness: a.State.Harness}
-				if a.Conversation != nil {
-					agent.Session, agent.Dir = a.Conversation.ID, a.Conversation.Dir
-				}
-				agents[a.Panel] = agent
-			}
+			agents[a.Panel] = agent
 		}
 		out[v.Project.Name] = agents
 	}
-	return out, nil
+	return out, unlisted
 }
 
 // NameConversations fills in the conversation each surveyed agent holds: the
