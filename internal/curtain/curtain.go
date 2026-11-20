@@ -11,6 +11,7 @@ package curtain
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -115,6 +116,8 @@ type Server struct {
 	seq    int    // counts the Sends, so a writer skips a state it wrote
 	conns  map[*serverConn]struct{}
 	closed bool
+	joined int           // the connections accepted, gone ones included
+	join   chan struct{} // closed and replaced at each one accepted
 }
 
 // serverConn is one curtain's connection. Its writer wakes on each Send and
@@ -157,6 +160,7 @@ func Listen() (*Server, error) {
 		commands: make(chan Command, 16),
 		done:     make(chan struct{}),
 		conns:    map[*serverConn]struct{}{},
+		join:     make(chan struct{}),
 	}
 	s.wg.Add(1)
 	go s.accept()
@@ -173,11 +177,8 @@ func (s *Server) Commands() <-chan Command { return s.commands }
 // Send makes st the latest state, and writes it to every curtain connected.
 // It never waits for a curtain.
 func (s *Server) Send(st State) {
-	line, err := json.Marshal(st)
-	if err != nil {
-		// Unreachable: a State holds strings, ints and bools alone.
-		panic("curtain: encode the state: " + err.Error())
-	}
+	// A State holds strings, ints and bools alone: it always encodes.
+	line, _ := json.Marshal(st)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.latest = append(line, '\n')
@@ -206,6 +207,26 @@ func (s *Server) Close() {
 	close(s.commands)
 }
 
+// AwaitJoined waits until n curtains have connected, the ones gone since
+// included. It fails once ctx ends or the server is closed first.
+func (s *Server) AwaitJoined(ctx context.Context, n int) error {
+	for {
+		s.mu.Lock()
+		joined, join := s.joined, s.join
+		s.mu.Unlock()
+		if joined >= n {
+			return nil
+		}
+		select {
+		case <-join:
+		case <-s.done:
+			return errors.New("curtain: the server closed")
+		case <-ctx.Done():
+			return fmt.Errorf("curtain: %d of %d curtains connected: %w", joined, n, ctx.Err())
+		}
+	}
+}
+
 func (s *Server) accept() {
 	defer s.wg.Done()
 	for {
@@ -221,6 +242,9 @@ func (s *Server) accept() {
 			return
 		}
 		s.conns[c] = struct{}{}
+		s.joined++
+		close(s.join)
+		s.join = make(chan struct{})
 		if s.latest != nil {
 			c.signal()
 		}
@@ -320,10 +344,8 @@ func (c *Client) States() <-chan State { return c.states }
 
 // Send tells the server what the user pressed.
 func (c *Client) Send(cmd Command) error {
-	line, err := json.Marshal(cmd)
-	if err != nil {
-		return fmt.Errorf("curtain: %w", err)
-	}
+	// A Command is a string: it always encodes.
+	line, _ := json.Marshal(cmd)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if _, err := c.conn.Write(append(line, '\n')); err != nil {

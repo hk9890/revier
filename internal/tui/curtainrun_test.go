@@ -9,79 +9,12 @@ import (
 	"testing"
 	"time"
 
-	tea "charm.land/bubbletea/v2"
-
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/curtain"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/tui"
 	"github.com/hk9890/revier/pkg/revier"
 )
-
-// loop runs a model as a bubbletea program does: each command in a goroutine
-// of its own, and each message it answers fed to Update in turn. A walk under
-// a curtain waits on the curtain's socket beside the walk, which the batch
-// helpers, running a batch in order, would wait on forever.
-type loop struct {
-	t    *testing.T
-	m    tui.Model
-	msgs chan tea.Msg
-	done chan struct{}
-	quit bool
-}
-
-func loopOf(t *testing.T, m tui.Model, cmd tea.Cmd) *loop {
-	t.Helper()
-	l := &loop{t: t, m: m, msgs: make(chan tea.Msg), done: make(chan struct{})}
-	t.Cleanup(func() { close(l.done) })
-	l.exec(cmd)
-	return l
-}
-
-func (l *loop) exec(cmd tea.Cmd) {
-	if cmd == nil {
-		return
-	}
-	go func() {
-		select {
-		case l.msgs <- cmd():
-		case <-l.done:
-		}
-	}()
-}
-
-// until feeds messages until cond holds, and fails the test after a while.
-func (l *loop) until(what string, cond func(tui.Model) bool) {
-	l.t.Helper()
-	deadline := time.After(5 * time.Second)
-	for !cond(l.m) {
-		select {
-		case msg := <-l.msgs:
-			l.feed(msg)
-		case <-time.After(10 * time.Millisecond):
-		case <-deadline:
-			l.t.Fatalf("waited 5s for %s", what)
-		}
-	}
-}
-
-func (l *loop) feed(msg tea.Msg) {
-	switch msg := msg.(type) {
-	case nil:
-		return
-	case tea.BatchMsg:
-		for _, c := range msg {
-			l.exec(c)
-		}
-		return
-	case tea.QuitMsg:
-		l.quit = true
-		return
-	}
-	next, cmd := l.m.Update(msg)
-	l.m = next.(tui.Model)
-	l.exec(cmd)
-}
 
 // watcher is a curtain's end of the socket: every state it was sent, and
 // whether the socket ended.
@@ -138,9 +71,9 @@ func (w *watcher) waitFor(t *testing.T, what string, cond func(curtain.State) bo
 }
 
 // curtained is a world whose window host has two monitors, the primary one
-// second, and a popup window to raise; and the launch a curtain gets, which
-// hands each socket it is given to the test.
-func curtained(t *testing.T, n int) (*hosttest.FakeRuntime, *hosttest.Fake, *core.Core, []core.Project, chan string) {
+// second, and a popup window to raise; and the channel the curtains of
+// underCurtain come on, the primary one first.
+func curtained(t *testing.T, n int) (*hosttest.FakeRuntime, *hosttest.Fake, *core.Core, []core.Project, chan *watcher) {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "rc")
 	if err != nil {
@@ -151,28 +84,29 @@ func curtained(t *testing.T, n int) (*hosttest.FakeRuntime, *hosttest.Fake, *cor
 	rt, wm, c, projects := world(t, n)
 	wm.MonitorList = []revier.Monitor{{Index: 0}, {Index: 1, Primary: true}}
 	wm.Add("revier", core.PopupClass)
-	return rt, wm, c, projects, make(chan string, 8)
+	return rt, wm, c, projects, make(chan *watcher, 8)
 }
 
-// underCurtain is the popup's surface with a curtain's launch that hands its
-// socket on.
-func underCurtain(m tui.Model, sockets chan<- string) tui.Model {
+// underCurtain is the popup's surface with a curtain's launch that connects
+// to the socket at once, as a curtain's program does, and hands the curtain
+// on.
+func underCurtain(t *testing.T, m tui.Model, curtains chan<- *watcher) tui.Model {
 	return m.WithPopup().WithCurtain(func(_ revier.Monitor, socket string, main bool) []string {
-		sockets <- socket
+		curtains <- watch(t, socket)
 		return []string{"curtain", socket}
 	})
 }
 
-// socketOf is the socket the first curtain was launched with. It runs on the
+// mainOf is the first curtain launched, the primary monitor's. It runs on the
 // walk's goroutine too, so it fails the test without stopping it.
-func socketOf(t *testing.T, sockets <-chan string) string {
+func mainOf(t *testing.T, curtains <-chan *watcher) *watcher {
 	t.Helper()
 	select {
-	case s := <-sockets:
-		return s
+	case w := <-curtains:
+		return w
 	case <-time.After(5 * time.Second):
 		t.Error("no curtain was launched")
-		return ""
+		return &watcher{ended: true}
 	}
 }
 
@@ -207,9 +141,9 @@ func covered(ops []string) int {
 // sends each step to the curtains, and lifts them once it went well
 // (decisions.md D192).
 func TestAFullShutdownFromThePopupRunsUnderACurtain(t *testing.T) {
-	rt, wm, c, projects, sockets := curtained(t, 2)
+	rt, wm, c, projects, curtains := curtained(t, 2)
 	root := stateWith(t, nil)
-	m := underCurtain(resize(refreshed(t, c, projects, root, nil), 150, 30), sockets)
+	m := underCurtain(t, resize(refreshed(t, c, projects, root, nil), 150, 30), curtains)
 	m, _ = press(m, "alt+q")
 	m, cmd := press(m, "enter")
 	m = run(m, cmd)
@@ -218,7 +152,7 @@ func TestAFullShutdownFromThePopupRunsUnderACurtain(t *testing.T) {
 	var seen *watcher
 	rt.OnClose = func(revier.TargetRef) {
 		coversAtClose = covered(wm.Ops())
-		seen = watch(t, socketOf(t, sockets))
+		seen = mainOf(t, curtains)
 		seen.waitFor(t, "the close running", func(st curtain.State) bool {
 			return st.Mode == "shutdown" && slices.ContainsFunc(st.Rows, func(r curtain.Row) bool {
 				return r.Project == "project-01" && r.Label == "home" && r.State == curtain.RowRunning
@@ -244,9 +178,9 @@ func TestAFullShutdownFromThePopupRunsUnderACurtain(t *testing.T) {
 
 // restoreUnder starts the restore of the newest session from the sessions
 // screen of a popup under a curtain.
-func restoreUnder(t *testing.T, c *core.Core, projects []core.Project, root string, sockets chan<- string) *loop {
+func restoreUnder(t *testing.T, c *core.Core, projects []core.Project, root string, curtains chan *watcher) *loop {
 	t.Helper()
-	m := underCurtain(resize(refreshed(t, c, projects, root, nil), 150, 30), sockets)
+	m := underCurtain(t, resize(refreshed(t, c, projects, root, nil), 150, 30), curtains)
 	m, _ = press(m, "alt+s")
 	m, cmd := press(m, "enter")
 	return loopOf(t, m, cmd)
@@ -259,17 +193,17 @@ func restoring(m tui.Model) bool { return strings.Contains(barLine(m), "Sessions
 // the keyboard back once the walk is done, lifts them, and then raises the
 // popup.
 func TestARestoreFromThePopupRunsUnderACurtainAndRaisesThePopupAfter(t *testing.T) {
-	rt, wm, c, projects, sockets := curtained(t, 3)
+	rt, wm, c, projects, curtains := curtained(t, 3)
 	root := t.TempDir()
 	saved(t, root, "", 10, homeOf("project-00"), homeOf("project-01"))
 	var seen *watcher
 	rt.OnOpen = func(revier.Realization) {
 		if seen == nil {
-			seen = watch(t, socketOf(t, sockets))
+			seen = mainOf(t, curtains)
 		}
 	}
 
-	l := restoreUnder(t, c, projects, root, sockets)
+	l := restoreUnder(t, c, projects, root, curtains)
 	l.until("the restore's end", func(m tui.Model) bool { return !restoring(m) })
 	l.until("the curtains lifted", func(tui.Model) bool { _, ended := seen.last(); return ended })
 	l.until("the popup raised", func(tui.Model) bool {
@@ -305,14 +239,14 @@ func TestARestoreFromThePopupRunsUnderACurtainAndRaisesThePopupAfter(t *testing.
 // brings them back over everything, and raises the popup only once the user
 // closed the summary.
 func TestACurtainStaysOverARestoreThatFailedUntilItIsClosed(t *testing.T) {
-	rt, wm, c, projects, sockets := curtained(t, 2)
+	rt, wm, c, projects, curtains := curtained(t, 2)
 	rt.OpenErr = errors.New("kitty refused")
 	root := t.TempDir()
 	saved(t, root, "", 10, homeOf("project-00"))
 	var seen *watcher
-	rt.OnOpen = func(revier.Realization) { seen = watch(t, socketOf(t, sockets)) }
+	rt.OnOpen = func(revier.Realization) { seen = mainOf(t, curtains) }
 
-	l := restoreUnder(t, c, projects, root, sockets)
+	l := restoreUnder(t, c, projects, root, curtains)
 	l.until("the restore's end", func(m tui.Model) bool { return !restoring(m) })
 	seen.waitFor(t, "the summary", func(st curtain.State) bool { return st.End != nil })
 	st, ended := seen.last()
@@ -340,7 +274,7 @@ func TestACurtainStaysOverARestoreThatFailedUntilItIsClosed(t *testing.T) {
 // A cancel on the curtain is the first ctrl+c: the walk stops after the step
 // that runs, the curtain says so, and its summary stays.
 func TestACancelOnTheCurtainCancelsTheWalk(t *testing.T) {
-	rt, _, c, projects, sockets := curtained(t, 3)
+	rt, _, c, projects, curtains := curtained(t, 3)
 	root := t.TempDir()
 	saved(t, root, "", 10, homeOf("project-00"), homeOf("project-01"))
 	var seen *watcher
@@ -348,14 +282,14 @@ func TestACancelOnTheCurtainCancelsTheWalk(t *testing.T) {
 		if seen != nil {
 			return
 		}
-		seen = watch(t, socketOf(t, sockets))
+		seen = mainOf(t, curtains)
 		if err := seen.client.Send(curtain.Cancel); err != nil {
 			t.Error(err)
 		}
 		seen.waitFor(t, "the cancel taken", func(st curtain.State) bool { return st.Cancelling })
 	}
 
-	l := restoreUnder(t, c, projects, root, sockets)
+	l := restoreUnder(t, c, projects, root, curtains)
 	l.until("the restore's end", func(m tui.Model) bool { return !restoring(m) })
 	seen.waitFor(t, "the summary", func(st curtain.State) bool { return st.End != nil })
 	st, ended := seen.last()
@@ -369,12 +303,12 @@ func TestACancelOnTheCurtainCancelsTheWalk(t *testing.T) {
 
 // Esc on the curtain hides every curtain and leaves the walk running.
 func TestAHideOnTheCurtainHidesThemAndTheWalkGoesOn(t *testing.T) {
-	rt, wm, c, projects, sockets := curtained(t, 2)
+	rt, wm, c, projects, curtains := curtained(t, 2)
 	root := t.TempDir()
 	saved(t, root, "", 10, homeOf("project-00"))
 	var seen *watcher
 	rt.OnOpen = func(revier.Realization) {
-		seen = watch(t, socketOf(t, sockets))
+		seen = mainOf(t, curtains)
 		if err := seen.client.Send(curtain.Hide); err != nil {
 			t.Error(err)
 		}
@@ -389,7 +323,7 @@ func TestAHideOnTheCurtainHidesThemAndTheWalkGoesOn(t *testing.T) {
 		t.Error("the curtains were not hidden while the walk ran")
 	}
 
-	l := restoreUnder(t, c, projects, root, sockets)
+	l := restoreUnder(t, c, projects, root, curtains)
 	l.until("the restore's end", func(m tui.Model) bool { return !restoring(m) })
 	l.until("the curtains lifted", func(tui.Model) bool { _, ended := seen.last(); return ended })
 	if foot := footer(l.m); l.quit || faulted(foot) {
@@ -428,26 +362,26 @@ func TestARestoreWithoutACurtainOpensNone(t *testing.T) {
 // A curtain that does not open costs the restore nothing: it runs without
 // one and raises the popup at its end.
 func TestACurtainThatFailsToOpenDoesNotFailTheRestore(t *testing.T) {
-	_, wm, c, projects, sockets := curtained(t, 2)
+	_, wm, c, projects, curtains := curtained(t, 2)
 	wm.MonitorsErr = errors.New("wctl: not running")
 	root := t.TempDir()
 	saved(t, root, "", 10, homeOf("project-00"))
 
-	l := restoreUnder(t, c, projects, root, sockets)
+	l := restoreUnder(t, c, projects, root, curtains)
 	l.until("the restore's end", func(m tui.Model) bool { return !restoring(m) })
 	l.until("the popup raised", func(tui.Model) bool { return slices.Contains(wm.Ops(), "focus 1") })
-	if foot := footer(l.m); faulted(foot) || len(sockets) != 0 {
-		t.Errorf("footer %q, curtains launched %d; want a restore with no curtain and no error", foot, len(sockets))
+	if foot := footer(l.m); faulted(foot) || len(curtains) != 0 {
+		t.Errorf("footer %q, curtains launched %d; want a restore with no curtain and no error", foot, len(curtains))
 	}
 }
 
 // fullShutdownUnder starts a full shutdown from the popup under a curtain.
 // The first close dials the curtain and hands it to first; seen is the
 // curtain once it was dialed, nil before.
-func fullShutdownUnder(t *testing.T, rt *hosttest.FakeRuntime, c *core.Core, projects []core.Project, sockets chan string, first func(*watcher)) (l *loop, seen func() *watcher) {
+func fullShutdownUnder(t *testing.T, rt *hosttest.FakeRuntime, c *core.Core, projects []core.Project, curtains chan *watcher, first func(*watcher)) (l *loop, seen func() *watcher) {
 	t.Helper()
 	root := stateWith(t, nil)
-	m := underCurtain(resize(refreshed(t, c, projects, root, nil), 150, 30), sockets)
+	m := underCurtain(t, resize(refreshed(t, c, projects, root, nil), 150, 30), curtains)
 	m, _ = press(m, "alt+q")
 	m, cmd := press(m, "enter")
 	m = run(m, cmd)
@@ -459,7 +393,7 @@ func fullShutdownUnder(t *testing.T, rt *hosttest.FakeRuntime, c *core.Core, pro
 			mu.Unlock()
 			return
 		}
-		dialed = watch(t, socketOf(t, sockets))
+		dialed = mainOf(t, curtains)
 		w := dialed
 		mu.Unlock()
 		first(w)
@@ -494,9 +428,9 @@ func summarized(l *loop, seen func() *watcher) (*watcher, curtain.End) {
 // quits only once the user closed it: the quit would end the curtains with
 // it.
 func TestAFullShutdownWithProblemsQuitsOnlyOnceItsSummaryIsClosed(t *testing.T) {
-	rt, _, c, projects, sockets := curtained(t, 2)
+	rt, _, c, projects, curtains := curtained(t, 2)
 	rt.CloseErr = errors.New("kitty refused")
-	l, seen := fullShutdownUnder(t, rt, c, projects, sockets, func(*watcher) {})
+	l, seen := fullShutdownUnder(t, rt, c, projects, curtains, func(*watcher) {})
 	w, end := summarized(l, seen)
 	if end.OK || end.Title != "Shutdown finished with problems" {
 		t.Fatalf("end = %+v, want a shutdown with problems", end)
@@ -517,9 +451,9 @@ func TestAFullShutdownWithProblemsQuitsOnlyOnceItsSummaryIsClosed(t *testing.T) 
 // closed the summary, the popup comes back from under the curtains' focus to
 // show its own result.
 func TestACancelledFullShutdownRaisesThePopupOnceItsSummaryIsClosed(t *testing.T) {
-	rt, wm, c, projects, sockets := curtained(t, 3)
+	rt, wm, c, projects, curtains := curtained(t, 3)
 	rt.Add("session:project-00", "kitty", revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "claude"})
-	l, seen := fullShutdownUnder(t, rt, c, projects, sockets, func(w *watcher) {
+	l, seen := fullShutdownUnder(t, rt, c, projects, curtains, func(w *watcher) {
 		if err := w.client.Send(curtain.Cancel); err != nil {
 			t.Error(err)
 		}
@@ -546,21 +480,93 @@ func TestACancelledFullShutdownRaisesThePopupOnceItsSummaryIsClosed(t *testing.T
 // the window manager or crashed, end their run: the popup comes back, and
 // the socket is free for the next walk.
 func TestCurtainsThatAllWentEndTheirRun(t *testing.T) {
-	rt, wm, c, projects, sockets := curtained(t, 2)
+	rt, wm, c, projects, curtains := curtained(t, 2)
 	rt.OpenErr = errors.New("kitty refused")
 	root := t.TempDir()
 	saved(t, root, "", 10, homeOf("project-00"))
 	var seen *watcher
-	rt.OnOpen = func(revier.Realization) { seen = watch(t, socketOf(t, sockets)) }
+	rt.OnOpen = func(revier.Realization) { seen = mainOf(t, curtains) }
 
-	l := restoreUnder(t, c, projects, root, sockets)
+	l := restoreUnder(t, c, projects, root, curtains)
 	l.until("the restore's end", func(m tui.Model) bool { return !restoring(m) })
 	seen.waitFor(t, "the summary", func(st curtain.State) bool { return st.End != nil })
 	seen.client.Close()
+	for len(curtains) > 0 {
+		(<-curtains).client.Close()
+	}
 	l.until("the popup raised", func(tui.Model) bool { return slices.Contains(wm.Ops(), "focus 1") })
 	next, err := curtain.Listen()
 	if err != nil {
 		t.Fatalf("Listen after the curtains went: %v, want the socket free", err)
 	}
 	next.Close()
+}
+
+// Curtains whose program never connected cannot say they went: the walk runs
+// without them and closes their socket at once. A walk that failed then has
+// no summary to wait on: the popup comes back, and the socket is free for the
+// next walk.
+func TestCurtainsThatNeverConnectedLeaveTheWalkWithoutThem(t *testing.T) {
+	rt, wm, c, projects, _ := curtained(t, 2)
+	rt.OpenErr = errors.New("kitty refused")
+	root := t.TempDir()
+	saved(t, root, "", 10, homeOf("project-00"))
+	m := resize(refreshed(t, c, projects, root, nil), 150, 30).WithPopup().WithCurtain(func(_ revier.Monitor, socket string, _ bool) []string {
+		return []string{"curtain", socket}
+	})
+	m, _ = press(m, "alt+s")
+	m, cmd := press(m, "enter")
+	l := loopOf(t, m, cmd)
+	l.until("the restore's end", func(m tui.Model) bool { return !restoring(m) })
+	l.until("the popup raised", func(tui.Model) bool { return slices.Contains(wm.Ops(), "focus 1") })
+	next, err := curtain.Listen()
+	if err != nil {
+		t.Fatalf("Listen after the walk: %v, want the socket free", err)
+	}
+	next.Close()
+}
+
+// A full shutdown whose host keeps a step listed after its close ends with
+// that step's row still open on the curtain, as the summary counts it: the
+// close reports the step done before the wait finds it listed.
+func TestAFullShutdownMarksAStepStillOpenOnTheCurtain(t *testing.T) {
+	rt, _, c, projects, curtains := curtained(t, 2)
+	instances, err := rt.Instances(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt.Refuses = map[string]bool{instances[0].Ref.ID: true}
+	l, seen := fullShutdownUnder(t, rt, c, projects, curtains, func(*watcher) {})
+	w, end := summarized(l, seen)
+	if end.OK || end.Summary != "0 closed · 1 still open" {
+		t.Fatalf("end = %+v, want the step still open", end)
+	}
+	st, _ := w.last()
+	open := slices.IndexFunc(st.Rows, func(r curtain.Row) bool { return r.State == curtain.RowSkipped && r.Note == "still open" })
+	if len(st.Rows) != 1 || open != 0 {
+		t.Errorf("rows = %+v, want the step left listed still open", st.Rows)
+	}
+}
+
+// The second ctrl+c on the curtain quits the surface, and the quit closes
+// the curtains' socket first: no socket file outlives the surface.
+func TestAQuitFromTheCurtainRemovesItsSocket(t *testing.T) {
+	rt, _, c, projects, curtains := curtained(t, 2)
+	l, _ := fullShutdownUnder(t, rt, c, projects, curtains, func(w *watcher) {
+		if err := w.client.Send(curtain.Cancel); err != nil {
+			t.Error(err)
+		}
+		w.waitFor(t, "the cancel taken", func(st curtain.State) bool { return st.Cancelling })
+		if err := w.client.Send(curtain.Quit); err != nil {
+			t.Error(err)
+		}
+	})
+	l.until("the popup quit", func(tui.Model) bool { return l.quit })
+	path, err := curtain.Path()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("stat %s = %v, want the socket removed", path, err)
+	}
 }

@@ -73,8 +73,9 @@ func TestWorkareaWidthReadsTheReply(t *testing.T) {
 	}
 }
 
-// Cover moves the window to its monitor before it makes it fullscreen, and
-// never maximizes it: a maximized window is under a fullscreen one.
+// Cover moves the window to its monitor and unmaximizes it before it makes it
+// fullscreen: a maximized window is under a fullscreen one, and mutter may map
+// the curtain's kitty maximized.
 func TestCoverBuildsTheCommands(t *testing.T) {
 	w := &wctl{}
 	if err := w.host().Cover(t.Context(), revier.TargetRef{Host: "gnome", ID: "4181121382"}, 1); err != nil {
@@ -82,6 +83,7 @@ func TestCoverBuildsTheCommands(t *testing.T) {
 	}
 	want := []string{
 		"move-to-monitor 4181121382 1",
+		"unmaximize 4181121382",
 		"fullscreen 4181121382",
 		"above 4181121382 on",
 		"sticky 4181121382 on",

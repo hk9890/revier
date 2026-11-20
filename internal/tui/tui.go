@@ -572,7 +572,7 @@ func (m Model) leave() tea.Cmd {
 	if m.popup {
 		return m.hide(false)
 	}
-	return tea.Quit
+	return m.quit()
 }
 
 // leaveWord names what leave does, for the help.
@@ -1008,7 +1008,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// The popup cannot leave the screen, so it leaves the way it
 			// did before it could hide.
 			slog.Warn("popup hide, quitting instead", "err", msg.err)
-			return m, tea.Quit
+			return m, m.quit()
 		}
 		m.hideTaken()
 		return m, nil
@@ -1380,7 +1380,7 @@ func (m Model) key(msg keyPress) (tea.Model, tea.Cmd) {
 	}
 	switch {
 	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
+		return m, m.quit()
 	case switches(msg):
 		return m.switchList()
 	case key.Matches(msg, m.keys.Back):

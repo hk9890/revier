@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"os"
 	"slices"
 	"testing"
 
@@ -37,7 +38,12 @@ func TestAHideAfterTheEndLeavesTheSummaryUp(t *testing.T) {
 // A walk cancelled before its last steps ends with the bar at the steps it
 // walked: the steps it did not reach are in the rows, not in the count.
 func TestACancelledWalkCountsOnlyTheStepsItWalked(t *testing.T) {
-	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	dir, err := os.MkdirTemp("", "rc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	t.Setenv("XDG_RUNTIME_DIR", dir)
 	srv, err := curtain.Listen()
 	if err != nil {
 		t.Fatal(err)
@@ -54,5 +60,24 @@ func TestACancelledWalkCountsOnlyTheStepsItWalked(t *testing.T) {
 	}
 	if got := r.state.Rows[2]; got.State != curtain.RowSkipped || got.Note != "not reached" {
 		t.Errorf("row not reached = %+v, want skipped, not reached", got)
+	}
+}
+
+// A step the recheck renamed is still the step the plan has: an agent panel
+// whose agent exited is named by its panel then. Its row is marked, keeps the
+// plan's label, and no second row is added.
+func TestARenamedStepMarksItsPlannedRow(t *testing.T) {
+	planned := core.CloseStep{
+		Project: "alpha", Ref: revier.TargetRef{Host: "kitty", ID: "1"}, Panel: "2",
+		Agents: []revier.AgentView{{State: revier.AgentState{Harness: "claude"}}},
+	}
+	rows, steps := closeRows([]core.CloseStep{planned})
+	r := &curtainRun{state: curtain.State{Rows: rows}, steps: steps}
+	walked := planned
+	walked.Agents = nil
+	r.take(core.Progress{Phase: core.PhaseClose, Done: true, Closed: core.CloseResult{CloseStep: walked}})
+	want := []curtain.Row{{Project: "alpha", Label: "claude", State: curtain.RowDone}}
+	if !slices.Equal(r.state.Rows, want) {
+		t.Errorf("rows = %+v, want %+v", r.state.Rows, want)
 	}
 }

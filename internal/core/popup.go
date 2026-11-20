@@ -45,7 +45,7 @@ const (
 // opened on, and revier does not place it again (D191). argv is a function,
 // asked only for a launch: what it carries - the project the surface opens
 // on - costs a listing the raise must not pay. While a curtain is open the
-// press shows it again and does nothing else (D192).
+// press shows it again (D192). It does nothing else.
 func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (revier.TargetRef, error) {
 	if c.Window == nil {
 		return revier.TargetRef{}, ErrNoPopupHost

@@ -3,8 +3,10 @@ package tui
 import (
 	"cmp"
 	"fmt"
+	"math"
 	"strings"
 	"time"
+	"unicode"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -22,6 +24,10 @@ import (
 
 // curtainWidth is the widest the main curtain's block is drawn.
 const curtainWidth = 72
+
+// curtainButtonLines is how many lines the button adds under the block: two
+// blank, the button, one blank and the hint.
+const curtainButtonLines = 5
 
 // curtainFrame is how often the spinner of the step that runs turns.
 const curtainFrame = 100 * time.Millisecond
@@ -236,23 +242,26 @@ func (m curtainModel) lines() (lines []string, label, hint string) {
 		return lines, "", ""
 	case m.compact && end != nil:
 		lines = append(lines, th.Meta.Render(end.Summary))
+		var failed []string
 		for _, r := range st.Rows {
 			if r.State == curtain.RowFailed {
-				lines = append(lines, th.Attention.Render(m.icon(r.State)+" "+r.Project+" "+r.Label+": "+r.Note))
+				failed = append(failed, m.clip(th.Attention.Render(m.icon(r.State)+" "+r.Project+" "+r.Label+": "+oneLine(r.Note))))
 			}
 		}
+		lines = append(lines, m.fit(failed, nil, m.room(len(lines)))...)
 	case m.compact:
 		lines = append(lines, m.spinner()+" "+th.Meta.Render(st.Line+" …"))
 	default:
-		rows, running := m.projectRows()
-		lines = append(lines, rows...)
-		lines = append(lines, "")
+		rows, first, running := m.projectRows()
+		tail := []string{""}
 		switch {
 		case end != nil:
-			lines = append(lines, th.Meta.Render(end.Summary))
+			tail = append(tail, th.Meta.Render(end.Summary))
 		case !running && st.Line != "":
-			lines = append(lines, m.spinner()+" "+th.Meta.Render(st.Line+" …"))
+			tail = append(tail, m.spinner()+" "+th.Meta.Render(st.Line+" …"))
 		}
+		lines = append(lines, m.fit(rows, first, m.room(len(lines)+len(tail)))...)
+		lines = append(lines, tail...)
 	}
 	switch {
 	case end != nil:
@@ -261,6 +270,58 @@ func (m curtainModel) lines() (lines []string, label, hint string) {
 		return lines, "Cancelling…", "stops after the step that runs · ctrl+c again quits now"
 	}
 	return lines, "Cancel", "ctrl+c cancel · esc hide · tab layout"
+}
+
+// room is how many rows fit between the fixed lines above them and the
+// button under them; on a monitor not yet sized, any number.
+func (m curtainModel) room(fixed int) int {
+	if m.height <= 0 {
+		return math.MaxInt
+	}
+	return max(0, m.height-fixed-curtainButtonLines)
+}
+
+// fit is as many rows as room holds, in their order, and a last line that
+// counts the rest. A row that first marks goes in before any other, so a
+// step that runs or failed stays in sight.
+func (m curtainModel) fit(rows []string, first []bool, room int) []string {
+	if len(rows) <= room {
+		return rows
+	}
+	if room == 0 {
+		return nil
+	}
+	shown := make([]bool, len(rows))
+	n := 0
+	for _, firstOnly := range []bool{true, false} {
+		for i := range rows {
+			if n < room-1 && !shown[i] && (!firstOnly || first != nil && first[i]) {
+				shown[i] = true
+				n++
+			}
+		}
+	}
+	var out []string
+	for i, r := range rows {
+		if shown[i] {
+			out = append(out, r)
+		}
+	}
+	return append(out, m.th.Help.Render(fmt.Sprintf("+%d more", len(rows)-n)))
+}
+
+// clip cuts a line to the monitor's width, so that it stays one line.
+func (m curtainModel) clip(line string) string {
+	if m.width <= 0 {
+		return line
+	}
+	return ellipsis(line, m.width)
+}
+
+// oneLine is a note on one line: the lines of an error that joins several
+// are set apart by "; ".
+func oneLine(note string) string {
+	return strings.Join(strings.FieldsFunc(note, unicode.IsControl), "; ")
 }
 
 // title names the walk, or how it ended.
@@ -326,8 +387,9 @@ func (m curtainModel) icon(s curtain.RowState) string {
 
 // projectRows is one line per project, in the order of the walk: the
 // project's state, its name, each step's state and label, and a note on the
-// step that runs, failed or was skipped. running says whether a step runs.
-func (m curtainModel) projectRows() (lines []string, running bool) {
+// step that runs, failed or was skipped. first marks the line of a project
+// whose step runs or failed; running says whether a step runs.
+func (m curtainModel) projectRows() (lines []string, first []bool, running bool) {
 	var order []string
 	steps := map[string][]curtain.Row{}
 	nameWidth := 0
@@ -349,9 +411,9 @@ func (m curtainModel) projectRows() (lines []string, running bool) {
 				running = true
 				note = th.Meta.Render(m.state.Line + " …")
 			case r.State == curtain.RowFailed && note == "":
-				note = th.Attention.Render(r.Label + ": " + r.Note)
+				note = th.Attention.Render(r.Label + ": " + oneLine(r.Note))
 			case r.State == curtain.RowSkipped && note == "":
-				note = th.Help.Render(cmp.Or(r.Note, "not reached"))
+				note = th.Help.Render(cmp.Or(oneLine(r.Note), "not reached"))
 			}
 		}
 		state := projectState(steps[project])
@@ -364,9 +426,10 @@ func (m curtainModel) projectRows() (lines []string, running bool) {
 		if note != "" {
 			line += "   " + note
 		}
-		lines = append(lines, line)
+		lines = append(lines, m.clip(line))
+		first = append(first, state == curtain.RowRunning || state == curtain.RowFailed)
 	}
-	return lines, running
+	return lines, first, running
 }
 
 // projectState is the state a project's line shows: the step that runs,

@@ -182,5 +182,5 @@ func (m Model) quitWalk() (tea.Model, tea.Cmd) {
 	if s := m.shut; s.running && s.record != nil {
 		s.record.Abandon()
 	}
-	return m, tea.Quit
+	return m, m.quit()
 }

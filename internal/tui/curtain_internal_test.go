@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -310,4 +311,83 @@ func TestAStateThatChangesTheFormClearsTheScreen(t *testing.T) {
 			m = shown(t, m, s, tc.st)
 		}
 	}
+}
+
+// sized is the curtain after the monitor took a size.
+func sized(m curtainModel, width, height int) curtainModel {
+	next, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: height})
+	return next.(curtainModel)
+}
+
+// buttonDrawnAt fails the test unless the screen draws label where the
+// layout says a click finds the button.
+func buttonDrawnAt(t *testing.T, m curtainModel, label string) {
+	t.Helper()
+	b := m.layout().button
+	rows := strings.Split(ansi.Strip(m.View().Content), "\n")
+	if b.row < 0 || b.row >= len(rows) {
+		t.Fatalf("button row %d is off the screen of %d rows", b.row, len(rows))
+	}
+	if got := ansi.Cut(rows[b.row], b.from, b.to); strings.TrimSpace(got) != label {
+		t.Errorf("the screen draws %q where the button is, want %q:\n%s", got, label, strings.Join(rows, "\n"))
+	}
+}
+
+// A walk with more projects than the monitor has rows keeps the title, the
+// bar, the summary, the button and the hint on the screen, keeps the failed
+// step in sight, and counts the projects it leaves out.
+func TestALongWalkFitsTheMonitor(t *testing.T) {
+	m, s := curtainOn(t, true)
+	m = sized(m, 160, 16)
+	st := ended()
+	st.Rows = nil
+	for i := range 30 {
+		st.Rows = append(st.Rows, curtain.Row{Project: fmt.Sprintf("p%02d", i), Label: "home", State: curtain.RowDone})
+	}
+	st.Rows[25] = curtain.Row{Project: "p25", Label: "editor", State: curtain.RowFailed, Note: "the window did not appear"}
+	m = shown(t, m, s, st)
+	if n := strings.Count(m.View().Content, "\n"); n > 16 {
+		t.Errorf("the screen has %d lines, the monitor 16", n)
+	}
+	got := screen(m)
+	for _, want := range []string{"Restore finished with problems", "4 / 5", "p25", "editor: the window did not appear", "3 opened · 1 failed · 1 not reached", "Close", "enter or esc close", "more"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("screen lacks %q:\n%s", want, got)
+		}
+	}
+	buttonDrawnAt(t, m, "Close")
+}
+
+// A note of several lines, as an error that joins several, stays on one
+// line, so the button is drawn where a click finds it.
+func TestANoteOfSeveralLinesKeepsTheButtonInPlace(t *testing.T) {
+	st := ended()
+	st.Rows[3].Note = "the window did not appear\nthe tab did not open"
+	for _, compact := range []bool{false, true} {
+		m, s := curtainOn(t, true)
+		m.compact = compact
+		m = shown(t, m, s, st)
+		if got := screen(m); !strings.Contains(got, "the window did not appear; the tab did not open") {
+			t.Errorf("compact=%v: screen lacks the note on one line:\n%s", compact, got)
+		}
+		buttonDrawnAt(t, m, "Close")
+	}
+}
+
+// A note wider than the monitor is cut to its width, with a mark.
+func TestANoteWiderThanTheMonitorIsCut(t *testing.T) {
+	m, s := curtainOn(t, true)
+	m = sized(m, 80, 40)
+	st := ended()
+	st.Rows[3].Note = strings.Repeat("too wide ", 20)
+	m = shown(t, m, s, st)
+	for _, l := range strings.Split(m.View().Content, "\n") {
+		if w := ansi.StringWidth(l); w > 80 {
+			t.Errorf("a line is %d wide on a monitor of 80: %q", w, ansi.Strip(l))
+		}
+	}
+	if !strings.Contains(screen(m), "…") {
+		t.Errorf("the cut note has no mark:\n%s", screen(m))
+	}
+	buttonDrawnAt(t, m, "Close")
 }

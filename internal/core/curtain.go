@@ -52,13 +52,15 @@ func (c *Core) curtainHost() (revier.Coverer, revier.Hider, error) {
 }
 
 // OpenCurtains opens one curtain on each monitor (decisions.md D192). It
-// opens the primary one first, and focuses it, so that its keys reach it.
-// argv is the launch of the curtain for a monitor: a terminal of class
-// CurtainClass with the title CurtainTitle gives it. Each curtain is waited
-// for by its class and title, then covers its monitor. It returns the refs,
-// primary first. A failure returns the error and the refs opened so far: the
-// caller ends those curtains by closing the socket they read. The wait is
-// ctx's to bound.
+// launches every curtain first, the primary one first, then waits for all
+// their windows at once, so a slow terminal on one monitor does not spend the
+// wait of the next. argv is the launch of the curtain for a monitor: a
+// terminal of class CurtainClass with the title CurtainTitle gives it. Each
+// curtain is found by its class and title, then covers its monitor, the
+// primary one first; the primary one is focused last, so that its keys reach
+// it. It returns the refs, primary first. A failure returns the error and the
+// refs of the curtains found so far: the caller ends every curtain by closing
+// the socket they read. The wait is ctx's to bound.
 func (c *Core) OpenCurtains(ctx context.Context, argv func(revier.Monitor) []string) ([]revier.TargetRef, error) {
 	start := time.Now()
 	refs, err := c.openCurtains(ctx, argv)
@@ -76,17 +78,37 @@ func (c *Core) openCurtains(ctx context.Context, argv func(revier.Monitor) []str
 		return nil, fmt.Errorf("curtain: monitors: %w", err)
 	}
 	// The primary monitor's curtain is first, so it covers the screen the
-	// user looks at before any other is waited for.
+	// user looks at before any other.
 	slices.SortStableFunc(monitors, func(a, b revier.Monitor) int {
 		return cmp.Compare(btoi(b.Primary), btoi(a.Primary))
 	})
-	var refs []revier.TargetRef
+	before, err := c.Window.Instances(ctx)
+	if err != nil {
+		return nil, err
+	}
 	for _, m := range monitors {
-		ref, err := c.openCurtain(ctx, cov, m, argv(m))
-		if err != nil {
-			return refs, err
+		if _, err := c.Window.Open(ctx, revier.Realization{
+			Launch: argv(m),
+			Match:  revier.Match{Class: "^" + CurtainClass + "$", Title: "^" + CurtainTitle(m) + "$"},
+		}); err != nil {
+			return nil, err
 		}
-		refs = append(refs, ref)
+	}
+	windows, err := c.awaitCurtains(ctx, before, monitors)
+	refs := make([]revier.TargetRef, 0, len(monitors))
+	for i, m := range monitors {
+		if !windows[i].Ref.IsZero() {
+			refs = append(refs, windows[i].Ref)
+			slog.Info("curtain: launched", "ref", windows[i].Ref, "monitor", m.Index, "primary", m.Primary)
+		}
+	}
+	if err != nil {
+		return refs, err
+	}
+	for i, m := range monitors {
+		if err := cov.Cover(ctx, refs[i], m.Index); err != nil {
+			return refs, fmt.Errorf("curtain: cover monitor %d: %w", m.Index, err)
+		}
 	}
 	if len(refs) > 0 {
 		if err := c.Window.Focus(ctx, refs[0]); err != nil {
@@ -96,38 +118,34 @@ func (c *Core) openCurtains(ctx context.Context, argv func(revier.Monitor) []str
 	return refs, nil
 }
 
-// openCurtain launches the curtain of one monitor, waits for its window and
-// makes it cover the monitor.
-func (c *Core) openCurtain(ctx context.Context, cov revier.Coverer, m revier.Monitor, launch []string) (revier.TargetRef, error) {
-	title := CurtainTitle(m)
-	before, err := c.Window.Instances(ctx)
-	if err != nil {
-		return revier.TargetRef{}, err
+// awaitCurtains waits for the window of each monitor's curtain, found by its
+// class and title, and returns them in the order of the monitors. A window
+// that did not appear is the zero instance at its place, and the error names
+// it.
+func (c *Core) awaitCurtains(ctx context.Context, before []revier.Instance, monitors []revier.Monitor) ([]revier.Instance, error) {
+	windows := make([]revier.Instance, len(monitors))
+	all := func() bool {
+		return !slices.ContainsFunc(windows, func(w revier.Instance) bool { return w.Ref.IsZero() })
 	}
-	if _, err := c.Window.Open(ctx, revier.Realization{
-		Launch: launch,
-		Match:  revier.Match{Class: "^" + CurtainClass + "$", Title: "^" + title + "$"},
-	}); err != nil {
-		return revier.TargetRef{}, err
-	}
-	w, _, err := c.awaitNew(ctx, before, BindWait, popupPoll, func(fresh []revier.Instance) (revier.Instance, bool, bool) {
-		i := slices.IndexFunc(fresh, func(w revier.Instance) bool { return w.Class == CurtainClass && w.Title == title })
-		if i < 0 {
-			return revier.Instance{}, false, false
+	_, _, err := c.awaitNew(ctx, before, BindWait, popupPoll, func(fresh []revier.Instance) (revier.Instance, bool, bool) {
+		for i, m := range monitors {
+			title := CurtainTitle(m)
+			if j := slices.IndexFunc(fresh, func(w revier.Instance) bool { return w.Class == CurtainClass && w.Title == title }); j >= 0 {
+				windows[i] = fresh[j]
+			}
 		}
-		return fresh[i], true, false
+		return revier.Instance{}, all(), false
 	})
-	if errors.Is(err, errNoNewWindow) {
-		return revier.TargetRef{}, fmt.Errorf("curtain: no window %s of class %s appeared in %s", title, CurtainClass, BindWait)
+	if errors.Is(err, errNoNewWindow) || errors.Is(err, context.DeadlineExceeded) {
+		var missing []string
+		for i, m := range monitors {
+			if windows[i].Ref.IsZero() {
+				missing = append(missing, CurtainTitle(m))
+			}
+		}
+		return windows, fmt.Errorf("curtain: no window %v of class %s appeared before the open's deadline: %w", missing, CurtainClass, err)
 	}
-	if err != nil {
-		return revier.TargetRef{}, err
-	}
-	slog.Info("curtain: launched", "ref", w.Ref, "monitor", m.Index, "primary", m.Primary)
-	if err := cov.Cover(ctx, w.Ref, m.Index); err != nil {
-		return w.Ref, fmt.Errorf("curtain: cover monitor %d: %w", m.Index, err)
-	}
-	return w.Ref, nil
+	return windows, err
 }
 
 // HideCurtains takes every open curtain off the screen while the run goes on:

@@ -416,7 +416,7 @@ func (sc *sessionsScreen) restore(sf surface) (tea.Cmd, error) {
 	// before the walk is the restore's first phase until the walk reports.
 	w, progress, cancelled := startWalk(core.PhaseSurvey, 1+2*s.Targets())
 	// The steps are known once the survey answers.
-	w.curtain = newCurtain(sf.curtain, "restore", nil)
+	w.curtain = newCurtain(sf.curtain, "restore", nil, nil)
 	sc.walk = w
 	run, argv := w.curtain, sf.curtain
 	restoring := func() tea.Msg {

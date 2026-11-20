@@ -2,8 +2,10 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -54,21 +56,25 @@ type curtainRun struct {
 	mu    sync.Mutex
 	srv   *curtain.Server // nil before the open, after one that failed, and once closed
 	state curtain.State
-	shown walk    // the walk's reports, for the line the curtain says
-	after tea.Cmd // what runs once the curtains of a walk that ended are gone
+	steps []stepKey // the step of each row, in the order of state.Rows
+	shown walk      // the walk's reports, for the line the curtain says
+	after tea.Cmd   // what runs once the curtains of a walk that ended are gone
 }
 
 // newCurtain is the curtain run of a walk of that mode over those steps, or
 // nil on a surface with no curtain to launch.
-func newCurtain(argv curtainArgv, mode string, rows []curtain.Row) *curtainRun {
+func newCurtain(argv curtainArgv, mode string, rows []curtain.Row, steps []stepKey) *curtainRun {
 	if argv == nil {
 		return nil
 	}
-	return &curtainRun{opened: make(chan struct{}), state: curtain.State{Mode: mode, Rows: rows, Of: len(rows)}}
+	return &curtainRun{opened: make(chan struct{}), state: curtain.State{Mode: mode, Rows: rows, Of: len(rows)}, steps: steps}
 }
 
-// open listens on the curtains' socket and opens a curtain on each monitor.
-// One that fails is logged and closed, and the walk goes on without it.
+// open listens on the curtains' socket, opens a curtain on each monitor, and
+// waits until each curtain connected. A curtain that never connected never
+// goes either, and its socket would stay open past the walk: an open that
+// fails, or whose curtains do not all connect, is logged and closed, and the
+// walk goes on without it.
 func (r *curtainRun) open(c *core.Core, argv curtainArgv) {
 	if r == nil {
 		return
@@ -77,7 +83,14 @@ func (r *curtainRun) open(c *core.Core, argv curtainArgv) {
 	srv, err := curtain.Listen()
 	if err == nil {
 		ctx, cancel := context.WithTimeout(context.Background(), curtainOpenWait)
-		_, err = c.OpenCurtains(ctx, func(m revier.Monitor) []string { return argv(m, srv.Path(), m.Primary) })
+		var refs []revier.TargetRef
+		refs, err = c.OpenCurtains(ctx, func(m revier.Monitor) []string { return argv(m, srv.Path(), m.Primary) })
+		switch {
+		case err == nil && len(refs) == 0:
+			err = errors.New("curtain: no monitor to cover")
+		case err == nil:
+			err = srv.AwaitJoined(ctx, len(refs))
+		}
 		cancel()
 		if err != nil {
 			srv.Close()
@@ -96,13 +109,13 @@ func (r *curtainRun) open(c *core.Core, argv curtainArgv) {
 
 // plan sets the steps of a walk whose plan was made after the curtains
 // opened: a restore's comes from the survey that follows the open.
-func (r *curtainRun) plan(rows []curtain.Row) {
+func (r *curtainRun) plan(rows []curtain.Row, steps []stepKey) {
 	if r == nil {
 		return
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.state.Rows = rows
+	r.state.Rows, r.steps = rows, steps
 	r.count()
 	r.send()
 }
@@ -118,29 +131,48 @@ func (r *curtainRun) take(p core.Progress) {
 	r.state.Line = r.shown.now()
 	switch p.Phase {
 	case core.PhaseClose:
-		r.mark(string(p.Closed.Project), p.Closed.Name(), p.Done, closeRow(p.Closed))
+		r.mark(closeKey(p.Closed.CloseStep), p.Closed.Name(), p.Done, closeRow(p.Closed))
 	case core.PhaseLaunch:
-		r.mark(string(p.Restored.Project), string(p.Restored.Target), p.Done, restoreRow(p.Restored))
+		r.mark(restoreKey(p.Restored.RestoreStep), string(p.Restored.Target), p.Done, restoreRow(p.Restored))
 	}
 	r.count()
 	r.send()
 }
 
 // mark sets the row of a step: running before it, done as it came to after.
-// The walk orders its steps itself, so a step is found by what it is, and
-// one not in the plan gets a row of its own.
-func (r *curtainRun) mark(project, label string, done bool, came curtain.Row) {
-	row := curtain.Row{Project: project, Label: label, State: curtain.RowRunning}
+// The walk orders its steps itself, and the recheck can rename one, so a step
+// is found by what it closes or opens, and keeps the label the plan gave it.
+// One not in the plan gets a row of its own.
+func (r *curtainRun) mark(step stepKey, label string, done bool, came curtain.Row) {
+	row := curtain.Row{Project: string(step.project), Label: label, State: curtain.RowRunning}
 	if done {
 		row.State, row.Note = came.State, came.Note
 	}
 	for i, at := range r.state.Rows {
-		if at.Project == project && at.Label == label && (at.State == curtain.RowWaiting || at.State == curtain.RowRunning) {
+		if r.steps[i] == step && (at.State == curtain.RowWaiting || at.State == curtain.RowRunning) {
+			row.Label = at.Label
 			r.state.Rows[i] = row
 			return
 		}
 	}
 	r.state.Rows = append(r.state.Rows, row)
+	r.steps = append(r.steps, step)
+}
+
+// settle marks each close step as the shutdown's end found it: the wait
+// after the closes finds a step still open that its report called closed.
+func (r *curtainRun) settle(closed core.Closed) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, res := range closed {
+		if i := slices.Index(r.steps, closeKey(res.CloseStep)); i >= 0 {
+			came := closeRow(res)
+			r.state.Rows[i].State, r.state.Rows[i].Note = came.State, came.Note
+		}
+	}
 }
 
 // count is the bar: the steps walked of the steps there are.
@@ -230,6 +262,17 @@ func (r *curtainRun) lift() tea.Cmd {
 	after := r.after
 	r.after = nil
 	return after
+}
+
+// quit ends the curtains of both walks, so that no socket file outlives the
+// surface, and quits.
+func (m Model) quit() tea.Cmd {
+	for _, r := range []*curtainRun{m.shut.walk.curtain, m.sessions.walk.curtain} {
+		if r != nil {
+			r.lift()
+		}
+	}
+	return tea.Quit
 }
 
 // back is the raise of the surface once its curtains are gone: they took the
@@ -338,22 +381,30 @@ func (m Model) curtained(msg curtainMsg) (tea.Model, tea.Cmd) {
 	return m, next
 }
 
-// closeRows are a shutdown's steps, none walked yet.
-func closeRows(plan []core.CloseStep) []curtain.Row {
-	rows := make([]curtain.Row, 0, len(plan))
+// closeRows are a shutdown's steps, none walked yet, and the step of each.
+func closeRows(plan []core.CloseStep) ([]curtain.Row, []stepKey) {
+	rows, steps := make([]curtain.Row, 0, len(plan)), make([]stepKey, 0, len(plan))
 	for _, s := range plan {
 		rows = append(rows, curtain.Row{Project: string(s.Project), Label: s.Name(), State: curtain.RowWaiting})
+		steps = append(steps, closeKey(s))
 	}
-	return rows
+	return rows, steps
 }
 
-// restoreRows are a restore's steps, none walked yet.
-func restoreRows(plan []core.RestoreStep) []curtain.Row {
-	rows := make([]curtain.Row, 0, len(plan))
+// restoreRows are a restore's steps, none walked yet, and the step of each.
+func restoreRows(plan []core.RestoreStep) ([]curtain.Row, []stepKey) {
+	rows, steps := make([]curtain.Row, 0, len(plan)), make([]stepKey, 0, len(plan))
 	for _, s := range plan {
 		rows = append(rows, curtain.Row{Project: string(s.Project), Label: string(s.Target), State: curtain.RowWaiting})
+		steps = append(steps, restoreKey(s))
 	}
-	return rows
+	return rows, steps
+}
+
+// restoreKey is a restore step as the curtain finds it: a target of a
+// project.
+func restoreKey(s core.RestoreStep) stepKey {
+	return stepKey{project: s.Project, target: s.Target}
 }
 
 // closeRow is what a close step came to: one left open is skipped, with why.

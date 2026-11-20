@@ -21,6 +21,8 @@ func TestCurtainArgvRunsTheCurtainOfItsMonitor(t *testing.T) {
 		"-o", "confirm_os_window_close=0",
 		"-o", "clear_all_shortcuts=yes",
 		"-o", "background_opacity=1",
+		"-o", "listen_on=none",
+		"-o", "allow_remote_control=no",
 		"-e", "/usr/bin/revier", curtainCmd, "--socket", "/run/user/1000/revier-curtain-7.sock", "--main"}
 	if !slices.Equal(argv, want) {
 		t.Errorf("argv = %q, want %q", argv, want)
@@ -32,12 +34,17 @@ func TestCurtainArgvRunsTheCurtainOfItsMonitor(t *testing.T) {
 	}
 }
 
-// A curtain's kitty has no control socket and no remote control: nothing
-// reaches it but its own socket.
+// A curtain's kitty has no control socket and no remote control, whatever
+// kitty.conf says: nothing reaches it but its own socket.
 func TestCurtainArgvHasNoRemoteControl(t *testing.T) {
-	argv := strings.Join(curtainArgv("/usr/bin/revier", revier.Monitor{Primary: true}, "/s.sock", true), " ")
-	if strings.Contains(argv, "listen-on") || strings.Contains(argv, "allow_remote_control") {
+	argv := curtainArgv("/usr/bin/revier", revier.Monitor{Primary: true}, "/s.sock", true)
+	if slices.Contains(argv, "--listen-on") || slices.Contains(argv, "allow_remote_control=socket-only") {
 		t.Errorf("argv = %q, want no control socket", argv)
+	}
+	for _, opt := range []string{"listen_on=none", "allow_remote_control=no"} {
+		if i := slices.Index(argv, opt); i < 1 || argv[i-1] != "-o" {
+			t.Errorf("argv = %q, want -o %s over kitty.conf", argv, opt)
+		}
 	}
 }
 

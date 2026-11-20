@@ -987,3 +987,68 @@ func step(m tui.Model, key string) tui.Model {
 	}
 	return run(m, cmd)
 }
+
+// loop runs a model as a bubbletea program does: each command in a goroutine
+// of its own, and each message it answers fed to Update in turn. A walk under
+// a curtain waits on the curtain's socket beside the walk, which the batch
+// helpers, running a batch in order, would wait on forever.
+type loop struct {
+	t    *testing.T
+	m    tui.Model
+	msgs chan tea.Msg
+	done chan struct{}
+	quit bool
+}
+
+func loopOf(t *testing.T, m tui.Model, cmd tea.Cmd) *loop {
+	t.Helper()
+	l := &loop{t: t, m: m, msgs: make(chan tea.Msg), done: make(chan struct{})}
+	t.Cleanup(func() { close(l.done) })
+	l.exec(cmd)
+	return l
+}
+
+func (l *loop) exec(cmd tea.Cmd) {
+	if cmd == nil {
+		return
+	}
+	go func() {
+		select {
+		case l.msgs <- cmd():
+		case <-l.done:
+		}
+	}()
+}
+
+// until feeds messages until cond holds, and fails the test after a while.
+func (l *loop) until(what string, cond func(tui.Model) bool) {
+	l.t.Helper()
+	deadline := time.After(5 * time.Second)
+	for !cond(l.m) {
+		select {
+		case msg := <-l.msgs:
+			l.feed(msg)
+		case <-time.After(10 * time.Millisecond):
+		case <-deadline:
+			l.t.Fatalf("waited 5s for %s", what)
+		}
+	}
+}
+
+func (l *loop) feed(msg tea.Msg) {
+	switch msg := msg.(type) {
+	case nil:
+		return
+	case tea.BatchMsg:
+		for _, c := range msg {
+			l.exec(c)
+		}
+		return
+	case tea.QuitMsg:
+		l.quit = true
+		return
+	}
+	next, cmd := l.m.Update(msg)
+	l.m = next.(tui.Model)
+	l.exec(cmd)
+}

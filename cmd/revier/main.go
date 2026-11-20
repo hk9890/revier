@@ -316,7 +316,8 @@ func run(out io.Writer, args []string) error {
 		// No app: a view's window runs it, with no configuration to read.
 		return cmdHcAttach(args)
 	case curtainCmd:
-		// No app: a curtain's window runs it, and the socket is all it reads.
+		// No app: a curtain's window runs it, and it reads only its socket
+		// and the theme config.toml names.
 		return cmdCurtain(args)
 	case "doctor":
 		// No app: what is wrong with the configuration is a question about

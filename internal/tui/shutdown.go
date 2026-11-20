@@ -194,13 +194,13 @@ func (m Model) shutRows() int {
 func (m Model) shutdownKey(msg keyPress) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	if s.quitting {
-		return m, tea.Quit
+		return m, m.quit()
 	}
 	m.err = nil
 	switch {
 	case key.Matches(msg, m.keys.Quit):
 		m.declined()
-		return m, tea.Quit
+		return m, m.quit()
 	case key.Matches(msg, m.keys.Back):
 		m.shutBack()
 	case key.Matches(msg, m.keys.Up):
@@ -356,7 +356,8 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	w, progress, cancelled := startWalk(core.PhaseRecheck, 3+2*len(plan))
 	// Only a full shutdown runs under the curtains (decisions.md D192).
 	if s.whole {
-		w.curtain = newCurtain(m.curtain, "shutdown", closeRows(plan))
+		rows, steps := closeRows(plan)
+		w.curtain = newCurtain(m.curtain, "shutdown", rows, steps)
 	}
 	s.walk = w
 	run, argv := w.curtain, m.curtain
@@ -470,6 +471,8 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 		s.quitting = true
 		quit = tea.Tick(quitAfterShutdown, func(time.Time) tea.Msg { return shutQuitMsg{} })
 	}
+	// The wait after the closes marks a step still open after its report.
+	s.walk.curtain.settle(s.closed)
 	end := shutdownEnd(s.closed, len(s.unreached()), s.walk.cancelled)
 	switch {
 	case quit == nil:
@@ -489,7 +492,7 @@ func (m Model) shutQuit() (tea.Model, tea.Cmd) {
 	if !m.shut.quitting {
 		return m, nil
 	}
-	return m, tea.Quit
+	return m, m.quit()
 }
 
 // notReached says how much of a cancelled close was left open.
@@ -501,27 +504,33 @@ func (s shutdown) notReached() string {
 // leaves open. The close walks the steps in an order of its own, so a step
 // is found by what it closes, not by its place.
 func (s shutdown) unreached() []core.CloseStep {
-	type closes struct {
-		project revier.ProjectName
-		target  revier.TargetName
-		host    string
-		id      string
-		panel   revier.PanelID
-	}
-	what := func(c core.CloseStep) closes {
-		return closes{c.Project, c.Target, c.Ref.Host, c.Ref.ID, c.Panel}
-	}
-	walked := make(map[closes]bool, len(s.closed))
+	walked := make(map[stepKey]bool, len(s.closed))
 	for _, r := range s.closed {
-		walked[what(r.CloseStep)] = true
+		walked[closeKey(r.CloseStep)] = true
 	}
 	var out []core.CloseStep
 	for _, step := range s.plan {
-		if !walked[what(step)] {
+		if !walked[closeKey(step)] {
 			out = append(out, step)
 		}
 	}
 	return out
+}
+
+// stepKey is a step of a walk by what it closes or opens. Its place and its
+// name can change between the plan and the walk: the recheck renames an agent
+// panel whose agent exited or could not be read.
+type stepKey struct {
+	project revier.ProjectName
+	target  revier.TargetName
+	host    string
+	id      string
+	panel   revier.PanelID
+}
+
+// closeKey is a close step by what it closes.
+func closeKey(c core.CloseStep) stepKey {
+	return stepKey{c.Project, c.Target, c.Ref.Host, c.Ref.ID, c.Panel}
 }
 
 // shutdownTitle is the question the step asks, on the line over the rule.

@@ -58,9 +58,10 @@ func curtainTheme() theme.Theme {
 // curtainArgv is the kitty of the curtain on monitor m, which draws what the
 // surface at socket sends; isMain is the curtain that lists the steps. Its
 // class is the curtains' own, which no window rule names, and its title
-// tells the curtains apart. It has no title bar, no kitty key and no remote
-// control: nothing in it opens a window, and no key of kitty's reaches past
-// the curtain. It closes with no question when its program ends.
+// tells the curtains apart. It has no title bar, no kitty key, no control
+// socket and no remote control, whatever kitty.conf says: nothing in it opens
+// a window, nothing reaches it but its own socket, and no key of kitty's
+// reaches past the curtain. It closes with no question when its program ends.
 func curtainArgv(self string, m revier.Monitor, socket string, isMain bool) []string {
 	argv := []string{"kitty", "--class", core.CurtainClass, "--title", core.CurtainTitle(m),
 		"-o", "remember_window_size=no",
@@ -68,6 +69,8 @@ func curtainArgv(self string, m revier.Monitor, socket string, isMain bool) []st
 		"-o", "confirm_os_window_close=0",
 		"-o", "clear_all_shortcuts=yes",
 		"-o", "background_opacity=1",
+		"-o", "listen_on=none",
+		"-o", "allow_remote_control=no",
 		"-e", self, curtainCmd, "--socket", socket}
 	if isMain {
 		argv = append(argv, "--main")

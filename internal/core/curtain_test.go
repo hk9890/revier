@@ -82,8 +82,53 @@ func TestOpenCurtainsFailsWhenTheMonitorsCannotBeListed(t *testing.T) {
 	}
 }
 
+// Every curtain is launched before any is waited for, so one slow window does
+// not spend the wait of the next. The covers follow, primary first.
+func TestOpenCurtainsLaunchesEveryCurtainBeforeTheWait(t *testing.T) {
+	wm := twoMonitors()
+	c := &core.Core{Window: wm}
+	var asked []revier.Monitor
+	wm.OnOpen = func(revier.Realization) {
+		if len(wm.Covers) != 0 {
+			t.Errorf("a launch after a cover: covers = %+v", wm.Covers)
+		}
+	}
+
+	refs, err := c.OpenCurtains(t.Context(), curtainArgv(&asked))
+	if err != nil {
+		t.Fatalf("OpenCurtains: %v", err)
+	}
+	if len(wm.Opened) != 2 {
+		t.Fatalf("opened %d, want 2", len(wm.Opened))
+	}
+	want := []string{"cover " + refs[0].ID + " 1", "cover " + refs[1].ID + " 0", "focus " + refs[0].ID}
+	if !slices.Equal(wm.WindowOps, want) {
+		t.Errorf("window calls = %q, want %q", wm.WindowOps, want)
+	}
+}
+
+// A cover that fails ends the open, and the refs of the curtains found are
+// returned for the caller to end.
+func TestOpenCurtainsFailsWhenACoverFails(t *testing.T) {
+	wm := twoMonitors()
+	wm.CoverErr = errors.New("wctl: no monitor 1")
+	c := &core.Core{Window: wm}
+	var asked []revier.Monitor
+
+	refs, err := c.OpenCurtains(t.Context(), curtainArgv(&asked))
+	if !errors.Is(err, wm.CoverErr) {
+		t.Errorf("err = %v, want the cover's", err)
+	}
+	if len(refs) != 2 || refs[0].Title != "revier-curtain-main" {
+		t.Errorf("refs = %+v, want both curtains, the main one first", refs)
+	}
+	if len(wm.Covers) != 1 || len(wm.Focuses) != 0 {
+		t.Errorf("covers %+v, focuses %v; want the first cover alone and no focus", wm.Covers, wm.Focuses)
+	}
+}
+
 // A curtain whose window never comes ends the wait when its context does, and
-// the refs opened so far are returned for the caller to end.
+// the refs found so far are returned for the caller to end.
 func TestOpenCurtainsEndsWhenAWindowNeverAppears(t *testing.T) {
 	wm := hosttest.NewLateWindows("wm")
 	wm.MonitorList = []revier.Monitor{{Index: 0, Primary: true}}
@@ -141,6 +186,34 @@ func TestHideCurtainsTurnsAboveOffBeforeTheHide(t *testing.T) {
 	}
 }
 
+// A curtain that fails to hide or show does not keep the others from it: each
+// gets its turn, and the errors are joined.
+func TestHideAndShowCurtainsActOnEveryCurtainWhenOneFails(t *testing.T) {
+	wm, main, other := openCurtains(t)
+	wm.AboveErr = errors.New("wctl: no window")
+	c := &core.Core{Window: wm}
+
+	if err := c.HideCurtains(t.Context()); !errors.Is(err, wm.AboveErr) {
+		t.Errorf("HideCurtains: err = %v, want the above's", err)
+	}
+	want := []hosttest.Above{{Ref: other, On: false}, {Ref: main, On: false}}
+	if !slices.Equal(wm.Aboves, want) {
+		t.Errorf("aboves = %+v, want %+v", wm.Aboves, want)
+	}
+
+	wm.Aboves = nil
+	if err := c.ShowCurtains(t.Context()); !errors.Is(err, wm.AboveErr) {
+		t.Errorf("ShowCurtains: err = %v, want the above's", err)
+	}
+	want = []hosttest.Above{{Ref: other, On: true}, {Ref: main, On: true}}
+	if !slices.Equal(wm.Aboves, want) {
+		t.Errorf("aboves = %+v, want %+v", wm.Aboves, want)
+	}
+	if !slices.Equal(wm.Focuses, []revier.TargetRef{other, main}) {
+		t.Errorf("focuses = %v, want each curtain raised", wm.Focuses)
+	}
+}
+
 // A show raises each curtain before it keeps it above, and the main one is
 // last, so it holds the keyboard.
 func TestShowCurtainsFocusesBeforeAboveAndTheMainOneLast(t *testing.T) {
@@ -177,8 +250,8 @@ func TestFocusCurtainLeavesAHiddenCurtainHidden(t *testing.T) {
 	}
 }
 
-// While a curtain is open the popup's key shows it again and does nothing
-// else: no switch of the list and no raise of the popup (decisions.md D192).
+// While a curtain is open the popup's key shows it again (decisions.md D192).
+// It does nothing else: no switch of the list and no raise of the popup.
 func TestPopupShowsAnOpenCurtainAndRaisesNoPopup(t *testing.T) {
 	wm, main, other := openCurtains(t)
 	popup := wm.Add("revier", core.PopupClass)

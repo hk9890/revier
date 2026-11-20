@@ -438,16 +438,18 @@ func decodeMonitors(raw []byte) ([]revier.Monitor, error) {
 	return out, nil
 }
 
-// Cover moves the window to the monitor, then makes it fullscreen, above and
-// sticky, in that order, and stops at the first command that fails. A window
-// that is above and not maximized is in mutter's top layer, over a
-// fullscreen window; fullscreen covers one monitor only.
+// Cover moves the window to the monitor, unmaximizes it, then makes it
+// fullscreen, above and sticky, in that order, and stops at the first command
+// that fails. A window that is above and not maximized is in mutter's top
+// layer, over a fullscreen window, and mutter may map a window maximized;
+// fullscreen covers one monitor only.
 func (h *Host) Cover(ctx context.Context, ref revier.TargetRef, monitor int) error {
 	if ref.ID == "" {
 		return fmt.Errorf("gnome: cannot cover with a zero ref")
 	}
 	for _, args := range [][]string{
 		{"move-to-monitor", ref.ID, strconv.Itoa(monitor)},
+		{"unmaximize", ref.ID},
 		{"fullscreen", ref.ID},
 		{"above", ref.ID, "on"},
 		{"sticky", ref.ID, "on"},

@@ -1,6 +1,7 @@
 package curtain_test
 
 import (
+	"context"
 	"errors"
 	"net"
 	"os"
@@ -249,4 +250,26 @@ func TestTheLastCurtainGoneIsSaid(t *testing.T) {
 	command(curtain.Hide)
 	second.Close()
 	command(curtain.Gone)
+}
+
+// AwaitJoined returns once the curtains it waits for have connected, a gone
+// one included, and fails when they do not connect in time.
+func TestAwaitJoinedWaitsForEveryCurtain(t *testing.T) {
+	s := listen(t)
+	dial(t, s).Close()
+	short, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	if err := s.AwaitJoined(short, 2); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("AwaitJoined with 1 of 2 connected = %v, want the deadline", err)
+	}
+	joined := make(chan error, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(t.Context(), wait)
+		defer cancel()
+		joined <- s.AwaitJoined(ctx, 2)
+	}()
+	dial(t, s)
+	if err := <-joined; err != nil {
+		t.Fatalf("AwaitJoined with 2 connected = %v, want nil", err)
+	}
 }
