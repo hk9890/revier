@@ -1570,7 +1570,8 @@ func (c *Core) claim(before, after []revier.Instance, p Project, st *state.State
 
 // candidate reports whether inst may be the window of p's launch of target,
 // or of p's action when target is empty. Neither takes by class a window of
-// a class another launch awaits (decisions.md D190), and a target's launch
+// a class another target's pending launch awaits, or a late launch awaits
+// (decisions.md D190), and a target's launch
 // takes by class no window that any binding or attachment holds: a late
 // launch's claim may have bound it to another target of p.
 func (c *Core) candidate(inst revier.Instance, p Project, target revier.TargetName, st *state.State, now time.Time, projects []Project) bool {
