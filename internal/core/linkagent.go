@@ -363,32 +363,29 @@ func (c *Core) conversationsOn(ctx context.Context, host string, links []revier.
 // answer to Remote.Conversations, which a save on another machine records. An
 // agent whose probe cannot say keeps none.
 //
-// A local agent the survey read a conversation for keeps that one, in the
-// project's directory where the survey left the directory out, as Seen does:
-// the survey is of this moment too, and asking the probe again can cost the
-// process the survey just paid for. The probe is asked about every other
-// agent: its read may have failed, and one that holds no conversation yet
-// still has a directory to name.
+// An agent whose probe named both its conversation and its directory in the
+// survey keeps that read: the survey is of this moment too, and asking the
+// probe again can cost the process the survey just paid for. The directory is
+// the one the probe gave, not the view's, which leaves out the project's own.
+// The probe is asked about every other agent: its read may have failed, and
+// one that holds no conversation yet still has a directory to name.
 func (c *Core) NameConversations(ctx context.Context, r Report) {
 	var agents []agentPanel
 	var at []*revier.AgentView
 	for i := range r.Views {
-		v := &r.Views[i]
-		for j := range v.Agents {
-			a := &v.Agents[j]
+		for j := range r.Views[i].Agents {
+			a := &r.Views[i].Agents[j]
 			for _, inst := range r.Instances {
 				if key(inst.Ref) != key(a.Ref) {
 					continue
 				}
 				for _, panel := range inst.Panels {
 					if probe, ok := c.probeFor(panel); ok && panel.ID == a.Panel {
-						if _, resumable := probe.(revier.Resumable); resumable && a.State.Session != "" && v.Project.Remote == nil {
-							held := revier.Conversation{ID: a.State.Session, Dir: a.State.Dir}
-							if held.Dir == "" {
-								held.Dir = v.Project.Path
+						if _, resumable := probe.(revier.Resumable); resumable {
+							if held, ok := r.surveyed(*a); ok {
+								a.Conversation = &held
+								continue
 							}
-							a.Conversation = &held
-							continue
 						}
 						agents = append(agents, agentPanel{panel: panel, probe: probe})
 						at = append(at, a)
@@ -403,4 +400,15 @@ func (c *Core) NameConversations(ctx context.Context, r Report) {
 			at[i].Conversation = &conv
 		}
 	}
+}
+
+// surveyed is the conversation the survey's read of the agent named, with the
+// directory the probe gave, where it named both.
+func (r Report) surveyed(a revier.AgentView) (revier.Conversation, bool) {
+	for _, read := range r.read[key(a.Ref)] {
+		if read.Panel == a.Panel && read.State.Session != "" && read.State.Dir != "" {
+			return revier.Conversation{ID: read.State.Session, Dir: read.State.Dir}, true
+		}
+	}
+	return revier.Conversation{}, false
 }

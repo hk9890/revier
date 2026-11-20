@@ -1328,6 +1328,10 @@ type Report struct {
 	// before is the state the survey started from: what Settle may judge. A
 	// ref written since is to a window the listing may have missed.
 	before *state.State
+	// read is each instance's agents as their probes read them, before a
+	// view left out a directory for being the project's own: what
+	// NameConversations records.
+	read probeCache
 }
 
 // HostErr is every failure a survey degraded over, joined, or nil: what a
@@ -1518,6 +1522,7 @@ func (c *Core) listed(ctx context.Context, projects []Project, st *state.State, 
 		}
 		r.Views = append(r.Views, v)
 	}
+	r.read = probed
 	for _, h := range c.hosts() {
 		if failed[h.Name()] != nil {
 			continue

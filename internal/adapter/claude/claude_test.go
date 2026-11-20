@@ -408,9 +408,9 @@ func TestSessions(t *testing.T) {
 	}
 }
 
-// Sessions reads the listing Inspect read, so a `revier list --conversations`
-// runs the command once. A session file written after that listing runs it
-// again: the save records the conversation the session holds now.
+// Sessions reads the listing Inspect read, so a save after a survey runs the
+// command once. A session file written after that listing runs it again: the
+// save records the conversation the session holds now.
 func TestSessionsReusesTheListingUntilASessionChanged(t *testing.T) {
 	dir := t.TempDir()
 	start := time.Unix(1_800_000_000, 0)

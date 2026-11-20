@@ -86,6 +86,8 @@ type FakeResumableProbe struct {
 	// Calls counts Sessions calls, so a test can assert a save asks once
 	// whatever the number of agents.
 	Calls int
+	// Asked is every panel Sessions was asked about, in the order asked.
+	Asked []revier.PanelID
 	// Gone are the conversations the harness no longer keeps.
 	Gone []revier.SessionID
 }
@@ -111,6 +113,9 @@ func (p *FakeResumableProbe) Inspect(ctx context.Context, panel revier.Panel) (r
 
 func (p *FakeResumableProbe) Sessions(_ context.Context, panels []revier.Panel) ([]revier.Conversation, error) {
 	p.Calls++
+	for _, panel := range panels {
+		p.Asked = append(p.Asked, panel.ID)
+	}
 	if p.SessionErr != nil {
 		return nil, p.SessionErr
 	}
