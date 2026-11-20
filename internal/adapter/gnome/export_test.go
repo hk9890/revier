@@ -52,3 +52,6 @@ func RulesReadOnly(args []string) error { return ruleCommand(readRuleCommands, a
 
 // DecodeRules exposes the parser of `wctl rules list --json`.
 func DecodeRules(raw []byte) ([]revier.WindowRule, error) { return decodeRules(raw) }
+
+// EncodeRules exposes the bytes WriteOwn writes for rules.
+func EncodeRules(rules []revier.WindowRule) ([]byte, error) { return encodeRules(rules) }

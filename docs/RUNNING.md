@@ -372,18 +372,19 @@ press the key, on a lease, as
 Run `revier setup install` and `revier setup uninstall` on scratch files, with
 `$S` from the scratch configuration recipe. Set all three variables in the
 same shell, every time: `XDG_CURRENT_DESKTOP=none` makes the desktop keys a
-skipped part, and `XDG_CONFIG_HOME` moves wctl's rules file, which the
-extension then does not read.
+skipped part, and `XDG_CONFIG_HOME` moves wctl's rules files, which the
+extension then does not read. The rules part still needs the extension
+running: an install asks it whether it reads `rules.d`.
 
 ```bash
 export XDG_CURRENT_DESKTOP=none XDG_CONFIG_HOME=$S/xdg KITTY_CONFIG_DIRECTORY=$S/kitty
 mkdir -p "$KITTY_CONFIG_DIRECTORY"
 printf 'map ctrl+shift+t new_tab\n' > "$KITTY_CONFIG_DIRECTORY/kitty.conf"
-wctl rules path                  # must name $S/xdg/gnome-window-control/rules.json
-./bin/revier setup install       # desktop keys skipped, so exit 4; revier.conf, the include, 3 popup rules
+wctl rules path --dir            # must name $S/xdg/gnome-window-control/rules.d
+./bin/revier setup install       # desktop keys skipped, so exit 4; revier.conf, the include, rules.d/revier.json
 ./bin/revier setup status        # each key written; ctrl+shift+t shadowed by kitty.conf:3
-wctl rules list --json           # revier's rules first
-./bin/revier setup uninstall     # kitty.conf and the rules file as they were
+wctl rules list                  # revier's 3 rules, SOURCE rules.d/revier.json
+./bin/revier setup uninstall     # kitty.conf as it was, rules.d/revier.json gone
 ```
 
 To try a generated map, run `revier setup install` in a lease, as

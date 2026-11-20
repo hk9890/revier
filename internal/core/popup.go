@@ -42,7 +42,7 @@ const (
 // decided before the launch, so revier places the window once and never
 // measures it to place it again. Where the window host's rules for the popup
 // are current, they placed it before its first frame, by the monitor it
-// opened on, and revier does not place it again (D189). argv is a function,
+// opened on, and revier does not place it again (D191). argv is a function,
 // asked only for a launch: what it carries - the project the surface opens
 // on - costs a listing the raise must not pay.
 func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (revier.TargetRef, error) {
@@ -124,7 +124,7 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 }
 
 // readPopupRules starts the read of whether the window host's rules place
-// the popup - revier's rules for it are current - and returns the wait for
+// the popup - PopupRuleReport.PlacesPopup - and returns the wait for
 // the answer. The read runs while the terminal starts, off the key's path. A
 // read that fails leaves the place to revier.
 func (c *Core) readPopupRules(ctx context.Context) func() bool {
@@ -137,7 +137,7 @@ func (c *Core) readPopupRules(ctx context.Context) func() bool {
 		if err != nil {
 			slog.Warn("popup: window rules", "err", err)
 		}
-		answer <- err == nil && report.State == PopupRulesCurrent
+		answer <- err == nil && report.PlacesPopup()
 	}()
 	return func() bool { return <-answer }
 }
@@ -276,7 +276,7 @@ type popupTier struct {
 // on a laptop all of it.
 //
 // revier writes them as the window host's rules, which place the popup
-// against its monitor before its first frame (decisions.md D189). Where
+// against its monitor before its first frame (decisions.md D191). Where
 // those rules are not current, revier places the popup it launched by them
 // itself, against the primary monitor's workarea.
 var popupTiers = []popupTier{

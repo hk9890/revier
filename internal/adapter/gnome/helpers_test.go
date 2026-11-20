@@ -33,6 +33,20 @@ func (w *wctl) host() *gnome.Host {
 	return h
 }
 
+// rules is a rules writer that runs w in place of wctl.
+func (w *wctl) rules() *gnome.RuleWriter {
+	r := &gnome.RuleWriter{}
+	r.SetRunner(func(_ context.Context, args ...string) ([]byte, error) {
+		joined := strings.Join(args, " ")
+		w.calls = append(w.calls, joined)
+		if w.reply == nil {
+			return nil, nil
+		}
+		return w.reply(joined)
+	})
+	return r
+}
+
 // refused is what the host gets from a wctl that exits non-zero: the command,
 // the exit status, and what wctl wrote to its standard error.
 func refused(args string, code int, stderr string) error {

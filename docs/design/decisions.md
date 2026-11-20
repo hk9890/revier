@@ -1088,17 +1088,6 @@ var holds only what kitty reports; any program can still send a record. Rejected
 the socket to the probe, which hands it all of kitty's remote control; a
 built-in mapping, until a second agent sends the records.
 
-### D189 — revier writes the popup's window rules, and one command writes all of revier's setup
-
-Extends D30 and D147: wctl's rules file is a third write, which wctl makes
-whole through a link. The popup's class is revier's (D76) and names its window
-before it opens, so its rules are revier's and place it by its monitor before
-its first frame. D24's place after that frame shows as a jump, so revier places
-the popup only where its rules are not current. A rule for the class in another
-shape is the user's, replaced only with --force (D27), which prints it: no tool
-writes it again. `revier setup` writes the desktop keys, the terminal keys and
-the rules in one run, because a user sets up a machine, not one store.
-
 ### D190 — a key binds to the instance it landed on, and a launch's window may come minutes late
 
 Replaces D21. Titles move after launch, so a key binds to the instance it
@@ -1109,3 +1098,14 @@ window, is kept for ten minutes and bound to the one unheld window its full
 rule alone matches, because a cold editor opens its windows minutes late and
 in any order. While it is kept, no class-only bind or claim takes a window of
 its class.
+
+### D191 — revier writes the popup's window rules as a file of its own, and one command writes all of revier's setup
+
+Replaces D189. Extends D30 and D147. The popup's class is revier's (D76), so
+its rules place it by its monitor before its first frame; D24's place after
+that frame jumps, so revier places it only where its rules are not current.
+revier owns its rules as a whole drop-in file, as the terminal's keys. It edits
+the user's file, often a link into dotfiles, only to take out a rule an older
+revier put there, known by its exact shape, printing each. The user's file loads
+first, so any other rule for the class is the user's: it wins, and is reported,
+never taken. One `revier setup` writes all three: a user sets up a machine.

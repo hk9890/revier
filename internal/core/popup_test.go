@@ -260,18 +260,25 @@ func TestPopupLaunchesAndPlacesByTheWorkarea(t *testing.T) {
 // first frame, by the monitor it opened on, so the launch raises it and
 // does not place it again: a place by the primary workarea would undo the
 // size they gave on another monitor. Rules that are not current, or that
-// cannot be read, leave the place to revier (decisions.md D189).
+// cannot be read, leave the place to revier (decisions.md D191).
 func TestPopupLeavesThePlaceToRulesThatAreCurrent(t *testing.T) {
-	stale := core.PopupRules()[1:]
-	unread := hosttest.NewWindowRules(core.PopupRules()...)
+	withOwn := func(own []revier.WindowRule, user ...revier.WindowRule) *hosttest.FakeWindowRules {
+		r := hosttest.NewWindowRules(user...)
+		r.Own = own
+		return r
+	}
+	unread := withOwn(core.PopupRules())
 	unread.ReadErr = errors.New("wctl not answering")
+	overlayAhead := revier.WindowRule{Class: core.PopupClass, Overlay: true}
 	cases := []struct {
 		name   string
 		rules  revier.WindowRules
 		placed bool
 	}{
-		{name: "current", rules: hosttest.NewWindowRules(core.PopupRules()...), placed: false},
-		{name: "stale", rules: hosttest.NewWindowRules(stale...), placed: true},
+		{name: "current", rules: withOwn(core.PopupRules()), placed: false},
+		{name: "stale", rules: withOwn(core.PopupRules()[1:]), placed: true},
+		{name: "only in the user's file", rules: hosttest.NewWindowRules(core.PopupRules()...), placed: true},
+		{name: "a rule ahead that places nothing", rules: withOwn(core.PopupRules(), overlayAhead), placed: true},
 		{name: "unread", rules: unread, placed: true},
 		{name: "none", rules: nil, placed: true},
 	}

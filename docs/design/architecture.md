@@ -118,8 +118,8 @@ pressed in. It is not the **View** either: the view is the terminal's remote
 control, this is its configuration file.
 
 **WindowRules** reads and writes the window host's placement rules, of which
-revier owns the popup's (D189). It is not the window **Host**: the host acts
-on a window that exists, a rule on a window before it is drawn.
+revier owns one file whole, the popup's (D191). It is not the window **Host**:
+the host acts on a window that exists, a rule on a window before it is drawn.
 
 Three things that look like ports and are not:
 

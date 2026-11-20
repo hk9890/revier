@@ -6,6 +6,39 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## v0.29.0
+
+- **Action required: the popup's window rules move to
+  `~/.config/gnome-window-control/rules.d/revier.json`, and need `wctl`
+  0.24.0 and extension 24 or later.** Upgrade both, log out and in, and run
+  `revier setup install`. It writes `rules.d/revier.json`, and takes out of
+  your `rules.json` the rules revier 0.28 wrote there and the overlay rule
+  the guide had you copy, printing each one it does not write now. A popup
+  rule you changed from them stays, and now wins over revier's: `revier
+  setup status` names it, and you delete it to get revier's sizes. After
+  that, an install leaves no change to commit in a dotfiles repository that
+  holds `rules.json`. With an older extension, install skips the rules and
+  says why.
+- **A rule of yours for `revier-popup` in `rules.json` now wins over
+  revier's.** The extension reads `rules.json` first. `revier setup status`
+  and `revier setup install` name each such rule, and install leaves it in
+  place: `--force` no longer replaces it. Add one to size the popup your own
+  way.
+- **`revier setup status` reports the popup's rules file as current, stale
+  or missing,** and says when the extension would not apply it, or when
+  your `rules.json` does not load. A broken `rules.json` no longer stops
+  the popup's rules: the extension loads `revier.json` without it.
+- **Action required for a script that reads the popup rules of `revier
+  setup status --json` or `install --json`.** The state `"absent"` is now
+  `"missing"`, and the state `"held"` and the action `"take-over"` are gone.
+  `found` is gone: `legacy` lists an older revier's rules in `rules.json`,
+  and `ahead` each rule that wins over revier's, each with `file`, `index`
+  and `rule`. New fields: `file`, `exists`, `own`, `broken` and
+  `user_broken` in the report, `moved` in the plan, and `rules_unread`
+  beside `rules` in the status.
+- **`revier setup uninstall` deletes `rules.d/revier.json`,** and takes an
+  older revier's rules out of `rules.json`, as install does.
+
 ## v0.28.1
 
 - **A `revier list` call that is cut off no longer leaves

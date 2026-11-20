@@ -10,6 +10,7 @@ import (
 	"context"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/hk9890/revier/internal/adapter/gnome"
@@ -101,6 +102,88 @@ func TestDecodeRulesReadsTheRecordedListing(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("rules =\n%+v\nwant\n%+v", got, want)
+	}
+}
+
+// popupTiers are the three rules revier writes, as the core builds them.
+var popupTiers = []revier.WindowRule{
+	{Class: "revier-popup", MinWidth: 3400, Place: []string{"center", "top", "1800", "100%"}, Overlay: true},
+	{Class: "revier-popup", MinWidth: 2200, Place: []string{"center", "top", "75%", "100%"}, Overlay: true},
+	{Class: "revier-popup", Place: []string{"left", "top", "100%", "100%"}, Overlay: true},
+}
+
+// revier writes its file byte for byte as wctl 0.24.0 writes the same three
+// rules with `wctl rules add --file`, recorded in revier.json: a repeat
+// install that did write would change no byte.
+func TestRevierFileIsWhatWctlWrites(t *testing.T) {
+	got, err := gnome.EncodeRules(popupTiers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := read(t, "revier.json"); string(got) != string(want) {
+		t.Errorf("file =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// The check of wctl 0.24.0, recorded over a rules.json, a drop-in of another
+// program's before revier's, a broken one, revier's, and one after it. check
+// exits 1 for the broken file. The read takes the user's file, the earlier
+// file that loads, and revier's, and lists no other.
+func TestReadTakesTheRecordedCheck(t *testing.T) {
+	const dir = "/home/you/.config/gnome-window-control/rules.d"
+	lists := map[string]string{
+		"":                        `[{"match":{"class":"code"},"tile":"left"}]`,
+		dir + "/0-other.json":     `[{"match":{"class":"revier-popup"},"tile":"left"}]`,
+		dir + "/" + "revier.json": string(read(t, "revier.json")),
+	}
+	w := &wctl{reply: func(args string) ([]byte, error) {
+		switch {
+		case args == "rules path --dir":
+			return []byte(dir + "\n"), nil
+		case args == "rules check --json":
+			return read(t, "rules-check.json"), refused(args, 1, "")
+		case strings.HasPrefix(args, "rules list --json"):
+			list, ok := lists[strings.TrimPrefix(strings.TrimPrefix(args, "rules list --json"), " --file ")]
+			if !ok {
+				t.Errorf("listed %q", args)
+			}
+			return []byte(list), nil
+		}
+		return nil, nil
+	}}
+	set, err := w.rules().Read(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := revier.WindowRuleSet{
+		User: revier.WindowRuleFile{Path: "/home/you/.config/gnome-window-control/rules.json", Rules: []revier.WindowRule{
+			{Class: "code", Other: true, Raw: `{"match":{"class":"code"},"tile":"left"}`}}},
+		Earlier: []revier.WindowRuleFile{{Path: dir + "/0-other.json", Rules: []revier.WindowRule{
+			{Class: "revier-popup", Other: true, Raw: `{"match":{"class":"revier-popup"},"tile":"left"}`}}}},
+		Own:       revier.WindowRuleFile{Path: dir + "/revier.json"},
+		OwnExists: true,
+	}
+	for i := range set.Own.Rules {
+		set.Own.Rules[i].Raw = ""
+	}
+	if !reflect.DeepEqual(set.Own.Rules, popupTiers) {
+		t.Errorf("own = %+v, want the three tiers", set.Own.Rules)
+	}
+	set.Own.Rules = nil
+	if !reflect.DeepEqual(set, want) {
+		t.Errorf("set =\n%+v\nwant\n%+v", set, want)
+	}
+}
+
+// The version document of wctl 0.24.0, recorded: the extension reads
+// rules.d and every key revier writes, so revier may write its file.
+func TestRulesCanWriteOnTheRecordedVersion(t *testing.T) {
+	r := (&wctl{reply: versionReply(string(read(t, "version-0.24.json")), 0)}).rules()
+	if err := r.Probe(t.Context()); err != nil {
+		t.Fatalf("Probe: %v", err)
+	}
+	if err := r.CanAdd(); err != nil {
+		t.Errorf("CanAdd: %v", err)
 	}
 }
 

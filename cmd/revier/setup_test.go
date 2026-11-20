@@ -53,7 +53,7 @@ func TestSetupDryRunWritesNoRule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"dry run: nothing is changed", "desktop keys:", "popup rules:", "3 rules would be written first"} {
+	for _, want := range []string{"dry run: nothing is changed", "desktop keys:", "popup rules:", hosttest.FakeOwnRules + " would be written with revier's 3 rules"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("dry run does not say %q:\n%s", want, out)
 		}
@@ -63,38 +63,59 @@ func TestSetupDryRunWritesNoRule(t *testing.T) {
 	}
 }
 
-// A rule of the user's for the popup's window holds the install back and
-// makes it incomplete; --force replaces it and prints it as the file held
-// it, for the user to put back.
-func TestSetupInstallNeedsForceForARuleOfTheUsers(t *testing.T) {
+// A rule of the user's for the popup's window wins over revier's: install
+// writes revier's file, leaves the user's rule, says it comes first, and is
+// complete.
+func TestSetupInstallLeavesARuleOfTheUsersAndSaysItWins(t *testing.T) {
 	a, w := rulesApp(t, userPopupRule)
 	out, err := runSetup(t, a, "install")
-	if !errors.Is(err, errSetupIncomplete) {
-		t.Errorf("err = %v, want errSetupIncomplete", err)
-	}
-	if !strings.Contains(out, "--force replaces it") || !strings.Contains(out, "rule 0 (yours)") {
-		t.Errorf("install does not name the rule and the way past it:\n%s", out)
-	}
-	if len(w.Calls) != 0 {
-		t.Fatalf("install without --force wrote: %v", w.Calls)
-	}
-
-	out, err = runSetup(t, a, "install", "--force")
 	if err != nil {
-		t.Fatalf("install --force: %v", err)
+		t.Fatalf("install: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "for you to put back:\n    "+userPopupRule.Raw+"\n") {
-		t.Errorf("install --force does not print the rule it removed:\n%s", out)
+	if !strings.Contains(out, "! rule 0 of "+hosttest.FakeUserRules+" comes first and wins over revier's") {
+		t.Errorf("install does not name the rule that wins:\n%s", out)
 	}
-	if !reflect.DeepEqual(w.Rules, core.PopupRules()) {
-		t.Errorf("rules = %+v, want revier's", w.Rules)
+	if !reflect.DeepEqual(w.User, []revier.WindowRule{userPopupRule}) || !reflect.DeepEqual(w.Own, core.PopupRules()) {
+		t.Errorf("user = %+v, own = %+v", w.User, w.Own)
+	}
+	out, err = runSetup(t, a, "status")
+	if err != nil || !strings.Contains(out, "+ ok: "+hosttest.FakeOwnRules) || !strings.Contains(out, "comes first and wins over revier's") {
+		t.Errorf("status: err %v:\n%s", err, out)
+	}
+}
+
+// An install takes the overlay rule the guide had users copy out of their
+// file, where it would hide revier's, and prints it as the file held it. A
+// rule of the user's in revier's shape with a size of their own stays, and
+// status and install say it wins.
+func TestSetupInstallTakesTheGuidesRuleOutAndLeavesTheUsers(t *testing.T) {
+	guide := revier.WindowRule{Class: core.PopupClass, Overlay: true, Raw: `{"match":{"class":"revier-popup"},"overlay":true}`}
+	hand := revier.WindowRule{
+		Class: core.PopupClass, Place: []string{"center", "top", "1800", "100%"}, Overlay: true,
+		Raw: `{"match":{"class":"revier-popup"},"place":["center","top",1800,"100%"],"overlay":true}`,
+	}
+	a, w := rulesApp(t, hand, guide)
+	out, err := runSetup(t, a, "status")
+	if err != nil || !strings.Contains(out, "stale: an older revier's rules are in your rules file") || !strings.Contains(out, "! rule 0 of "+hosttest.FakeUserRules+" comes first and wins over revier's") {
+		t.Errorf("status before: err %v:\n%s", err, out)
+	}
+	out, err = runSetup(t, a, "install")
+	if err != nil {
+		t.Fatalf("install: %v", err)
+	}
+	if !strings.Contains(out, "1 rule of an older revier removed from your rules file") || !strings.Contains(out, "wins over revier's:\n    "+guide.Raw+"\n") {
+		t.Errorf("install does not print the rule it removed:\n%s", out)
+	}
+	if !reflect.DeepEqual(w.User, []revier.WindowRule{hand}) || !reflect.DeepEqual(w.Own, core.PopupRules()) {
+		t.Errorf("user = %+v, own = %+v", w.User, w.Own)
 	}
 }
 
 // status --json carries each part, a part the machine does not have as null
-// with the reason under skipped; uninstall then removes revier's rules.
+// with the reason under skipped; uninstall then removes revier's file.
 func TestSetupStatusThenUninstall(t *testing.T) {
-	a, w := rulesApp(t, core.PopupRules()...)
+	a, w := rulesApp(t)
+	w.Own = core.PopupRules()
 	stores := a.stores
 	a.stores = func(ctx context.Context, write bool) setupStores {
 		s := stores(ctx, write)
@@ -123,8 +144,8 @@ func TestSetupStatusThenUninstall(t *testing.T) {
 	if _, err := runSetup(t, a, "uninstall"); err != nil {
 		t.Fatal(err)
 	}
-	if len(w.Rules) != 0 {
-		t.Errorf("rules after uninstall = %+v", w.Rules)
+	if w.Own != nil {
+		t.Errorf("revier's file after uninstall = %+v", w.Own)
 	}
 }
 
@@ -162,26 +183,31 @@ func TestSetupStatusReportsThePartsBesideOneThatFails(t *testing.T) {
 	}
 }
 
-// An extension that cannot read revier's rules keeps an install from adding
-// them, and the install exits as incomplete, so a script hears that it set
-// up less than the machine; an uninstall still removes the ones revier wrote.
+// An extension that would not apply revier's file keeps an install from
+// writing it, and the install exits as incomplete, so a script hears that
+// it set up less than the machine; status says why the file is not
+// applied, and an uninstall still removes it.
 func TestSetupUninstallNeedsNoExtensionThatReadsTheRules(t *testing.T) {
 	a, w := rulesApp(t)
 	stores := a.stores
+	why := errors.New(`extension 23 does not read "rules-dropin", so it would not apply revier's rules: upgrade it`)
 	a.stores = func(ctx context.Context, write bool) setupStores {
 		s := stores(ctx, write)
-		s.addWhy = errors.New("extension 21 does not read \"rules-min-width\" in a rule: upgrade it")
+		s.addWhy = why
 		return s
 	}
 	out, err := runSetup(t, a, "install")
-	if !errors.Is(err, errSetupIncomplete) || !strings.Contains(out, "- skipped: extension 21 does not read") || len(w.Calls) != 0 {
+	if !errors.Is(err, errSetupIncomplete) || !strings.Contains(out, "- skipped: "+why.Error()) || len(w.Calls) != 0 {
 		t.Errorf("install: err %v, calls %v:\n%s", err, w.Calls, out)
 	}
-	w.Rules = core.PopupRules()
+	w.Own = core.PopupRules()
+	if out, err := runSetup(t, a, "status"); err != nil || !strings.Contains(out, "! not applied: "+why.Error()) {
+		t.Errorf("status: err %v:\n%s", err, out)
+	}
 	if _, err := runSetup(t, a, "uninstall"); err != nil {
 		t.Fatalf("uninstall: %v", err)
 	}
-	if len(w.Rules) != 0 {
-		t.Errorf("uninstall left %v", w.Rules)
+	if w.Own != nil {
+		t.Errorf("uninstall left %v", w.Own)
 	}
 }

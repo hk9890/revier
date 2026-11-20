@@ -9,7 +9,8 @@ revier also writes its desktop keys into GNOME, and the popup needs it.
 
 - The [Window Control extension](https://github.com/carlo9890/gnome-window-control),
   switched on, and its command `wctl` 0.23.0 or later on your PATH. GNOME
-  gives no window list to an outside program; `wctl` does.
+  gives no window list to an outside program; `wctl` does. The popup's
+  window rules need `wctl` 0.24.0 and extension 24 or later.
 - `revier` on the PATH of a login shell. Each desktop key runs it through
   `sh -lc`.
 
@@ -33,9 +34,10 @@ revier uses GNOME when `XDG_CURRENT_DESKTOP` names GNOME (or is not set) and
 
 ## The popup's window
 
-`revier setup install` writes three rules for the popup's window into
-`~/.config/gnome-window-control/rules.json`, above your own rules. They set
-its size by the width of the monitor it opens on:
+`revier setup install` writes three rules for the popup's window into a file
+of its own, `~/.config/gnome-window-control/rules.d/revier.json`. It never
+edits your `rules.json`. The rules set the popup's size by the width of the
+monitor it opens on:
 
 | Monitor width | Popup |
 |---|---|
@@ -53,15 +55,21 @@ hide it when another window takes the focus or the overview opens.
 - While the rules are as revier wrote them, revier does not move the popup
   itself. Else it places the popup by the same widths, but measures the
   primary monitor, less its panels.
-- A rule of yours for `revier-popup` that keeps the popup on top is
-  revier's: install replaces it. Any other rule of yours for it holds the
-  install back, and `revier setup install --force` replaces it. Install and
-  uninstall print each rule they removed that revier does not write, as the
-  file held it, for you to put back.
-- An extension older than version 23 cannot read the rules, and
-  `revier setup install` skips them and says so. Upgrade the extension.
-  `revier setup uninstall` still removes them, with or without a running
-  extension.
+- To size the popup your own way, add a rule for the class `revier-popup` to
+  your `rules.json`. The extension reads `rules.json` before `rules.d`, so
+  your rule wins over revier's. `revier setup status` and `revier setup
+  install` name each rule of yours that wins, and install leaves it. Do not
+  edit `revier.json`: the next install writes it again.
+- revier 0.28 wrote its rules into `rules.json`, and an older guide had you
+  copy `{ "match": { "class": "revier-popup" }, "overlay": true }` there.
+  Install takes those rules out, because they would hide revier's file, and
+  prints each one that revier does not write now. A rule you changed from
+  them is yours: install leaves it, and status says it wins. Delete it if you
+  want revier's sizes.
+- An extension older than version 24 does not read `rules.d`, and
+  `revier setup install` skips the rules and says so. Upgrade the extension
+  and `wctl`. `revier setup uninstall` deletes `revier.json`, with or without
+  a running extension.
 - A hide by the extension acts as Esc: the next press raises the popup on the
   project list, with no query. An error the popup showed stays. A screen or a
   question the popup showed, such as the help or a delete, still waits for
