@@ -6,6 +6,34 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## v0.30.0
+
+- **A full shutdown or a restore that you start in the popup runs under a
+  curtain on every monitor.** The windows that open and close no longer pop
+  up one after another and take the focus: they open under the curtain. The
+  curtain on the main monitor lists each step, and Tab shows it on one line.
+  To cancel, press ctrl+c or click Cancel: the step that runs finishes
+  first, and a second ctrl+c quits. To see the desktop while the run goes
+  on, press Esc; the popup's key brings the curtain back. The curtain lifts
+  by itself when the run went well. After a failure or a cancel it stays
+  with a summary until you close it. When a curtain cannot open, the run
+  goes on without it.
+- **A linked host that no longer knows one project still lists the
+  others.** One stale link on a host made every link on that host show
+  unreachable. Now only that link fails, and a session save names it.
+- **An agent with no name, such as `dtop` that you started in a shell
+  panel, comes back from a restore as the agent that runs that program.**
+  Before, it came back as the default agent, so a restore turned two `dtop`
+  agents into Claude Code agents. The restore line in the logs now says
+  which agent it came back as.
+- **A restore no longer says that the conversation of an agent you never
+  prompted is gone.** It starts that agent fresh, and says so. When the
+  agent got its first prompt after the save, the restore resumes it.
+- **The logs no longer show a slow `remote survey` line nearly every minute
+  for a healthy linked host.** A survey that waits for a linked host now
+  counts as slow at 1 s, and its line says how long the listing of this
+  machine took.
+
 ## v0.29.0
 
 - **Action required: the popup's window rules move to
