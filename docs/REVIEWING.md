@@ -18,8 +18,11 @@ with the correct form.
   [OVERVIEW.md](OVERVIEW.md#finding-things) has the search. Flag a number on
   any other fact: the comment states that fact in its own words, with no
   number.
-- **Decision citation, outside Go**: a commit message, a PR title or a PR
-  body cites a decision as `decisions.md Dnn`, several together as
-  `decisions.md Dnn, Dnn`, and only for a fact that its entry or the design
-  text tagged `(Dnn)` carries. Flag a citation in any other form or on any
-  other fact.
+- **Decision numbers, outside Go**: a commit message, a PR title or a PR
+  body writes every decision number as `decisions.md Dnn`, several together
+  as `decisions.md Dnn, Dnn`: a citation, and also a number that names the
+  decision itself, as in "decisions.md D190 replaces decisions.md D21". A
+  number placed next to a fact is a citation, and only for a fact that its
+  entry or the design text tagged `(Dnn)` carries. A wrong form quoted in
+  backticks, as in a report of it, is no number. Flag a number in any other
+  form, or a citation on any other fact.
