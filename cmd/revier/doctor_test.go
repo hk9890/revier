@@ -391,16 +391,22 @@ func TestDoctorAdvisesARenameForARefusedName(t *testing.T) {
 	doctorRoot(t, map[string]string{
 		"a:b.toml":        soundAt("/tmp/ab"),
 		"with space.toml": soundAt("/tmp/withspace"),
+		"-x y.toml":       soundAt("/tmp/xy"),
+		"a\x1bb.toml":     soundAt("/tmp/escape"),
 	})
 
 	var out strings.Builder
-	if err := cmdDoctor(&out, nil); err != (problemsFound{files: 2}) {
-		t.Fatalf("err = %v, want two files with problems", err)
+	if err := cmdDoctor(&out, nil); err != (problemsFound{files: 4}) {
+		t.Fatalf("err = %v, want four files with problems", err)
+	}
+	if n := strings.Count(out.String(), "fix: rename"); n != 3 {
+		t.Errorf("%d rename fixes, want 3: a name with a control character gets none:\n%s", n, out.String())
 	}
 	lines := strings.Split(out.String(), "\n")
 	for problem, fix := range map[string]string{
 		`project name "a:b" contains ":"`:                                      "fix: rename the project: revier rename a:b <new name>",
 		`project name "with space" contains whitespace or a control character`: "fix: rename the project: revier rename 'with space' <new name>",
+		`project name "-x y" contains whitespace or a control character`:       "fix: rename the project: revier rename -- '-x y' <new name>",
 	} {
 		i := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, problem) })
 		if i < 0 || i+1 == len(lines) || strings.TrimSpace(lines[i+1]) != fix {

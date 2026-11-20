@@ -32,7 +32,7 @@ const usage = `revier - a project-grouped control surface for running agents
 
 usage:
   revier                        the TUI: every project, its agent state, its targets
-  revier list [--json [--conversations]] [--agents] [--match <word> | name..]
+  revier list [--json [--conversations] | --agents [--json]] [--match <word> | name..]
                                 what the TUI shows, printed once, or for the
                                 named projects, exiting 1 after them when a
                                 name is no project's; --match lists the

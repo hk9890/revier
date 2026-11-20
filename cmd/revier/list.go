@@ -23,7 +23,7 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "emit the view as JSON")
 	conversations := fs.Bool("conversations", false, "with --json, name the conversation each agent holds")
-	match := fs.String("match", "", "only the projects this word finds; see revier --help")
+	match := fs.String("match", "", "only the projects this word finds")
 	agents := fs.Bool("agents", false, "one row per agent, with its address")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
