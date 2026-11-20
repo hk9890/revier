@@ -378,14 +378,14 @@ func ownPanel(in revier.Instance) (revier.PanelID, bool) {
 // same instance is reached by making its own first panel current, because
 // focusing the instance alone would leave the tab where it is.
 //
-// A tab the listing holds can end before its focus. Its panel is then gone
-// from the instance, and the press is made once more: the listing it reads
-// holds the tab without that panel, or not at all, and then the tab opens.
-// That second pass does not go home: the first pass focused the instance,
-// which would make the press read as one made on the tab. goTab logs "tab
-// gone at its focus, pressed again" at INFO before the second pass, with
-// project, target and err, the focus error of the first pass. A second such
-// end fails the press with its own focus error.
+// A tab the listing holds can end before its focus. Its panel is then gone from
+// the instance, and the press is made once more: the listing it reads holds the
+// tab without that panel, or not at all, and then the tab opens. That second
+// pass does not go home: the first pass focused the instance, which would make
+// the press read as one made on the tab. goTab logs
+// "tab gone at its focus, pressed again" at INFO before the second pass, with
+// project, target and err, the focus error of the first pass. A second such end
+// fails the press with its own focus error.
 func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resumes []Resume) (Result, error) {
 	res, err := c.goTabOnce(ctx, p, i, bound, resumes, false)
 	var gone tabGone

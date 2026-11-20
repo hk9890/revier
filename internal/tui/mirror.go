@@ -186,10 +186,10 @@ func (mi *mirror) take(msg mirroredMsg) {
 	case errors.Is(msg.err, core.ErrNoScreen):
 	case errors.Is(msg.err, revier.ErrPanelGone):
 		// A panel that closed while it was read is no failure, as a close of
-		// its project reads it last as it ends. take logs "mirror: panel
-		// gone" at INFO in its place, with panel and err, once while the
-		// cursor stays on that panel: that line still shows a panel that
-		// stays unmatched (decisions.md D172).
+		// its project reads it last as it ends. take logs "mirror: panel gone"
+		// at INFO in its place, with panel and err, once while the cursor stays
+		// on that panel: that line still shows a panel that stays unmatched
+		// (decisions.md D172).
 		if !mi.gone[panel] {
 			if mi.gone == nil {
 				mi.gone = map[string]bool{}

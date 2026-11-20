@@ -662,15 +662,14 @@ func (c *Core) reread(ctx context.Context, a Agent) (revier.AgentState, error) {
 // next read has nothing to read, writes none.
 //
 // A read whose error is the ctx's end cuts its probe: the probe is not asked
-// again in this walk, and its agents not yet read stay empty. A read that
-// fails for another cause after the deadline is logged as its own. The cut
-// is logged once per probe, not once per agent: the claude probe reads every
-// panel through one listing, and a listing the ctx killed fails each read
-// after it at once. The cut writes
-// one WARN "detail" with err errCut and probe. cut is the error of the read
-// that the deadline ended. read, failed and unread count the probe's agents
-// that were read, whose read failed, and that were not read. Its "detail:
-// recovered" comes at the next walk that reads that probe with no cut.
+// again in this walk, and its agents not yet read stay empty. A read that fails
+// for another cause after the deadline is logged as its own. The cut is logged
+// once per probe, not once per agent: the claude probe reads every panel
+// through one listing, and a listing the ctx killed fails each read after it at
+// once. The cut writes one WARN "detail" with err errCut and probe. cut is the
+// error of the read that the deadline ended. read, failed and unread count the
+// probe's agents that were read, whose read failed, and that were not read. Its
+// "detail: recovered" comes at the next walk that reads that probe with no cut.
 // Another probe's agents are still read.
 func (c *Core) Details(ctx context.Context, agents []revier.AgentView) []revier.AgentDetail {
 	c.seenMu.Lock()

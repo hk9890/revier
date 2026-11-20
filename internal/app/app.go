@@ -111,6 +111,8 @@ func RenameProject(c *core.Core, cfgRoot, stateRoot string, v revier.ProjectView
 		return true
 	})
 	if err := session.Rename(stateRoot, from, to); err != nil {
+		// After "project renamed": the project is renamed, and its saved
+		// sessions could not be. The WARN carries from, to and err.
 		slog.Warn("rename: the saved sessions keep the old name", "from", from, "to", to, "err", err)
 	}
 	return p, nil

@@ -56,8 +56,8 @@ func cmdTUI(ctx context.Context, a *app) error {
 				return curtainArgv(self, mon, socket, isMain)
 			})
 		} else {
-			// A popup with no path to its own binary logs a WARN "popup: no
-			// curtain" with err at start.
+			// A popup with no path to its own binary logs a WARN
+			// "popup: no curtain" with err at start.
 			slog.Warn("popup: no curtain", "err", err)
 		}
 		if ln := listenForSwitch(); ln != nil {

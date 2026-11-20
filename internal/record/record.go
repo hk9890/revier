@@ -329,9 +329,9 @@ func readDay(path string) ([]Line, error) {
 		if len(line) == 0 {
 			continue
 		}
-		// A line that does not decode is skipped with one WARN "record line
-		// skipped": file, the base name of the day file, line, its number
-		// from 1, and err. A blank line is skipped and writes nothing.
+		// A line that does not decode is skipped with one WARN
+		// "record line skipped": file, the base name of the day file, line, its
+		// number from 1, and err. A blank line is skipped and writes nothing.
 		var l Line
 		if err := json.Unmarshal(line, &l); err != nil {
 			slog.Warn("record line skipped", "file", filepath.Base(path), "line", n, "err", err)

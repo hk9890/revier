@@ -91,8 +91,8 @@ func (t tabs) OpenTab(ctx context.Context, ref revier.TargetRef, r revier.Realiz
 	if err != nil || t.launching {
 		return panel, err
 	}
-	// When the view cannot draw the tab, OpenTab logs a WARN "show the new
-	// tab" with view, ref and err. The tab runs, and the next press that shows the
+	// When the view cannot draw the tab, OpenTab logs a WARN "show the new tab"
+	// with view, ref and err. The tab runs, and the next press that shows the
 	// instance draws it.
 	if _, err := t.c.show(ctx, ref, false); err != nil {
 		slog.Warn("show the new tab", "view", t.c.View.Name(), "ref", ref, "err", err)
@@ -231,11 +231,11 @@ func (c *Core) shownAgain(ctx context.Context, inst revier.Instance, name revier
 	return c.placeShown(ctx, inst.Ref, name, place), nil
 }
 
-// placeShown waits for the OS window a view opened again over the live
-// instance ref, puts it where place says, and returns it: zero when the
-// window host never lists it. A window the host never lists within
-// PlaceWait logs a WARN "raise: the window host never listed the new
-// window" with ref and target: it is not placed and not raised.
+// placeShown waits for the OS window a view opened again over the live instance
+// ref, puts it where place says, and returns it: zero when the window host
+// never lists it. A window the host never lists within PlaceWait logs a WARN
+// "raise: the window host never listed the new window" with ref and target: it
+// is not placed and not raised.
 func (c *Core) placeShown(ctx context.Context, ref revier.TargetRef, name revier.TargetName, place string) revier.TargetRef {
 	osw, ok := c.windowOfNew(ctx, ref)
 	if !ok {

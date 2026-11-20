@@ -403,10 +403,10 @@ func cmdAgentClose(out io.Writer, args []string) error {
 	start := time.Now()
 	err = a.closeAgent(ctx, pos[0], *force)
 	// Logs "agent close" with address and force, and err when the close failed
-	// or was refused. An address that names an agent first writes "shutdown
-	// survey". A close past the busy check in closeAgent adds "shutdown
-	// recheck", then "shutdown refused", or "shutdown step" and "shutdown". It
-	// writes no "shutdown save" or "session saved".
+	// or was refused. An address that names an agent first writes
+	// "shutdown survey". A close past the busy check in closeAgent adds
+	// "shutdown recheck", then "shutdown refused", or "shutdown step" and
+	// "shutdown". It writes no "shutdown save" or "session saved".
 	logging.Op("agent close", start, err, "address", pos[0], "force", *force)
 	return err
 }

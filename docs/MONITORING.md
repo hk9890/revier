@@ -34,7 +34,7 @@ doc reads what it already did.
 | `time`, `level`, `msg` | slog's own. `msg` is the operation. |
 | `pid`, `cmd` | the process, and its first argument (`tui` for none) |
 | `duration_ms` | on every timed operation |
-| `err` | on every `ERROR` and `WARN` |
+| `err` | on most `ERROR` and `WARN` lines; the call-site comment names the fields of each |
 | `project`, `target`, `ref` | on every operation that acts on one |
 
 ## Levels
@@ -42,7 +42,7 @@ doc reads what it already did.
 - `INFO` — an operation that succeeded.
 - `ERROR` — an operation that failed. An error the TUI showed in its footer that no operation logged has `msg` `tui`.
 - `WARN` — an error revier carried on past: a state file it could not read or save, a probe that reported unknown, a window it could not place or bind.
-- A failure that recurs every refresh — a probe, a survey, a remote host, the TUI's state file — is one `WARN` per different `err`, then one `INFO` `<msg>: recovered` (`logging.Repeat`). Its `was` is the `err` of the last failed refresh, `last_failed` when that refresh failed, and `failures` how many refreshes failed.
+- A failure that recurs every refresh — a probe, a host's listing (`instances`), a remote host, the TUI's state file — is one `WARN` per different `err`, then one `INFO` `<msg>: recovered` (`logging.Repeat`). Its `was` is the `err` of the last failed refresh, `last_failed` when that refresh failed, and `failures` how many refreshes failed.
 - Silence after a `WARN` means no refresh of that process succeeded since: it still failed, with an `err` already written, or it did not refresh. A hidden popup does not refresh (`docs/design/decisions.md` D86), so its `recovered` comes at its next raise. Read the end of an outage from `last_failed`, not from the time of the line.
 
 ## Operations
@@ -51,8 +51,11 @@ A line's `msg` names the operation. The comment at the call site that writes
 it says when it is written and which fields it carries. Find it:
 
 ```bash
-rg -n '"<msg>' internal cmd pkg -g '!*_test.go'
+rg -n '"<msg>"' internal cmd pkg -g '!*_test.go'
 ```
+
+A `msg` that the code builds, such as `setup uninstall: term`, has no literal:
+search its comment for the same quoted text, without the closing quote.
 
 ## The event file
 

@@ -245,7 +245,8 @@ func (c *Core) RaisePopup(ctx context.Context) error {
 		}
 	}
 	// Logs "surface raise" with popup true and duration_ms; at Error with err
-	// when the window host could not list, or no popup is open.
+	// when the window host could not list, no popup is open, or the raise
+	// failed.
 	logging.Op("surface raise", start, err, "popup", true)
 	return err
 }

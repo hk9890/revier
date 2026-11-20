@@ -1000,15 +1000,15 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case hiddenMsg:
 		if msg.err != nil && msg.went {
-			// The go landed; the popup stays where it is, with its query
-			// and cursor, as it did before a go hid it. Logs "popup hide
-			// after go" at Warn with err.
+			// The go landed; the popup stays where it is, with its query and
+			// cursor, as it did before a go hid it. Logs "popup hide after go"
+			// at Warn with err.
 			slog.Warn("popup hide after go", "err", msg.err)
 			return m, nil
 		}
 		if msg.err != nil {
-			// The popup cannot leave the screen, so it quits. Logs "popup
-			// hide, quitting instead" at Warn with err.
+			// The popup cannot leave the screen, so it quits. Logs
+			// "popup hide, quitting instead" at Warn with err.
 			slog.Warn("popup hide, quitting instead", "err", msg.err)
 			return m, m.quit()
 		}

@@ -152,12 +152,12 @@ func (c *Core) settledProjects() []Project {
 // the one launch on record is the only one a window is attached for.
 //
 // The line is "claim: launch set aside" for a target's launch, kept until
-// LateWindow after launched_at (decisions.md D190), and "claim: launch
-// replaced" for an action's. project, target and launched_at are the
-// replaced launch's, by_project and by_target the new one's, and age_ms is
+// LateWindow after launched_at (decisions.md D190), and
+// "claim: launch replaced" for an action's. project, target and launched_at are
+// the replaced launch's, by_project and by_target the new one's, and age_ms is
 // the replaced launch's age at at. A target's launch past BindWindow, still
-// kept, that another replaces before a settle set it aside is set aside with
-// no line: Launched returns only a launch still pending.
+// kept, that another replaces before a settle set it aside is set aside with no
+// line: Launched returns only a launch still pending.
 func LogReplacedLaunch(replaced *state.Launch, p revier.ProjectName, t revier.TargetName, at time.Time) {
 	if replaced == nil {
 		return
