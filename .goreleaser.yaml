@@ -29,11 +29,11 @@ archives:
       - revier
     formats:
       - tar.gz
-    # The binary alone: the desktop keys run `revier popup` and `revier go`.
-    # A pattern that matches nothing replaces GoReleaser's default of adding
-    # README, LICENSE and CHANGELOG.
+    # The binary and the licence notice MIT asks every copy to carry. Naming
+    # the one file replaces GoReleaser's default of adding README and
+    # CHANGELOG as well.
     files:
-      - none*
+      - LICENSE
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ if eq .Arch "amd64" }}x64{{ else }}{{ .Arch }}{{ end }}
 
