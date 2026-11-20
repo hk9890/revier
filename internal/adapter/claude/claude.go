@@ -134,7 +134,9 @@ func Status(listed string) revier.Status {
 //
 // A run the caller's context cut short is not kept: it says the caller ran
 // out of time, not what Claude Code answers, and kept it would blank every
-// agent until MaxAge.
+// agent until MaxAge. Its error wraps the context's, so the caller can tell
+// a run it cut from a run that failed: the command killed at the deadline
+// says only "signal: killed".
 func (p *Probe) listing(ctx context.Context) (map[int]listedSession, error) {
 	listed, _, err := p.load(ctx)
 	return listed, err
@@ -151,6 +153,9 @@ func (p *Probe) load(ctx context.Context) (listed map[int]listedSession, ran boo
 	}
 	listed, err = p.list(ctx)
 	if err != nil && ctx.Err() != nil {
+		if !errors.Is(err, ctx.Err()) {
+			err = fmt.Errorf("%w: %w", ctx.Err(), err)
+		}
 		return nil, true, err
 	}
 	p.listed, p.err = listed, err

@@ -317,9 +317,9 @@ const briefRunes = 300
 //
 // A tail that gives no detail is errFormat, not errNoMessage, where no line of
 // it parses, or where it holds lines of the conversation and none of them
-// parses: it is the format of a Claude Code release this read does not know,
-// and the core logs it (decisions.md D106). The last line is not counted
-// while Claude Code is still writing it.
+// parses: the format changes between Claude Code releases (decisions.md
+// D106), and this is one this read does not know. The core logs it. The last
+// line is not counted while Claude Code is still writing it.
 func lastSaid(tail []byte) (revier.AgentDetail, error) {
 	var d revier.AgentDetail
 	failed := map[string]bool{}
@@ -402,7 +402,7 @@ func lastSaid(tail []byte) (revier.AgentDetail, error) {
 
 // errFormat is a transcript tail in a format this read does not know. Its text
 // is the same for every tail, so an outage writes one line per panel.
-var errFormat = errors.New("no line of the transcript's tail parses: a Claude Code transcript format this read does not know")
+var errFormat = errors.New("no line of the transcript's tail, or of the conversation in it, parses: a Claude Code transcript format this read does not know")
 
 // conversationLine is whether a line that did not parse names itself a line of
 // the conversation.
