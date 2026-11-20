@@ -116,8 +116,9 @@ is the only write outside revier's own files, and never happens in a survey.
 
 `PanelWriter` is optional. The core refuses a panel with no agent and a shell
 in the foreground, and for a prompt an attention or unknown state and text of
-more than one line. Each would type into the wrong thing. A named key is
-D117's.
+more than one line: each would type into the wrong thing. It refuses an empty
+or blank prompt too, whose Enter starts no turn that a wait could follow. A
+named key is D117's.
 
 ### D32 — a command in every project is revier's
 
