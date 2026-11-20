@@ -72,13 +72,13 @@ func TestListConversationsNeedsTheProjectsJSON(t *testing.T) {
 	for _, args := range [][]string{{"--conversations"}, {"--agents", "--conversations"}, {"--agents", "--json", "--conversations"}} {
 		var out bytes.Buffer
 		a.out = &out
-		err := cmdList(context.Background(), a, args)
+		err := cmdList(t.Context(), a, args)
 		if err == nil || !strings.HasPrefix(err.Error(), "usage:") || out.Len() != 0 {
 			t.Errorf("list %q: err = %v, printed %q; want a usage error and nothing printed", args, err, out.String())
 		}
 	}
 	a.out = &bytes.Buffer{}
-	if err := cmdList(context.Background(), a, []string{"--json", "--conversations"}); err != nil {
+	if err := cmdList(t.Context(), a, []string{"--json", "--conversations"}); err != nil {
 		t.Errorf("list --json --conversations: %v", err)
 	}
 }

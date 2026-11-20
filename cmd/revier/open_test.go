@@ -41,7 +41,7 @@ func TestOpenAttachExecsTheAttach(t *testing.T) {
 func TestOpenRefusesAnEmptyName(t *testing.T) {
 	rt := hosttest.NewRuntime("hc")
 	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t)}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt, View: rt}}, &state.State{Current: "demo"})
-	err := cmdOpen(context.Background(), a, []string{""})
+	err := cmdOpen(t.Context(), a, []string{""})
 	if err == nil || err.Error() != "the project name is empty" {
 		t.Errorf("err = %v, want the project name is empty", err)
 	}

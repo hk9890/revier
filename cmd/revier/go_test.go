@@ -45,7 +45,7 @@ func TestGoNamesTheTabItReached(t *testing.T) {
 	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{p}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt, View: rt}}, &state.State{})
 
 	for _, press := range []struct{ target, want string }{{"home", "demo: home ("}, {"agent", "demo: agent in home ("}} {
-		got := output(t, a, func() error { return cmdGo(context.Background(), a, []string{press.target, "-p", "demo"}) })
+		got := output(t, a, func() error { return cmdGo(t.Context(), a, []string{press.target, "-p", "demo"}) })
 		if !strings.HasPrefix(got, press.want) || (press.target == "home" && strings.Contains(got, " in ")) {
 			t.Errorf("go %s printed %q, want it to start %q", press.target, got, press.want)
 		}
