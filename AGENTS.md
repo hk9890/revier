@@ -53,7 +53,7 @@ machine with no display.
 
 **MUST read [docs/REVIEWING.md](docs/REVIEWING.md) before reviewing a PR or a
 diff.** It carries the quality rules that no tool checks: today, how a Go
-comment cites a decision.
+comment, a commit message or a PR cites or mentions a decision.
 
 ### Running revier by hand
 
