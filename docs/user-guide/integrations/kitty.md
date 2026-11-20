@@ -86,8 +86,8 @@ leaves it empty when `kitty.conf` itself is a link.
 - A map of your own below the include wins: for example a
   `map --when-focus-on var:in_tmux ctrl+shift+t ...` for windows that run
   tmux. `revier setup status` names each such map by its line.
-- A terminal key on the same chord as `trigger_key` or a target's `key` is
-  left out: the desktop takes that press first.
+- A terminal key on the same chord as another key is left out; see
+  [`[terminal]`](../configuration.md#terminal).
 - A shell tab starts in the directory of the window you pressed the key in.
   An agent tab starts in the project, so from a worktree the agent can still
   enter any worktree.
@@ -109,8 +109,7 @@ setup status` names them as `shadowed by kitty.conf:<line>`.
 - `revier open --attach` needs hc.
 - A window you opened yourself in a kitty of your own is no workspace until
   you run `revier attach` in it. revier reads its agents only when it is the
-  one unnamed window of its kitty process. In an OS window you opened in
-  revier's kitty, `revier attach` reads no agents.
+  one unnamed window of its kitty process.
 
 **`revier attach` reads no agents in your kitty.** Your kitty
 has no control socket. Do step 1 of [Set it up](#set-it-up) and restart

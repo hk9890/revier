@@ -6,12 +6,14 @@ screen: the popup when it is shown, or `revier` in a terminal.
 
 ## Places
 
-| `at` | Where | Runs for | Declared in |
-|---|---|---|---|
-| `rule-left` | Left end of the rule under the top line | The whole screen | `config.toml` only |
-| `rule-right` | Right end of that rule | The whole screen | `config.toml` only |
-| `project-line` | Right end of the pane's first line | The selected project | `config.toml`, project file, link file |
-| `project` | A section of the pane, above the targets, with a title | The selected project | `config.toml`, project file, link file |
+| `at` | Where | Runs for |
+|---|---|---|
+| `rule-left` | Left end of the rule under the top line | The whole screen |
+| `rule-right` | Right end of that rule | The whole screen |
+| `project-line` | Right end of the pane's first line | The selected project |
+| `project` | A section of the pane, above the targets, with a title | The selected project |
+
+Which file can declare each place is in [Files](../configuration.md#files).
 
 One status per place in a file. A second table at the same place is refused.
 

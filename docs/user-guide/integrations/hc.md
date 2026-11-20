@@ -4,7 +4,7 @@ hc ([herdr-core](https://github.com/herdrdev/herdr-core)) is an experimental
 runtime host. hc runs your workspaces' programs headless, and kitty shows
 them. Your agents keep running when you close kitty, or when it crashes; the
 next press opens the window again over them. Until you name hc, kitty runs
-and shows your workspaces, as before.
+and shows your workspaces.
 
 ## What you need
 

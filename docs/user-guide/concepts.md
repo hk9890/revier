@@ -4,9 +4,10 @@ Read this page once. Each word below has one meaning in the whole guide.
 
 ## One operation
 
-Every operation in revier is the same one: **run-or-raise a named target**,
-by revier or by a command you name. A desktop key, `revier go`, `revier open`
-and Enter in the TUI all do it.
+Every target is reached the same way: **run-or-raise it**, by revier or by a
+command you name. A desktop key, `revier go`, `revier open` and Enter in the
+TUI all do it. Actions and agent or shell tabs are not targets: each press
+runs or opens one more.
 
 A press of the key of a window or runtime target does one of three things:
 

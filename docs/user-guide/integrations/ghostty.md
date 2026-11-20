@@ -47,7 +47,6 @@ revier sees such a window, not what runs in it.
 
 ## What does not work
 
-- `ghostty` in `[hosts]`: revier stops with `unknown host "ghostty"`.
 - Agents that run in Ghostty outside hc.
 - Raising or switching the Ghostty window: with no view, a press focuses
   nothing. Attach the window to another terminal with `hc attach`.

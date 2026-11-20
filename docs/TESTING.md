@@ -106,7 +106,7 @@ that did not focus after `Open` passed L2 and failed L4.
   `https://releases.herdr.dev/core/<version>/manifest.json`, and record a new
   `internal/adapter/hc/testdata/hc-<version>/`: `hello.json` and `list.json`,
   the `hello` and `terminal.list` answers of the private core in
-  [RUNNING.md](RUNNING.md#run-a-private-hc-core), with terminals that carry
+  [RUNNING.md](RUNNING.md#drive-the-cli-against-a-scratch-configuration), with terminals that carry
   revier's labels. Point the paths in `hc_integration_test.go` at them.
 - Run hc in a live test on a private core only: `world` in
   `internal/adapter/hc/helpers_live_test.go`, `scratch` in
