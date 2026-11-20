@@ -1132,12 +1132,12 @@ reads a command, a wrapper, the agent whose name is the harness runs it. A
 wrapper default can run any harness, so only that name match replaces it; with
 none it is trusted. Any other default is dropped and said, as an unknown name is.
 
-### D194 — a shutdown that ends every agent saves none with a conversation its harness never kept
+### D194 — a save marks a conversation its harness never filed, and keeps its id
 
 Amends D139. A Claude Code agent that never got a prompt has an id and no
 transcript, so each restore said its conversation was gone, which reads as lost
-work, and the agent it started was the same again at the next shutdown. The
-save of a shutdown that ends every agent it records now asks the probe, as a
-restore does, and records such an agent in its directory with no conversation.
-Every other save keeps the id: by hand, a project close, a close of the targets
-alone, and what a surface last saw. Their agents run on and can still be prompted.
+work. A save that asks the probes now asks, as a restore does, whether the
+harness keeps the conversation, and marks one it does not keep as unfiled. A
+restore that finds it still not kept starts the agent empty and says so. The id
+stays: a close can stop before it ends the agent, which can then get its first
+prompt. Rejected: dropping the id at a shutdown save, which loses that prompt.

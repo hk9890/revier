@@ -91,9 +91,6 @@ func Close(ctx context.Context, req CloseRequest) (CloseResult, error) {
 	if req.Project != "" {
 		reason = session.ReasonProjectClosed
 	}
-	// A close of one project leaves the agents of the other projects running,
-	// and a close of the targets alone leaves every agent running.
-	endsEveryAgent := req.Project == "" && req.Scope != core.ShutdownTargets
 	opts := core.ShutdownOpts{Force: req.Force, Projects: req.Projects, Progress: req.Progress}
 	if record != nil {
 		record.start(len(req.Plan))
@@ -110,7 +107,7 @@ func Close(ctx context.Context, req CloseRequest) (CloseResult, error) {
 		opts.Before = func(saving context.Context, now core.Report) error {
 			var id string
 			if req.Save {
-				stored, saved, gaps, err := SaveChanged(saving, c, req.StateRoot, now, reason, endsEveryAgent, time.Now())
+				stored, saved, gaps, err := SaveChanged(saving, c, req.StateRoot, now, reason, time.Now())
 				if err != nil {
 					return err
 				}

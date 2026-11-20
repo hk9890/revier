@@ -911,12 +911,12 @@ func TestRestoreKeepsAWrapperDefaultForAHarnessAnotherAgentRuns(t *testing.T) {
 }
 
 // Claude Code names a session from its start, but keeps no transcript of it
-// until its first prompt. The save that a close makes, which ends the agent,
-// records such an agent with no conversation and in its directory, so its
-// restore starts it empty there and does not say that its conversation is
-// gone. A save after which the agent runs on keeps the id: the agent can
-// still get its first prompt (decisions.md D194).
-func TestAnEndingSaveRecordsNoConversationForAnAgentNeverPrompted(t *testing.T) {
+// until its first prompt. A save records such an agent with its id, marked
+// unfiled. Its restore starts it empty and does not say that its
+// conversation is gone. When the agent ran on after the save, as after a
+// close that stopped before it, and got its first prompt, the restore
+// resumes it (decisions.md D194).
+func TestASaveMarksAnAgentNeverPromptedUnfiled(t *testing.T) {
 	dir := t.TempDir()
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty", agent("1", "abc-123", dir), agent("2", "never-prompted", dir))
@@ -928,30 +928,34 @@ func TestAnEndingSaveRecordsNoConversationForAnAgentNeverPrompted(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	byHand, _ := c.Session(t.Context(), report)
-	if got := byHand.Projects[0].Targets[0].Agents[1].Session; got != "never-prompted" {
-		t.Errorf("by hand: session = %q, want the id kept", got)
-	}
-	s, gaps := c.EndingSession(t.Context(), report)
-	want := []session.Agent{{Harness: "claude", Session: "abc-123", Dir: dir}, {Harness: "claude", Dir: dir}}
+	s, _ := c.Session(t.Context(), report)
+	want := []session.Agent{{Harness: "claude", Session: "abc-123", Dir: dir}, {Harness: "claude", Session: "never-prompted", Dir: dir, Unfiled: true}}
 	if got := s.Projects[0].Targets[0].Agents; !slices.Equal(got, want) {
-		t.Fatalf("ending: agents = %+v, want %+v", got, want)
+		t.Fatalf("agents = %+v, want %+v", got, want)
 	}
-	if gaps.Unnamed != 1 {
-		t.Errorf("unnamed = %d, want the agent never prompted", gaps.Unnamed)
-	}
-
 	plan := c.RestorePlan(s, report)
-	outcomes := []core.AgentOutcome{core.AgentResumed, core.AgentEmpty}
-	restorer := &core.Core{Runtime: hosttest.NewRuntime("rt"), View: rt, Probes: []revier.AgentProbe{probe}}
-	if got := restorer.Resumes(prepared(t, agentProject()), "home", plan[0].Resumes); !slices.Equal(got, outcomes) {
-		t.Errorf("Resumes = %v, want %v", got, outcomes)
-	}
-	res, err := pressResuming(t.Context(), restorer, prepared(t, agentProject()), "home", plan[0].Resumes)
-	if err != nil || !slices.Equal(res.Agents, outcomes) {
-		t.Fatalf("press = %v, %v; want %v", res.Agents, err, outcomes)
-	}
-	if note := core.AgentsNote("opened", res.Agents, plan[0].Resumes, nil); strings.Contains(note, "conversation gone") {
-		t.Errorf("note = %q, want no conversation said gone", note)
+
+	for name, tc := range map[string]struct {
+		gone []revier.SessionID
+		want []core.AgentOutcome
+	}{
+		"never prompted":          {[]revier.SessionID{"never-prompted"}, []core.AgentOutcome{core.AgentResumed, core.AgentEmpty}},
+		"prompted after the save": {nil, []core.AgentOutcome{core.AgentResumed, core.AgentResumed}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			probe := resumable()
+			probe.Gone = tc.gone
+			restorer := &core.Core{Runtime: hosttest.NewRuntime("rt"), View: rt, Probes: []revier.AgentProbe{probe}}
+			if got := restorer.Resumes(prepared(t, agentProject()), "home", plan[0].Resumes); !slices.Equal(got, tc.want) {
+				t.Errorf("Resumes = %v, want %v", got, tc.want)
+			}
+			res, err := pressResuming(t.Context(), restorer, prepared(t, agentProject()), "home", plan[0].Resumes)
+			if err != nil || !slices.Equal(res.Agents, tc.want) {
+				t.Fatalf("press = %v, %v; want %v", res.Agents, err, tc.want)
+			}
+			if note := core.AgentsNote("opened", res.Agents, plan[0].Resumes, nil); strings.Contains(note, "conversation gone") {
+				t.Errorf("note = %q, want no conversation said gone", note)
+			}
+		})
 	}
 }

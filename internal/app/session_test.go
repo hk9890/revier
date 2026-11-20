@@ -83,18 +83,18 @@ func TestSaveChangedSavesOnlyWhatChanged(t *testing.T) {
 	root := t.TempDir()
 	at := time.Date(2026, 9, 15, 18, 0, 0, 0, time.UTC)
 
-	first, saved, _, err := app.SaveChanged(context.Background(), c, root, report, session.ReasonShutdown, false, at)
+	first, saved, _, err := app.SaveChanged(context.Background(), c, root, report, session.ReasonShutdown, at)
 	if err != nil || !saved {
 		t.Fatalf("first save = %v, %v; want a save", saved, err)
 	}
 	if first.Reason != session.ReasonShutdown {
 		t.Errorf("first reason = %q, want shutdown", first.Reason)
 	}
-	if _, saved, _, _ := app.SaveChanged(context.Background(), c, root, surveyed(t, c, projects), session.ReasonProjectClosed, false, at.Add(time.Minute)); saved {
+	if _, saved, _, _ := app.SaveChanged(context.Background(), c, root, surveyed(t, c, projects), session.ReasonProjectClosed, at.Add(time.Minute)); saved {
 		t.Error("second save wrote a session, want the same desktop left unsaved")
 	}
 	rt.Remove(report.Views[0].Targets[1].Ref)
-	second, saved, _, err := app.SaveChanged(context.Background(), c, root, surveyed(t, c, projects), session.ReasonProjectClosed, false, at.Add(2*time.Minute))
+	second, saved, _, err := app.SaveChanged(context.Background(), c, root, surveyed(t, c, projects), session.ReasonProjectClosed, at.Add(2*time.Minute))
 	if err != nil || !saved || second.ID == first.ID {
 		t.Errorf("save after a change = %v, %v, id %q; want a new session", saved, err, second.ID)
 	}
@@ -113,16 +113,16 @@ func TestSaveChangedComparesWithTheSaveARestoreOpens(t *testing.T) {
 	c, rt, report, projects := desktop(t)
 	root := t.TempDir()
 	at := time.Date(2026, 9, 15, 18, 0, 0, 0, time.UTC)
-	if _, saved, _, err := app.SaveChanged(context.Background(), c, root, report, session.ReasonShutdown, false, at); err != nil || !saved {
+	if _, saved, _, err := app.SaveChanged(context.Background(), c, root, report, session.ReasonShutdown, at); err != nil || !saved {
 		t.Fatalf("first shutdown = %v, %v; want a save", saved, err)
 	}
 	rt.Remove(report.Views[0].Targets[1].Ref)
 	closed := surveyed(t, c, projects)
-	if _, saved, _, err := app.SaveChanged(context.Background(), c, root, closed, session.ReasonProjectClosed, false, at.Add(time.Minute)); err != nil || !saved {
+	if _, saved, _, err := app.SaveChanged(context.Background(), c, root, closed, session.ReasonProjectClosed, at.Add(time.Minute)); err != nil || !saved {
 		t.Fatalf("close = %v, %v; want a save", saved, err)
 	}
 
-	shut, saved, _, err := app.SaveChanged(context.Background(), c, root, closed, session.ReasonShutdown, false, at.Add(2*time.Minute))
+	shut, saved, _, err := app.SaveChanged(context.Background(), c, root, closed, session.ReasonShutdown, at.Add(2*time.Minute))
 	if err != nil || !saved || shut.Reason != session.ReasonShutdown {
 		t.Fatalf("second shutdown = %+v, %v, %v; want a shutdown save", shut, saved, err)
 	}
@@ -137,7 +137,7 @@ func TestSaveChangedOfACloseWritesNothingWhenTheWholeSaveHoldsIt(t *testing.T) {
 	c, _, report, _ := desktop(t)
 	root := t.TempDir()
 	at := time.Date(2026, 9, 15, 18, 0, 0, 0, time.UTC)
-	shut, saved, _, err := app.SaveChanged(context.Background(), c, root, report, session.ReasonShutdown, false, at)
+	shut, saved, _, err := app.SaveChanged(context.Background(), c, root, report, session.ReasonShutdown, at)
 	if err != nil || !saved {
 		t.Fatalf("shutdown = %v, %v; want a save", saved, err)
 	}
@@ -145,7 +145,7 @@ func TestSaveChangedOfACloseWritesNothingWhenTheWholeSaveHoldsIt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, saved, _, err := app.SaveChanged(context.Background(), c, root, report, session.ReasonProjectClosed, false, at.Add(2*time.Minute))
+	got, saved, _, err := app.SaveChanged(context.Background(), c, root, report, session.ReasonProjectClosed, at.Add(2*time.Minute))
 	if err != nil || saved || got.ID != shut.ID {
 		t.Errorf("close = %s, %v, %v; want the shutdown %s and nothing written", got.ID, saved, err, shut.ID)
 	}
@@ -155,7 +155,7 @@ func TestSaveChangedOfACloseWritesNothingWhenTheWholeSaveHoldsIt(t *testing.T) {
 func TestSaveChangedSavesNothingWhenNothingIsOpen(t *testing.T) {
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt")}
 	_, _, _, projects := desktop(t)
-	if _, saved, _, err := app.SaveChanged(context.Background(), c, t.TempDir(), surveyed(t, c, projects), session.ReasonShutdown, false, time.Now()); saved || err != nil {
+	if _, saved, _, err := app.SaveChanged(context.Background(), c, t.TempDir(), surveyed(t, c, projects), session.ReasonShutdown, time.Now()); saved || err != nil {
 		t.Errorf("save = %v, %v; want none", saved, err)
 	}
 }
@@ -168,7 +168,7 @@ func TestSaveChangedSavesNothingWhenTheCallerCancels(t *testing.T) {
 	root := t.TempDir()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, saved, _, err := app.SaveChanged(ctx, c, root, report, session.ReasonShutdown, false, time.Now())
+	_, saved, _, err := app.SaveChanged(ctx, c, root, report, session.ReasonShutdown, time.Now())
 	if !errors.Is(err, context.Canceled) || saved {
 		t.Errorf("save = %v, %v; want the cancel and nothing saved", saved, err)
 	}
@@ -185,7 +185,7 @@ func TestSaveChangedFailsWhenTheStoreCannotBeRead(t *testing.T) {
 	if err := os.WriteFile(session.Dir(root), []byte("not a directory"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, saved, _, err := app.SaveChanged(context.Background(), c, root, report, session.ReasonShutdown, false, time.Now())
+	_, saved, _, err := app.SaveChanged(context.Background(), c, root, report, session.ReasonShutdown, time.Now())
 	if err == nil || errors.Is(err, session.ErrNoSession) || saved {
 		t.Errorf("save = %v, %v; want the read error and nothing saved", saved, err)
 	}

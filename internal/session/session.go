@@ -143,12 +143,14 @@ type Target struct {
 // for the project's default agent, for a program started by hand in a panel,
 // and in a file written before the field existed (decisions.md D146). A
 // restore gives an agent with no name the agent that runs its harness
-// (D193).
+// (D193). Unfiled says that its harness kept no conversation under Session
+// when the save ran, as for a Claude Code agent never prompted (D194).
 type Agent struct {
 	Harness string           `toml:"harness" json:"harness"`
 	Session revier.SessionID `toml:"session,omitempty" json:"session,omitempty"`
 	Dir     string           `toml:"dir,omitempty" json:"dir,omitempty"`
 	Name    string           `toml:"name,omitempty" json:"name,omitempty"`
+	Unfiled bool             `toml:"unfiled,omitempty" json:"unfiled,omitempty"`
 }
 
 // Dir is where sessions live under the state root.

@@ -55,12 +55,14 @@ func (a RestoreAction) String() string { return restoreNames[a] }
 // Either of the last two may be empty. Agent is the named agent it runs, and
 // empty when its tab carried no mark: the project's default agent, or a
 // program started by hand in a panel. Past the layout, a restore gives an
-// agent with no name the agent that runs its harness.
+// agent with no name the agent that runs its harness. Unfiled is the save's
+// word that the harness kept no conversation under Session at the save.
 type Resume struct {
 	Harness string
 	Session revier.SessionID
 	Dir     string
 	Agent   string
+	Unfiled bool
 }
 
 // AgentOutcome is what restoring one recorded agent comes to. The zero value
@@ -70,7 +72,8 @@ type AgentOutcome uint8
 const (
 	// AgentResumed starts on the conversation it held, in its directory.
 	AgentResumed AgentOutcome = iota + 1
-	// AgentEmpty starts with no conversation, because none was recorded.
+	// AgentEmpty starts with no conversation, because none was recorded, or
+	// the one recorded was never filed and still is not.
 	AgentEmpty
 	// AgentUnresumable starts empty although a conversation was recorded: no
 	// probe here can resume that harness, or the panel it starts in runs
@@ -94,8 +97,7 @@ const (
 	AgentInTab
 	// AgentConversationGone starts empty in its directory, because its
 	// harness no longer keeps the conversation recorded: one pruned since
-	// the save, or one it never filed, which only a save its agent ran on
-	// after records (EndingSession).
+	// the save, or one it never filed, in a save that did not ask.
 	AgentConversationGone
 	// AgentUnknown is not restored: it ran a named agent its project no
 	// longer declares, or it has no name and no agent of its project runs its
@@ -151,21 +153,13 @@ type RestoreStep struct {
 // while the agents are still running. A resume that cannot happen is
 // otherwise found after the reboot, which is the worst moment. None of it
 // fails the save.
+//
+// An agent whose harness keeps no conversation under its id, as a Claude
+// Code agent that never got a prompt, keeps the id and is marked unfiled. A
+// restore resumes it when the agent got its first prompt after the save, and
+// otherwise starts it empty and does not say its conversation is gone
+// (decisions.md D139, D194).
 func (c *Core) Session(ctx context.Context, r Report) (session.Session, SessionGaps) {
-	return c.session(ctx, r, false)
-}
-
-// EndingSession is the Session a close saves when every agent it records ends
-// with the close. An agent whose harness keeps no conversation for it, as a
-// Claude Code agent that never got a prompt, is recorded with none, so its
-// restore starts it empty and does not say its conversation is gone. No other
-// save does this: an agent that runs on after the save can get its first
-// prompt, and a restore of that save then resumes it (decisions.md D139, D194).
-func (c *Core) EndingSession(ctx context.Context, r Report) (session.Session, SessionGaps) {
-	return c.session(ctx, r, true)
-}
-
-func (c *Core) session(ctx context.Context, r Report, ending bool) (session.Session, SessionGaps) {
 	current := c.state().Current
 	// The hosts have HostWait and not the whole of the save's bound: the
 	// agents on this machine are asked after them, on what is left of it
@@ -173,12 +167,8 @@ func (c *Core) session(ctx context.Context, r Report, ending bool) (session.Sess
 	asking, stop := context.WithTimeout(ctx, HostWait)
 	there, failed := c.conversationsThere(asking, r.Views)
 	stop()
-	s, gaps := c.sessionOf(r, there, func(agents []agentPanel) ([]revier.Conversation, []error) {
-		named, failed := c.conversations(ctx, agents)
-		if ending {
-			unkept(agents, named)
-		}
-		return named, failed
+	s, gaps := c.sessionOf(r, there, true, func(agents []agentPanel) ([]revier.Conversation, []error) {
+		return c.conversations(ctx, agents)
 	})
 	s.Current = current
 	gaps.Failed = append(failed, gaps.Failed...)
@@ -237,7 +227,7 @@ func (c *Core) Seen(local Report, answers RemoteAnswers, prev session.Session) (
 		}
 		there[v.Project.Name] = agents
 	}
-	s, _ := c.sessionOf(r, there, func(agents []agentPanel) ([]revier.Conversation, []error) {
+	s, _ := c.sessionOf(r, there, false, func(agents []agentPanel) ([]revier.Conversation, []error) {
 		out := make([]revier.Conversation, len(agents))
 		for i, a := range agents {
 			out[i] = conversations[key(a.ref)+"\x00"+string(a.panel.ID)]
@@ -329,8 +319,9 @@ func (c *Core) Lost(seen session.Session, r Report) bool {
 // disagree on the order of the agents, on tabs, on attachments or on the
 // named agents. there is each link's agents by the tag of the panel here
 // that shows it, and name is the conversation of each agent panel here, in
-// order, with why a probe could not say.
-func (c *Core) sessionOf(r Report, there map[revier.ProjectName]map[revier.PanelID]session.Agent,
+// order, with why a probe could not say. asks says that each probe is also
+// asked whether its harness filed the conversation it named.
+func (c *Core) sessionOf(r Report, there map[revier.ProjectName]map[revier.PanelID]session.Agent, asks bool,
 	name func([]agentPanel) ([]revier.Conversation, []error),
 ) (session.Session, SessionGaps) {
 	byRef := make(map[string]revier.Instance, len(r.Instances))
@@ -437,7 +428,10 @@ func (c *Core) sessionOf(r Report, there map[revier.ProjectName]map[revier.Panel
 			gaps.Unnamed++
 		}
 		t := &s.Projects[a.project].Targets[a.target]
-		t.Agents = append(t.Agents, session.Agent{Harness: a.harness, Session: named[i].ID, Dir: named[i].Dir, Name: a.panel.Vars[revier.PanelAgentVar]})
+		t.Agents = append(t.Agents, session.Agent{
+			Harness: a.harness, Session: named[i].ID, Dir: named[i].Dir, Name: a.panel.Vars[revier.PanelAgentVar],
+			Unfiled: asks && unfiled(a.probe, named[i]),
+		})
 	}
 	return s, gaps
 }
@@ -540,15 +534,11 @@ func (c *Core) conversations(ctx context.Context, agents []agentPanel) ([]revier
 	return out, failed
 }
 
-// unkept takes the conversation off each agent whose harness keeps none for
-// it, and leaves the directory, where its restore starts it empty.
-func unkept(agents []agentPanel, named []revier.Conversation) {
-	for i, a := range agents {
-		holder, ok := a.probe.(revier.Holder)
-		if ok && named[i].ID != "" && !holder.Holds(named[i].ID, named[i].Dir) {
-			named[i].ID = ""
-		}
-	}
+// unfiled reports whether the harness keeps no conversation under the id its
+// probe named.
+func unfiled(probe revier.AgentProbe, named revier.Conversation) bool {
+	holder, ok := probe.(revier.Holder)
+	return ok && named.ID != "" && !holder.Holds(named.ID, named.Dir)
 }
 
 // RestorePlan decides what each recorded target means on this machine now. It
@@ -616,7 +606,7 @@ func targetView(v revier.ProjectView, name revier.TargetName) (revier.TargetView
 func resumesOf(t session.Target) []Resume {
 	var out []Resume
 	for _, a := range t.Agents {
-		out = append(out, Resume{Harness: a.Harness, Session: a.Session, Dir: a.Dir, Agent: a.Name})
+		out = append(out, Resume{Harness: a.Harness, Session: a.Session, Dir: a.Dir, Agent: a.Name, Unfiled: a.Unfiled})
 	}
 	return out
 }
@@ -690,7 +680,9 @@ func (c *Core) layAgents(layout []revier.PanelSpec, resumes []Resume, link bool)
 // one was recorded and its probe here can resume it. A directory that is gone
 // starts the agent empty where the realization starts: its conversation
 // resumed there would carry on in the wrong checkout, and its edits would
-// land there. Every other way a resume can fail starts the agent empty.
+// land there. Every other way a resume can fail starts the agent empty. A
+// conversation its harness does not keep is gone, unless the save found it
+// unfiled too: that agent never got a prompt, and is empty (decisions.md D194).
 //
 // The conversation is resumed only into a panel that runs its harness: a
 // claude conversation laid over an opencode panel would start `opencode
@@ -716,6 +708,9 @@ func (c *Core) startAgent(spec *revier.PanelSpec, r Resume, link bool) AgentOutc
 		return AgentUnresumable
 	}
 	if holder, ok := res.(revier.Holder); ok && !holder.Holds(r.Session, r.Dir) {
+		if r.Unfiled {
+			return AgentEmpty
+		}
 		return AgentConversationGone
 	}
 	spec.Command = res.ResumeCommand(*spec, r.Session)

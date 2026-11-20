@@ -299,9 +299,8 @@ func (p *Probe) Sessions(ctx context.Context, panels []revier.Panel) ([]revier.C
 // cleanupPeriodDays. Claude Code refuses to resume a conversation it does not
 // keep, and ends at once. It looks as Detail does, with the same kept sweep.
 // It is asked once for each agent a restore or a resume starts, and for each
-// agent with a conversation that the save of a shutdown of every agent
-// records. A transcript
-// that cannot be looked for is held.
+// agent with a conversation that a save records. A transcript that cannot be
+// looked for is held.
 func (p *Probe) Holds(id revier.SessionID, dir string) bool {
 	_, _, err := p.transcript(listedSession{SessionID: string(id), Cwd: dir})
 	return !errors.Is(err, revier.ErrNoDetail)
