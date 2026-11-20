@@ -35,3 +35,17 @@ func TestOpenAttachExecsTheAttach(t *testing.T) {
 		t.Errorf("exec'd %q, want %q", execd, argv)
 	}
 }
+
+// An empty name is a name given, so it is refused: resolved as no name, it
+// would open the project last focused, which the caller never named.
+func TestOpenRefusesAnEmptyName(t *testing.T) {
+	rt := hosttest.NewRuntime("hc")
+	a := withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t)}, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt, View: rt}}, &state.State{Current: "demo"})
+	err := cmdOpen(context.Background(), a, []string{""})
+	if err == nil || err.Error() != "the project name is empty" {
+		t.Errorf("err = %v, want the project name is empty", err)
+	}
+	if len(rt.Opened) != 0 {
+		t.Errorf("opened %v, want nothing", rt.Opened)
+	}
+}
