@@ -105,10 +105,11 @@ func TestSessionRecordsNoAgentWithAShellInTheForeground(t *testing.T) {
 	}
 }
 
-// A save records the harness the probe read in the panel, not the probe's own
-// name, for the agent of the instance and of a tab target alike: an exec
-// probe may claim any agent its program detects, such as codex.
-func TestSessionRecordsTheHarnessTheProbeRead(t *testing.T) {
+// A save records the name of the probe that claimed the panel, not the
+// harness the probe read in it, for the agent of the instance and of a tab
+// target alike: a restore finds the agent that runs it by that name, and an
+// exec probe may report any harness its program detects, such as codex.
+func TestSessionRecordsTheProbeThatClaimedTheAgent(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.Add("session:revier", "kitty",
 		revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "codex"},
@@ -126,8 +127,8 @@ func TestSessionRecordsTheHarnessTheProbeRead(t *testing.T) {
 		t.Fatalf("targets = %+v, want home and the tickets tab", targets)
 	}
 	for _, target := range targets {
-		if !slices.Equal(target.Agents, []session.Agent{{Harness: "codex"}}) {
-			t.Errorf("%s agents = %+v, want the one codex", target.Name, target.Agents)
+		if !slices.Equal(target.Agents, []session.Agent{{Harness: "agents"}}) {
+			t.Errorf("%s agents = %+v, want the one of the probe agents", target.Name, target.Agents)
 		}
 	}
 }
@@ -962,9 +963,8 @@ func TestASaveMarksAnAgentNeverPromptedUnfiled(t *testing.T) {
 }
 
 // An exec probe can report a harness under another name than its own, and a
-// save records the harness it reported. An agent so recorded with no name
-// comes back as the default agent that probe reads: the default agent's
-// probe is not named after that harness, but it is the one that reported it.
+// save records the probe's name, not the harness it reported. An agent so
+// recorded with no name comes back as the default agent that probe reads.
 func TestRestoreKeepsTheDefaultForAHarnessItsProbeReportedUnderAnotherName(t *testing.T) {
 	proj := agentProject()
 	proj.Targets[3].Runtime.Panels[1] = revier.PanelSpec{Kind: revier.PanelAgent, Title: "aider", Command: []string{"aider"}}
@@ -982,7 +982,7 @@ func TestRestoreKeepsTheDefaultForAHarnessItsProbeReportedUnderAnotherName(t *te
 		t.Fatal(err)
 	}
 	s, _ := saver.Session(t.Context(), report)
-	if got, want := s.Projects[0].Targets[0].Agents, []session.Agent{{Harness: "aider-chat"}, {Harness: "aider-chat"}}; !slices.Equal(got, want) {
+	if got, want := s.Projects[0].Targets[0].Agents, []session.Agent{{Harness: "aider"}, {Harness: "aider"}}; !slices.Equal(got, want) {
 		t.Fatalf("agents = %+v, want %+v", got, want)
 	}
 	plan := saver.RestorePlan(s, report)
@@ -996,5 +996,44 @@ func TestRestoreKeepsTheDefaultForAHarnessItsProbeReportedUnderAnotherName(t *te
 	}
 	if len(restoring.Tabs) != 1 || restoring.Tabs[0].Real.Panels[0].Title != "aider" || len(restoring.Tabs[0].Vars) != 0 {
 		t.Errorf("tabs = %+v, want the default agent's tab, unmarked", restoring.Tabs)
+	}
+}
+
+// A default agent whose probe cannot resume does not take an agent another
+// probe claimed: an unnamed aider agent past the layout, whose exec probe
+// reports another harness name, comes back as the named aider agent and not
+// as the default opencode (decisions.md D193).
+func TestAnUnnamedAgentOfAProbeThatReportsAnotherNameComesBackAsItsNamedAgent(t *testing.T) {
+	proj := agentProject()
+	proj.Targets[3].Runtime.Panels[1] = revier.PanelSpec{Kind: revier.PanelAgent, Title: "opencode", Command: []string{"opencode"}}
+	probes := func() []revier.AgentProbe {
+		return []revier.AgentProbe{
+			resumable(),
+			&hosttest.FakeProbe{Harness: "opencode", Marker: "opencode"},
+			&hosttest.FakeProbe{Harness: "aider", Marker: "aider", State: revier.AgentState{Harness: "aider-chat"}},
+		}
+	}
+	opencode := revier.Panel{ID: "1", Kind: revier.PanelTool, Title: "opencode", Vars: map[string]string{}}
+	aider := revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "aider", Vars: map[string]string{}}
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:revier", "kitty", opencode, aider)
+	saver := &core.Core{Runtime: rt, View: rt, Probes: probes()}
+	project := prepared(t, proj)
+	project.Agents = []core.NamedAgent{{Name: "aider", Command: []string{"aider"}}}
+	report, err := saver.Survey(t.Context(), []core.Project{project})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _ := saver.Session(t.Context(), report)
+	plan := saver.RestorePlan(s, report)
+
+	restoring := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: restoring, View: restoring, Probes: probes()}
+	res, err := pressResuming(t.Context(), c, project, "home", plan[0].Resumes)
+	if err != nil || !slices.Equal(res.Agents, []core.AgentOutcome{core.AgentEmpty, core.AgentEmpty}) || !slices.Equal(res.As, []string{"", "aider"}) {
+		t.Fatalf("press = %v as %q, %v; want both empty, the second as aider", res.Agents, res.As, err)
+	}
+	if len(restoring.Tabs) != 1 || restoring.Tabs[0].Real.Panels[0].Title != "aider" || restoring.Tabs[0].Vars[revier.PanelAgentVar] != "aider" {
+		t.Errorf("tabs = %+v, want the aider agent's tab, marked", restoring.Tabs)
 	}
 }

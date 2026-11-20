@@ -36,7 +36,7 @@ func SaveSession(ctx context.Context, c *core.Core, stateRoot string, r core.Rep
 
 // SaveChanged saves the session a close ends, for the given reason, unless
 // the save a plain restore opens (decisions.md D149) already holds the same,
-// or nothing is open. saved is false when it wrote nothing.
+// with the same unfiled marks, or nothing is open. saved is false when it wrote nothing.
 //
 // A caller that cancels saves nothing, and the cancel is the error: the
 // agents read on a cancelled context lack their conversations, and that
@@ -52,7 +52,7 @@ func SaveChanged(ctx context.Context, c *core.Core, stateRoot string, r core.Rep
 	}
 	newest, err := session.Load(stateRoot, "")
 	switch {
-	case err == nil && newest.SameAs(s):
+	case err == nil && newest.SameMarkedAs(s):
 		return newest, false, gaps, nil
 	case err != nil && !errors.Is(err, session.ErrNoSession):
 		return session.Session{}, false, gaps, err

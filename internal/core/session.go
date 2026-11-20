@@ -368,7 +368,7 @@ func (c *Core) sessionOf(r Report, there map[revier.ProjectName]map[revier.Panel
 						continue
 					}
 					if probe, ok := c.agentProbe(panel); ok {
-						tab.Agents = append(tab.Agents, session.Agent{Harness: harnessIn(v, inst, panel, probe)})
+						tab.Agents = append(tab.Agents, session.Agent{Harness: probe.Name()})
 						gaps.InTab = append(gaps.InTab, fmt.Sprintf("%s:%s", v.Project.Name, tv.Name))
 					}
 				}
@@ -410,7 +410,7 @@ func (c *Core) sessionOf(r Report, there map[revier.ProjectName]map[revier.Panel
 				if probe, ok := c.agentProbe(panel); ok {
 					agents = append(agents, agentPanel{
 						project: len(s.Projects), target: len(targets) - 1,
-						ref: inst.Ref, panel: panel, probe: probe, harness: harnessIn(v, inst, panel, probe),
+						ref: inst.Ref, panel: panel, probe: probe,
 					})
 				}
 			}
@@ -429,7 +429,7 @@ func (c *Core) sessionOf(r Report, there map[revier.ProjectName]map[revier.Panel
 		}
 		t := &s.Projects[a.project].Targets[a.target]
 		t.Agents = append(t.Agents, session.Agent{
-			Harness: a.harness, Session: named[i].ID, Dir: named[i].Dir, Name: a.panel.Vars[revier.PanelAgentVar],
+			Harness: a.probe.Name(), Session: named[i].ID, Dir: named[i].Dir, Name: a.panel.Vars[revier.PanelAgentVar],
 			Unfiled: asks && unfiled(a.probe, named[i]),
 		})
 	}
@@ -471,23 +471,6 @@ type agentPanel struct {
 	ref             revier.TargetRef
 	panel           revier.Panel
 	probe           revier.AgentProbe
-	harness         string
-}
-
-// harnessIn is the harness the survey read in the panel, else the name of the
-// probe that claimed it. A probe can name another harness than its own: an
-// exec probe reports the harness its program names. A probe that can resume
-// keeps its name, which is what a restore finds it by.
-func harnessIn(v revier.ProjectView, inst revier.Instance, panel revier.Panel, probe revier.AgentProbe) string {
-	if _, ok := probe.(revier.Resumable); ok {
-		return probe.Name()
-	}
-	for _, a := range v.Agents {
-		if a.Panel == panel.ID && key(a.Ref) == key(inst.Ref) && a.State.Harness != "" {
-			return a.State.Harness
-		}
-	}
-	return probe.Name()
 }
 
 // conversations asks each resumable probe once, for every panel it claimed

@@ -215,20 +215,13 @@ func chosenAs(recorded, chosen []Resume) []string {
 }
 
 // runsHarness reports whether an agent of that name, whose panel is spec,
-// runs the recorded harness. With no probe to say, the name says. A save
-// records the name of a probe that can resume, but the harness that any other
-// probe reported, which can differ from its name: so a harness that no probe
-// here is named is one that any probe that cannot resume can run.
+// runs the recorded harness: a save records the name of the probe that
+// claimed the panel. With no probe to say, the name says.
 func (c *Core) runsHarness(spec revier.PanelSpec, name, recorded string) bool {
-	probe, ok := c.probeFor(revier.Panel{Kind: spec.Kind, Title: spec.Title, Command: spec.Command})
-	if !ok {
-		return name == recorded
+	if probe, ok := c.probeFor(revier.Panel{Kind: spec.Kind, Title: spec.Title, Command: spec.Command}); ok {
+		return probe.Name() == recorded
 	}
-	if probe.Name() == recorded {
-		return true
-	}
-	_, resumes := probe.(revier.Resumable)
-	return !resumes && !slices.ContainsFunc(c.Probes, func(p revier.AgentProbe) bool { return p.Name() == recorded })
+	return name == recorded
 }
 
 // addAgents opens an agent tab in a workspace that has just opened, for each

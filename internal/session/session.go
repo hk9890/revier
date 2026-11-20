@@ -136,7 +136,7 @@ type Target struct {
 	Agents []Agent `toml:"agent,omitempty" json:"agents,omitempty"`
 }
 
-// Agent is one agent: the harness its probe named, and what that probe could
+// Agent is one agent: the name of the probe that claimed it, and what it could
 // say about its conversation. An agent with neither holds its place in the
 // order, so the agents after it keep theirs. Name is the named agent it ran,
 // which a restore opens again and no other program in its place; it is empty
@@ -467,6 +467,20 @@ func (s Session) Targets() int {
 // unfiled mark of an agent is not what is open either: what a surface last
 // saw never carries it, and that snapshot is the same as the save it follows.
 func (s Session) SameAs(o Session) bool {
+	return s.same(o, func(p, q Agent) bool {
+		p.Unfiled, q.Unfiled = false, false
+		return p == q
+	})
+}
+
+// SameMarkedAs is SameAs with the unfiled mark of each agent compared too: a
+// save that adds the mark is not held by one that lacks it, as what a surface
+// last saw, promoted after an unclean end, lacks it (decisions.md D194).
+func (s Session) SameMarkedAs(o Session) bool {
+	return s.same(o, func(p, q Agent) bool { return p == q })
+}
+
+func (s Session) same(o Session, sameAgent func(p, q Agent) bool) bool {
 	byName := func(ps []Project) []Project {
 		out := slices.Clone(ps)
 		slices.SortStableFunc(out, func(a, b Project) int { return strings.Compare(string(a.Name), string(b.Name)) })
@@ -474,10 +488,7 @@ func (s Session) SameAs(o Session) bool {
 	}
 	return slices.EqualFunc(byName(s.Projects), byName(o.Projects), func(a, b Project) bool {
 		return a.Name == b.Name && slices.EqualFunc(a.Targets, b.Targets, func(x, y Target) bool {
-			return x.Name == y.Name && slices.EqualFunc(x.Agents, y.Agents, func(p, q Agent) bool {
-				p.Unfiled, q.Unfiled = false, false
-				return p == q
-			})
+			return x.Name == y.Name && slices.EqualFunc(x.Agents, y.Agents, sameAgent)
 		})
 	})
 }
