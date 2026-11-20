@@ -151,7 +151,9 @@ agent with no name, such as `dtop` you started in a shell panel, comes back
 in a tab of its own as the agent that runs that program: the default agent,
 or else a named agent. When no probe reads an agent's `command`, as with a
 `zsh -ilc` wrapper, the named agent whose name is the program runs it. When
-no agent of the project runs it, the restore skips it and says so. An
+the default agent is such a wrapper, only that named agent takes its place,
+and otherwise the default agent comes back. When no agent of the project
+runs it, the restore skips it and says so. An
 attached window is not saved. A target that is now a
 [command target](configuration.md#command-targets) is skipped: the restore
 runs no command.

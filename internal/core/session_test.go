@@ -886,6 +886,30 @@ func TestRestoreDropsAnAgentWhoseHarnessNoAgentRuns(t *testing.T) {
 	}
 }
 
+// A default agent that is a wrapper can run any harness, so an unmarked tab
+// of it comes back as the default agent, also when a named agent that a probe
+// reads runs the same harness: that agent is not the one that ran. Only a
+// named agent whose name is the harness comes back in its place.
+func TestRestoreKeepsAWrapperDefaultForAHarnessAnotherAgentRuns(t *testing.T) {
+	proj := agentProject()
+	proj.Targets[3].Runtime.Panels[1] = revier.PanelSpec{
+		Kind: revier.PanelAgent, Title: "Claude Code",
+		Command: []string{"zsh", "-ilc", "exec claude"},
+	}
+	p := prepared(t, proj)
+	p.Agents = []core.NamedAgent{{Name: "opus", Command: []string{"claude", "--model", "opus"}}}
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.NewResumableProbe("claude", "opus")}}
+
+	// The first agent fills the layout's agent panel; the second is past it.
+	if _, err := pressResuming(t.Context(), c, p, "home", []core.Resume{{Harness: "claude"}, {Harness: "claude"}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Real.Panels[0].Title != "Claude Code" || len(rt.Tabs[0].Vars) != 0 {
+		t.Errorf("tabs = %+v, want the default agent's tab, unmarked", rt.Tabs)
+	}
+}
+
 // Claude Code names a session from its start, but keeps no transcript of it
 // until its first prompt. The save that a close makes, which ends the agent,
 // records such an agent with no conversation and in its directory, so its

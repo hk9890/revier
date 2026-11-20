@@ -170,8 +170,11 @@ func (c *Core) agentTabs(host revier.Host, p Project, layout []revier.PanelSpec,
 // agentRunning is the agent a recorded agent with a harness and no name comes
 // back as: the default agent when it runs that harness, else the first named
 // agent that does. A command no probe claims - a wrapper such as
-// `zsh -ilc "exec dtop"` - runs the harness its agent's name names. When no
-// agent runs the harness, a default agent that is a wrapper is trusted, as
+// `zsh -ilc "exec dtop"` - runs the harness its agent's name names. A default
+// agent that is a wrapper can run any harness, so only a named agent whose
+// name is the harness comes back in its place: an unmarked tab of the default
+// agent comes back as the default, not as another agent of its harness. When
+// no agent runs the harness, a default agent that is a wrapper is trusted, as
 // startAgent trusts it; any other default agent runs another program, which
 // is not the agent that ran (decisions.md D193). A link's agents are its
 // host's to name.
@@ -187,6 +190,9 @@ func (c *Core) agentRunning(p Project, layout []revier.PanelSpec, r Resume) (Res
 	for _, named := range p.Agents {
 		spec := agent
 		spec.Title, spec.Command = named.Name, named.Command
+		if harness == "" && named.Name != r.Harness {
+			continue
+		}
 		if runsHarness(c.harnessOf(spec), named.Name, r.Harness) {
 			r.Agent = named.Name
 			return r, true
