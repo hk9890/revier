@@ -67,7 +67,7 @@ func TestTheFooterOffersTheRowKeysOnlyWhereThereIsARow(t *testing.T) {
 	if !strings.Contains(got, "esc") {
 		t.Errorf("footer = %q with no project selected, want esc", got)
 	}
-	for _, k := range []string{"open", "close", "alt+e", "alt+del", "ctrl+y"} {
+	for _, k := range []string{"open", "tab", "close", "alt+e", "alt+del", "ctrl+y"} {
 		if strings.Contains(got, k) {
 			t.Errorf("footer = %q with no project selected, want no %q", got, k)
 		}

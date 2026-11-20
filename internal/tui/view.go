@@ -544,7 +544,8 @@ func (m Model) footer() string {
 	v, ok := m.selected()
 	if !ok {
 		// A filter that matches no project leaves no row for enter, the
-		// actions, the target keys or the file keys to act on.
+		// actions, the target keys or the file keys to act on, and no
+		// section for tab to step to.
 		return " " + m.help.ShortHelpView(m.keys.helpFor(m.focus, false))
 	}
 	keys := append(m.keys.helpFor(m.focus, true), m.keys.targetHelp(m.targetKeysOf(v))...)
