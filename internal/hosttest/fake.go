@@ -9,6 +9,7 @@ package hosttest
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"sync"
 
@@ -112,6 +113,20 @@ type Fake struct {
 	// fail.
 	Hidden  []revier.TargetRef
 	HideErr error
+
+	// MonitorList is what Monitors reports, and MonitorsErr makes it fail.
+	MonitorList []revier.Monitor
+	MonitorsErr error
+	// Covers records every Cover call and Aboves every Above call, in order.
+	// CoverErr and AboveErr make them fail; a call that fails is recorded.
+	Covers   []Cover
+	Aboves   []Above
+	CoverErr error
+	AboveErr error
+	// WindowOps records the Hide, Focus, Cover and Above calls together, in
+	// order, as "hide <id>", "focus <id>", "cover <id> <monitor>" and
+	// "above <id> on|off", so a test can assert on the order across them.
+	WindowOps []string
 
 	caps revier.Capabilities
 }
@@ -315,11 +330,57 @@ func (f *Fake) Hide(_ context.Context, ref revier.TargetRef) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.Hidden = append(f.Hidden, ref)
+	f.WindowOps = append(f.WindowOps, "hide "+ref.ID)
 	if f.HideErr != nil {
 		return f.HideErr
 	}
 	f.setMinimized(ref, true)
 	return nil
+}
+
+// Cover is one Cover call.
+type Cover struct {
+	Ref     revier.TargetRef
+	Monitor int
+}
+
+// Above is one Above call.
+type Above struct {
+	Ref revier.TargetRef
+	On  bool
+}
+
+// Monitors reports MonitorList, or fails with MonitorsErr. Fake implements
+// revier.Coverer.
+func (f *Fake) Monitors(context.Context) ([]revier.Monitor, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.MonitorsErr != nil {
+		return nil, f.MonitorsErr
+	}
+	return append([]revier.Monitor(nil), f.MonitorList...), nil
+}
+
+// Cover records the call, or fails with CoverErr.
+func (f *Fake) Cover(_ context.Context, ref revier.TargetRef, monitor int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Covers = append(f.Covers, Cover{Ref: ref, Monitor: monitor})
+	f.WindowOps = append(f.WindowOps, "cover "+ref.ID+" "+strconv.Itoa(monitor))
+	return f.CoverErr
+}
+
+// Above records the call, or fails with AboveErr.
+func (f *Fake) Above(_ context.Context, ref revier.TargetRef, on bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Aboves = append(f.Aboves, Above{Ref: ref, On: on})
+	state := "off"
+	if on {
+		state = "on"
+	}
+	f.WindowOps = append(f.WindowOps, "above "+ref.ID+" "+state)
+	return f.AboveErr
 }
 
 // setMinimized marks the instance of ref minimized or not. The caller holds
@@ -457,6 +518,14 @@ func (f *Fake) Remove(ref revier.TargetRef) {
 	}
 }
 
+// Ops is WindowOps as it is now, for a test that reads it while other
+// goroutines still call the host.
+func (f *Fake) Ops() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.WindowOps)
+}
+
 // SetFocus makes ref the focused instance.
 func (f *Fake) SetFocus(ref revier.TargetRef) {
 	f.mu.Lock()
@@ -520,6 +589,7 @@ func (f *Fake) Focus(_ context.Context, ref revier.TargetRef) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.Focuses = append(f.Focuses, ref)
+	f.WindowOps = append(f.WindowOps, "focus "+ref.ID)
 	if f.FocusErr != nil {
 		return f.FocusErr
 	}

@@ -292,6 +292,29 @@ type Hider interface {
 	Hide(ctx context.Context, ref TargetRef) error
 }
 
+// Monitor is one monitor of the window host.
+type Monitor struct {
+	Index   int  `json:"index"`
+	Primary bool `json:"primary"`
+}
+
+// Coverer is an optional capability of a WindowController, detected by type
+// assertion. It is how a full shutdown or a restore from the popup shows its
+// progress on a curtain that covers every monitor, over the windows the run
+// opens and closes (decisions.md D192). Where the host cannot cover, the run
+// goes on with no curtain.
+type Coverer interface {
+	// Monitors lists the monitors.
+	Monitors(ctx context.Context) ([]Monitor, error)
+	// Cover moves the window to the monitor and makes it cover that monitor
+	// over every other window, on every workspace: fullscreen, above,
+	// sticky. Not maximized: a maximized window is under a fullscreen one.
+	Cover(ctx context.Context, ref TargetRef, monitor int) error
+	// Above keeps the window over every other window, or lets other windows
+	// over it again.
+	Above(ctx context.Context, ref TargetRef, on bool) error
+}
+
 // PanelCloser is an optional capability of a Runtime, detected by type
 // assertion. ClosePanel closes one panel of an instance and leaves the rest,
 // which is how a shutdown of the agents alone ends an agent without its

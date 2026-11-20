@@ -15,6 +15,7 @@ import (
 	"github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/curtain"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -193,13 +194,13 @@ func (m Model) shutRows() int {
 func (m Model) shutdownKey(msg keyPress) (tea.Model, tea.Cmd) {
 	s := &m.shut
 	if s.quitting {
-		return m, tea.Quit
+		return m, m.quit()
 	}
 	m.err = nil
 	switch {
 	case key.Matches(msg, m.keys.Quit):
 		m.declined()
-		return m, tea.Quit
+		return m, m.quit()
 	case key.Matches(msg, m.keys.Back):
 		m.shutBack()
 	case key.Matches(msg, m.keys.Up):
@@ -353,7 +354,13 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	// The recheck, the save, a report before and after each step, and the
 	// wait.
 	w, progress, cancelled := startWalk(core.PhaseRecheck, 3+2*len(plan))
+	// Only a full shutdown runs under the curtains (decisions.md D192).
+	if s.whole {
+		rows, steps := closeRows(plan)
+		w.curtain = newCurtain(m.curtain, "shutdown", rows, steps)
+	}
 	s.walk = w
+	run, argv := w.curtain, m.curtain
 	// The wizard holds the record to abandon it on the second ctrl+c;
 	// app.Close decides whether it is written.
 	s.record = app.NewShutdownRecord(m.core, m.stateRoot)
@@ -361,11 +368,15 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 		Core: m.core, StateRoot: m.stateRoot, Plan: plan, Projects: s.projects,
 		Project: s.project, Scope: s.scope, Force: confirmed && len(core.Busy(plan)) > 0,
 		Save: s.saves(), Wait: m.closeWait, Record: s.record,
-		Progress: func(p core.Progress) { progress <- p },
+		Progress: func(p core.Progress) {
+			run.take(p)
+			progress <- p
+		},
 	}
 	closing := func() tea.Msg {
 		defer close(progress)
 		defer w.cancel()
+		run.open(m.core, argv)
 		// No deadline over the close: each phase bounds its own, and once a
 		// deadline laid over the cancel passed, a ctrl+c would no longer
 		// reach the walk.
@@ -378,7 +389,7 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	}
 	// The close goes first in the batch: run in order, as the tests run a
 	// batch, the wait would otherwise block on a channel nothing writes yet.
-	return m, tea.Batch(closing, waitProgress(progress))
+	return m, tea.Batch(closing, waitProgress(progress), waitCurtain(run))
 }
 
 // closeAnswer is what a close came to, as the wizard reads it: the refusal
@@ -432,7 +443,7 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 		// so it carries no listing from here.
 		s.plan, s.row, s.step = msg.recheck, 1, shutConfirm
 		m.dialog = dialogShutdown
-		return m, nil
+		return m, s.walk.curtain.finish(m.core, curtain.End{Title: "Shutdown stopped", Summary: m.err.Error()}, m.curtainLift, s.walk.curtain.back(m.core, m.popup))
 	}
 	if s.one {
 		return m.closed(msg, cancelled)
@@ -442,7 +453,7 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 		if !cancelled {
 			m.err = fail("shutdown", "", msg.err)
 		}
-		return m, nil
+		return m, s.walk.curtain.finish(m.core, failedEnd("Shutdown", cancelled, msg.err), m.curtainLift, s.walk.curtain.back(m.core, m.popup))
 	}
 	s.step, s.row, s.saved, s.closed = shutDone, 0, msg.saved, msg.closed
 	// A cancel that came after the last step was walked left no step
@@ -455,11 +466,25 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 	// A full shutdown leaves nothing to come back to: the surface says what
 	// it did and quits, the popup too, so the next start is a cold one that
 	// offers the restore (decisions.md D141).
+	var quit tea.Cmd
 	if msg.recorded && !s.walk.cancelled {
 		s.quitting = true
-		return m, tea.Tick(quitAfterShutdown, func(time.Time) tea.Msg { return shutQuitMsg{} })
+		quit = tea.Tick(quitAfterShutdown, func(time.Time) tea.Msg { return shutQuitMsg{} })
 	}
-	return m, nil
+	// The wait after the closes marks a step still open after its report.
+	s.walk.curtain.settle(s.closed)
+	end := shutdownEnd(s.closed, len(s.unreached()), s.walk.cancelled)
+	switch {
+	case quit == nil:
+		return m, s.walk.curtain.finish(m.core, end, m.curtainLift, s.walk.curtain.back(m.core, m.popup))
+	case end.OK:
+		// The quit counts from the end, beside the curtains' lift: it ends
+		// them too.
+		return m, tea.Batch(quit, s.walk.curtain.finish(m.core, end, m.curtainLift, nil))
+	}
+	// The summary of what went wrong stays until the user closed it, and the
+	// quit counts from then.
+	return m, s.walk.curtain.finish(m.core, end, m.curtainLift, quit)
 }
 
 // shutQuit is the end of the wait after a full shutdown.
@@ -467,7 +492,7 @@ func (m Model) shutQuit() (tea.Model, tea.Cmd) {
 	if !m.shut.quitting {
 		return m, nil
 	}
-	return m, tea.Quit
+	return m, m.quit()
 }
 
 // notReached says how much of a cancelled close was left open.
@@ -479,27 +504,33 @@ func (s shutdown) notReached() string {
 // leaves open. The close walks the steps in an order of its own, so a step
 // is found by what it closes, not by its place.
 func (s shutdown) unreached() []core.CloseStep {
-	type closes struct {
-		project revier.ProjectName
-		target  revier.TargetName
-		host    string
-		id      string
-		panel   revier.PanelID
-	}
-	what := func(c core.CloseStep) closes {
-		return closes{c.Project, c.Target, c.Ref.Host, c.Ref.ID, c.Panel}
-	}
-	walked := make(map[closes]bool, len(s.closed))
+	walked := make(map[stepKey]bool, len(s.closed))
 	for _, r := range s.closed {
-		walked[what(r.CloseStep)] = true
+		walked[closeKey(r.CloseStep)] = true
 	}
 	var out []core.CloseStep
 	for _, step := range s.plan {
-		if !walked[what(step)] {
+		if !walked[closeKey(step)] {
 			out = append(out, step)
 		}
 	}
 	return out
+}
+
+// stepKey is a step of a walk by what it closes or opens. Its place and its
+// name can change between the plan and the walk: the recheck renames an agent
+// panel whose agent exited or could not be read.
+type stepKey struct {
+	project revier.ProjectName
+	target  revier.TargetName
+	host    string
+	id      string
+	panel   revier.PanelID
+}
+
+// closeKey is a close step by what it closes.
+func closeKey(c core.CloseStep) stepKey {
+	return stepKey{c.Project, c.Target, c.Ref.Host, c.Ref.ID, c.Panel}
 }
 
 // shutdownTitle is the question the step asks, on the line over the rule.

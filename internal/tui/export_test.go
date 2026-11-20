@@ -16,7 +16,7 @@ import (
 // AwaitSwitch is the wait for the next press on the popup's socket.
 func (m Model) AwaitSwitch() tea.Cmd { return m.awaitSwitch() }
 
-// NewWithoutWaits is New with no close wait and no mirror gap, the model
+// NewWithoutWaits is New with no close wait, no mirror gap and no curtain lift, the model
 // every test builds: a shutdown whose host keeps a closed instance listed
 // does not wait out core.CloseWait, and the mirror's tick fires at once.
 // TestASurfaceWaitsTheCloseWaitAndTheMirrorInterval builds with New, so the
@@ -29,6 +29,7 @@ func NewWithoutWaits(c *core.Core, projects []core.Project, stateRoot string, cf
 	m := New(c, projects, stateRoot, cfg, refresh, th, start)
 	m.closeWait = 0
 	m.mirrorGap = 0
+	m.curtainLift = 0
 	return m
 }
 

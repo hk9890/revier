@@ -1109,3 +1109,14 @@ the user's file, often a link into dotfiles, only to take out a rule an older
 revier put there, known by its exact shape, printing each. The user's file loads
 first, so any other rule for the class is the user's: it wins, and is reported,
 never taken. One `revier setup` writes all three: a user sets up a machine.
+
+### D192 — a full shutdown or a restore from the popup runs under a curtain on every monitor
+
+Amends D140. Windows popped up through such a run and took the focus. Each
+monitor now gets a fullscreen, above, unmaximized window of a class no window
+rule names: it shows the progress alone, and new windows map without the focus.
+Esc on it hides the curtain, not the run: the surface stays locked, and the
+popup's key shows it again. Its Cancel is the first ctrl+c. It lifts on success,
+else stays with a summary, and ends with its socket. Rejected: one window over
+all monitors (fullscreen covers one), a maximized one (it goes under fullscreen
+windows), the popup itself (its overlay rule minimizes it when the focus moves).

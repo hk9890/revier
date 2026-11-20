@@ -410,3 +410,68 @@ func (h *Host) decodeFocused(raw []byte) (revier.TargetRef, error) {
 		Host: h.Name(), ID: strconv.FormatInt(w.ID, 10), Title: w.Title,
 	}, nil
 }
+
+// Monitors lists the monitors, by the index wctl moves a window to.
+func (h *Host) Monitors(ctx context.Context) ([]revier.Monitor, error) {
+	raw, err := h.wctl(ctx, "monitors", "--json")
+	if err != nil {
+		return nil, err
+	}
+	return decodeMonitors(raw)
+}
+
+func decodeMonitors(raw []byte) ([]revier.Monitor, error) {
+	var monitors []struct {
+		Index     int  `json:"index"`
+		IsPrimary bool `json:"is_primary"`
+	}
+	if err := json.Unmarshal(raw, &monitors); err != nil {
+		return nil, fmt.Errorf("wctl monitors --json: %w", err)
+	}
+	if len(monitors) == 0 {
+		return nil, fmt.Errorf("wctl monitors --json: no monitor in %s", bytes.TrimSpace(raw))
+	}
+	out := make([]revier.Monitor, 0, len(monitors))
+	for _, m := range monitors {
+		out = append(out, revier.Monitor{Index: m.Index, Primary: m.IsPrimary})
+	}
+	return out, nil
+}
+
+// Cover moves the window to the monitor, unmaximizes it, then makes it
+// fullscreen, above and sticky, in that order, and stops at the first command
+// that fails. A window that is above and not maximized is in mutter's top
+// layer, over a fullscreen window, and mutter may map a window maximized;
+// fullscreen covers one monitor only.
+func (h *Host) Cover(ctx context.Context, ref revier.TargetRef, monitor int) error {
+	if ref.ID == "" {
+		return fmt.Errorf("gnome: cannot cover with a zero ref")
+	}
+	for _, args := range [][]string{
+		{"move-to-monitor", ref.ID, strconv.Itoa(monitor)},
+		{"unmaximize", ref.ID},
+		{"fullscreen", ref.ID},
+		{"above", ref.ID, "on"},
+		{"sticky", ref.ID, "on"},
+	} {
+		if _, err := h.wctl(ctx, args...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Above keeps the window over every other window, or lets other windows over
+// it again. A minimized window that is still above keeps the focus from every
+// window that maps under it, so a hide turns it off first.
+func (h *Host) Above(ctx context.Context, ref revier.TargetRef, on bool) error {
+	if ref.ID == "" {
+		return fmt.Errorf("gnome: cannot set above on a zero ref")
+	}
+	state := "off"
+	if on {
+		state = "on"
+	}
+	_, err := h.wctl(ctx, "above", ref.ID, state)
+	return err
+}

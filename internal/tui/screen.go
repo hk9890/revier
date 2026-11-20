@@ -33,6 +33,7 @@ type surface struct {
 	list      int                              // the columns the list has
 	pane      int                              // the columns the pane's text has
 	page      int                              // the list rows on the screen at once
+	curtain   curtainArgv                      // Model.curtain, which a restore runs under
 }
 
 func (m Model) surface() surface {
@@ -41,6 +42,7 @@ func (m Model) surface() surface {
 		views: m.views, settled: m.settled(), projects: m.projects, targets: m.targets, usable: m.usable,
 		actions: m.actions, shared: m.shared, tkeys: m.tkeys, err: m.err, errands: m.errands,
 		list: m.listWidth(), pane: m.paneCols() - paneChrome, page: m.listPage(),
+		curtain: m.curtain,
 	}
 }
 
