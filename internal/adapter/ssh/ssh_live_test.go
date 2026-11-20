@@ -104,6 +104,45 @@ func TestSSHRunsInAProcessGroupOfItsOwn(t *testing.T) {
 	}
 }
 
+// A remote revier that does not know one name lists the others and exits 1:
+// the call keeps what it wrote, so the survey still has the others. The ssh
+// is a script first on PATH that answers as that revier.
+func TestASurveyThatFailsForOneNameKeepsTheOthers(t *testing.T) {
+	bin := t.TempDir()
+	script := "#!/bin/sh\n" +
+		`echo '[{"project":{"name":"demo","path":"/x"},"targets":[]}]'` + "\n" +
+		`echo 'revier: no project named "gone"' >&2` + "\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("XDG_RUNTIME_DIR", "")
+
+	views, err := ssh.New("box").Survey(t.Context(), []revier.ProjectName{"demo", "gone"})
+	if err != nil || len(views) != 1 || views[0].Project.Name != "demo" {
+		t.Errorf("Survey = %+v, %v; want demo alone and no error", views, err)
+	}
+}
+
+// The line for a name the host does not know comes before the remote
+// survey. When the connection drops after it, ssh exits 255 and the host
+// failed, though the last line the remote revier wrote is that refusal.
+func TestASurveyWhoseConnectionDroppedAfterARefusalFailsTheHost(t *testing.T) {
+	bin := t.TempDir()
+	script := "#!/bin/sh\n" +
+		`echo 'revier: no project named "gone"' >&2` + "\n" +
+		`echo 'Connection to box closed by remote host.' >&2` + "\nexit 255\n"
+	if err := os.WriteFile(filepath.Join(bin, "ssh"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("XDG_RUNTIME_DIR", "")
+
+	if views, err := ssh.New("box").Survey(t.Context(), []revier.ProjectName{"demo", "gone"}); err == nil {
+		t.Errorf("Survey = %+v, nil; want the host's failure", views)
+	}
+}
+
 // awkward are names a user may give a project or an agent that each shell
 // on the way reads in its own way: a backtick, a backslash, a trailing
 // backslash, quotes, a dollar and spaces.

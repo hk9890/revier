@@ -12,6 +12,7 @@ import (
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/record"
 	"github.com/hk9890/revier/internal/session"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // A save with nothing open is refused with a normal outcome, not written: an
@@ -148,6 +149,31 @@ func TestSaveChangedOfACloseWritesNothingWhenTheWholeSaveHoldsIt(t *testing.T) {
 	got, saved, _, err := app.SaveChanged(context.Background(), c, root, report, session.ReasonProjectClosed, at.Add(2*time.Minute))
 	if err != nil || saved || got.ID != shut.ID {
 		t.Errorf("close = %s, %v, %v; want the shutdown %s and nothing written", got.ID, saved, err, shut.ID)
+	}
+}
+
+// A shutdown that marks an agent never prompted unfiled is saved, though the
+// save a plain restore opens holds the same agent: that save is what a surface
+// last saw, promoted after an unclean end, and carries no mark. Without the
+// new save, the restore says the conversation is gone (decisions.md D194).
+func TestSaveChangedWritesTheUnfiledMarkThatTheNewestSaveLacks(t *testing.T) {
+	c, _, report, _ := desktop(t)
+	c.Probes[0].(*hosttest.FakeResumableProbe).Gone = []revier.SessionID{"abc-123"}
+	root := t.TempDir()
+	at := time.Date(2026, 9, 15, 18, 0, 0, 0, time.UTC)
+	promoted, _ := c.Session(context.Background(), report)
+	promoted.Projects[0].Targets[0].Agents[0].Unfiled = false
+	promoted.Reason, promoted.At = session.ReasonLastSeen, at
+	if _, _, err := session.Save(root, promoted); err != nil {
+		t.Fatal(err)
+	}
+
+	shut, saved, _, err := app.SaveChanged(context.Background(), c, root, report, session.ReasonShutdown, at.Add(time.Minute))
+	if err != nil || !saved {
+		t.Fatalf("shutdown = %v, %v; want a save", saved, err)
+	}
+	if !shut.Projects[0].Targets[0].Agents[0].Unfiled {
+		t.Errorf("agents = %+v, want the agent marked unfiled", shut.Projects[0].Targets[0].Agents)
 	}
 }
 

@@ -1120,3 +1120,25 @@ popup's key shows it again. Its Cancel is the first ctrl+c. It lifts on success,
 else stays with a summary, and ends with its socket. Rejected: one window over
 all monitors (fullscreen covers one), a maximized one (it goes under fullscreen
 windows), the popup itself (its overlay rule minimizes it when the focus moves).
+
+### D193 — a restored agent with no name comes back as the agent that runs its harness
+
+Extends D146. A save names an agent only by its tab's mark, so a program started
+by hand in a panel, such as dtop typed into the shell, is recorded by harness
+alone; a restore gave it the default agent's tab, and a dtop came back as claude.
+Now one past the layout's agent panels comes back as the default agent when
+that runs its harness, else as the first named agent that does, and its tab
+gets that name's mark. Where no probe reads a command, a wrapper, the agent
+whose name is the harness runs it. A wrapper default can run any harness, so
+only that name match replaces it; with none it is trusted. Any other default
+is dropped and said, as an unknown name is.
+
+### D194 — a save marks a conversation its harness never filed, and keeps its id
+
+Amends D139. A Claude Code agent that never got a prompt has an id and no
+transcript, so each restore said its conversation was gone, which reads as lost
+work. A save that asks the probes now asks, as a restore does, whether the
+harness keeps the conversation, and marks one it does not keep as unfiled. A
+restore that finds it still not kept starts the agent empty and says so. The id
+stays: a close can stop before it ends the agent, which can then get its first
+prompt. Rejected: dropping the id at a shutdown save, which loses that prompt.

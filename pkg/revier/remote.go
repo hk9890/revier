@@ -22,9 +22,10 @@ type Remote interface {
 	Version(ctx context.Context) (string, error)
 
 	// Survey reports the named projects as the remote revier sees them, one
-	// call for all of them. A name the remote does not know is an error, so
-	// a missing project file there is reported, not shown as a project with
-	// nothing in it.
+	// call for all of them. A name the remote does not know is left out of
+	// the answer and costs no other name, so the caller reports a missing
+	// project file there for that name alone, not as a project with nothing
+	// in it.
 	Survey(ctx context.Context, names []ProjectName) ([]ProjectView, error)
 
 	// Conversations is Survey with each agent's Conversation filled in, for a

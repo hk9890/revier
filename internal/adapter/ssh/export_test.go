@@ -24,3 +24,6 @@ func Connection() []string { return connection() }
 func Classify(host string, args []string, stderr string, err error) error {
 	return classify(context.Background(), host, args, stderr, err)
 }
+
+// FailedThere is err as a call that the remote revier ended itself returns it.
+func FailedThere(err error) error { return failedThere{err} }

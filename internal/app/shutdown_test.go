@@ -75,6 +75,34 @@ func TestACloseSavesWithTheReasonOfItsScope(t *testing.T) {
 	}
 }
 
+// A close saves an agent whose harness keeps no conversation for it with its
+// id, marked unfiled, whatever the scope. A close can stop or fail before it
+// ends that agent, and the agent can then get its first prompt: a restore of
+// the save then resumes it.
+func TestACloseKeepsTheIdOfAnAgentItsHarnessNeverFiled(t *testing.T) {
+	for name, tc := range map[string]struct {
+		only  revier.ProjectName
+		scope core.ShutdownScope
+	}{
+		"everything":  {"", core.ShutdownAll},
+		"the agents":  {"", core.ShutdownAgents},
+		"one project": {"demo", core.ShutdownAll},
+		"the targets": {"", core.ShutdownTargets},
+	} {
+		c, _, report, projects := desktop(t)
+		c.Probes[0].(*hosttest.FakeResumableProbe).Gone = []revier.SessionID{"abc-123"}
+		req := fullShutdown(c, t.TempDir(), c.ShutdownPlan(report, tc.only, tc.scope), projects)
+		req.Project, req.Scope = tc.only, tc.scope
+		res, err := app.Close(t.Context(), req)
+		if err != nil || res.Save == nil {
+			t.Fatalf("%s: Close = %+v, %v; want a save", name, res, err)
+		}
+		if got := res.Save.Session.Projects[0].Targets[0].Agents[0]; got.Session != "abc-123" || !got.Unfiled {
+			t.Errorf("%s: saved agent = %+v, want abc-123 kept and unfiled", name, got)
+		}
+	}
+}
+
 // A full shutdown on record removes what a surface last saw: it was a clean
 // end, and the file would read as an end with no shutdown once something
 // opened and ended the record. One that is not full leaves it.

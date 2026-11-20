@@ -136,17 +136,21 @@ type Target struct {
 	Agents []Agent `toml:"agent,omitempty" json:"agents,omitempty"`
 }
 
-// Agent is one agent: the harness its probe named, and what that probe could
+// Agent is one agent: the name of the probe that claimed it, and what it could
 // say about its conversation. An agent with neither holds its place in the
 // order, so the agents after it keep theirs. Name is the named agent it ran,
 // which a restore opens again and no other program in its place; it is empty
-// for the project's default agent, and in a file written before the field
-// existed (decisions.md D146).
+// for the project's default agent, for a program started by hand in a panel,
+// and in a file written before the field existed (decisions.md D146). A
+// restore gives an agent with no name the agent that runs its harness
+// (D193). Unfiled says that its harness kept no conversation under Session
+// when the save ran, as for a Claude Code agent never prompted (D194).
 type Agent struct {
 	Harness string           `toml:"harness" json:"harness"`
 	Session revier.SessionID `toml:"session,omitempty" json:"session,omitempty"`
 	Dir     string           `toml:"dir,omitempty" json:"dir,omitempty"`
 	Name    string           `toml:"name,omitempty" json:"name,omitempty"`
+	Unfiled bool             `toml:"unfiled,omitempty" json:"unfiled,omitempty"`
 }
 
 // Dir is where sessions live under the state root.
@@ -459,8 +463,24 @@ func (s Session) Targets() int {
 // SameAs reports whether two sessions hold the same projects, targets and
 // agents: what a restore of either would open. The id, the name, the reason,
 // the moment and the project ended on are not what is open, and the order of the
-// projects is the survey's; the order of the agents is their identity.
+// projects is the survey's; the order of the agents is their identity. The
+// unfiled mark of an agent is not what is open either: what a surface last
+// saw never carries it, and that snapshot is the same as the save it follows.
 func (s Session) SameAs(o Session) bool {
+	return s.same(o, func(p, q Agent) bool {
+		p.Unfiled, q.Unfiled = false, false
+		return p == q
+	})
+}
+
+// SameMarkedAs is SameAs with the unfiled mark of each agent compared too: a
+// save that adds the mark is not held by one that lacks it, as what a surface
+// last saw, promoted after an unclean end, lacks it (decisions.md D194).
+func (s Session) SameMarkedAs(o Session) bool {
+	return s.same(o, func(p, q Agent) bool { return p == q })
+}
+
+func (s Session) same(o Session, sameAgent func(p, q Agent) bool) bool {
 	byName := func(ps []Project) []Project {
 		out := slices.Clone(ps)
 		slices.SortStableFunc(out, func(a, b Project) int { return strings.Compare(string(a.Name), string(b.Name)) })
@@ -468,7 +488,7 @@ func (s Session) SameAs(o Session) bool {
 	}
 	return slices.EqualFunc(byName(s.Projects), byName(o.Projects), func(a, b Project) bool {
 		return a.Name == b.Name && slices.EqualFunc(a.Targets, b.Targets, func(x, y Target) bool {
-			return x.Name == y.Name && slices.Equal(x.Agents, y.Agents)
+			return x.Name == y.Name && slices.EqualFunc(x.Agents, y.Agents, sameAgent)
 		})
 	})
 }

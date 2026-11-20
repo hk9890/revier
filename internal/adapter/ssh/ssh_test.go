@@ -140,6 +140,121 @@ func TestSurveyPassesTheSSHFailureThrough(t *testing.T) {
 	}
 }
 
+// answer replaces ssh with a remote revier that failed: it wrote out and
+// stderr, and its call failed with err.
+func answer(r *ssh.Remote, out, stderr string, err error) {
+	r.SetRunner(func(context.Context, ...string) ([]byte, []byte, error) {
+		return []byte(out), []byte(stderr), err
+	})
+}
+
+// errFailed is a call that failed in the remote revier, as classify passes it
+// through when it does not know the reason.
+var errFailed = errors.New("buildbox: revier list --json demo gone: exit status 1")
+
+// failedThere is errFailed as the call returns it when the remote revier
+// ended the call itself.
+var failedThere = ssh.FailedThere(errFailed)
+
+// A remote revier that does not know one of the names lists the others, says
+// why for that one, and exits 1. The others are the answer, so a stale link
+// costs no other link on its host (decisions.md D85). A profile can write
+// to stderr after revier did.
+func TestSurveyListsTheKnownNamesWhenTheHostDoesNotKnowOne(t *testing.T) {
+	r := ssh.New("buildbox")
+	answer(r, `[{"project":{"name":"demo","path":"/x"},"targets":[]}]`,
+		"welcome\nrevier: no project named \"gone\"; did you mean \"demo\"?\nrevier: no project named \"gone\"\nbye\n", failedThere)
+	views, err := r.Survey(t.Context(), []revier.ProjectName{"demo", "gone"})
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	if len(views) != 1 || views[0].Project.Name != "demo" {
+		t.Errorf("views = %+v, want demo alone", views)
+	}
+}
+
+// A remote revier whose own survey degraded warns after the refusal and
+// before it prints the JSON. The warning is no failure of the list.
+func TestSurveyListsTheKnownNamesWhenTheHostWarnsAfterTheRefusal(t *testing.T) {
+	r := ssh.New("buildbox")
+	answer(r, `[{"project":{"name":"demo","path":"/x"},"targets":[]}]`,
+		"revier: no project named \"gone\"\nrevier: warning: farbox: connection timed out\n", failedThere)
+	views, err := r.Survey(t.Context(), []revier.ProjectName{"demo", "gone"})
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	if len(views) != 1 || views[0].Project.Name != "demo" {
+		t.Errorf("views = %+v, want demo alone", views)
+	}
+}
+
+// A remote revier older than 0.23 ended at the first name it did not know
+// and listed nothing, also the names it knows. A name left out with no line
+// of its own is not known to be unknown there, so the host failed.
+func TestSurveyFailsTheHostWhenANameIsLeftOutWithNoRefusal(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		names []revier.ProjectName
+	}{
+		{"a known name before the unknown one", []revier.ProjectName{"demo", "gone"}},
+		{"a name after the unknown one", []revier.ProjectName{"gone", "later"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := ssh.New("buildbox")
+			answer(r, "", "revier: no project named \"gone\"\n", failedThere)
+			if _, err := r.Survey(t.Context(), tc.names); !errors.Is(err, errFailed) {
+				t.Errorf("err = %v, want the call's failure", err)
+			}
+		})
+	}
+}
+
+func TestSurveyListsNothingWhenTheHostKnowsNoName(t *testing.T) {
+	r := ssh.New("buildbox")
+	answer(r, "", "revier: no project named \"gone\"\nrevier: no project named \"gone\"\n", failedThere)
+	views, err := r.Survey(t.Context(), []revier.ProjectName{"gone"})
+	if err != nil || len(views) != 0 {
+		t.Errorf("Survey = %+v, %v; want nothing and no error", views, err)
+	}
+}
+
+// Every failure that is not only a name the host does not know is the
+// host's, also one after a name was refused.
+func TestSurveyFailsTheHostForAnyOtherFailure(t *testing.T) {
+	for _, tc := range []struct{ name, out, stderr string }{
+		{"no JSON after the refusal", "[{", "revier: no project named \"gone\"\n"},
+		{"no refusal", "", "revier: survey: wctl timed out\n"},
+		{"the survey failed after the refusal", "", "revier: no project named \"gone\"\nrevier: survey: wctl timed out\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := ssh.New("buildbox")
+			answer(r, tc.out, tc.stderr, failedThere)
+			if _, err := r.Survey(t.Context(), []revier.ProjectName{"demo", "gone"}); !errors.Is(err, errFailed) {
+				t.Errorf("err = %v, want the call's failure", err)
+			}
+		})
+	}
+}
+
+// The remote revier writes the line for a name it does not know before its
+// survey starts. A call that ended after that line and before the remote
+// revier ended it has no answer, so the host failed: one that was killed at
+// the end of its wait, and one whose connection dropped.
+func TestSurveyFailsTheHostWhenTheCallEndedAfterTheRefusal(t *testing.T) {
+	for _, tc := range []struct{ name, stderr string }{
+		{"killed", "revier: no project named \"gone\"\n"},
+		{"connection dropped", "revier: no project named \"gone\"\nConnection to buildbox closed by remote host.\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := ssh.New("buildbox")
+			answer(r, "", tc.stderr, errFailed)
+			if _, err := r.Survey(t.Context(), []revier.ProjectName{"demo", "gone"}); !errors.Is(err, errFailed) {
+				t.Errorf("err = %v, want the call's failure", err)
+			}
+		})
+	}
+}
+
 // sshd runs a command in a shell that read no profile, where a PATH set in
 // one - the directory Claude Code installs into - is missing. The command
 // line runs in the user's login shell instead, as one word. The shell is

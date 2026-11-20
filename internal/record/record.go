@@ -133,7 +133,9 @@ type Outcome struct {
 	Session revier.SessionID `json:"session,omitempty"`
 	Dir     string           `json:"dir,omitempty"`
 	Agent   string           `json:"agent,omitempty"`
-	Outcome string           `json:"outcome,omitempty"`
+	// As is the named agent a restore chose for an agent recorded with none.
+	As      string `json:"as,omitempty"`
+	Outcome string `json:"outcome,omitempty"`
 }
 
 // Seen is what one survey saw of one scope: this machine when Machine is

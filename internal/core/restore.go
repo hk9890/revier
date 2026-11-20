@@ -22,6 +22,9 @@ type RestoreResult struct {
 	RestoreStep
 	Ref    revier.TargetRef
 	Agents []AgentOutcome
+	// As is, parallel to Agents, the named agent each agent recorded with no
+	// name came back as, or would: empty for every other agent.
+	As []string
 	// AgentErr is why an agent tab failed to open in a workspace that did.
 	AgentErr error
 	Err      error
@@ -48,6 +51,15 @@ func (r RestoreResult) Note() string {
 		return AgentsNote("launched, not up yet", r.Agents, r.Resumes, r.AgentErr)
 	}
 	return AgentsNote("opened", r.Agents, r.Resumes, r.AgentErr)
+}
+
+// as is the named agent the recorded agent at i came back as, when it was
+// recorded with no name.
+func (r RestoreResult) as(i int) string {
+	if i < len(r.As) {
+		return r.As[i]
+	}
+	return ""
 }
 
 // Restored is every step of one restore, in the order it walked them.
@@ -78,7 +90,7 @@ func (c *Core) RestorePreview(s session.Session, r Report, projects []Project) R
 		res := RestoreResult{RestoreStep: step, dry: true}
 		if step.Action == RestoreLaunch {
 			if p, ok := projectNamed(projects, step.Project); ok {
-				res.Agents = c.Resumes(p, step.Target, step.Resumes)
+				res.Agents, res.As = c.wouldResume(p, step.Target, step.Resumes)
 			} else {
 				res.Action = RestoreNoProject
 			}
@@ -230,7 +242,7 @@ func stepLine(r RestoreResult) record.Line {
 		if i < len(r.Agents) {
 			outcome = r.Agents[i].String()
 		}
-		l.Agents = append(l.Agents, record.Outcome{Harness: a.Harness, Session: a.Session, Dir: a.Dir, Agent: a.Agent, Outcome: outcome})
+		l.Agents = append(l.Agents, record.Outcome{Harness: a.Harness, Session: a.Session, Dir: a.Dir, Agent: a.Agent, As: r.as(i), Outcome: outcome})
 	}
 	return l
 }
@@ -264,7 +276,7 @@ func (c *Core) restoreLaunch(ctx context.Context, p Project, step RestoreStep, r
 	ctx, cancel := context.WithTimeout(ctx, 2*BindWait)
 	defer cancel()
 	ref, res, err := c.activateWaiting(ctx, p, step.Target, step.Resumes, raise)
-	return RestoreResult{RestoreStep: step, Ref: ref, Agents: res.Agents, AgentErr: res.AgentErr, Err: err}
+	return RestoreResult{RestoreStep: step, Ref: ref, Agents: res.Agents, As: res.As, AgentErr: res.AgentErr, Err: err}
 }
 
 // ActivateWaiting is the whole run-or-raise for one target, and the one way
@@ -360,7 +372,7 @@ func logAgents(r RestoreResult) {
 			outcome = r.Agents[i].String()
 		}
 		slog.Info("restore agent", "project", r.Project, "target", r.Target, "dry_run", r.dry,
-			"harness", a.Harness, "agent", a.Agent, "session", a.Session, "dir", a.Dir, "outcome", outcome)
+			"harness", a.Harness, "agent", a.Agent, "as", r.as(i), "session", a.Session, "dir", a.Dir, "outcome", outcome)
 	}
 }
 
@@ -368,14 +380,22 @@ func logAgents(r RestoreResult) {
 // recorded: how many start on their conversation, how many start empty because
 // the directory they worked in is gone or their conversation cannot be resumed
 // here, and how many cannot be started at all, with tabErr for the ones whose
-// tab failed to open and the name of each named agent the project no longer
-// declares. resumes is what was recorded, parallel to agents. An agent
-// recorded with no conversation starts empty as it always would, and is not
-// worth a word.
+// tab failed to open, the name of each named agent the project no longer
+// declares, and each harness that no agent of the project runs. resumes is
+// what was recorded, parallel to agents. An agent recorded with no
+// conversation starts empty as it always would, and is not worth a word.
 func AgentsNote(verb string, agents []AgentOutcome, resumes []Resume, tabErr error) string {
 	n := map[AgentOutcome]int{}
-	var unknown []string
+	var unknown, harnesses []string
+	unrun := 0
 	for i, o := range agents {
+		if o == AgentUnknown && i < len(resumes) && resumes[i].Agent == "" {
+			unrun++
+			if !slices.Contains(harnesses, strconv.Quote(resumes[i].Harness)) {
+				harnesses = append(harnesses, strconv.Quote(resumes[i].Harness))
+			}
+			continue
+		}
 		n[o]++
 		if o == AgentUnknown && i < len(resumes) && !slices.Contains(unknown, strconv.Quote(resumes[i].Agent)) {
 			unknown = append(unknown, strconv.Quote(resumes[i].Agent))
@@ -403,6 +423,9 @@ func AgentsNote(verb string, agents []AgentOutcome, resumes []Resume, tabErr err
 			named = "the named agents "
 		}
 		note += fmt.Sprintf(", %s not restored: the project no longer declares %s%s", Count(n[AgentUnknown], "agent"), named, strings.Join(unknown, ", "))
+	}
+	if unrun > 0 {
+		note += fmt.Sprintf(", %s not restored: no agent of the project runs %s", Count(unrun, "agent"), strings.Join(harnesses, ", "))
 	}
 	if n[AgentInTab] > 0 {
 		note += fmt.Sprintf(", %s not resumed: it ran in a tab target", Count(n[AgentInTab], "agent"))

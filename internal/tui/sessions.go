@@ -748,6 +748,9 @@ func agentOp(th theme.Theme, r core.RestoreResult, i int) (op, reason string) {
 	case core.AgentResumed:
 		return startOp(th, tense("resume", "resumed")), ""
 	case core.AgentEmpty:
+		if r.Resumes[i].Session != "" {
+			return startOp(th, tense("start", "started")), "empty: it never got a prompt"
+		}
 		return startOp(th, tense("start", "started")), ""
 	case core.AgentDirGone:
 		return startOp(th, tense("start", "started")), "empty: its directory is gone"
@@ -760,6 +763,9 @@ func agentOp(th theme.Theme, r core.RestoreResult, i int) (op, reason string) {
 	case core.AgentDropped:
 		return skipOp(th, tense("skip", "skipped")), "no agent panel to start it in"
 	case core.AgentUnknown:
+		if r.Resumes[i].Agent == "" {
+			return skipOp(th, tense("skip", "skipped")), fmt.Sprintf("no agent of its project runs %q", r.Resumes[i].Harness)
+		}
 		return skipOp(th, tense("skip", "skipped")), fmt.Sprintf("its project no longer declares the agent %q", r.Resumes[i].Agent)
 	case core.AgentNotAdded:
 		if r.AgentErr != nil {

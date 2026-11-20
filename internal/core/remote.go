@@ -250,7 +250,7 @@ func (c *Core) askRemote(ctx context.Context, host string, links []Project) map[
 	}
 	start := time.Now()
 	views, err := c.survey(ctx, host, names)
-	logging.Poll("remote survey "+host, "remote survey", start, err, "host", host, "projects", len(names))
+	logging.PollAt("remote survey "+host, "remote survey", logging.SlowRemotePoll, start, err, "host", host, "projects", len(names))
 	if err != nil {
 		for _, p := range links {
 			out[p.Name] = remoteAnswer{link: *p.Remote, err: err, unreached: true}

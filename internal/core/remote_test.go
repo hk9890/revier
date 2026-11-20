@@ -11,6 +11,7 @@ import (
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -206,14 +207,32 @@ func TestASurveyLineNamesTheLinkedHostItWaitedFor(t *testing.T) {
 		return m
 	}
 
-	line := fields(core.SurveyLine(1, core.Report{}, c.AskRemotes(t.Context(), []core.Project{prepared(t, remoteProject("demo"))})))
+	line := fields(core.SurveyLine(1, core.Report{}, c.AskRemotes(t.Context(), []core.Project{prepared(t, remoteProject("demo"))}), 800*time.Millisecond))
 	asked, _ := line["asked"].([]string)
 	unanswered, _ := line["unanswered"].([]string)
-	if !slices.Equal(asked, []string{"buildbox"}) || len(unanswered) != 1 || !strings.Contains(unanswered[0], "no answer") {
-		t.Errorf("line = %v, want buildbox asked and its reason", line)
+	if !slices.Equal(asked, []string{"buildbox"}) || len(unanswered) != 1 || !strings.Contains(unanswered[0], "no answer") || line["local_ms"] != int64(800) {
+		t.Errorf("line = %v, want buildbox asked, its reason, and local_ms 800", line)
 	}
-	if line := fields(core.SurveyLine(1, core.Report{}, c.AskRemotes(t.Context(), nil))); line["asked"] != nil || line["unanswered"] != nil {
-		t.Errorf("line of a survey that asked no host = %v, want no asked and no unanswered", line)
+	if line := fields(core.SurveyLine(1, core.Report{}, c.AskRemotes(t.Context(), nil), 0)); line["asked"] != nil || line["unanswered"] != nil || line["local_ms"] != nil {
+		t.Errorf("line of a survey that asked no host = %v, want no asked, unanswered or local_ms", line)
+	}
+}
+
+// A survey that waited for a linked host holds its ssh round trip, so it is
+// slow at the remote survey's time. One of this machine alone stays at the
+// local time, and so does one whose listing of this machine was slow by
+// itself: a link does not hide a slow kitty ls.
+func TestASurveyThatWaitedForALinkedHostIsSlowAtTheRemoteTime(t *testing.T) {
+	c := &core.Core{Runtime: hosttest.NewRuntime("kitty"), Remotes: map[string]revier.Remote{"buildbox": hosttest.NewRemote("buildbox")}}
+	linked := c.AskRemotes(t.Context(), []core.Project{prepared(t, remoteProject("demo"))})
+	if got := core.SlowSurvey(linked, 100*time.Millisecond); got != logging.SlowRemotePoll {
+		t.Errorf("slow at %v after a linked host, want %v", got, logging.SlowRemotePoll)
+	}
+	if got := core.SlowSurvey(linked, 800*time.Millisecond); got != logging.SlowPoll {
+		t.Errorf("slow at %v after a linked host and an 800 ms local listing, want %v", got, logging.SlowPoll)
+	}
+	if got := core.SlowSurvey(c.AskRemotes(t.Context(), nil), 0); got != logging.SlowPoll {
+		t.Errorf("slow at %v with no linked host, want %v", got, logging.SlowPoll)
 	}
 }
 

@@ -124,7 +124,12 @@ command = ["sh", "-lc", "my-agent"]
 When the directory the agent worked in is gone, the agent starts fresh in the
 project. When Claude Code no longer has the conversation, the agent starts
 fresh in its directory: an agent that never got a prompt has none, and Claude
-Code deletes old ones after `cleanupPeriodDays`, 30 days by default.
+Code deletes old ones after `cleanupPeriodDays`, 30 days by default. A save
+by hand, at shutdown or at a project close notes an agent on this machine that
+never got a prompt, so its restore starts it fresh and does not say that its
+conversation is gone. A save of what revier last saw
+before an unclean end, and an agent on a linked host, carry no such note. When that agent got its first
+prompt after the save, the restore resumes it.
 
 ## Let an agent configure revier
 

@@ -635,6 +635,9 @@ type Result struct {
 	ComingUp bool
 	Before   []revier.Instance
 	Agents   []AgentOutcome
+	// As is, parallel to Agents, the named agent each agent recorded with no
+	// name came back as (decisions.md D193): empty for every other agent.
+	As []string
 	// AgentErr is why an agent tab failed to open in a workspace that did
 	// open: the launch succeeded, and the agents it names are AgentNotAdded.
 	AgentErr error
@@ -764,8 +767,9 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 				return res, fmt.Errorf("%s: %w", host.Name(), err)
 			}
 		}
-		added, err := c.addAgents(ctx, host, p, layout, ref, extra)
+		added, as, err := c.addAgents(ctx, host, p, layout, ref, extra)
 		res.Agents, res.AgentErr = append(agents, added...), err
+		res.As = append(make([]string, len(agents)), as...)
 		// A view that opens its own windows draws the instance once every
 		// tab of it runs (decisions.md D180).
 		if _, err := c.show(ctx, ref, true); err != nil {
@@ -1362,8 +1366,9 @@ func (r Report) HostErr() error { return hostErrs(r.Failed).err() }
 func (c *Core) Survey(ctx context.Context, projects []Project) (r Report, err error) {
 	start := time.Now()
 	var answers RemoteAnswers
+	var local time.Duration
 	defer func() {
-		logging.Poll("survey", "survey", start, err, surveyLine(len(projects), r, answers)...)
+		logging.PollAt("survey", "survey", slowSurvey(answers, local), start, err, surveyLine(len(projects), r, answers, local)...)
 	}()
 	// The remote hosts are asked while the local ones are listed and the
 	// local agents probed: a round trip to another machine is the slow part,
@@ -1372,17 +1377,30 @@ func (c *Core) Survey(ctx context.Context, projects []Project) (r Report, err er
 	go func() { remote <- c.AskRemotes(ctx, projects) }()
 	st := c.state()
 	r = c.listed(ctx, projects, st, st.Attached)
+	local = time.Since(start)
 	answers = <-remote
 	c.lay(&r, answers)
 	return r, nil
 }
 
-// surveyLine is what the line of a survey says: asked and unanswered only
-// when it waited for a linked host, so their presence says it did.
-func surveyLine(projects int, r Report, answers RemoteAnswers) []any {
+// slowSurvey is the time at which a survey is slow, given how long its
+// listing of this machine took. One that waited for a linked host holds that
+// host's ssh round trip, as its remote survey does, so it is slow at the same
+// time, unless the listing of this machine alone was slow already.
+func slowSurvey(answers RemoteAnswers, local time.Duration) time.Duration {
+	if len(answers.hosts()) > 0 && local < logging.SlowPoll {
+		return logging.SlowRemotePoll
+	}
+	return logging.SlowPoll
+}
+
+// surveyLine is what the line of a survey says: asked, unanswered and
+// local_ms, the time of the listing of this machine, only when it waited for
+// a linked host, so their presence says it did.
+func surveyLine(projects int, r Report, answers RemoteAnswers, local time.Duration) []any {
 	line := []any{"projects", projects, "hosts", r.Hosts, "instances", len(r.Instances)}
 	if asked := answers.hosts(); len(asked) > 0 {
-		line = append(line, "asked", asked, "unanswered", answers.failures())
+		line = append(line, "asked", asked, "unanswered", answers.failures(), "local_ms", local.Milliseconds())
 	}
 	return line
 }
