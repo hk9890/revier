@@ -184,7 +184,7 @@ func (c *Core) agentRunning(p Project, layout []revier.PanelSpec, r Resume) (Res
 		return r, true
 	}
 	harness := c.harnessOf(agent)
-	if runsHarness(harness, agent.Agent, r.Harness) {
+	if c.runsHarness(agent, agent.Agent, r.Harness) {
 		return r, true
 	}
 	for _, named := range p.Agents {
@@ -193,7 +193,7 @@ func (c *Core) agentRunning(p Project, layout []revier.PanelSpec, r Resume) (Res
 		if harness == "" && named.Name != r.Harness {
 			continue
 		}
-		if runsHarness(c.harnessOf(spec), named.Name, r.Harness) {
+		if c.runsHarness(spec, named.Name, r.Harness) {
 			r.Agent = named.Name
 			return r, true
 		}
@@ -201,13 +201,34 @@ func (c *Core) agentRunning(p Project, layout []revier.PanelSpec, r Resume) (Res
 	return r, harness == ""
 }
 
-// runsHarness reports whether an agent of that name, which a probe says runs
-// harness, runs the recorded one. With no probe to say, the name says.
-func runsHarness(harness, name, recorded string) bool {
-	if harness == "" {
+// chosenAs is the named agent each agent recorded with no name comes back
+// as, parallel to recorded: empty for one that keeps the name it was recorded
+// with, or no name.
+func chosenAs(recorded, chosen []Resume) []string {
+	as := make([]string, len(recorded))
+	for n, r := range recorded {
+		if r.Agent == "" {
+			as[n] = chosen[n].Agent
+		}
+	}
+	return as
+}
+
+// runsHarness reports whether an agent of that name, whose panel is spec,
+// runs the recorded harness. With no probe to say, the name says. A save
+// records the name of a probe that can resume, but the harness that any other
+// probe reported, which can differ from its name: so a harness that no probe
+// here is named is one that any probe that cannot resume can run.
+func (c *Core) runsHarness(spec revier.PanelSpec, name, recorded string) bool {
+	probe, ok := c.probeFor(revier.Panel{Kind: spec.Kind, Title: spec.Title, Command: spec.Command})
+	if !ok {
 		return name == recorded
 	}
-	return harness == recorded
+	if probe.Name() == recorded {
+		return true
+	}
+	_, resumes := probe.(revier.Resumable)
+	return !resumes && !slices.ContainsFunc(c.Probes, func(p revier.AgentProbe) bool { return p.Name() == recorded })
 }
 
 // addAgents opens an agent tab in a workspace that has just opened, for each
@@ -218,12 +239,14 @@ func runsHarness(harness, name, recorded string) bool {
 // the view draws it. A tab that fails stops the rest, which are named as not added, and
 // the error is returned beside the outcomes: the workspace is open, so it is
 // not the launch's failure. A failed OpenTab leaves no tab behind, so the
-// agent it names is not running anywhere.
-func (c *Core) addAgents(ctx context.Context, host revier.Host, p Project, layout []revier.PanelSpec, ref revier.TargetRef, resumes []Resume) ([]AgentOutcome, error) {
-	tabs, outcomes, resumes := c.agentTabs(host, p, layout, resumes)
+// agent it names is not running anywhere. as is the named agent each agent
+// recorded with no name came back as, as chosenAs says.
+func (c *Core) addAgents(ctx context.Context, host revier.Host, p Project, layout []revier.PanelSpec, ref revier.TargetRef, recorded []Resume) ([]AgentOutcome, []string, error) {
+	tabs, outcomes, resumes := c.agentTabs(host, p, layout, recorded)
+	as := chosenAs(recorded, resumes)
 	opener, ok := c.launchOpener(host)
 	if !ok {
-		return outcomes, nil
+		return outcomes, as, nil
 	}
 	var current revier.PanelID
 	opened := false
@@ -235,7 +258,7 @@ func (c *Core) addAgents(ctx context.Context, host revier.Host, p Project, layou
 		if !opened {
 			cur, err := opener.FocusedPanel(ctx, ref)
 			if err != nil {
-				return notAdded(outcomes, n), fmt.Errorf("%s: agent tab: %w", host.Name(), err)
+				return notAdded(outcomes, n), as, fmt.Errorf("%s: agent tab: %w", host.Name(), err)
 			}
 			current, opened = cur, true
 		}
@@ -246,10 +269,10 @@ func (c *Core) addAgents(ctx context.Context, host revier.Host, p Project, layou
 	}
 	if opened && current != "" {
 		if err := opener.FocusPanel(ctx, ref, current); err != nil {
-			return outcomes, errors.Join(failed, fmt.Errorf("%s: focus the workspace after its agent tabs: %w", host.Name(), err))
+			return outcomes, as, errors.Join(failed, fmt.Errorf("%s: focus the workspace after its agent tabs: %w", host.Name(), err))
 		}
 	}
-	return outcomes, failed
+	return outcomes, as, failed
 }
 
 // notAdded names the agent at n, and every later one that would have had a

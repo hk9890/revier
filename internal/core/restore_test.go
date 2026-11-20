@@ -256,3 +256,30 @@ func TestRestoreDoesNotLaunchACurrentHomeItDidNotRecord(t *testing.T) {
 		t.Errorf("opened = %+v, want notes alone: home was not open at the save", rt.Opened)
 	}
 }
+
+// An agent recorded with no name that a restore brings back as a named agent
+// is said with the name it came back as, beside the one it was recorded
+// with: the state record, the log and a dry run name it.
+func TestARestoreSaysTheNamedAgentAnAgentWithNoNameCameBackAs(t *testing.T) {
+	probes := []revier.AgentProbe{resumable(), &hosttest.FakeProbe{Harness: "dtop", Marker: "dtop"}}
+	projects := []core.Project{wrapped(t)}
+	s := session.Session{ID: "2026-11-20T10-00-00", Projects: []session.Project{{Name: "revier", Targets: []session.Target{
+		{Name: "home", Agents: []session.Agent{{Harness: "claude"}, {Harness: "dtop"}}},
+	}}}}
+
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Probes: probes}
+	report := survey(t, c, projects, nil)
+	if preview := c.RestorePreview(s, report, projects); len(preview) != 1 || !slices.Equal(preview[0].As, []string{"", "dtop"}) {
+		t.Errorf("preview = %+v, want the second agent as dtop", preview)
+	}
+
+	l := &ledger{}
+	c.Ledger = l
+	if _, back := c.Restore(t.Context(), s, report, projects, core.RestoreOpts{}); back != nil {
+		t.Fatal(back)
+	}
+	want := []record.Outcome{{Harness: "claude", Outcome: "empty"}, {Harness: "dtop", As: "dtop", Outcome: "empty"}}
+	if steps := l.noted(record.KindRestoreStep); len(steps) != 1 || !slices.Equal(steps[0].Agents, want) {
+		t.Errorf("restore steps = %+v, want %+v", steps, want)
+	}
+}

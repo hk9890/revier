@@ -22,6 +22,9 @@ type RestoreResult struct {
 	RestoreStep
 	Ref    revier.TargetRef
 	Agents []AgentOutcome
+	// As is, parallel to Agents, the named agent each agent recorded with no
+	// name came back as, or would: empty for every other agent.
+	As []string
 	// AgentErr is why an agent tab failed to open in a workspace that did.
 	AgentErr error
 	Err      error
@@ -48,6 +51,15 @@ func (r RestoreResult) Note() string {
 		return AgentsNote("launched, not up yet", r.Agents, r.Resumes, r.AgentErr)
 	}
 	return AgentsNote("opened", r.Agents, r.Resumes, r.AgentErr)
+}
+
+// as is the named agent the recorded agent at i came back as, when it was
+// recorded with no name.
+func (r RestoreResult) as(i int) string {
+	if i < len(r.As) {
+		return r.As[i]
+	}
+	return ""
 }
 
 // Restored is every step of one restore, in the order it walked them.
@@ -78,7 +90,7 @@ func (c *Core) RestorePreview(s session.Session, r Report, projects []Project) R
 		res := RestoreResult{RestoreStep: step, dry: true}
 		if step.Action == RestoreLaunch {
 			if p, ok := projectNamed(projects, step.Project); ok {
-				res.Agents = c.Resumes(p, step.Target, step.Resumes)
+				res.Agents, res.As = c.wouldResume(p, step.Target, step.Resumes)
 			} else {
 				res.Action = RestoreNoProject
 			}
@@ -230,7 +242,7 @@ func stepLine(r RestoreResult) record.Line {
 		if i < len(r.Agents) {
 			outcome = r.Agents[i].String()
 		}
-		l.Agents = append(l.Agents, record.Outcome{Harness: a.Harness, Session: a.Session, Dir: a.Dir, Agent: a.Agent, Outcome: outcome})
+		l.Agents = append(l.Agents, record.Outcome{Harness: a.Harness, Session: a.Session, Dir: a.Dir, Agent: a.Agent, As: r.as(i), Outcome: outcome})
 	}
 	return l
 }
@@ -264,7 +276,7 @@ func (c *Core) restoreLaunch(ctx context.Context, p Project, step RestoreStep, r
 	ctx, cancel := context.WithTimeout(ctx, 2*BindWait)
 	defer cancel()
 	ref, res, err := c.activateWaiting(ctx, p, step.Target, step.Resumes, raise)
-	return RestoreResult{RestoreStep: step, Ref: ref, Agents: res.Agents, AgentErr: res.AgentErr, Err: err}
+	return RestoreResult{RestoreStep: step, Ref: ref, Agents: res.Agents, As: res.As, AgentErr: res.AgentErr, Err: err}
 }
 
 // ActivateWaiting is the whole run-or-raise for one target, and the one way
@@ -360,7 +372,7 @@ func logAgents(r RestoreResult) {
 			outcome = r.Agents[i].String()
 		}
 		slog.Info("restore agent", "project", r.Project, "target", r.Target, "dry_run", r.dry,
-			"harness", a.Harness, "agent", a.Agent, "session", a.Session, "dir", a.Dir, "outcome", outcome)
+			"harness", a.Harness, "agent", a.Agent, "as", r.as(i), "session", a.Session, "dir", a.Dir, "outcome", outcome)
 	}
 }
 

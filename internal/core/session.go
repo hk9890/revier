@@ -618,20 +618,27 @@ func resumesOf(t session.Target) []Resume {
 // has no agent panel, and every agent is past its layout. A target the launch
 // refuses starts no agent, and has no outcome.
 func (c *Core) Resumes(p Project, name revier.TargetName, resumes []Resume) []AgentOutcome {
+	outcomes, _ := c.wouldResume(p, name, resumes)
+	return outcomes
+}
+
+// wouldResume is Resumes, with the named agent each agent recorded with no
+// name would come back as, parallel to the outcomes, as Result.As is.
+func (c *Core) wouldResume(p Project, name revier.TargetName, resumes []Resume) ([]AgentOutcome, []string) {
 	i, ok := p.index(name)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	if p.isTab(i) {
-		return inTab(resumes)
+		return inTab(resumes), nil
 	}
 	host, real, _, err := c.resolveAt(p, i)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	opener, err := c.tabsHost(name, real, host)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	link := p.Remote != nil
 	var outcomes []AgentOutcome
@@ -639,16 +646,16 @@ func (c *Core) Resumes(p Project, name revier.TargetName, resumes []Resume) []Ag
 	if opener != nil {
 		tabs, err := c.opening(p, name, real)
 		if err != nil {
-			return nil
+			return nil, nil
 		}
 		_, outcomes, extra = c.resumingTabs(tabs, resumes, link)
 	}
 	layout, err := c.layout(p, real)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
-	_, added, _ := c.agentTabs(host, p, layout, extra)
-	return append(outcomes, added...)
+	_, added, chosen := c.agentTabs(host, p, layout, extra)
+	return append(outcomes, added...), append(make([]string, len(outcomes)), chosenAs(extra, chosen)...)
 }
 
 // layAgents lays recorded agents over a layout, in order, and says what each

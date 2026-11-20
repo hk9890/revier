@@ -1126,11 +1126,12 @@ windows), the popup itself (its overlay rule minimizes it when the focus moves).
 Extends D146. A save names an agent only by its tab's mark, so a program started
 by hand in a panel, such as dtop typed into the shell, is recorded by harness
 alone; a restore gave it the default agent's tab, and a dtop came back as claude.
-Now it comes back as the default agent when that runs its harness, else as the
-first named agent that does, and its tab gets that name's mark. Where no probe
-reads a command, a wrapper, the agent whose name is the harness runs it. A
-wrapper default can run any harness, so only that name match replaces it; with
-none it is trusted. Any other default is dropped and said, as an unknown name is.
+Now one past the layout's agent panels comes back as the default agent when
+that runs its harness, else as the first named agent that does, and its tab
+gets that name's mark. Where no probe reads a command, a wrapper, the agent
+whose name is the harness runs it. A wrapper default can run any harness, so
+only that name match replaces it; with none it is trusted. Any other default
+is dropped and said, as an unknown name is.
 
 ### D194 — a save marks a conversation its harness never filed, and keeps its id
 

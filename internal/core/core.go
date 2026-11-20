@@ -635,6 +635,9 @@ type Result struct {
 	ComingUp bool
 	Before   []revier.Instance
 	Agents   []AgentOutcome
+	// As is, parallel to Agents, the named agent each agent recorded with no
+	// name came back as (decisions.md D193): empty for every other agent.
+	As []string
 	// AgentErr is why an agent tab failed to open in a workspace that did
 	// open: the launch succeeded, and the agents it names are AgentNotAdded.
 	AgentErr error
@@ -764,8 +767,9 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 				return res, fmt.Errorf("%s: %w", host.Name(), err)
 			}
 		}
-		added, err := c.addAgents(ctx, host, p, layout, ref, extra)
+		added, as, err := c.addAgents(ctx, host, p, layout, ref, extra)
 		res.Agents, res.AgentErr = append(agents, added...), err
+		res.As = append(make([]string, len(agents)), as...)
 		// A view that opens its own windows draws the instance once every
 		// tab of it runs (decisions.md D180).
 		if _, err := c.show(ctx, ref, true); err != nil {

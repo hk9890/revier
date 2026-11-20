@@ -960,3 +960,41 @@ func TestASaveMarksAnAgentNeverPromptedUnfiled(t *testing.T) {
 		})
 	}
 }
+
+// An exec probe can report a harness under another name than its own, and a
+// save records the harness it reported. An agent so recorded with no name
+// comes back as the default agent that probe reads: the default agent's
+// probe is not named after that harness, but it is the one that reported it.
+func TestRestoreKeepsTheDefaultForAHarnessItsProbeReportedUnderAnotherName(t *testing.T) {
+	proj := agentProject()
+	proj.Targets[3].Runtime.Panels[1] = revier.PanelSpec{Kind: revier.PanelAgent, Title: "aider", Command: []string{"aider"}}
+	probes := func() []revier.AgentProbe {
+		return []revier.AgentProbe{resumable(), &hosttest.FakeProbe{Harness: "aider", Marker: "aider", State: revier.AgentState{Harness: "aider-chat"}}}
+	}
+	aider := revier.Panel{Kind: revier.PanelTool, Title: "aider", Vars: map[string]string{}}
+	first, second := aider, aider
+	first.ID, second.ID = "1", "2"
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:revier", "kitty", first, second)
+	saver := &core.Core{Runtime: rt, View: rt, Probes: probes()}
+	report, err := saver.Survey(t.Context(), []core.Project{prepared(t, proj)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _ := saver.Session(t.Context(), report)
+	if got, want := s.Projects[0].Targets[0].Agents, []session.Agent{{Harness: "aider-chat"}, {Harness: "aider-chat"}}; !slices.Equal(got, want) {
+		t.Fatalf("agents = %+v, want %+v", got, want)
+	}
+	plan := saver.RestorePlan(s, report)
+
+	restoring := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: restoring, View: restoring, Probes: probes()}
+	want := []core.AgentOutcome{core.AgentEmpty, core.AgentEmpty}
+	res, err := pressResuming(t.Context(), c, prepared(t, proj), "home", plan[0].Resumes)
+	if err != nil || !slices.Equal(res.Agents, want) {
+		t.Fatalf("press = %v, %v; want %v", res.Agents, err, want)
+	}
+	if len(restoring.Tabs) != 1 || restoring.Tabs[0].Real.Panels[0].Title != "aider" || len(restoring.Tabs[0].Vars) != 0 {
+		t.Errorf("tabs = %+v, want the default agent's tab, unmarked", restoring.Tabs)
+	}
+}
