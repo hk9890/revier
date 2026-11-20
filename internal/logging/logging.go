@@ -29,6 +29,12 @@ const Keep = 14
 // poll is the normal heartbeat, and a line a second would bury the operations.
 const SlowPoll = 500 * time.Millisecond
 
+// SlowRemotePoll is SlowPoll for the survey of a linked host. Its time holds
+// the ssh round trip and the host's own revier list, about 500 ms on a healthy
+// host, so at SlowPoll it would write a line almost every minute and hide the
+// survey that is slow.
+const SlowRemotePoll = time.Second
+
 const (
 	prefix = "revier-"
 	suffix = ".log"
@@ -81,7 +87,13 @@ const SlowEvery = time.Minute
 // success writes nothing, a slow one writes at most once per SlowEvery, and a
 // failure is Repeat's.
 func Poll(key, op string, start time.Time, err error, attrs ...any) {
-	recurring.poll(key, op, time.Since(start), err, attrs)
+	recurring.poll(key, op, SlowPoll, time.Since(start), err, attrs)
+}
+
+// PollRemote is Poll for the survey of a linked host, which is slow at
+// SlowRemotePoll.
+func PollRemote(key, op string, start time.Time, err error, attrs ...any) {
+	recurring.poll(key, op, SlowRemotePoll, time.Since(start), err, attrs)
 }
 
 // Repeat logs the failure of something that recurs once, at Warn, and again
@@ -111,10 +123,10 @@ type failure struct {
 	logged   map[string]bool // every error the run has logged
 }
 
-func (r *repeats) poll(key, op string, took time.Duration, err error, attrs []any) {
+func (r *repeats) poll(key, op string, slow, took time.Duration, err error, attrs []any) {
 	attrs = append(attrs, "duration_ms", took.Milliseconds())
 	r.repeat(key, op, err, attrs)
-	if err != nil || took < SlowPoll {
+	if err != nil || took < slow {
 		return
 	}
 	r.mu.Lock()

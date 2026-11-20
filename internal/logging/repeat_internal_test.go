@@ -115,14 +115,32 @@ func TestASlowPollIsLoggedAtMostOncePerInterval(t *testing.T) {
 	now := time.Date(2026, 9, 14, 9, 0, 0, 0, time.Local)
 	r, buf := capture(func() time.Time { return now })
 	for range 30 {
-		r.poll("survey", "survey", 2*SlowPoll, nil, nil)
-		r.poll("survey", "survey", SlowPoll/2, nil, nil)
+		r.poll("survey", "survey", SlowPoll, 2*SlowPoll, nil, nil)
+		r.poll("survey", "survey", SlowPoll, SlowPoll/2, nil, nil)
 		now = now.Add(time.Second)
 	}
 	now = now.Add(SlowEvery)
-	r.poll("survey", "survey", 2*SlowPoll, nil, nil)
+	r.poll("survey", "survey", SlowPoll, 2*SlowPoll, nil, nil)
 
 	if n := len(lines(t, buf)); n != 2 {
 		t.Errorf("%d lines, want 2:\n%s", n, buf)
+	}
+}
+
+// A remote survey holds an ssh round trip, so it is slow at SlowRemotePoll:
+// one of 600 ms writes no line and one of 1.1 s writes one, while a local
+// poll of 600 ms still writes.
+func TestARemoteSurveyIsSlowAtItsOwnThreshold(t *testing.T) {
+	r, buf := capture(time.Now)
+	r.poll("remote survey a", "remote survey", SlowRemotePoll, 600*time.Millisecond, nil, nil)
+	if n := len(lines(t, buf)); n != 0 {
+		t.Fatalf("a 600 ms remote survey wrote %d lines, want 0:\n%s", n, buf)
+	}
+	r.poll("remote survey a", "remote survey", SlowRemotePoll, 1100*time.Millisecond, nil, nil)
+	r.poll("survey", "survey", SlowPoll, 600*time.Millisecond, nil, nil)
+
+	got := lines(t, buf)
+	if len(got) != 2 || got[0]["msg"] != "remote survey" || got[0]["slow"] != true || got[1]["msg"] != "survey" || got[1]["slow"] != true {
+		t.Errorf("lines = %v, want one slow remote survey, then one slow survey", got)
 	}
 }
