@@ -1363,7 +1363,7 @@ func (c *Core) Survey(ctx context.Context, projects []Project) (r Report, err er
 	start := time.Now()
 	var answers RemoteAnswers
 	defer func() {
-		logging.Poll("survey", "survey", start, err, surveyLine(len(projects), r, answers)...)
+		logging.PollAt("survey", "survey", slowSurvey(answers), start, err, surveyLine(len(projects), r, answers)...)
 	}()
 	// The remote hosts are asked while the local ones are listed and the
 	// local agents probed: a round trip to another machine is the slow part,
@@ -1375,6 +1375,16 @@ func (c *Core) Survey(ctx context.Context, projects []Project) (r Report, err er
 	answers = <-remote
 	c.lay(&r, answers)
 	return r, nil
+}
+
+// slowSurvey is the time at which a survey is slow. One that waited for a
+// linked host holds that host's ssh round trip, as its remote survey does, so
+// it is slow at the same time.
+func slowSurvey(answers RemoteAnswers) time.Duration {
+	if len(answers.hosts()) > 0 {
+		return logging.SlowRemotePoll
+	}
+	return logging.SlowPoll
 }
 
 // surveyLine is what the line of a survey says: asked and unanswered only

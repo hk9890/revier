@@ -11,6 +11,7 @@ import (
 
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
+	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -214,6 +215,19 @@ func TestASurveyLineNamesTheLinkedHostItWaitedFor(t *testing.T) {
 	}
 	if line := fields(core.SurveyLine(1, core.Report{}, c.AskRemotes(t.Context(), nil))); line["asked"] != nil || line["unanswered"] != nil {
 		t.Errorf("line of a survey that asked no host = %v, want no asked and no unanswered", line)
+	}
+}
+
+// A survey that waited for a linked host holds its ssh round trip, so it is
+// slow at the remote survey's time. One of this machine alone stays at the
+// local time.
+func TestASurveyThatWaitedForALinkedHostIsSlowAtTheRemoteTime(t *testing.T) {
+	c := &core.Core{Runtime: hosttest.NewRuntime("kitty"), Remotes: map[string]revier.Remote{"buildbox": hosttest.NewRemote("buildbox")}}
+	if got := core.SlowSurvey(c.AskRemotes(t.Context(), []core.Project{prepared(t, remoteProject("demo"))})); got != logging.SlowRemotePoll {
+		t.Errorf("slow at %v after a linked host, want %v", got, logging.SlowRemotePoll)
+	}
+	if got := core.SlowSurvey(c.AskRemotes(t.Context(), nil)); got != logging.SlowPoll {
+		t.Errorf("slow at %v with no linked host, want %v", got, logging.SlowPoll)
 	}
 }
 
