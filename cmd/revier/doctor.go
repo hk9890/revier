@@ -13,6 +13,7 @@ import (
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/fsutil"
+	"github.com/hk9890/revier/internal/shell"
 	"github.com/hk9890/revier/internal/userunit"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -275,6 +276,9 @@ func trimPath(line string) string {
 // which is what every command printed before this one existed.
 func advise(msg string) string {
 	switch {
+	case strings.Contains(msg, `contains ":", which separates`),
+		strings.Contains(msg, "contains whitespace or a control character"):
+		return renameFix(msg)
 	case strings.Contains(msg, "renders to an empty argument"):
 		return "give the project the field the template reads, or drop the argument from the target"
 	case strings.Contains(msg, "no target is marked home"):
@@ -313,6 +317,19 @@ func advise(msg string) string {
 		return "the file is not valid TOML; the message names the line"
 	}
 	return ""
+}
+
+// renameFix is the rename that answers a refused project name, with the name
+// taken from the message and quoted so that it copies into a shell as one
+// word. The new name is the user's to choose.
+func renameFix(msg string) string {
+	_, rest, _ := strings.Cut(msg, "project name ")
+	quoted, err := strconv.QuotedPrefix(rest)
+	if err != nil {
+		return ""
+	}
+	name, _ := strconv.Unquote(quoted)
+	return "rename the project: revier rename " + shell.Quote(name) + " <new name>"
 }
 
 // problemsFound is a doctor run that found files with problems. It ends the

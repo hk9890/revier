@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -381,6 +382,30 @@ func TestDoctorTellsATypeMismatchFromASyntaxError(t *testing.T) {
 	}
 	if !strings.Contains(ofSyntax, "fix: the file is not valid TOML") {
 		t.Errorf("syntax.toml should keep the TOML advice:\n%s", out.String())
+	}
+}
+
+// A project name that is refused is fixed by a rename, and the fix names the
+// project so that it copies into a shell as one word.
+func TestDoctorAdvisesARenameForARefusedName(t *testing.T) {
+	doctorRoot(t, map[string]string{
+		"a:b.toml":        soundAt("/tmp/ab"),
+		"with space.toml": soundAt("/tmp/withspace"),
+	})
+
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); err != (problemsFound{files: 2}) {
+		t.Fatalf("err = %v, want two files with problems", err)
+	}
+	lines := strings.Split(out.String(), "\n")
+	for problem, fix := range map[string]string{
+		`project name "a:b" contains ":"`:                                      "fix: rename the project: revier rename a:b <new name>",
+		`project name "with space" contains whitespace or a control character`: "fix: rename the project: revier rename 'with space' <new name>",
+	} {
+		i := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, problem) })
+		if i < 0 || i+1 == len(lines) || strings.TrimSpace(lines[i+1]) != fix {
+			t.Errorf("report should carry %q under %q:\n%s", fix, problem, out.String())
+		}
 	}
 }
 
