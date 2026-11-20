@@ -25,7 +25,7 @@ territory. revier is how you walk it.
 | **Panel** | One terminal of a runtime target: an agent, a shell, a tool |
 | **Tab** | The panels of one instance that share a tab mark. The runtime keeps the mark, so a view that opens again draws the same tabs (D179) |
 | **Agent** | A program an agent panel runs. The layout's first agent panel is the project's default agent; a named agent is declared once and opened by its name (D145) |
-| **Agent state** | What an agent panel is doing: idle, running, waiting for you, or unknown (D57) |
+| **Agent state** | What an agent panel is doing: idle, running, waiting for you, or unknown |
 | **Session** | A recorded set: which projects were open, which of their targets, and each agent's conversation, directory and named agent (D46, D146) |
 
 A target is reached one way: **run-or-raise it, revier's or its command's; a
@@ -116,7 +116,7 @@ it.
 
 The popup is the surface in a window revier places and run-or-raises (D76),
 sized by the window host's rules before it is drawn (D191).
-Leaving it hides it, and the next press raises it as the user left it (D86, D169). A cold start on
+Leaving it hides it, and the next press raises it as Esc left it (D86, D169). A cold start on
 every press — a terminal, the TUI, and a first survey of every linked host —
 is too slow for the one keystroke the product promises. A full shutdown is the
 exception: it quits the popup, because nothing is left to raise it over, and
@@ -124,8 +124,8 @@ the next press is a cold start that offers the restore (D141).
 
 A shutdown saves the session first, and refuses while an agent works or waits
 for an answer (D78). The guard sits in the close path, so every way to close
-passes it (D99). Nothing is killed; a window an application keeps open stays
-open.
+passes it (D99). Nothing is killed, except under hc (D173); a window an
+application keeps open stays open.
 
 A full shutdown is remembered until anything opens again (D141). The surface
 quits after it, and its next start opens on the restore of what it closed, or

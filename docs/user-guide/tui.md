@@ -98,7 +98,8 @@ says in the footer when it is complete.
 
 A restore ends on the project list, with the cursor on the project the
 session was left on. The footer names what did not open, or how many targets
-a cancel did not reach.
+a cancel did not reach. When the restore ends, failed or cancelled too, the
+TUI brings its own window to the front once.
 
 Closing a whole project saves the session first. You cannot rename a project
 while something in it runs: close it first.
@@ -214,6 +215,8 @@ start does not show the dialog. Which full shutdowns are remembered is in
 
 The next start of the TUI, or of the popup, opens on a dialog:
 `revier was shut down at 18:30.` The pane shows what the saved session holds.
+A TUI left open while `revier shutdown` runs elsewhere shows the dialog at its
+next refresh, on the project list with no query.
 
 - **Restore this session** restores the session the shutdown saved. The
   sessions screen shows each step, then the project list opens.
@@ -233,7 +236,9 @@ open as a `last seen` session, if something of it is not open now. It then
 opens on a dialog: `revier ended without a shutdown; last changed 18:30.`
 If you already typed a query or opened a screen, the dialog waits until you
 are back on the plain project list. The pane shows what that session holds.
-The choices are those of the dialog after a full shutdown.
+The choices are those of the dialog after a full shutdown. A restore or save
+from the sessions screen stops the dialog, and a later shutdown shows its own
+dialog in its place.
 The dialog stays until you choose, and shows once: a later start does not
 offer the session again. See
 [Save and restore sessions](projects.md#save-and-restore-sessions).

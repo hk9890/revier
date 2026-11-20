@@ -34,8 +34,9 @@ revier uses GNOME when `XDG_CURRENT_DESKTOP` names GNOME (or is not set) and
 ## The popup's window
 
 `revier setup install` writes three rules for the popup's window into a file
-of its own, `~/.config/gnome-window-control/rules.d/revier.json`. It never
-edits your `rules.json`. The rules set the popup's size by the width of the
+of its own, `~/.config/gnome-window-control/rules.d/revier.json`. It edits
+your `rules.json` only to take out the rules an older revier wrote there, and
+prints each one. The rules set the popup's size by the width of the
 monitor it opens on:
 
 | Monitor width | Popup |

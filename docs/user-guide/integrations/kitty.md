@@ -109,7 +109,8 @@ setup status` names them as `shadowed by kitty.conf:<line>`.
 - `revier open --attach` needs hc.
 - A window you opened yourself in a kitty of your own is no workspace until
   you run `revier attach` in it. revier reads its agents only when it is the
-  one unnamed window of its kitty process.
+  one unnamed window of its kitty process. In an OS window you opened in
+  revier's kitty, `revier attach` reads no agents.
 
 **`revier attach` reads no agents in your kitty.** Your kitty
 has no control socket. Do step 1 of [Set it up](#set-it-up) and restart
