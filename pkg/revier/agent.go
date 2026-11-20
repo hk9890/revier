@@ -156,8 +156,10 @@ type AgentState struct {
 	// Session is the conversation the agent holds, empty when the harness
 	// does not say or the probe would pay a process to learn it: a survey
 	// reads it every refresh. It is what the event file records an agent by
-	// (decisions.md D112); a save asks Resumable instead, which answers for
-	// that moment.
+	// (decisions.md D112). A save on this machine asks Resumable instead,
+	// which answers for that moment. A save on another machine records it
+	// as the survey that answered the save read it, and asks Resumable only
+	// about an agent the survey read none for.
 	Session SessionID `json:"session,omitempty"`
 
 	// Name is what the harness calls the agent, empty when it names none:

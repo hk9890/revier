@@ -407,6 +407,62 @@ func TestNameConversationsFillsInWhatEachAgentHolds(t *testing.T) {
 	}
 }
 
+// The survey already read each agent's conversation: naming them asks the
+// probe nothing, so a poll does not pay the probe's process twice. The
+// directory the survey left out for being the project's is the project's.
+func TestNameConversationsTakesWhatTheSurveyRead(t *testing.T) {
+	proj := project()
+	served := hosttest.New("proc")
+	served.Add("session:revier", "", agent("box.1", "abc-123", ""), agent("box.2", "def-456", "/srv/wt"))
+	probe := resumable()
+	c := &core.Core{Served: served, Probes: []revier.AgentProbe{probe}}
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, proj)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.NameConversations(context.Background(), report)
+	got := conversationsByPanel(report)
+	if c := got["box.1"]; c == nil || c.ID != "abc-123" || c.Dir != proj.Path {
+		t.Errorf("box.1 conversation = %+v, want abc-123 in the project's directory %s", c, proj.Path)
+	}
+	if c := got["box.2"]; c == nil || c.ID != "def-456" || c.Dir != "/srv/wt" {
+		t.Errorf("box.2 conversation = %+v, want def-456 in /srv/wt", c)
+	}
+	if probe.Calls != 0 {
+		t.Errorf("Sessions asked %d times, want never", probe.Calls)
+	}
+}
+
+// An agent the survey read no conversation for is asked about: the read may
+// have failed, and an agent not yet prompted still says where it works.
+func TestNameConversationsAsksTheProbeForWhatTheSurveyCouldNotName(t *testing.T) {
+	served := hosttest.New("proc")
+	served.Add("session:revier", "", agent("box.1", "abc-123", ""), agent("box.2", "", "/srv/wt"))
+	probe := resumable()
+	c := &core.Core{Served: served, Probes: []revier.AgentProbe{probe}}
+	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.NameConversations(context.Background(), report)
+	if c := conversationsByPanel(report)["box.2"]; c == nil || c.ID != "" || c.Dir != "/srv/wt" {
+		t.Errorf("box.2 conversation = %+v, want none yet, in /srv/wt", c)
+	}
+	if probe.Calls != 1 {
+		t.Errorf("Sessions asked %d times, want once", probe.Calls)
+	}
+}
+
+func conversationsByPanel(r core.Report) map[revier.PanelID]*revier.Conversation {
+	out := map[revier.PanelID]*revier.Conversation{}
+	for _, v := range r.Views {
+		for _, a := range v.Agents {
+			out[a.Panel] = a.Conversation
+		}
+	}
+	return out
+}
+
 // An agent this machine serves to a terminal elsewhere ends with that
 // terminal: a shutdown here plans nothing for it, and no busy check names it.
 func TestAShutdownLeavesAServedAgentToItsTerminal(t *testing.T) {

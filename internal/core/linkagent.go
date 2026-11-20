@@ -362,18 +362,34 @@ func (c *Core) conversationsOn(ctx context.Context, host string, links []revier.
 // NameConversations fills in the conversation each surveyed agent holds: the
 // answer to Remote.Conversations, which a save on another machine records. An
 // agent whose probe cannot say keeps none.
+//
+// A local agent the survey read a conversation for keeps that one, in the
+// project's directory where the survey left the directory out, as Seen does:
+// the survey is of this moment too, and asking the probe again can cost the
+// process the survey just paid for. The probe is asked about every other
+// agent: its read may have failed, and one that holds no conversation yet
+// still has a directory to name.
 func (c *Core) NameConversations(ctx context.Context, r Report) {
 	var agents []agentPanel
 	var at []*revier.AgentView
 	for i := range r.Views {
-		for j := range r.Views[i].Agents {
-			a := &r.Views[i].Agents[j]
+		v := &r.Views[i]
+		for j := range v.Agents {
+			a := &v.Agents[j]
 			for _, inst := range r.Instances {
 				if key(inst.Ref) != key(a.Ref) {
 					continue
 				}
 				for _, panel := range inst.Panels {
 					if probe, ok := c.probeFor(panel); ok && panel.ID == a.Panel {
+						if _, resumable := probe.(revier.Resumable); resumable && a.State.Session != "" && v.Project.Remote == nil {
+							held := revier.Conversation{ID: a.State.Session, Dir: a.State.Dir}
+							if held.Dir == "" {
+								held.Dir = v.Project.Path
+							}
+							a.Conversation = &held
+							continue
+						}
 						agents = append(agents, agentPanel{panel: panel, probe: probe})
 						at = append(at, a)
 					}
