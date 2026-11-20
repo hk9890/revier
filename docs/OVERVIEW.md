@@ -29,7 +29,8 @@ A findability map: where things live, and how to search for them.
 | `internal/hosttest/` | The fake host, view, probe, key binder, terminal keys, window rules and remote that layers L2 and L4 run against. |
 | `internal/testenv/` | The scratch configuration, state, ssh configuration, kitty configuration and XDG configuration directory a test binary runs in, in place of the user's own; the empty PATH of a test that must start no tool; the short socket name of a live test. |
 | `internal/popupswitch/` | The socket the popup's surface listens on in the runtime directory, and the second press of the desktop's key that tells it there to switch its list. |
-| `internal/tui/` | The TUI surface: the project list, the pane, the dialogs and the config screen. |
+| `internal/curtain/` | The socket in the runtime directory between the surface that runs a full shutdown or a restore and its curtains: the progress it sends them, and the presses they send back. |
+| `internal/tui/` | The TUI surface: the project list, the pane, the dialogs, the config screen and the curtain's screen. |
 | `internal/theme/` | Every colour and glyph the TUI draws with, named by role. |
 | `internal/build/` | The version, commit and date that `.goreleaser.yaml` and `.mise.toml` stamp in by ldflags. |
 | `scripts/drive/` | Manual headless driver, on an hc core of its own. |
