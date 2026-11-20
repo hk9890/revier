@@ -75,6 +75,34 @@ func TestACloseSavesWithTheReasonOfItsScope(t *testing.T) {
 	}
 }
 
+// A close that ends every agent its save records saves an agent whose harness
+// keeps no conversation for it with none. A close after which agents run on,
+// of one project or of the targets alone, keeps the id.
+func TestACloseThatEndsEveryAgentSavesNoConversationItsHarnessNeverKept(t *testing.T) {
+	for name, tc := range map[string]struct {
+		only  revier.ProjectName
+		scope core.ShutdownScope
+		want  revier.SessionID
+	}{
+		"everything":  {"", core.ShutdownAll, ""},
+		"the agents":  {"", core.ShutdownAgents, ""},
+		"one project": {"demo", core.ShutdownAll, "abc-123"},
+		"the targets": {"", core.ShutdownTargets, "abc-123"},
+	} {
+		c, _, report, projects := desktop(t)
+		c.Probes[0].(*hosttest.FakeResumableProbe).Gone = []revier.SessionID{"abc-123"}
+		req := fullShutdown(c, t.TempDir(), c.ShutdownPlan(report, tc.only, tc.scope), projects)
+		req.Project, req.Scope = tc.only, tc.scope
+		res, err := app.Close(t.Context(), req)
+		if err != nil || res.Save == nil {
+			t.Fatalf("%s: Close = %+v, %v; want a save", name, res, err)
+		}
+		if got := res.Save.Session.Projects[0].Targets[0].Agents[0].Session; got != tc.want {
+			t.Errorf("%s: saved session = %q, want %q", name, got, tc.want)
+		}
+	}
+}
+
 // A full shutdown on record removes what a surface last saw: it was a clean
 // end, and the file would read as an end with no shutdown once something
 // opened and ended the record. One that is not full leaves it.

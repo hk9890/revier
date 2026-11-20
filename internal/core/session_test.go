@@ -885,3 +885,49 @@ func TestRestoreDropsAnAgentWhoseHarnessNoAgentRuns(t *testing.T) {
 		t.Errorf("note = %q, want %q", note, want)
 	}
 }
+
+// Claude Code names a session from its start, but keeps no transcript of it
+// until its first prompt. The save that a close makes, which ends the agent,
+// records such an agent with no conversation and in its directory, so its
+// restore starts it empty there and does not say that its conversation is
+// gone. A save after which the agent runs on keeps the id: the agent can
+// still get its first prompt (decisions.md D194).
+func TestAnEndingSaveRecordsNoConversationForAnAgentNeverPrompted(t *testing.T) {
+	dir := t.TempDir()
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:revier", "kitty", agent("1", "abc-123", dir), agent("2", "never-prompted", dir))
+	probe := resumable()
+	probe.Gone = []revier.SessionID{"never-prompted"}
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{probe}}
+	report, err := c.Survey(t.Context(), []core.Project{prepared(t, agentProject())})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	byHand, _ := c.Session(t.Context(), report)
+	if got := byHand.Projects[0].Targets[0].Agents[1].Session; got != "never-prompted" {
+		t.Errorf("by hand: session = %q, want the id kept", got)
+	}
+	s, gaps := c.EndingSession(t.Context(), report)
+	want := []session.Agent{{Harness: "claude", Session: "abc-123", Dir: dir}, {Harness: "claude", Dir: dir}}
+	if got := s.Projects[0].Targets[0].Agents; !slices.Equal(got, want) {
+		t.Fatalf("ending: agents = %+v, want %+v", got, want)
+	}
+	if gaps.Unnamed != 1 {
+		t.Errorf("unnamed = %d, want the agent never prompted", gaps.Unnamed)
+	}
+
+	plan := c.RestorePlan(s, report)
+	outcomes := []core.AgentOutcome{core.AgentResumed, core.AgentEmpty}
+	restorer := &core.Core{Runtime: hosttest.NewRuntime("rt"), View: rt, Probes: []revier.AgentProbe{probe}}
+	if got := restorer.Resumes(prepared(t, agentProject()), "home", plan[0].Resumes); !slices.Equal(got, outcomes) {
+		t.Errorf("Resumes = %v, want %v", got, outcomes)
+	}
+	res, err := pressResuming(t.Context(), restorer, prepared(t, agentProject()), "home", plan[0].Resumes)
+	if err != nil || !slices.Equal(res.Agents, outcomes) {
+		t.Fatalf("press = %v, %v; want %v", res.Agents, err, outcomes)
+	}
+	if note := core.AgentsNote("opened", res.Agents, plan[0].Resumes, nil); strings.Contains(note, "conversation gone") {
+		t.Errorf("note = %q, want no conversation said gone", note)
+	}
+}

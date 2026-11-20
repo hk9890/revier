@@ -93,8 +93,9 @@ const (
 	// argv, which need not be the agent, so no resume flag is added to it.
 	AgentInTab
 	// AgentConversationGone starts empty in its directory, because its
-	// harness no longer keeps the conversation recorded: one it never filed,
-	// or pruned since the save.
+	// harness no longer keeps the conversation recorded: one pruned since
+	// the save, or one it never filed, which only a save its agent ran on
+	// after records (EndingSession).
 	AgentConversationGone
 	// AgentUnknown is not restored: it ran a named agent its project no
 	// longer declares, or it has no name and no agent of its project runs its
@@ -151,6 +152,20 @@ type RestoreStep struct {
 // otherwise found after the reboot, which is the worst moment. None of it
 // fails the save.
 func (c *Core) Session(ctx context.Context, r Report) (session.Session, SessionGaps) {
+	return c.session(ctx, r, false)
+}
+
+// EndingSession is the Session a close saves when every agent it records ends
+// with the close. An agent whose harness keeps no conversation for it, as a
+// Claude Code agent that never got a prompt, is recorded with none, so its
+// restore starts it empty and does not say its conversation is gone. No other
+// save does this: an agent that runs on after the save can get its first
+// prompt, and a restore of that save then resumes it (decisions.md D139, D194).
+func (c *Core) EndingSession(ctx context.Context, r Report) (session.Session, SessionGaps) {
+	return c.session(ctx, r, true)
+}
+
+func (c *Core) session(ctx context.Context, r Report, ending bool) (session.Session, SessionGaps) {
 	current := c.state().Current
 	// The hosts have HostWait and not the whole of the save's bound: the
 	// agents on this machine are asked after them, on what is left of it
@@ -159,7 +174,11 @@ func (c *Core) Session(ctx context.Context, r Report) (session.Session, SessionG
 	there, failed := c.conversationsThere(asking, r.Views)
 	stop()
 	s, gaps := c.sessionOf(r, there, func(agents []agentPanel) ([]revier.Conversation, []error) {
-		return c.conversations(ctx, agents)
+		named, failed := c.conversations(ctx, agents)
+		if ending {
+			unkept(agents, named)
+		}
+		return named, failed
 	})
 	s.Current = current
 	gaps.Failed = append(failed, gaps.Failed...)
@@ -519,6 +538,17 @@ func (c *Core) conversations(ctx context.Context, agents []agentPanel) ([]revier
 		}
 	}
 	return out, failed
+}
+
+// unkept takes the conversation off each agent whose harness keeps none for
+// it, and leaves the directory, where its restore starts it empty.
+func unkept(agents []agentPanel, named []revier.Conversation) {
+	for i, a := range agents {
+		holder, ok := a.probe.(revier.Holder)
+		if ok && named[i].ID != "" && !holder.Holds(named[i].ID, named[i].Dir) {
+			named[i].ID = ""
+		}
+	}
 }
 
 // RestorePlan decides what each recorded target means on this machine now. It

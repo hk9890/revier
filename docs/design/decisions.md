@@ -1131,3 +1131,13 @@ its harness, else as the first named agent that does, and its tab gets that
 name's mark. Where no probe reads a command, a wrapper, the agent whose name is
 the harness runs it. With none, a wrapper default is trusted; any other is
 dropped and said, as an unknown name is.
+
+### D194 — a shutdown that ends every agent saves none with a conversation its harness never kept
+
+Amends D139. A Claude Code agent that never got a prompt has an id and no
+transcript, so each restore said its conversation was gone, which reads as lost
+work, and the agent it started was the same again at the next shutdown. The
+save of a shutdown that ends every agent it records now asks the probe, as a
+restore does, and records such an agent in its directory with no conversation.
+Every other save keeps the id: by hand, a project close, a close of the targets
+alone, and what a surface last saw. Their agents run on and can still be prompted.

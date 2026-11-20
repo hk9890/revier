@@ -36,14 +36,20 @@ func SaveSession(ctx context.Context, c *core.Core, stateRoot string, r core.Rep
 
 // SaveChanged saves the session a close ends, for the given reason, unless
 // the save a plain restore opens (decisions.md D149) already holds the same,
-// or nothing is open. saved is false when it wrote nothing.
+// or nothing is open. saved is false when it wrote nothing. ending says that
+// the close ends every agent the save records, so the save is the core's
+// EndingSession.
 //
 // A caller that cancels saves nothing, and the cancel is the error: the
 // agents read on a cancelled context lack their conversations, and that
 // session could be the one a plain restore opens. A budget that
 // runs out is no such decision, and the save names what it could not ask.
-func SaveChanged(ctx context.Context, c *core.Core, stateRoot string, r core.Report, reason session.Reason, at time.Time) (stored session.Session, saved bool, gaps core.SessionGaps, err error) {
-	s, gaps := c.Session(ctx, r)
+func SaveChanged(ctx context.Context, c *core.Core, stateRoot string, r core.Report, reason session.Reason, ending bool, at time.Time) (stored session.Session, saved bool, gaps core.SessionGaps, err error) {
+	save := c.Session
+	if ending {
+		save = c.EndingSession
+	}
+	s, gaps := save(ctx, r)
 	if errors.Is(ctx.Err(), context.Canceled) {
 		return session.Session{}, false, gaps, ctx.Err()
 	}
