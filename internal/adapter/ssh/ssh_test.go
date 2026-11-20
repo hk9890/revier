@@ -140,6 +140,62 @@ func TestSurveyPassesTheSSHFailureThrough(t *testing.T) {
 	}
 }
 
+// answer replaces ssh with a remote revier that failed: it wrote out and
+// stderr, and its call failed with err.
+func answer(r *ssh.Remote, out, stderr string, err error) {
+	r.SetRunner(func(context.Context, ...string) ([]byte, []byte, error) {
+		return []byte(out), []byte(stderr), err
+	})
+}
+
+// errFailed is a call that failed in the remote revier, as classify passes it
+// through when it does not know the reason: the exit status is gone.
+var errFailed = errors.New("buildbox: revier list --json demo gone: exit status 1")
+
+// A remote revier that does not know one of the names lists the others, says
+// why for that one, and exits 1. The others are the answer, so a stale link
+// costs no other link on its host (decisions.md D85). A profile can write
+// to stderr after revier did.
+func TestSurveyListsTheKnownNamesWhenTheHostDoesNotKnowOne(t *testing.T) {
+	r := ssh.New("buildbox")
+	answer(r, `[{"project":{"name":"demo","path":"/x"},"targets":[]}]`,
+		"welcome\nrevier: no project named \"gone\"; did you mean \"demo\"?\nrevier: no project named \"gone\"\nbye\n", errFailed)
+	views, err := r.Survey(t.Context(), []revier.ProjectName{"demo", "gone"})
+	if err != nil {
+		t.Fatalf("Survey: %v", err)
+	}
+	if len(views) != 1 || views[0].Project.Name != "demo" {
+		t.Errorf("views = %+v, want demo alone", views)
+	}
+}
+
+func TestSurveyListsNothingWhenTheHostKnowsNoName(t *testing.T) {
+	r := ssh.New("buildbox")
+	answer(r, "", "revier: no project named \"gone\"\nrevier: no project named \"gone\"\n", errFailed)
+	views, err := r.Survey(t.Context(), []revier.ProjectName{"gone"})
+	if err != nil || len(views) != 0 {
+		t.Errorf("Survey = %+v, %v; want nothing and no error", views, err)
+	}
+}
+
+// Every failure that is not only a name the host does not know is the
+// host's, also one after a name was refused.
+func TestSurveyFailsTheHostForAnyOtherFailure(t *testing.T) {
+	for _, tc := range []struct{ name, out, stderr string }{
+		{"no JSON after the refusal", "[{", "revier: no project named \"gone\"\n"},
+		{"no refusal", "", "revier: survey: wctl timed out\n"},
+		{"the survey failed after the refusal", "", "revier: no project named \"gone\"\nrevier: survey: wctl timed out\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := ssh.New("buildbox")
+			answer(r, tc.out, tc.stderr, errFailed)
+			if _, err := r.Survey(t.Context(), []revier.ProjectName{"demo", "gone"}); !errors.Is(err, errFailed) {
+				t.Errorf("err = %v, want the call's failure", err)
+			}
+		})
+	}
+}
+
 // sshd runs a command in a shell that read no profile, where a PATH set in
 // one - the directory Claude Code installs into - is missing. The command
 // line runs in the user's login shell instead, as one word. The shell is

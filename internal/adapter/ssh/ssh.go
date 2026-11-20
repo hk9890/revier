@@ -104,7 +104,8 @@ func quiet(line string) string {
 	return login(line+" >&3") + " 3>&1 1>&2"
 }
 
-// exec runs one command on the remote and returns what it wrote. The remote
+// exec runs one command on the remote and returns what it wrote, also when
+// it failed: a remote revier can answer in part and still fail. The remote
 // shell joins the words ssh is given back into one line, so each is quoted
 // here to reach the remote revier as the one argument it was. A failure is
 // classified: what ssh or the remote shell said, in one line that says what
@@ -124,7 +125,7 @@ func (r *Remote) exec(ctx context.Context, args ...string) ([]byte, []byte, erro
 	// its context, so the wait for its output is bounded too.
 	c.WaitDelay = waitDelay
 	if err := procgroup.Run(c); err != nil {
-		return nil, errb.Bytes(), classify(ctx, r.host, args, errb.String(), err)
+		return out.Bytes(), errb.Bytes(), classify(ctx, r.host, args, errb.String(), err)
 	}
 	return out.Bytes(), errb.Bytes(), nil
 }
@@ -201,7 +202,8 @@ func (r *Remote) Version(ctx context.Context) (string, error) {
 	return fields[1], nil
 }
 
-// Survey asks the remote revier for the named projects, in one call.
+// Survey asks the remote revier for the named projects, in one call. A name
+// it does not know is left out of the answer.
 func (r *Remote) Survey(ctx context.Context, names []revier.ProjectName) ([]revier.ProjectView, error) {
 	return r.list(ctx, names)
 }
@@ -234,13 +236,47 @@ func (r *Remote) list(ctx context.Context, names []revier.ProjectName, flags ...
 	for _, n := range names {
 		args = append(args, string(n))
 	}
-	out, _, err := r.run(ctx, args...)
+	out, stderr, err := r.run(ctx, args...)
 	if err != nil {
-		return nil, err
+		return partial(out, stderr, err)
 	}
 	var views []revier.ProjectView
 	if err := json.Unmarshal(out, &views); err != nil {
 		return nil, fmt.Errorf("%s: revier list --json: %w", r.host, err)
 	}
 	return views, nil
+}
+
+// partial is the answer of a list that failed. A remote revier that knows
+// some of the names lists those and fails for the others, and one that knows
+// none lists nothing: a name it does not know is one link's fault, which the
+// core reports for that link alone (decisions.md D85). Every other
+// failure is the host's.
+func partial(out, stderr []byte, err error) ([]revier.ProjectView, error) {
+	if !refusedNamesOnly(stderr) {
+		return nil, err
+	}
+	if len(bytes.TrimSpace(out)) == 0 {
+		return nil, nil
+	}
+	var views []revier.ProjectView
+	if json.Unmarshal(out, &views) != nil {
+		return nil, err
+	}
+	return views, nil
+}
+
+// noProjectNamed is how the remote revier's last line starts when the names
+// it did not know are why it failed. A login profile can write to stderr
+// too, so only the lines revier wrote count.
+const noProjectNamed = "revier: no project named "
+
+func refusedNamesOnly(stderr []byte) bool {
+	last := ""
+	for line := range strings.Lines(string(stderr)) {
+		if strings.HasPrefix(line, "revier: ") {
+			last = line
+		}
+	}
+	return strings.HasPrefix(last, noProjectNamed)
 }

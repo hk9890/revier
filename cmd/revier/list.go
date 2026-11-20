@@ -37,7 +37,9 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	// (decisions.md D40), and a name it does not know is an error, so a
 	// missing project file there is reported, not shown as nothing. The
 	// names it knows are listed all the same, for the person who asked about
-	// several at once.
+	// several at once and for the revier that asked about its links: it
+	// reports a stale link alone, by the line written for it here, which
+	// the ssh adapter reads.
 	projects := a.projects
 	var unknown []string
 	if len(pos) > 0 {
