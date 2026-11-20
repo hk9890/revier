@@ -26,6 +26,7 @@ type walk struct {
 	last      core.Progress // the latest report
 	closed    core.Closed   // the close steps done
 	restored  core.Restored // the restore steps done
+	curtain   *curtainRun   // the curtains the walk runs under, nil for none (decisions.md D192)
 }
 
 // startWalk is a walk with its channel and its cancel, in its first phase
@@ -53,31 +54,35 @@ func (w *walk) take(p core.Progress) {
 
 // line says what the walk does now, and how to stop it.
 func (w walk) line() string {
-	p := w.last
-	now := ""
 	switch {
-	case w.cancelled && p.Phase == core.PhaseWait:
+	case w.cancelled && w.last.Phase == core.PhaseWait:
 		return "no longer waiting for what was closed… ctrl+c again quits"
 	case w.cancelled:
 		return "cancelling once the step that runs is done… ctrl+c again quits"
-	case p.Phase == core.PhaseRecheck:
-		now = "reading the agents again"
-	case p.Phase == core.PhaseSave:
-		now = "saving the session when it changed"
-	case p.Phase == core.PhaseWait:
-		now = w.waiting()
-	case p.Phase == core.PhaseSurvey:
-		now = "surveying what is open now"
-	case p.Phase == core.PhaseHome:
-		now = "returning to " + p.Label
-	case p.Done:
-		now = fmt.Sprintf("%d of %d done", p.N, p.Of)
-	case p.Phase == core.PhaseClose:
-		now = fmt.Sprintf("closing %d of %d: %s", p.N, p.Of, p.Label)
-	default:
-		now = fmt.Sprintf("opening %d of %d: %s", p.N, p.Of, p.Label)
 	}
-	return now + "… ctrl+c cancels"
+	return w.now() + "… ctrl+c cancels"
+}
+
+// now says what the walk does now.
+func (w walk) now() string {
+	p := w.last
+	switch {
+	case p.Phase == core.PhaseRecheck:
+		return "reading the agents again"
+	case p.Phase == core.PhaseSave:
+		return "saving the session when it changed"
+	case p.Phase == core.PhaseWait:
+		return w.waiting()
+	case p.Phase == core.PhaseSurvey:
+		return "surveying what is open now"
+	case p.Phase == core.PhaseHome:
+		return "returning to " + p.Label
+	case p.Done:
+		return fmt.Sprintf("%d of %d done", p.N, p.Of)
+	case p.Phase == core.PhaseClose:
+		return fmt.Sprintf("closing %d of %d: %s", p.N, p.Of, p.Label)
+	}
+	return fmt.Sprintf("opening %d of %d: %s", p.N, p.Of, p.Label)
 }
 
 // waiting is the wait after the closes, which waits for each step the walk
@@ -131,30 +136,51 @@ func (m Model) walking() bool {
 
 // lockedKey is a press while a walk runs: ctrl+c cancels the walk, a second
 // quits, and every other press does nothing.
+func (m Model) lockedKey(msg keyPress) (tea.Model, tea.Cmd) {
+	if !key.Matches(msg, m.keys.Quit) {
+		return m, nil
+	}
+	if m.runningWalk().cancelled {
+		return m.quitWalk()
+	}
+	m.cancelWalk()
+	return m, nil
+}
+
+// runningWalk is the walk that runs, nil with none.
+func (m *Model) runningWalk() *walk {
+	switch {
+	case m.shut.running:
+		return &m.shut.walk
+	case m.sessions.restoring != "":
+		return &m.sessions.walk
+	}
+	return nil
+}
+
+// cancelWalk is the first ctrl+c: the walk stops once the step that runs is
+// done.
+func (m *Model) cancelWalk() {
+	w := m.runningWalk()
+	w.cancel()
+	w.cancelled = true
+	w.curtain.cancelling()
+}
+
+// quitWalk is the second ctrl+c: the surface quits with the walk still
+// running.
 //
 // The surface quits before the walk returns, so the hung step's command is
 // ended here, and the close's record is abandoned here, and the record
 // decides whether it is taken back (decisions.md D141). The record of a close
 // that is not full returns at once. The command is ended first: the abandon
 // of a full shutdown's record can wait on the state's lock.
-func (m Model) lockedKey(msg keyPress) (tea.Model, tea.Cmd) {
-	if !key.Matches(msg, m.keys.Quit) {
-		return m, nil
+func (m Model) quitWalk() (tea.Model, tea.Cmd) {
+	if m.endHung != nil {
+		m.endHung()
 	}
-	w := &m.sessions.walk
-	if m.shut.running {
-		w = &m.shut.walk
+	if s := m.shut; s.running && s.record != nil {
+		s.record.Abandon()
 	}
-	if w.cancelled {
-		if m.endHung != nil {
-			m.endHung()
-		}
-		if s := m.shut; s.running && s.record != nil {
-			s.record.Abandon()
-		}
-		return m, tea.Quit
-	}
-	w.cancel()
-	w.cancelled = true
-	return m, nil
+	return m, tea.Quit
 }

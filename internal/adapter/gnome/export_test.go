@@ -50,6 +50,9 @@ func (r *Rules) SetRunner(fn func(ctx context.Context, args ...string) ([]byte, 
 // that write.
 func RulesReadOnly(args []string) error { return ruleCommand(readRuleCommands, args) }
 
+// DecodeMonitors exposes the parser of `wctl monitors --json`.
+func DecodeMonitors(raw []byte) ([]revier.Monitor, error) { return decodeMonitors(raw) }
+
 // DecodeRules exposes the parser of `wctl rules list --json`.
 func DecodeRules(raw []byte) ([]revier.WindowRule, error) { return decodeRules(raw) }
 

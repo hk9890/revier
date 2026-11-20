@@ -1,0 +1,4 @@
+[
+  {"index": 0, "x": 0, "y": 0, "width": 2560, "height": 1440, "is_primary": true, "connector": "DP-1", "scale": 1},
+  {"index": 1, "x": 2560, "y": 0, "width": 1920, "height": 1080, "is_primary": false, "connector": "HDMI-1", "scale": 1}
+]

@@ -48,6 +48,16 @@ func cmdTUI(ctx context.Context, a *app) error {
 	// alternate screen, and pointer and focus reports (tui.Model.View).
 	if popup {
 		m = m.WithPopup()
+		// A full shutdown or a restore from the popup runs under a curtain
+		// on every monitor (decisions.md D192). Without its own path the
+		// popup runs them with none.
+		if self, err := os.Executable(); err == nil {
+			m = m.WithCurtain(func(mon revier.Monitor, socket string, isMain bool) []string {
+				return curtainArgv(self, mon, socket, isMain)
+			})
+		} else {
+			slog.Warn("popup: no curtain", "err", err)
+		}
 		if ln := listenForSwitch(); ln != nil {
 			defer func() { _ = ln.Close() }()
 			m = m.WithSwitchSocket(ln)

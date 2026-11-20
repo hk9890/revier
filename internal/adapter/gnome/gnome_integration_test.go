@@ -187,6 +187,18 @@ func TestRulesCanWriteOnTheRecordedVersion(t *testing.T) {
 	}
 }
 
+// The monitors of `wctl monitors --json`, in wctl 0.23.0's shape: the
+// geometry is left, the index and the primary flag kept.
+func TestDecodeMonitors(t *testing.T) {
+	got, err := gnome.DecodeMonitors(read(t, "monitors.json"))
+	if err != nil {
+		t.Fatalf("DecodeMonitors: %v", err)
+	}
+	if want := []revier.Monitor{{Index: 0, Primary: true}, {Index: 1}}; !slices.Equal(got, want) {
+		t.Errorf("monitors = %+v, want %+v", got, want)
+	}
+}
+
 // The version document of wctl 0.23.0, recorded: the host takes it as usable,
 // and reads that the extension minimizes and activates without the animation.
 func TestProbeReadsTheRecordedVersion(t *testing.T) {

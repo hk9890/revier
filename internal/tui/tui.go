@@ -180,6 +180,8 @@ type Model struct {
 	popup        bool                             // the surface is the popup: Esc or the desktop hides it, and the next press raises it
 	switchSocket net.Listener                     // the popup's socket, where the second press of the desktop's key arrives; nil for none
 	endHung      func()                           // ends the host command of a step that hangs, as the second ctrl+c quits; nil to leave it
+	curtain      curtainArgv                      // the launch of a curtain a full shutdown or a restore runs under; nil for none
+	curtainLift  time.Duration                    // how long the curtains show a walk that went well; a test shortens it
 	hidden       bool                             // the popup is off the screen; nothing surveys until it is raised, unless a launch is coming up
 	errands      int                              // the raises, presses, pastes, clicks and wheel turns so far; a go hides the popup only when none came since its own press
 	raises       int                              // the times the popup was raised; a close a del planned before the last raise asks nothing
@@ -250,7 +252,7 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	keys := newKeyMap(actions)
 	m := Model{
 		core: c, stateRoot: stateRoot, actions: actions,
-		refresh: refresh, now: time.Now, closeWait: core.CloseWait, mirrorGap: mirrorInterval,
+		refresh: refresh, now: time.Now, closeWait: core.CloseWait, mirrorGap: mirrorInterval, curtainLift: curtainLift,
 		theme: &th, width: 80, height: 24,
 		plist: newProjectList(th),
 		link:  new(newLinkScreen(th)), sessions: new(newSessionsScreen(th)),
@@ -1154,6 +1156,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.ledgerWritten(msg)
 	case progressMsg:
 		return m.progressed(msg)
+	case curtainMsg:
+		return m.curtained(msg)
 	case runtimeMsg:
 		return m.runtimeSwitched(msg)
 	case clonedMsg:

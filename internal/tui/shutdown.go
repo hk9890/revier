@@ -15,6 +15,7 @@ import (
 	"github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/curtain"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -353,7 +354,12 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	// The recheck, the save, a report before and after each step, and the
 	// wait.
 	w, progress, cancelled := startWalk(core.PhaseRecheck, 3+2*len(plan))
+	// Only a full shutdown runs under the curtains (decisions.md D192).
+	if s.whole {
+		w.curtain = newCurtain(m.curtain, "shutdown", closeRows(plan))
+	}
 	s.walk = w
+	run, argv := w.curtain, m.curtain
 	// The wizard holds the record to abandon it on the second ctrl+c;
 	// app.Close decides whether it is written.
 	s.record = app.NewShutdownRecord(m.core, m.stateRoot)
@@ -361,11 +367,15 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 		Core: m.core, StateRoot: m.stateRoot, Plan: plan, Projects: s.projects,
 		Project: s.project, Scope: s.scope, Force: confirmed && len(core.Busy(plan)) > 0,
 		Save: s.saves(), Wait: m.closeWait, Record: s.record,
-		Progress: func(p core.Progress) { progress <- p },
+		Progress: func(p core.Progress) {
+			run.take(p)
+			progress <- p
+		},
 	}
 	closing := func() tea.Msg {
 		defer close(progress)
 		defer w.cancel()
+		run.open(m.core, argv)
 		// No deadline over the close: each phase bounds its own, and once a
 		// deadline laid over the cancel passed, a ctrl+c would no longer
 		// reach the walk.
@@ -378,7 +388,7 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	}
 	// The close goes first in the batch: run in order, as the tests run a
 	// batch, the wait would otherwise block on a channel nothing writes yet.
-	return m, tea.Batch(closing, waitProgress(progress))
+	return m, tea.Batch(closing, waitProgress(progress), waitCurtain(run))
 }
 
 // closeAnswer is what a close came to, as the wizard reads it: the refusal
@@ -432,7 +442,7 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 		// so it carries no listing from here.
 		s.plan, s.row, s.step = msg.recheck, 1, shutConfirm
 		m.dialog = dialogShutdown
-		return m, nil
+		return m, s.walk.curtain.finish(m.core, curtain.End{Title: "Shutdown stopped", Summary: m.err.Error()}, m.curtainLift, s.walk.curtain.back(m.core, m.popup))
 	}
 	if s.one {
 		return m.closed(msg, cancelled)
@@ -442,7 +452,7 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 		if !cancelled {
 			m.err = fail("shutdown", "", msg.err)
 		}
-		return m, nil
+		return m, s.walk.curtain.finish(m.core, failedEnd("Shutdown", cancelled, msg.err), m.curtainLift, s.walk.curtain.back(m.core, m.popup))
 	}
 	s.step, s.row, s.saved, s.closed = shutDone, 0, msg.saved, msg.closed
 	// A cancel that came after the last step was walked left no step
@@ -455,11 +465,23 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 	// A full shutdown leaves nothing to come back to: the surface says what
 	// it did and quits, the popup too, so the next start is a cold one that
 	// offers the restore (decisions.md D141).
+	var quit tea.Cmd
 	if msg.recorded && !s.walk.cancelled {
 		s.quitting = true
-		return m, tea.Tick(quitAfterShutdown, func(time.Time) tea.Msg { return shutQuitMsg{} })
+		quit = tea.Tick(quitAfterShutdown, func(time.Time) tea.Msg { return shutQuitMsg{} })
 	}
-	return m, nil
+	end := shutdownEnd(s.closed, len(s.unreached()), s.walk.cancelled)
+	switch {
+	case quit == nil:
+		return m, s.walk.curtain.finish(m.core, end, m.curtainLift, s.walk.curtain.back(m.core, m.popup))
+	case end.OK:
+		// The quit counts from the end, beside the curtains' lift: it ends
+		// them too.
+		return m, tea.Batch(quit, s.walk.curtain.finish(m.core, end, m.curtainLift, nil))
+	}
+	// The summary of what went wrong stays until the user closed it, and the
+	// quit counts from then.
+	return m, s.walk.curtain.finish(m.core, end, m.curtainLift, quit)
 }
 
 // shutQuit is the end of the wait after a full shutdown.

@@ -179,6 +179,14 @@ kitty, and GNOME with the Window Control extension. See
   window takes the focus; see
   [The popup's window](integrations/gnome.md#the-popups-window). That hide
   acts as Esc.
+- A full shutdown or a restore that you start in the popup runs under a
+  curtain on every monitor, so the windows that open and close stay out of
+  sight. The curtain on the main monitor lists each step; Tab shows it on one
+  line. To cancel, press ctrl+c or click Cancel: the step that runs finishes
+  first, and a second ctrl+c quits. To see the desktop while the run goes on,
+  press Esc; the popup's key brings the curtain back. The curtain lifts by
+  itself when the run went well. After a failure or a cancel it stays with a
+  summary until you press Enter or Esc, or click Close.
 - After a full shutdown the popup quits, so the next press starts it again
   and shows the [start dialog](#after-a-full-shutdown). When `revier shutdown`
   shut everything down while the popup was hidden, the next raise shows the

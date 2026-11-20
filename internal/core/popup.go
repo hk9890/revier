@@ -44,7 +44,8 @@ const (
 // are current, they placed it before its first frame, by the monitor it
 // opened on, and revier does not place it again (D191). argv is a function,
 // asked only for a launch: what it carries - the project the surface opens
-// on - costs a listing the raise must not pay.
+// on - costs a listing the raise must not pay. While a curtain is open the
+// press shows it again and does nothing else (D192).
 func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (revier.TargetRef, error) {
 	if c.Window == nil {
 		return revier.TargetRef{}, ErrNoPopupHost
@@ -56,6 +57,13 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 	before, err := c.Window.Instances(ctx)
 	if err != nil {
 		return revier.TargetRef{}, err
+	}
+	// While a run shows its curtain the surface takes no key, and the press
+	// brings back a curtain Esc hid (decisions.md D192).
+	if curtains := curtainWindows(before); len(curtains) > 0 {
+		main := curtains[len(curtains)-1].Ref
+		slog.Info("popup: show the curtain", "ref", main, "curtains", len(curtains))
+		return main, c.ShowCurtains(ctx)
 	}
 	// The window the key was pressed over decides a switch, and is in a
 	// launch's line by its id alone, as its title is the user's: a launch with

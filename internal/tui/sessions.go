@@ -227,13 +227,15 @@ func (m Model) restored(msg restoredMsg) (tea.Model, tea.Cmd) {
 	// The windows the restore opened came up over the popup: a survey that
 	// listed it minimized then is no hide by the desktop.
 	m.look++
+	w := m.sessions.walk
 	if msg.err != nil {
-		return m, nil
+		return m, w.curtain.finish(m.core, failedEnd("Restore", w.cancelled, msg.err), m.curtainLift, w.curtain.back(m.core, m.popup))
 	}
 	if msg.current != "" {
 		m.selectName(msg.current)
 	}
-	return m, raiseSelf(m.core, m.popup)
+	// The raise comes once the curtains lifted: under them it shows nothing.
+	return m, w.curtain.finish(m.core, restoreEnd(msg, w.cancelled), m.curtainLift, raiseSelf(m.core, m.popup))
 }
 
 // raiseSelf brings the surface's own terminal to the front: the popup by its
@@ -413,22 +415,33 @@ func (sc *sessionsScreen) restore(sf surface) (tea.Cmd, error) {
 	// A report before and after each step, and the return home. The survey
 	// before the walk is the restore's first phase until the walk reports.
 	w, progress, cancelled := startWalk(core.PhaseSurvey, 1+2*s.Targets())
+	// The steps are known once the survey answers.
+	w.curtain = newCurtain(sf.curtain, "restore", nil)
 	sc.walk = w
+	run, argv := w.curtain, sf.curtain
 	restoring := func() tea.Msg {
 		defer close(written)
 		defer close(progress)
 		defer w.cancel()
+		run.open(c, argv)
 		ctx, cancel := context.WithTimeout(cancelled, localHostWait)
 		report, err := c.Survey(ctx, projects)
 		cancel()
 		if err != nil {
 			return restoredMsg{id: s.ID, err: err}
 		}
+		plan := c.RestorePlan(s, report)
+		run.plan(restoreRows(plan))
 		// No deadline over the whole walk: each step bounds its own.
-		out, back := c.Restore(cancelled, s, report, projects, core.RestoreOpts{Progress: func(p core.Progress) { progress <- p }})
-		return restoredMsg{id: s.ID, current: s.Current, restored: out, notReached: len(c.RestorePlan(s, report)) - len(out), back: back}
+		out, back := c.Restore(cancelled, s, report, projects, core.RestoreOpts{Progress: func(p core.Progress) {
+			run.take(p)
+			progress <- p
+		}})
+		// The return home took the keyboard from the curtain.
+		run.refocus(c)
+		return restoredMsg{id: s.ID, current: s.Current, restored: out, notReached: len(plan) - len(out), back: back}
 	}
-	return tea.Batch(restoring, waitLedger(written), waitProgress(progress)), nil
+	return tea.Batch(restoring, waitLedger(written), waitProgress(progress), waitCurtain(run)), nil
 }
 
 // restored takes a restore's answer: a cancel, a target that did not open,
