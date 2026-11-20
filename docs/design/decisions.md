@@ -1120,3 +1120,14 @@ popup's key shows it again. Its Cancel is the first ctrl+c. It lifts on success,
 else stays with a summary, and ends with its socket. Rejected: one window over
 all monitors (fullscreen covers one), a maximized one (it goes under fullscreen
 windows), the popup itself (its overlay rule minimizes it when the focus moves).
+
+### D193 — a restored agent with no name comes back as the agent that runs its harness
+
+Extends D146. A save names an agent only by its tab's mark, so a program started
+by hand in a panel, such as dtop typed into the shell, is recorded by harness
+alone. A restore gave such an agent past the layout the default agent's tab: a
+dtop came back as claude. Now it comes back as the default agent when that runs
+its harness, else as the first named agent that does, and its tab gets that
+name's mark. Where no probe reads a command, a wrapper, the agent whose name is
+the harness runs it. With none, a wrapper default is trusted; any other is
+dropped and said, as an unknown name is.

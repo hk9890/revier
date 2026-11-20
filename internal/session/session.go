@@ -140,8 +140,10 @@ type Target struct {
 // say about its conversation. An agent with neither holds its place in the
 // order, so the agents after it keep theirs. Name is the named agent it ran,
 // which a restore opens again and no other program in its place; it is empty
-// for the project's default agent, and in a file written before the field
-// existed (decisions.md D146).
+// for the project's default agent, for a program started by hand in a panel,
+// and in a file written before the field existed (decisions.md D146). A
+// restore gives an agent with no name the agent that runs its harness
+// (D193).
 type Agent struct {
 	Harness string           `toml:"harness" json:"harness"`
 	Session revier.SessionID `toml:"session,omitempty" json:"session,omitempty"`

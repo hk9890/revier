@@ -142,18 +142,66 @@ func declared(layout []revier.PanelSpec, kind revier.PanelKind) (revier.PanelSpe
 // workspace's layout declares no agent panel, or the runtime cannot open tabs.
 // A launch opens the tabs and a dry run reports the outcomes, so the two
 // cannot disagree.
-func (c *Core) agentTabs(host revier.Host, p Project, layout []revier.PanelSpec, resumes []Resume) ([]revier.Realization, []AgentOutcome) {
+//
+// An agent recorded with a harness and no name comes back as the agent that
+// runs that harness. The resumes returned carry its name, so its tab is
+// marked as agent new marks it, and the next save records the name.
+func (c *Core) agentTabs(host revier.Host, p Project, layout []revier.PanelSpec, resumes []Resume) ([]revier.Realization, []AgentOutcome, []Resume) {
 	tabs := make([]revier.Realization, len(resumes))
 	outcomes := make([]AgentOutcome, len(resumes))
+	chosen := slices.Clone(resumes)
 	_, opens := c.opener(host)
 	for n, r := range resumes {
 		if !opens {
 			outcomes[n] = AgentDropped
 			continue
 		}
+		r, ok := c.agentRunning(p, layout, r)
+		if !ok {
+			outcomes[n] = AgentUnknown
+			continue
+		}
+		chosen[n] = r
 		tabs[n], outcomes[n] = c.agentTab(p, layout, r)
 	}
-	return tabs, outcomes
+	return tabs, outcomes, chosen
+}
+
+// agentRunning is the agent a recorded agent with a harness and no name comes
+// back as: the default agent when it runs that harness, else the first named
+// agent that does. A command no probe claims - a wrapper such as
+// `zsh -ilc "exec dtop"` - runs the harness its agent's name names. When no
+// agent runs the harness, a default agent that is a wrapper is trusted, as
+// startAgent trusts it; any other default agent runs another program, which
+// is not the agent that ran (decisions.md D193). A link's agents are its
+// host's to name.
+func (c *Core) agentRunning(p Project, layout []revier.PanelSpec, r Resume) (Resume, bool) {
+	agent, ok := declared(layout, revier.PanelAgent)
+	if !ok || r.Agent != "" || r.Harness == "" || p.Remote != nil {
+		return r, true
+	}
+	harness := c.harnessOf(agent)
+	if runsHarness(harness, agent.Agent, r.Harness) {
+		return r, true
+	}
+	for _, named := range p.Agents {
+		spec := agent
+		spec.Title, spec.Command = named.Name, named.Command
+		if runsHarness(c.harnessOf(spec), named.Name, r.Harness) {
+			r.Agent = named.Name
+			return r, true
+		}
+	}
+	return r, harness == ""
+}
+
+// runsHarness reports whether an agent of that name, which a probe says runs
+// harness, runs the recorded one. With no probe to say, the name says.
+func runsHarness(harness, name, recorded string) bool {
+	if harness == "" {
+		return name == recorded
+	}
+	return harness == recorded
 }
 
 // addAgents opens an agent tab in a workspace that has just opened, for each
@@ -166,7 +214,7 @@ func (c *Core) agentTabs(host revier.Host, p Project, layout []revier.PanelSpec,
 // not the launch's failure. A failed OpenTab leaves no tab behind, so the
 // agent it names is not running anywhere.
 func (c *Core) addAgents(ctx context.Context, host revier.Host, p Project, layout []revier.PanelSpec, ref revier.TargetRef, resumes []Resume) ([]AgentOutcome, error) {
-	tabs, outcomes := c.agentTabs(host, p, layout, resumes)
+	tabs, outcomes, resumes := c.agentTabs(host, p, layout, resumes)
 	opener, ok := c.launchOpener(host)
 	if !ok {
 		return outcomes, nil

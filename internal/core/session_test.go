@@ -795,3 +795,93 @@ func TestRestoreDropsANamedAgentItsProjectNoLongerDeclares(t *testing.T) {
 		t.Errorf("note = %q, want %q", note, want)
 	}
 }
+
+// wrapped is the agentProject as a machine that wraps every command in a
+// login shell declares it: the default agent panel runs the named agent
+// claude, and both named agents are zsh wrappers, which no probe reads.
+func wrapped(t *testing.T) core.Project {
+	t.Helper()
+	proj := agentProject()
+	proj.Targets[3].Runtime.Panels[1] = revier.PanelSpec{
+		Kind: revier.PanelAgent, Title: "Claude Code", Agent: "claude",
+		Command: []string{"zsh", "-ilc", `exec agent.sh "$@"`, "zsh"},
+	}
+	p := prepared(t, proj)
+	p.Agents = []core.NamedAgent{
+		{Name: "claude", Command: []string{"zsh", "-ilc", `exec agent.sh "$@"`, "zsh"}},
+		{Name: "dtop", Command: []string{"zsh", "-ilc", `exec dtop "$@"`, "zsh"}},
+	}
+	return p
+}
+
+// A program started by hand in a panel carries no mark, so a save records it
+// by harness alone. Its restore opens the agent that runs that harness, marked
+// with its name so the next save records it, and never the default agent: a
+// dtop came back as claude. The probe that read dtop at the save need not
+// read the wrapper at the restore: the named agent dtop runs dtop.
+func TestRestoreOpensTheAgentThatRunsARecordedHarness(t *testing.T) {
+	dtop := revier.Panel{ID: "2", Kind: revier.PanelTool, Title: "dtop", Vars: map[string]string{}}
+	rt := hosttest.NewRuntime("rt")
+	dir := t.TempDir()
+	rt.Add("session:revier", "kitty", agent("1", "abc-123", dir), dtop)
+	saver := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{resumable(), &hosttest.FakeProbe{Harness: "dtop", Marker: "dtop"}}}
+	report, err := saver.Survey(t.Context(), []core.Project{wrapped(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _ := saver.Session(t.Context(), report)
+	if got, want := s.Projects[0].Targets[0].Agents, []session.Agent{{Harness: "claude", Session: "abc-123", Dir: dir}, {Harness: "dtop"}}; !slices.Equal(got, want) {
+		t.Fatalf("agents = %+v, want %+v", got, want)
+	}
+	plan := saver.RestorePlan(s, report)
+	if len(plan) != 1 {
+		t.Fatalf("plan = %+v, want the workspace", plan)
+	}
+
+	for name, probes := range map[string][]revier.AgentProbe{
+		"a probe reads dtop":      {resumable(), &hosttest.FakeProbe{Harness: "dtop", Marker: "dtop"}},
+		"no probe reads wrappers": {resumable()},
+	} {
+		t.Run(name, func(t *testing.T) {
+			rt := hosttest.NewRuntime("rt")
+			c := &core.Core{Runtime: rt, View: rt, Probes: probes}
+			want := []core.AgentOutcome{core.AgentResumed, core.AgentEmpty}
+			if got := c.Resumes(wrapped(t), "home", plan[0].Resumes); !slices.Equal(got, want) {
+				t.Errorf("Resumes = %v, want %v", got, want)
+			}
+			res, err := pressResuming(t.Context(), c, wrapped(t), "home", plan[0].Resumes)
+			if err != nil || !slices.Equal(res.Agents, want) {
+				t.Fatalf("press = %v, %v; want %v", res.Agents, err, want)
+			}
+			if len(rt.Tabs) != 1 || rt.Tabs[0].Real.Panels[0].Title != "dtop" || !slices.Equal(rt.Tabs[0].Real.Panels[0].Command, wrapped(t).Agents[1].Command) {
+				t.Fatalf("tabs = %+v, want the dtop agent's tab alone", rt.Tabs)
+			}
+			if want := map[string]string{revier.PanelAgentVar: "dtop"}; !maps.Equal(rt.Tabs[0].Vars, want) {
+				t.Errorf("vars = %v, want %v", rt.Tabs[0].Vars, want)
+			}
+		})
+	}
+}
+
+// An agent with no name whose harness no agent of the project runs is not
+// restored when the default agent is known to run another one: claude in its
+// place is not the agent that ran. The note names the harness.
+func TestRestoreDropsAnAgentWhoseHarnessNoAgentRuns(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.NewResumableProbe("claude", "Claude")}}
+	resumes := []core.Resume{{Harness: "claude"}, {Harness: "codex"}, {Harness: "claude"}}
+	want := []core.AgentOutcome{core.AgentEmpty, core.AgentUnknown, core.AgentEmpty}
+	if got := c.Resumes(named(t), "home", resumes); !slices.Equal(got, want) {
+		t.Errorf("Resumes = %v, want %v", got, want)
+	}
+	res, err := pressResuming(t.Context(), c, named(t), "home", resumes)
+	if err != nil || !slices.Equal(res.Agents, want) {
+		t.Fatalf("press = %v, %v; want %v", res.Agents, err, want)
+	}
+	if len(rt.Tabs) != 1 || rt.Tabs[0].Real.Panels[0].Title != "Claude Code" || len(rt.Tabs[0].Vars) != 0 {
+		t.Errorf("tabs = %+v, want the default agent's tab for claude alone", rt.Tabs)
+	}
+	if note, want := core.AgentsNote("opened", res.Agents, resumes, nil), `opened, 1 agent not restored: no agent of the project runs "codex"`; note != want {
+		t.Errorf("note = %q, want %q", note, want)
+	}
+}

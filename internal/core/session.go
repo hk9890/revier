@@ -53,7 +53,9 @@ func (a RestoreAction) String() string { return restoreNames[a] }
 // Resume is one recorded agent of a target: the harness its probe named, the
 // probe's own word for its conversation, and the directory it worked in.
 // Either of the last two may be empty. Agent is the named agent it runs, and
-// empty for the project's default agent.
+// empty when its tab carried no mark: the project's default agent, or a
+// program started by hand in a panel. Past the layout, a restore gives an
+// agent with no name the agent that runs its harness.
 type Resume struct {
 	Harness string
 	Session revier.SessionID
@@ -95,8 +97,9 @@ const (
 	// or pruned since the save.
 	AgentConversationGone
 	// AgentUnknown is not restored: it ran a named agent its project no
-	// longer declares, and another program in its place is not that agent
-	// (decisions.md D146).
+	// longer declares, or it has no name and no agent of its project runs its
+	// harness. Another program in its place is not that agent
+	// (decisions.md D146, D193).
 	AgentUnknown
 )
 
@@ -624,7 +627,7 @@ func (c *Core) Resumes(p Project, name revier.TargetName, resumes []Resume) []Ag
 	if err != nil {
 		return nil
 	}
-	_, added := c.agentTabs(host, p, layout, extra)
+	_, added, _ := c.agentTabs(host, p, layout, extra)
 	return append(outcomes, added...)
 }
 

@@ -368,14 +368,22 @@ func logAgents(r RestoreResult) {
 // recorded: how many start on their conversation, how many start empty because
 // the directory they worked in is gone or their conversation cannot be resumed
 // here, and how many cannot be started at all, with tabErr for the ones whose
-// tab failed to open and the name of each named agent the project no longer
-// declares. resumes is what was recorded, parallel to agents. An agent
-// recorded with no conversation starts empty as it always would, and is not
-// worth a word.
+// tab failed to open, the name of each named agent the project no longer
+// declares, and each harness that no agent of the project runs. resumes is
+// what was recorded, parallel to agents. An agent recorded with no
+// conversation starts empty as it always would, and is not worth a word.
 func AgentsNote(verb string, agents []AgentOutcome, resumes []Resume, tabErr error) string {
 	n := map[AgentOutcome]int{}
-	var unknown []string
+	var unknown, harnesses []string
+	unrun := 0
 	for i, o := range agents {
+		if o == AgentUnknown && i < len(resumes) && resumes[i].Agent == "" {
+			unrun++
+			if !slices.Contains(harnesses, strconv.Quote(resumes[i].Harness)) {
+				harnesses = append(harnesses, strconv.Quote(resumes[i].Harness))
+			}
+			continue
+		}
 		n[o]++
 		if o == AgentUnknown && i < len(resumes) && !slices.Contains(unknown, strconv.Quote(resumes[i].Agent)) {
 			unknown = append(unknown, strconv.Quote(resumes[i].Agent))
@@ -403,6 +411,9 @@ func AgentsNote(verb string, agents []AgentOutcome, resumes []Resume, tabErr err
 			named = "the named agents "
 		}
 		note += fmt.Sprintf(", %s not restored: the project no longer declares %s%s", Count(n[AgentUnknown], "agent"), named, strings.Join(unknown, ", "))
+	}
+	if unrun > 0 {
+		note += fmt.Sprintf(", %s not restored: no agent of the project runs %s", Count(unrun, "agent"), strings.Join(harnesses, ", "))
 	}
 	if n[AgentInTab] > 0 {
 		note += fmt.Sprintf(", %s not resumed: it ran in a tab target", Count(n[AgentInTab], "agent"))
