@@ -1,8 +1,9 @@
 //go:build live
 
 // Layer L4 for checkout: real git against repositories in temporary
-// directories. Nothing reaches the network - every origin is a local bare
-// repository - and mise's trust list is redirected to a temporary directory.
+// directories, or a sh script named git first on PATH. Nothing reaches the
+// network - every origin is a local bare repository or none - and mise's
+// trust list is redirected to a temporary directory.
 package checkout_test
 
 import (
@@ -112,7 +113,7 @@ func TestEnsureReportsACloneWithNoFatalLine(t *testing.T) {
 	for _, tc := range []struct {
 		says, want string
 	}{
-		{"echo 'error: something'\n", "exit status 1: error: something"},
+		{"echo 'error: something' >&2\n", "exit status 1: error: something"},
 		{"", "exit status 1"},
 	} {
 		t.Run(tc.want, func(t *testing.T) {

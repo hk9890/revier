@@ -106,8 +106,9 @@ func TestLinkRefusesThisMachineBeforeAskingIt(t *testing.T) {
 	}
 }
 
-// `revier link <host> <project>` writes the link and loads it: the host is
-// asked first, and a project it does not have is refused before any file.
+// `revier link <host> <project>` writes the link and loads it: a taken name
+// is refused before the host is asked; else the host is asked, and a project
+// it does not have is refused before any file.
 func TestLinkWritesALinkToAProjectTheHostHas(t *testing.T) {
 	a, remote := hostWith(t, "far")
 
@@ -140,6 +141,9 @@ func TestLinkWritesALinkToAProjectTheHostHas(t *testing.T) {
 	// taken, is refused before the host is asked.
 	if err := cmdLink(t.Context(), a, []string{"buildbox", "far"}); err != nil {
 		t.Fatalf("link with no --name: %v", err)
+	}
+	if _, err := os.Stat(config.ProjectFile(a.cfgRoot, "far")); err != nil {
+		t.Errorf("link with no --name: %v, want the link named after the project", err)
 	}
 	asked := len(remote.Asked)
 	err = cmdLink(t.Context(), a, []string{"buildbox", "far"})
