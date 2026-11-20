@@ -157,10 +157,19 @@ func (c *Core) Agent(ctx context.Context, p Project, addr string) (Agent, error)
 		return c.linkAgent(ctx, p, a, scope, snap, bound)
 	}
 
+	// A panel of a tab inside the named target is the tab's to name
+	// (decisions.md D155).
+	var tabs places
+	if a.byPanel {
+		tabs = c.tabPlaces(snap, p, bound)
+	}
 	var found []Agent
 	for _, h := range scope {
 		for _, panel := range h.inst.Panels {
 			if a.byPanel && panel.ID != a.panel {
+				continue
+			}
+			if t := tabs.of(h.inst.Ref, panel.ID); t != "" && t != h.target {
 				continue
 			}
 			probe, ok := c.agentProbe(panel)
@@ -333,7 +342,7 @@ func defaultAgent(found []Agent) (Agent, bool) {
 
 func notAgentReason(panel revier.Panel) string {
 	if panel.Kind == revier.PanelShell {
-		return "its foreground is a shell, where the text would run as a command"
+		return "its foreground is a shell, not an agent"
 	}
 	return "no probe recognises what runs in it"
 }
@@ -486,6 +495,9 @@ func (c *Core) Prompt(ctx context.Context, a Agent, text string, poll time.Durat
 	}
 	if strings.ContainsAny(text, "\r\n") {
 		return a.State, errors.New("a prompt is one line: a newline submits the text early and sends the rest as further prompts")
+	}
+	if strings.TrimSpace(text) == "" {
+		return a.State, errors.New("a prompt has text: an empty Enter starts no turn; agent send-keys sends one")
 	}
 
 	if err := w.SendText(ctx, a.Ref, a.Panel.ID, text); err != nil {

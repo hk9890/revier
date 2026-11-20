@@ -108,6 +108,10 @@ func TestAgentRefusesWhatIsNotAnAgent(t *testing.T) {
 			t.Errorf("Agent(%q) err = %v, want %v", tc.addr, err, tc.want)
 		}
 	}
+	// The reason holds for every command that names a panel, a read too.
+	if _, err := c.Agent(t.Context(), p, "home:1"); err == nil || !strings.Contains(err.Error(), "its foreground is a shell, not an agent") {
+		t.Errorf("Agent(home:1) err = %v, want the shell named as what is in the panel", err)
+	}
 	for _, addr := range []string{"nosuch", "home:9"} {
 		if _, err := c.Agent(context.Background(), p, addr); err == nil {
 			t.Errorf("Agent(%q): an address naming nothing must be an error", addr)
@@ -403,6 +407,18 @@ func TestPromptRefusesMoreThanOneLine(t *testing.T) {
 	}
 }
 
+// An empty or blank Enter starts no turn, so a wait after it would return at
+// once as if the turn had ended.
+func TestPromptRefusesAnEmptyOrBlankText(t *testing.T) {
+	for _, text := range []string{"", "   "} {
+		c, rt := agentCore(agentPanel("1", "idle"))
+		a, _ := c.Agent(t.Context(), prepared(t, project()), "")
+		if _, err := c.Prompt(t.Context(), a, text, time.Millisecond); err == nil || len(rt.Sent) != 0 {
+			t.Errorf("Prompt(%q): err = %v, sent %+v; want a refusal and nothing sent", text, err, rt.Sent)
+		}
+	}
+}
+
 // A working agent queues the prompt and nothing marks its arrival, so there
 // is nothing to wait for.
 func TestPromptToAWorkingAgentReturnsAtOnce(t *testing.T) {
@@ -452,5 +468,31 @@ func TestWorstIsTheFirstAgentInTheWorstState(t *testing.T) {
 	}
 	if _, ok := core.Worst(nil); ok {
 		t.Error("Worst(nil) reported an agent")
+	}
+}
+
+// A panel of a tab placed inside another target is addressed through the
+// tab's target alone: the target it sits inside names it no second time
+// (decisions.md D155). A tab no declared target holds stays the home's.
+func TestAPanelOfATabInsideHomeIsNotAddressedThroughHome(t *testing.T) {
+	marked := func(panel revier.Panel) revier.Panel {
+		panel.Vars = map[string]string{core.PanelTargetVar: "agent"}
+		return panel
+	}
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("demo", "", shellPanel("1"), marked(agentPanel("2", "idle")), marked(shellPanel("3")), agentPanel("4", "busy"))
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+	p := placeProject(t, "demo")
+
+	for _, addr := range []string{"home:2", "home:3"} {
+		if _, err := c.Agent(t.Context(), p, addr); err == nil || !strings.Contains(err.Error(), "home has no running panel") {
+			t.Errorf("Agent(%s) err = %v, want home to have no such panel", addr, err)
+		}
+	}
+	if a, err := c.Agent(t.Context(), p, "agent:2"); err != nil || a.Panel.ID != "2" {
+		t.Errorf("Agent(agent:2) = %+v, %v; want the tab's agent", a, err)
+	}
+	if a, err := c.Agent(t.Context(), p, "home:4"); err != nil || a.Panel.ID != "4" {
+		t.Errorf("Agent(home:4) = %+v, %v; want the agent of a tab no target holds", a, err)
 	}
 }

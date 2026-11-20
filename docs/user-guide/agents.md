@@ -29,7 +29,9 @@ revier agent send-keys shop esc                # interrupt, or answer a dialog
 
 The first argument is the agent's address: `<project>:<target>:<panel>`,
 for example `shop:home:7`. The agent list shows it in the pane, `revier list
---agents` prints it for each agent, and `agent new --no-focus` prints it. Two
+--agents` prints it for each agent, and `agent new --no-focus` prints it. A
+panel of a tab target is addressed through that tab's target only, also when
+the tab sits inside the home: `shop:agent:7`, not `shop:home:7`. Two
 short forms name the one agent there is: `shop`, the project's only agent, and
 `shop:agent`, the only agent in the target `agent`. Beside
 named agents, both name the default agent, the one that runs no named agent.
