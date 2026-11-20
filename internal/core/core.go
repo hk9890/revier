@@ -960,11 +960,13 @@ func (c *Core) bind(ctx context.Context, p Project, name revier.TargetName, befo
 	if err != nil || !found {
 		return revier.Instance{}, false, err
 	}
-	c.place(ctx, *p.Targets[i].Window, w.Ref)
+	var raised error
 	if raise {
-		if err := c.Window.Focus(ctx, w.Ref); err != nil {
-			return w, true, fmt.Errorf("%s: raise new %s: %w", c.Window.Name(), name, err)
-		}
+		raised = c.Window.Focus(ctx, w.Ref)
+	}
+	c.place(ctx, *p.Targets[i].Window, w.Ref)
+	if raised != nil {
+		return w, true, fmt.Errorf("%s: raise new %s: %w", c.Window.Name(), name, raised)
 	}
 	return w, true, nil
 }
@@ -1567,7 +1569,8 @@ func (c *Core) listed(ctx context.Context, projects []Project, st *state.State, 
 // no declared target of any project matches, since a declared one is reached
 // by its key already. Either way it claims nothing rather than the wrong
 // thing: nothing outside the window after the launch, nothing another
-// project's binding or attachment holds, and nothing when more than one
+// project's binding or attachment holds, for an action nothing a binding of
+// its own project holds, and nothing when more than one
 // candidate appeared at once. A restore launches one step after another, so
 // the window an earlier step bound can still be new to this survey.
 func (c *Core) claim(before, after []revier.Instance, p Project, st *state.State, now time.Time, projects []Project) (revier.TargetRef, bool) {

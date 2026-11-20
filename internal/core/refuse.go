@@ -52,8 +52,9 @@ func (c *Core) RefuseChange(v revier.ProjectView, s Settled, doing string) error
 // known: a target whose host could not list may be running (decisions.md
 // D89), and the launch on record, or a late launch while it is kept (D190),
 // may be the project's with its window still to appear: a rename moves the
-// late launch to a name its window's title never carries. The change waits
-// for either, not for a guess.
+// late launch to a name its window's title never carries. A target's launch
+// on record past its pending window is a late launch that no settle has set
+// aside yet. The change waits for either, not for a guess.
 func RefuseUnsettled(v revier.ProjectView, s Settled, doing string) error {
 	name := v.Project.Name
 	for _, t := range v.Targets {
@@ -65,7 +66,11 @@ func RefuseUnsettled(v revier.ProjectView, s Settled, doing string) error {
 	if s.Launch.Pending(now) && s.Launch.Project == name {
 		return fmt.Errorf("%s is coming up; wait for its window before %s it", name, doing)
 	}
-	for _, l := range s.Late {
+	late := s.Late
+	if l := s.Launch; l != nil && l.Target != "" {
+		late = append([]state.Launch{*l}, late...)
+	}
+	for _, l := range late {
 		if l.Kept(now) && l.Project == name {
 			return fmt.Errorf("%s: the late launch of %s waits for its window; wait for it before %s the project", name, l.Target, doing)
 		}

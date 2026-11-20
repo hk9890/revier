@@ -46,6 +46,7 @@ func TestRefuseChange(t *testing.T) {
 		{"a launch of another project", idle, core.Settled{Surveyed: true, Launch: &state.Launch{Project: "other", Target: "home", At: time.Now()}}, ""},
 		{"a late launch of it kept", idle, core.Settled{Surveyed: true, Late: lateEditor("demo", time.Now())}, "demo: the late launch of editor waits for its window; wait for it before renaming the project"},
 		{"a late launch of it past LateWindow", idle, core.Settled{Surveyed: true, Late: lateEditor("demo", time.Now().Add(-state.LateWindow-time.Second))}, ""},
+		{"a launch of it past its window and not set aside yet", idle, core.Settled{Surveyed: true, Launch: &lateEditor("demo", time.Now().Add(-state.BindWindow-time.Second))[0]}, "demo: the late launch of editor waits for its window"},
 		{"a late launch of another project", idle, core.Settled{Surveyed: true, Late: lateEditor("other", time.Now())}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
