@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/internal/procgroup"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -101,6 +102,11 @@ func (p *Probe) Match(panel revier.Panel) bool {
 // Inspect reports the status the listing gives the panel's process. A panel
 // with no session in it is unknown: Claude is running there, but revier
 // cannot see what it does.
+//
+// A listed status that Status does not know is unknown too, and is logged
+// once per process and status: a Claude Code release that renames a status
+// turns every agent unknown, and the log says why. It is no error, so the
+// directory, the session and the name stay on the state.
 func (p *Probe) Inspect(ctx context.Context, panel revier.Panel) (revier.AgentState, error) {
 	listed, err := p.listing(ctx)
 	if err != nil {
@@ -109,8 +115,23 @@ func (p *Probe) Inspect(ctx context.Context, panel revier.Panel) (revier.AgentSt
 	state := revier.AgentState{Harness: "claude", Activity: Activity(panel.Title)}
 	if s, ok := listed[panel.PID]; ok && panel.PID != 0 {
 		state.Status, state.Dir, state.Session, state.Name = Status(s.Status), s.Cwd, revier.SessionID(s.SessionID), s.Name
+		logging.Repeat(fmt.Sprintf("probe\x00claude\x00status\x00%d", panel.PID), "probe", unrecognised(s.Status), "probe", "claude", "pid", panel.PID)
 	}
 	return state, nil
+}
+
+// unrecognised is the error of a listed status that Status maps to unknown,
+// cut so that a runaway value does not fill the log line. It is nil for a
+// status Status knows.
+func unrecognised(status string) error {
+	if Status(status) != revier.StatusUnknown {
+		return nil
+	}
+	const most = 48
+	if r := []rune(status); len(r) > most {
+		status = string(r[:most]) + "…"
+	}
+	return fmt.Errorf("claude agents --json: unrecognised status %q", status)
 }
 
 // Status maps a listed status. A value Claude Code adds later is unknown, not
