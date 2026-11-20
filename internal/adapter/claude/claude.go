@@ -115,7 +115,7 @@ func (p *Probe) Inspect(ctx context.Context, panel revier.Panel) (revier.AgentSt
 	state := revier.AgentState{Harness: "claude", Activity: Activity(panel.Title)}
 	if s, ok := listed[panel.PID]; ok && panel.PID != 0 {
 		state.Status, state.Dir, state.Session, state.Name = Status(s.Status), s.Cwd, revier.SessionID(s.SessionID), s.Name
-		logging.Repeat(fmt.Sprintf("probe\x00claude\x00status\x00%d", panel.PID), "probe", unrecognised(s.Status), "probe", "claude", "pid", panel.PID)
+		logging.Repeat(fmt.Sprintf("probe\x00claude\x00status\x00%d", panel.PID), "probe", unrecognised(s.Status), "probe", "claude", "agent_pid", panel.PID)
 	}
 	return state, nil
 }

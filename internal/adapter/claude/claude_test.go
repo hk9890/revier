@@ -136,6 +136,9 @@ func TestInspectLogsAStatusItDoesNotKnow(t *testing.T) {
 			if len(lines) != 1 || lines[0]["level"] != "WARN" || lines[0]["msg"] != "probe" {
 				t.Fatalf("logged %v, want one WARN probe", lines)
 			}
+			if lines[0]["pid"] != float64(processPID) || lines[0]["agent_pid"] != float64(pid) {
+				t.Errorf("logged %v, want pid the process's and agent_pid the agent's", lines[0])
+			}
 			msg, _ := lines[0]["err"].(string)
 			if !strings.Contains(msg, tc.want) || len(msg) >= 100 {
 				t.Errorf("err = %q, want it to hold %s and be under 100 characters", msg, tc.want)
@@ -150,12 +153,16 @@ func TestInspectLogsAStatusItDoesNotKnow(t *testing.T) {
 	}
 }
 
+// processPID is the pid logged sets on every line, as logging.Setup sets the
+// process's own.
+const processPID = 1
+
 // logged captures every log line of the test, as JSON.
 func logged(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	var out bytes.Buffer
 	previous := slog.Default()
-	slog.SetDefault(slog.New(slog.NewJSONHandler(&out, nil)))
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&out, nil)).With("pid", processPID))
 	t.Cleanup(func() { slog.SetDefault(previous) })
 	return &out
 }
