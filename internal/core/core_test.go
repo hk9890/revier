@@ -854,7 +854,7 @@ func TestClaimBounds(t *testing.T) {
 // first step bound is still new to the next survey, and the class rule of the
 // second launch accepts it while its title is empty: a window another
 // project's binding or attachment holds is not the launch's to claim. One the
-// launch's own project holds still is.
+// launch's own project attached still is; one it bound is not.
 func TestClaimSkipsAWindowAnotherProjectHolds(t *testing.T) {
 	projects := []core.Project{prepared(t, project())}
 	now := time.Now()
@@ -904,6 +904,50 @@ func TestClaimSkipsAWindowAnotherProjectHolds(t *testing.T) {
 	st, refs = settled(action, "revier", attach, stray)
 	if got := st.Attached["revier"]; len(got) != 1 || got[0].ID != refs[0].ID || st.Launch != nil {
 		t.Errorf("attached %v, launch %v; want the window revier holds claimed and the launch settled", got, st.Launch)
+	}
+}
+
+// A launch's bind takes its window by class before the title its rule
+// matches has settled. An action of the same project launched before the
+// next survey does not attach that window as well: it is the target's, and
+// the action's own window, new beside it, is the action's.
+func TestAnActionsClaimSkipsAWindowItsProjectBound(t *testing.T) {
+	projects := []core.Project{classAndTitle(t)}
+	now := time.Now()
+	for _, tc := range []struct {
+		name   string
+		stray  bool
+		attach bool
+	}{
+		{"the bound window alone is new", false, false},
+		{"the action's window is new beside it", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wm := hosttest.New("wm")
+			led := &ledger{st: state.State{Launch: &state.Launch{Project: "revier", At: now.Add(-time.Second)}}}
+			c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm, Ledger: led}
+			settle := func() *state.State {
+				r, err := c.Survey(t.Context(), projects)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return c.Settle(r, projects, now)
+			}
+			settle()
+			editor := wm.AddInstance(revier.Instance{Title: "", Class: "code"})
+			led.st.Bind("revier", "editor", editor)
+			var stray revier.TargetRef
+			if tc.stray {
+				stray = wm.AddInstance(revier.Instance{Title: "Pull requests", Class: "chromium"})
+			}
+			got := settle().Attached["revier"]
+			switch {
+			case tc.attach && (len(got) != 1 || got[0].ID != stray.ID):
+				t.Errorf("attached %v, want the action's own window %v alone", got, stray)
+			case !tc.attach && len(got) != 0:
+				t.Errorf("attached %v, want none: the window is the editor's", got)
+			}
+		})
 	}
 }
 
@@ -1215,6 +1259,29 @@ func TestALaunchedWindowIsPlacedWhereTheProjectSays(t *testing.T) {
 	got := wm.Placements[res.Ref.ID]
 	want := []string{"right", "top", "75%", "100%"}
 	if !slices.Equal(got, want) {
+		t.Errorf("placement = %v, want %v", got, want)
+	}
+}
+
+// A detached launch's window that the compositor refuses to raise is still
+// the launch's: it is bound and placed, and the press reports the raise.
+func TestALaunchedWindowWhoseRaiseFailsIsPlaced(t *testing.T) {
+	raw := project()
+	raw.Targets[1].Window.Place = "right top 75% 100%"
+	wm := hosttest.New("wm")
+	wm.Detached = true
+	wm.FocusErr = errors.New("focus refused")
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm, Ledger: &ledger{}}
+
+	_, err := press(t.Context(), c, prepared(t, raw), "editor")
+	if !errors.Is(err, wm.FocusErr) {
+		t.Errorf("err = %v, want the raise failure", err)
+	}
+	ref := landed(t, c, "editor")
+	if ref.IsZero() {
+		t.Fatal("the window that appeared is not bound")
+	}
+	if got, want := wm.Placements[ref.ID], []string{"right", "top", "75%", "100%"}; !slices.Equal(got, want) {
 		t.Errorf("placement = %v, want %v", got, want)
 	}
 }
