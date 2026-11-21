@@ -30,7 +30,7 @@ import (
 //
 // A row is the agent's state, what it is on, and how long ago it spoke, over
 // its project and the directory it works in, and the tokens and the cache of
-// its conversation. Beside the list the pane names the agent, with the name
+// its conversation; in its gutter, a stripe while that cache is warm. Beside the list the pane names the agent, with the name
 // its harness gives it, and mirrors its terminal (mirror.go).
 
 // switchChord is the key that switches between the two lists: alt+space, the
@@ -266,7 +266,8 @@ func (d agentDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 
 // agentLines is an agent's row, in the agent list and in the project pane's
 // Agents alike: its state, what it is on and how long ago it spoke, over
-// where it works and the tokens and the cache, under the age. matches
+// where it works and the tokens and the cache, under the age, with a stripe
+// down its gutter while the cache is warm. matches
 // are the byte positions of filterValue the query matched. A selected or
 // pointed-at row is lit on every line; cursor is whether a selected row
 // carries the cursor's bar.

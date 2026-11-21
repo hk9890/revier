@@ -92,8 +92,9 @@ func TestEveryAgentStateIsItsGlyphInOneColumn(t *testing.T) {
 
 // A row is the agent's state, by its glyph alone, and what it is on, without
 // its harness, over its project; the age of what it said last stands at the
-// row's right end, and the cache's minutes end under the age. The name its
-// harness gives it is the pane's.
+// row's right end, and the cache's minutes end under the age. The warm
+// cache's stripe stands in the gutter. The name its harness gives it is the
+// pane's.
 func TestAnAgentRowLeadsWithItsStateAndNamesItsProject(t *testing.T) {
 	now := time.Now()
 	m, _, _ := listedWorld(t, 140, 20,
@@ -120,8 +121,8 @@ func TestAnAgentRowLeadsWithItsStateAndNamesItsProject(t *testing.T) {
 }
 
 // The project pane's Agents draw a row as the agent list does: the state, what
-// the agent is on and its age, over its worktree and its tokens and cache. The
-// project, which every row there shares, is left out, and so is a second line
+// the agent is on and its age, over its worktree and its tokens and cache,
+// with the warm cache's stripe in the gutter. The project, which every row there shares, is left out, and so is a second line
 // that would be blank.
 func TestTheProjectPaneDrawsAnAgentAsTheAgentListDoes(t *testing.T) {
 	m, _, _ := listedSurface(t, 160, 30,
