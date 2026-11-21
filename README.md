@@ -70,7 +70,7 @@ territory.
   the restore.
   See [Save and restore sessions](docs/user-guide/projects.md#save-and-restore-sessions).
 
-![Alt+S and Alt+Q show the shutdown plan and close every project; the next start offers the restore](.github/assets/restore.webp)
+![The shutdown plan closes every project; the next start offers the restore](.github/assets/restore.webp)
 
 **Reach further**
 

@@ -211,11 +211,12 @@ func (c *Core) raisableShown(ctx context.Context, snap snapshot, failed hostErrs
 //
 // It logs "view opened again over a live instance" at Info with view, ref and
 // target. The view opened a window over an instance that no window of the
-// view showed. A press of a target or of a tab, a restore, and an agent or
-// shell tab opened with the focus pass the place of the instance's target
-// (decisions.md D186). An agent focus, a focus of a ref and a surface raise
-// (RaiseSelf) pass none, and nothing is placed. The window host must then
-// list the window within PlaceWait (placeShown).
+// view showed. The instance's target places that window once, as a launch
+// (decisions.md D186). A press of a target or of a tab, a restore, and an
+// agent or shell tab opened with the focus pass that place. An agent focus, a
+// focus of a ref and a surface raise (RaiseSelf) pass none, and nothing is
+// placed. The window host must then list the window within PlaceWait
+// (placeShown).
 func (c *Core) shownAgain(ctx context.Context, inst revier.Instance, name revier.TargetName, place string) (revier.TargetRef, error) {
 	slog.Info("view opened again over a live instance", "view", c.View.Name(), "ref", inst.Ref, "target", name)
 	if opener, ok := c.opener(c.terminal()); ok {

@@ -35,8 +35,8 @@ Its rules are not visible from the code.
 
 **MUST read [docs/design/README.md](docs/design/README.md) before the first edit
 under `pkg/revier/`, `internal/core/` or `docs/design/`, and before writing any
-plan that touches `pkg/revier/` or `internal/core/`.** The decision log names
-the models it rejected, so a rejected idea is not proposed again.
+plan that touches `cmd/`, `pkg/` or `internal/`.** The decision log names the
+models it rejected, so a rejected idea is not proposed again.
 
 ### Testing and verification
 
