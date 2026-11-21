@@ -103,6 +103,9 @@ func TestAnAgentRowLeadsWithItsStateAndNamesItsProject(t *testing.T) {
 	first, _, _ := strings.Cut(all[4], "│")
 	second, _, _ := strings.Cut(all[5], "│")
 	g := theme.Default().Glyphs
+	if !strings.HasPrefix(strings.TrimLeft(first, " "+g.Cursor), g.Warm) || !strings.HasPrefix(strings.TrimLeft(second, " "+g.Cursor), g.Warm) {
+		t.Errorf("row = %q over %q, want the warm cache's stripe in the gutter of both lines", first, second)
+	}
 	if !strings.HasPrefix(strings.TrimLeft(first, " "+g.Cursor+g.Warm), g.Idle+" Taskmgr tickets") || strings.Contains(first, "idle") || strings.Contains(first, "claude") {
 		t.Errorf("row = %q, want the state's glyph leading the summary, no word for the state, and no harness", first)
 	}
@@ -122,8 +125,8 @@ func TestAnAgentRowLeadsWithItsStateAndNamesItsProject(t *testing.T) {
 
 // The project pane's Agents draw a row as the agent list does: the state, what
 // the agent is on and its age, over its worktree and its tokens and cache,
-// with the warm cache's stripe in the gutter. The project, which every row there shares, is left out, and so is a second line
-// that would be blank.
+// with the warm cache's stripe in the gutter. The project, which every row
+// there shares, is left out, and so is a second line that would be blank.
 func TestTheProjectPaneDrawsAnAgentAsTheAgentListDoes(t *testing.T) {
 	m, _, _ := listedSurface(t, 160, 30,
 		listed{project: "alpha", status: revier.StatusIdle, on: "Taskmgr tickets", said: "done",
@@ -131,10 +134,13 @@ func TestTheProjectPaneDrawsAnAgentAsTheAgentListDoes(t *testing.T) {
 	rows := strings.Split(pane(m.Said()), "\n")
 	var first, second string
 	if i := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "Taskmgr tickets") }); i >= 0 && i+1 < len(rows) {
-		// The gutter carries the warm cache's stripe.
-		gutter := " " + theme.Default().Glyphs.Warm
-		first, second = strings.TrimLeft(rows[i], gutter), strings.TrimLeft(rows[i+1], gutter)
+		first, second = rows[i], rows[i+1]
 	}
+	warm := theme.Default().Glyphs.Warm
+	if !strings.HasPrefix(first, warm) || !strings.HasPrefix(second, warm) {
+		t.Errorf("row = %q over %q, want the warm cache's stripe in the gutter of both lines", first, second)
+	}
+	first, second = strings.TrimLeft(first, " "+warm), strings.TrimLeft(second, " "+warm)
 	if !strings.HasPrefix(first, theme.Default().Glyphs.Idle+" Taskmgr tickets") || strings.Contains(first, "idle") || !strings.HasSuffix(first, "4m") || strings.Contains(first, "claude") {
 		t.Errorf("first line = %q, want the state's glyph, the summary and the age, and no harness", first)
 	}
@@ -533,5 +539,16 @@ func TestTheCoolingKeyWalksTheWarmCachesInTheOrderTheyGoCold(t *testing.T) {
 		if row := selectedRow(t, m); !strings.Contains(row, want) {
 			t.Fatalf("selected = %q after alt+w, want %s", row, want)
 		}
+	}
+
+	// A cursor the user moved onto a warm row starts a new walk, at the cache
+	// that goes cold first, not at the one after the row it is on.
+	m, _ = press(m, "up")
+	if row := selectedRow(t, m); !strings.Contains(row, "rest-mid") {
+		t.Fatalf("selected = %q after up, want rest-mid", row)
+	}
+	m, _ = press(m, "alt+w")
+	if row := selectedRow(t, m); !strings.Contains(row, "rest-soon") {
+		t.Errorf("selected = %q after up and alt+w, want rest-soon, the cache that goes cold first", row)
 	}
 }

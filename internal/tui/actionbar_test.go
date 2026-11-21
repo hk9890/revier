@@ -485,6 +485,7 @@ func TestAltHListsEveryKeyAndEscLeaves(t *testing.T) {
 		"ctrl+y", "sync",
 		"ctrl+shift+u", "go to home",
 		"alt+space", "open revier", "switch between the projects and the agents",
+		"alt+w", "prompt cache goes cold next",
 	} {
 		if !strings.Contains(screen, want) {
 			t.Errorf("help screen does not name %q:\n%s", want, screen)

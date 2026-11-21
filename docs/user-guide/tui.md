@@ -140,11 +140,13 @@ Each agent takes two lines:
   the next prompt to that agent then reads the whole conversation again.
 - The stripe left of the state: the agent's prompt cache is warm. It is
   green, and yellow in the last 5 minutes. The rows with a warm cache form
-  one ruler down the list, and a gap in it is an agent whose cache is cold.
+  one ruler down the list. A gap in it is an agent whose cache is cold, or one
+  whose cache revier does not know, such as an agent that is not Claude Code.
 
 Press alt+w to go to the agent whose prompt cache goes cold next. Press it
 again to go to the one after that. Working agents are skipped: their own turn
-keeps the cache warm.
+keeps the cache warm. alt+w works on the agent list only; on the project
+list it is free for a target or an action.
 
 Type to filter by what the agent does, its project or its worktree. The pane
 shows the agent's [address](agents.md#drive-an-agent-from-a-script), its

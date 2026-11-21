@@ -30,8 +30,9 @@ import (
 //
 // A row is the agent's state, what it is on, and how long ago it spoke, over
 // its project and the directory it works in, and the tokens and the cache of
-// its conversation; in its gutter, a stripe while that cache is warm. Beside the list the pane names the agent, with the name
-// its harness gives it, and mirrors its terminal (mirror.go).
+// its conversation; in its gutter, a stripe while that cache is warm. Beside
+// the list the pane names the agent, with the name its harness gives it, and
+// mirrors its terminal (mirror.go).
 
 // switchChord is the key that switches between the two lists: alt+space, the
 // default of the desktop key that opens the surface. On a desktop that takes
@@ -219,6 +220,7 @@ type agentList struct {
 	filter string          // that query, held here so a refresh can re-apply it
 	top    bool            // it opened and the user has not acted on it: every reload puts the cursor on the row it opens on
 	place  bool            // the list chose the cursor's row; the next body sync places the list around it
+	cooled *listedKey      // the row the last alt+w chose, until another key is pressed
 }
 
 func newAgentScreen(th theme.Theme) agentList {
@@ -267,10 +269,9 @@ func (d agentDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 // agentLines is an agent's row, in the agent list and in the project pane's
 // Agents alike: its state, what it is on and how long ago it spoke, over
 // where it works and the tokens and the cache, under the age, with a stripe
-// down its gutter while the cache is warm. matches
-// are the byte positions of filterValue the query matched. A selected or
-// pointed-at row is lit on every line; cursor is whether a selected row
-// carries the cursor's bar.
+// down its gutter while the cache is warm. matches are the byte positions of
+// filterValue the query matched. A selected or pointed-at row is lit on every
+// line; cursor is whether a selected row carries the cursor's bar.
 //
 // inPane draws the row for the project pane: what the agent is on wraps
 // under itself rather than being cut, and the second line leaves out the
@@ -340,7 +341,7 @@ func agentLines(th theme.Theme, it agentItem, matches []int, width int, sel, ove
 			// click lands on the row drawn under the pointer.
 			lines = append(lines, fill(clipTo(prefix+state+text+age, width), width, style))
 		} else {
-			lines = append(lines, fill(prefix+space(indent-2)+text, width, style))
+			lines = append(lines, fill(prefix+space(listedStateWidth)+text, width, style))
 		}
 	}
 
@@ -365,7 +366,7 @@ func agentLines(th theme.Theme, it agentItem, matches []int, width int, sel, ove
 	if right != "" {
 		room -= gridGap
 	}
-	second := prefix + space(indent-2) + lit(ellipsis(where, room), from)
+	second := prefix + space(listedStateWidth) + lit(ellipsis(where, room), from)
 	second += space(width-lipgloss.Width(second)-lipgloss.Width(right)) + right
 
 	return strings.Join(append(lines, fill(second, width, style)), "\n")
@@ -495,33 +496,45 @@ func (al *agentList) selectOpenRow() {
 }
 
 // selectCooling puts the cursor on the agent whose prompt cache goes cold
-// next, of those whose cache is warm at now. A working agent is passed over:
-// its own turn keeps its cache warm. With the cursor on one of them already,
-// it goes to the one that goes cold after it, and from the last back to the
-// first, so each press walks the warm caches in the order they go cold.
-func (al *agentList) selectCooling(now time.Time) {
+// next, of those whose row is striped warm, and reports whether it found one.
+// A working agent is passed over: its own turn keeps its cache warm. While
+// the cursor is still on the row the last press chose, it goes to the one
+// that goes cold after it, and from the last back to the first, so presses in
+// a row walk the warm caches in the order they go cold. An agent under two
+// projects is one stop, on its first row.
+func (al *agentList) selectCooling() bool {
 	type warm struct {
 		row   int
+		agent agentKey
 		until time.Time
 	}
 	var rows []warm
+	seen := map[agentKey]bool{}
 	for i, item := range al.list.VisibleItems() {
 		it, ok := item.(agentItem)
-		if ok && it.agent.State.Status != revier.StatusRunning && it.detail.CacheUntil.After(now) {
-			rows = append(rows, warm{row: i, until: it.detail.CacheUntil})
+		if !ok || !it.warm || it.agent.State.Status == revier.StatusRunning || seen[keyOf(it.agent)] {
+			continue
 		}
+		seen[keyOf(it.agent)] = true
+		rows = append(rows, warm{row: i, agent: keyOf(it.agent), until: it.detail.CacheUntil})
 	}
 	if len(rows) == 0 {
-		return
+		return false
 	}
 	sort.SliceStable(rows, func(a, b int) bool { return rows[a].until.Before(rows[b].until) })
 	next := 0
-	for i, r := range rows {
-		if r.row == al.list.Index() {
-			next = (i + 1) % len(rows)
+	if at, ok := al.selected(); ok && al.cooled != nil && at.key() == *al.cooled {
+		for i, r := range rows {
+			if r.agent == keyOf(at.agent) {
+				next = (i + 1) % len(rows)
+			}
 		}
 	}
 	al.list.Select(rows[next].row)
+	chosen, _ := al.selected()
+	key := chosen.key()
+	al.cooled = &key
+	return true
 }
 
 // selected is the row under the cursor.
@@ -590,8 +603,9 @@ func (m Model) switchKey() string {
 func (m Model) agentsKey(msg keyPress) (tea.Model, tea.Cmd) {
 	m.err = nil
 	if key.Matches(msg, m.keys.Cooling) {
-		m.agents.top = false
-		m.agents.selectCooling(m.now())
+		if m.agents.selectCooling() {
+			m.agents.top = false
+		}
 		return m, nil
 	}
 	res, cmd := m.agents.key(m.surface(), msg)
@@ -618,6 +632,7 @@ func (m Model) agentsKey(msg keyPress) (tea.Model, tea.Cmd) {
 // and Esc.
 func (al *agentList) key(sf surface, msg keyPress) (agentsResult, tea.Cmd) {
 	al.top = false
+	al.cooled = nil
 	if by, ok := sf.keys.move(msg, func(int) int { return sf.page }); ok {
 		moveRow(&al.list, by)
 		return agentsResult{}, nil

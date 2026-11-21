@@ -169,7 +169,7 @@ var glyphSets = map[string]Glyphs{
 		Running: "*", Stopped: "-", Cursor: ">",
 		NeedsYou: "!", Working: "|", Idle: ".", Unknown: "?",
 		Start: "+", Keep: "=", Skip: "x", Linked: "~",
-		Branch: "|", LastBranch: "`", Cache: "c", Warm: "|",
+		Branch: "|", LastBranch: "`", Cache: "c", Warm: ":",
 	},
 }
 
