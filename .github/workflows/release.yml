@@ -59,8 +59,8 @@ jobs:
         run: scripts/release-notes "$GITHUB_REF_NAME" > "$RUNNER_TEMP/release-notes.md"
 
       # The binary is pinned as the action is: this job holds write and
-      # signing permissions. ci.yml's `goreleaser check` pins the same one;
-      # bump both together.
+      # signing permissions. ci.yml's two goreleaser steps pin the same one;
+      # bump all together.
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:

@@ -29,8 +29,8 @@ mise use -g github:hk9890/revier
 
 Or extract `revier_<version>_linux_<arch>.tar.gz` from the
 [releases page](https://github.com/hk9890/revier/releases) onto your PATH,
-for example with `tar -xzf <file> -C ~/.local/bin revier`. The archive also
-holds the `LICENSE` file.
+for example with `tar -xzf <file> -C ~/.local/bin revier`. Naming `revier`
+extracts only the binary.
 
 ### Verify a download
 

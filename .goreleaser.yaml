@@ -2,6 +2,14 @@ version: 2
 
 project_name: revier
 
+# The licence texts of everything the static binary links: each third-party
+# module's, then the Go standard library's, which go-licenses leaves out. The
+# archives carry them, so each run writes them and no commit holds them.
+before:
+  hooks:
+    - go run github.com/google/go-licenses/v2@v2.0.1 save ./cmd/revier --save_path third_party_licenses --force --ignore github.com/hk9890/revier
+    - sh -c 'mkdir third_party_licenses/go && cp "$(go env GOROOT)/LICENSE" third_party_licenses/go/LICENSE'
+
 builds:
   - id: revier
     main: ./cmd/revier
@@ -29,11 +37,23 @@ archives:
       - revier
     formats:
       - tar.gz
-    # The binary and the licence notice MIT asks every copy to carry. Naming
-    # the one file replaces GoReleaser's default of adding README and
-    # CHANGELOG as well.
+    # The binary and the licence notices that MIT and BSD-3-Clause ask every
+    # copy to carry: revier's own, and those the `before` hooks write. Naming
+    # the files replaces GoReleaser's default of adding README and CHANGELOG
+    # as well.
     files:
-      - LICENSE
+      - src: LICENSE
+        info: &root_owned
+          owner: root
+          group: root
+          mode: 0644
+      - src: third_party_licenses/**/*
+        info: *root_owned
+    # Owned by root, not by the user the release ran as: tar keeps the
+    # recorded owner when root extracts.
+    builds_info:
+      owner: root
+      group: root
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ if eq .Arch "amd64" }}x64{{ else }}{{ .Arch }}{{ end }}
 

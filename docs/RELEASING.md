@@ -11,10 +11,15 @@ One setting that looks wrong and is not: cosign is pinned to **v2.6.5**
 because v3 defaults to `--new-bundle-format`, which the `--output-signature`
 and `--output-certificate` flags in `.goreleaser.yaml` do not accept.
 
-GoReleaser is pinned in three places: `release.yml`, the `goreleaser check`
-step of `.github/workflows/ci.yml`, and the `go install` line of
-[Local fallback](#local-fallback). Bump all three in one change; no check
-compares them.
+GoReleaser is pinned in four places: `release.yml`, the `goreleaser check`
+and `goreleaser snapshot` steps of `.github/workflows/ci.yml`, and the
+`go install` line of [Local fallback](#local-fallback). Bump all four in one
+change; no check compares them.
+
+Each archive holds `revier`, the `LICENSE` file, and under
+`third_party_licenses/` the licence of each module in the binary and of the
+Go standard library. The `before` hooks of `.goreleaser.yaml` write that
+directory on each run; it is never committed.
 
 ## Cut a release
 
