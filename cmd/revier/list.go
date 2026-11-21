@@ -32,6 +32,9 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	if *match != "" && len(pos) > 0 {
 		return errors.New("usage: revier list --match <word> takes no project names")
 	}
+	if *conversations && (!*asJSON || *agents) {
+		return errors.New("usage: revier list --conversations needs --json and no --agents")
+	}
 	// Named, the list is those projects alone. This is how a revier on
 	// another machine is asked about the projects that live there
 	// (decisions.md D40), and a name it does not know is an error, so a

@@ -27,6 +27,18 @@ func TestAgentNewTakesOneName(t *testing.T) {
 	}
 }
 
+// A negative --lines is a wrong value, not a wrong form, so the refusal
+// names the flag; the other mistakes still get the usage line.
+func TestAgentReadNamesANegativeLines(t *testing.T) {
+	err := cmdAgentRead(io.Discard, []string{"demo:agent:t1", "--screen", "--lines", "-1"})
+	if err == nil || !strings.Contains(err.Error(), "--lines must not be negative") {
+		t.Errorf("err = %v, want --lines named", err)
+	}
+	if err := cmdAgentRead(io.Discard, nil); err == nil || !strings.Contains(err.Error(), "usage: revier agent read <agent>") {
+		t.Errorf("err = %v, want the usage", err)
+	}
+}
+
 // agentDesktop is the demo workspace open on the runtime: its own tab holds
 // a shell and the declared agent, panels 1 and 2, and the tab `revier agent
 // new` added holds an agent and the shell beside it, panels 3 and 4. Every

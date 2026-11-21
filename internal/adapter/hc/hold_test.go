@@ -92,8 +92,17 @@ func TestAHeldWindowEndsWhenRevierRemovesItsTerminal(t *testing.T) {
 		_, err := (&hc.Host{Socket: sock}).Hold(t.Context(), "t1", never, io.Discard)
 		done <- err
 	}()
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+	deadline := time.After(5 * time.Second)
 	for len(c.paramsOf("terminal.label")) == 0 {
-		time.Sleep(10 * time.Millisecond)
+		select {
+		case <-tick.C:
+		case err := <-done:
+			t.Fatalf("Hold returned %v before it held the terminal", err)
+		case <-deadline:
+			t.Fatal("Hold never labelled the terminal held")
+		}
 	}
 	c.mu.Lock()
 	c.terminals = nil

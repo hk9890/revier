@@ -117,7 +117,7 @@ named `revier_<version>_linux_<arch>.tar.gz`, with `x64` or `arm64` as the
 architecture:
 
 ```bash
-tar -xzf revier_<version>_linux_x64.tar.gz -C ~/.local/bin
+tar -xzf revier_<version>_linux_x64.tar.gz -C ~/.local/bin revier
 ```
 
 `revier version` prints what is installed. To install from source instead,

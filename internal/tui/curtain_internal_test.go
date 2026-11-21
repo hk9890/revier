@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -356,6 +357,15 @@ func TestALongWalkFitsTheMonitor(t *testing.T) {
 		}
 	}
 	buttonDrawnAt(t, m, "Close")
+}
+
+// Rows that exactly fill the room all show, with no line that counts more.
+func TestRowsThatFillTheRoomAllShow(t *testing.T) {
+	rows := []string{"p00 home", "p01 home", "p02 editor"}
+	got := curtainModel{th: theme.Default()}.fit(rows, nil, len(rows))
+	if !slices.Equal(got, rows) {
+		t.Errorf("fit = %q, want %q", got, rows)
+	}
 }
 
 // A note of several lines, as an error that joins several, stays on one

@@ -23,7 +23,7 @@ var (
 	ErrNoAgent = errors.New("no agent panel")
 
 	// ErrNotAgent refuses a panel no probe claims, or one whose foreground is
-	// a shell: text typed there runs as a command. A probe can still claim a
+	// a shell, which holds no agent to type to or read. A probe can still claim a
 	// shell - the kitty marker outlives the agent in a `--hold` window - which
 	// is why the foreground is checked as well.
 	ErrNotAgent = errors.New("not an agent panel")
@@ -134,7 +134,8 @@ func Worst(agents []revier.AgentView) (revier.AgentState, bool) {
 // Agent finds the agent panel addr names in a project. addr is what follows
 // the project in the agent's address: empty, for the project's only agent; a
 // target name, for the only agent in that target; or a target and a panel id,
-// <target>:<panel>, for that panel of the target (decisions.md D155). Where
+// <target>:<panel>, for that panel of the target, unless a tab of another
+// target holds it, whose address it is then (decisions.md D155). Where
 // several agents run in what addr names, the only one that is no named
 // agent's is the default agent, and the one meant (D145).
 func (c *Core) Agent(ctx context.Context, p Project, addr string) (Agent, error) {
@@ -152,6 +153,11 @@ func (c *Core) Agent(ctx context.Context, p Project, addr string) (Agent, error)
 	scope := c.running(snap, p, bound, a.target)
 	if a.target != "" && len(scope) == 0 {
 		return Agent{}, fmt.Errorf("%s is not running", a.where)
+	}
+	if a.byPanel {
+		if err := c.inAnotherTab(snap, p, bound, a, scope); err != nil {
+			return Agent{}, err
+		}
 	}
 	if p.Remote != nil {
 		return c.linkAgent(ctx, p, a, scope, snap, bound)
@@ -219,6 +225,19 @@ func (a address) noPanel() error {
 	return fmt.Errorf("%s: %s has no running panel %q", a.where, a.target, a.panel)
 }
 
+// inAnotherTab refuses a panel address whose panel sits in a tab of another
+// target than the one it names: the tab's target is its one address
+// (decisions.md D155), and the refusal gives it.
+func (c *Core) inAnotherTab(snap snapshot, p Project, bound Bindings, a address, scope []held) error {
+	tabs := c.tabPlaces(snap, p, bound)
+	for _, h := range scope {
+		if t := tabs.of(h.inst.Ref, a.panel); t != "" && t != h.target {
+			return fmt.Errorf("%s: panel %q is in the tab %s; its address is %s", a.where, a.panel, t, Address(p.Name, t, a.panel))
+		}
+	}
+	return nil
+}
+
 // ambiguous refuses where, which names every agent of found, with the
 // address of each. An agent no target holds - a link's tab moved to another
 // window - has none, and is named by its panel, which only the agent list
@@ -274,11 +293,16 @@ func (c *Core) places(snap snapshot, p Project, bound Bindings) places {
 	return pl
 }
 
-// tabPlaces is places of the open tabs alone.
+// tabPlaces is places of the open tabs alone: the tabs tabView reports, so
+// that a refused tab, or one no runtime here can open, places no panel the
+// survey labels as its container's.
 func (c *Core) tabPlaces(snap snapshot, p Project, bound Bindings) places {
 	pl := places{tabs: map[string]revier.TargetName{}}
+	if _, ok := c.opener(c.terminal()); !ok {
+		return pl
+	}
 	for i := range p.Targets {
-		if p.isTab(i) {
+		if p.isTab(i) && p.compiled[i].err == nil {
 			pl.addTab(c.heldTab(snap, p, i, bound))
 		}
 	}
@@ -333,7 +357,7 @@ func defaultAgent(found []Agent) (Agent, bool) {
 
 func notAgentReason(panel revier.Panel) string {
 	if panel.Kind == revier.PanelShell {
-		return "its foreground is a shell, where the text would run as a command"
+		return "its foreground is a shell, not an agent"
 	}
 	return "no probe recognises what runs in it"
 }
@@ -486,6 +510,9 @@ func (c *Core) Prompt(ctx context.Context, a Agent, text string, poll time.Durat
 	}
 	if strings.ContainsAny(text, "\r\n") {
 		return a.State, errors.New("a prompt is one line: a newline submits the text early and sends the rest as further prompts")
+	}
+	if strings.TrimSpace(text) == "" {
+		return a.State, errors.New("a prompt has text: an empty Enter starts no turn; agent send-keys sends one")
 	}
 
 	if err := w.SendText(ctx, a.Ref, a.Panel.ID, text); err != nil {

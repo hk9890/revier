@@ -181,6 +181,11 @@ func TestALinksAgentIsAddressedByItsTab(t *testing.T) {
 			t.Errorf("Agent(far:%s) = %+v, %v; want panel %s", addr, a, err, panel)
 		}
 	}
+	// The tab's panel has that one address: the workspace names it no second
+	// time (decisions.md D155).
+	if _, err := c.Agent(t.Context(), p, "home:9"); err == nil || !strings.Contains(err.Error(), "its address is far:agent:9") {
+		t.Errorf("Agent(far:home:9) err = %v, want the tab's address given", err)
+	}
 }
 
 // A link's agent whose tab moved to a window no target of the link holds is

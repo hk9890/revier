@@ -28,6 +28,11 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	name := ""
 	if len(pos) > 0 {
 		name = pos[0]
+		if name == "" {
+			// An empty name from a script is no name it meant to leave out:
+			// resolved as none, it would open a project nobody named.
+			return errors.New("the project name is empty")
+		}
 	}
 	// A name revier does not know, typed in a directory, is a project being
 	// started: the file is written and the workspace opened in one step, as
