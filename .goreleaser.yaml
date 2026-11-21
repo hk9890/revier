@@ -7,7 +7,9 @@ project_name: revier
 # archives carry them, so each run writes them and no commit holds them.
 before:
   hooks:
-    - go run github.com/google/go-licenses/v2@v2.0.1 save ./cmd/revier --save_path third_party_licenses --force --ignore github.com/hk9890/revier
+    # go-licenses is no dependency of revier, so it gets neither the token nor
+    # the signing identity of the release run. CGO_ENABLED is the builds'.
+    - env -u GITHUB_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL CGO_ENABLED=0 go run github.com/google/go-licenses/v2@v2.0.1 save ./cmd/revier --save_path third_party_licenses --force --ignore github.com/hk9890/revier
     - sh -c 'mkdir third_party_licenses/go && cp "$(go env GOROOT)/LICENSE" third_party_licenses/go/LICENSE'
 
 builds:
