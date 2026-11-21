@@ -217,6 +217,8 @@ func writeUnless(root string, name revier.ProjectName, body string, inh Inherite
 		_ = os.Remove(path)
 		return core.Project{}, errors.Join(probs...)
 	}
+	// Logs "project file written" with project and path: the file of a new
+	// project, a new link, or a renamed project.
 	slog.Info("project file written", "project", name, "path", path)
 	return p, nil
 }

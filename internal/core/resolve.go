@@ -43,6 +43,12 @@ type Ask struct {
 // project "go back to the terminal" could not be answered. The project the
 // user is looking at beats the one revier last acted on. The focused window
 // lists every host, which is why the TUI asks after its first frame.
+//
+// The step that picks the project logs "resolve" at Info with project and
+// by: flag, directory (with dir), focused window or last project. A focused
+// window that cannot be read, or whose host cannot list, logs a WARN
+// "resolve: focused window" with err, and the last project is tried next.
+// No project found writes no "resolve" line.
 func (c *Core) ProjectFor(ctx context.Context, projects []Project, ask Ask) (Project, error) {
 	if ask.Name != "" {
 		p, ok := projectNamed(projects, ask.Name)

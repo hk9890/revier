@@ -62,6 +62,9 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 	// brings back a curtain Esc hid (decisions.md D192).
 	if curtains := curtainWindows(before); len(curtains) > 0 {
 		main := curtains[len(curtains)-1].Ref
+		// Logs "popup: show the curtain" with ref, the main curtain, and
+		// curtains, their count: the press shows the curtain and raises no
+		// popup.
 		slog.Info("popup: show the curtain", "ref", main, "curtains", len(curtains))
 		return main, c.ShowCurtains(ctx)
 	}
@@ -71,19 +74,26 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 	// leaves behind.
 	over, err := c.Window.Focused(ctx)
 	if err != nil {
+		// Logs "popup: focused window" at Warn with err. The press goes on
+		// with no window over it, so it switches nothing.
 		slog.Warn("popup: focused window", "err", err)
 	}
 	if c.switchPopup(ctx, before, over) {
+		// Logs "popup: switch" with ref, the popup the key was pressed over.
 		slog.Info("popup: switch", "ref", over)
 		return over, nil
 	}
 	if w, ok := popupWindow(before); ok {
+		// Logs "popup: raise" with ref and minimized: the press raises the
+		// open popup.
 		slog.Info("popup: raise", "ref", w.Ref, "minimized", w.Minimized)
 		// The surface reads it at the focus the raise gives it, so it is on
 		// record first (decisions.md D169).
 		marked := c.Ledger != nil && w.Minimized
 		if marked {
 			if err := c.Ledger.MarkPopupHidden(); err != nil {
+				// Logs "popup: mark the raise" at Warn with err. The raise
+				// goes on.
 				slog.Warn("popup: mark the raise", "err", err)
 			}
 		}
@@ -120,6 +130,9 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 	ref := w.Ref
 	geometry := popupGeometry(width)
 	byRules := placedByRules()
+	// Logs "popup: launched" with ref, over, workarea_width, place and
+	// by_rules. place is the geometry revier puts the window at when by_rules
+	// is false; by_rules true is a window the rules placed.
 	slog.Info("popup: launched", "ref", ref, "over", over.ID, "workarea_width", width, "place", geometry, "by_rules", byRules)
 	// The raise goes first, so the keyboard reaches the window before it moves.
 	if err := c.Window.Focus(ctx, ref); err != nil {
@@ -143,6 +156,8 @@ func (c *Core) readPopupRules(ctx context.Context) func() bool {
 	go func() {
 		report, err := c.PopupRuleReport(ctx)
 		if err != nil {
+			// Logs "popup: window rules" at Warn with err. The launch goes
+			// on, and revier places the popup.
 			slog.Warn("popup: window rules", "err", err)
 		}
 		answer <- err == nil && report.PlacesPopup()
@@ -165,6 +180,8 @@ func (c *Core) switchPopup(ctx context.Context, windows []revier.Instance, focus
 		return false
 	}
 	if err := c.SwitchPopup(ctx); err != nil {
+		// Logs "popup: switch" at Warn with ref and err. Popup then raises the
+		// popup.
 		slog.Warn("popup: switch", "ref", focused, "err", err)
 		return false
 	}
@@ -179,6 +196,13 @@ func (c *Core) switchPopup(ctx context.Context, windows []revier.Instance, focus
 // runtime here lists - or with no Self - is left where it is, and so is one
 // whose window the window host cannot pair with it: raising a guess would
 // raise somebody else's window. The popup is raised by RaisePopup instead.
+//
+// The raise logs "surface raise" with ref, the terminal, panel, the panel
+// it makes current, and duration_ms; at Error with err when the raise
+// failed. A runtime listing that failed writes the line at Error with err
+// and duration_ms alone. A surface that no runtime here lists, or with no
+// Self, writes no line. One whose window the window host cannot pair with
+// it writes the line at Error, with err.
 func (c *Core) RaiseSelf(ctx context.Context) error {
 	if c.Self == nil || c.Runtime == nil {
 		return nil
@@ -220,6 +244,9 @@ func (c *Core) RaisePopup(ctx context.Context) error {
 			err = c.Window.Focus(ctx, w.Ref)
 		}
 	}
+	// Logs "surface raise" with popup true and duration_ms; at Error with err
+	// when the window host could not list, no popup is open, or the raise
+	// failed.
 	logging.Op("surface raise", start, err, "popup", true)
 	return err
 }
@@ -241,6 +268,7 @@ func (c *Core) HidePopup(ctx context.Context) error {
 	if !ok {
 		return fmt.Errorf("popup: no window of class %s to hide", PopupClass)
 	}
+	// Logs "popup: hide" with ref: Esc, or a go, hides the popup.
 	slog.Info("popup: hide", "ref", w.Ref)
 	return hider.Hide(ctx, w.Ref)
 }

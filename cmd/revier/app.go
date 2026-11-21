@@ -65,12 +65,16 @@ func newApp(ctx context.Context, out io.Writer) (*app, error) {
 	}, nil
 }
 
-// withAssistant adds the built-in assistant to projects, unless a file of
-// its name is there, and returns it either way: the surface takes it back
-// into the list when that file goes. The assistant lives under the state
-// root, which is a convenience: a root it cannot be made in costs the
-// built-in, not the command, and the zero project comes back. alt+a then
-// hands the terminal over, and `revier assist` says why.
+// withAssistant adds the built-in assistant to projects, unless a file of its
+// name is there, and returns it either way: the surface takes it back into the
+// list when that file goes. The assistant lives under the state root, which is
+// a convenience: a root it cannot be made in costs the built-in, not the
+// command, and the zero project comes back. alt+a then hands the terminal over,
+// and `revier assist` says why.
+//
+// An assistant that cannot be made logs one WARN "built-in assistant left out"
+// with err for each command that builds its app. `revier list` builds one too,
+// so a linked host writes it on every refresh of the surface that asks it.
 func withAssistant(projects *[]core.Project, cfgRoot, stateRoot string) core.Project {
 	builtin, err := assistProject(cfgRoot, stateRoot)
 	if err != nil {
@@ -127,6 +131,10 @@ func warnState(err error) {
 // machine, and a command that prints them before every keypress is a command
 // nobody reads.
 //
+// Each reason is one WARN "config problem" with err: with project and file
+// for a project file, and with file "config.toml" and no project for the
+// main configuration.
+//
 // `list` is left out, for the reason openLog leaves it out of the log: a
 // surface with a linked project runs it on that host every refresh
 // (decisions.md D40), and a configuration problem is the same on every one of
@@ -178,7 +186,8 @@ func (a *app) resolveProject(ctx context.Context, explicit string) (core.Project
 }
 
 // workingDir is the directory the command runs in, or "" when it cannot be
-// read: the step that needs it is skipped.
+// read, which logs a WARN "resolve: working directory" with err: the step
+// that needs it is skipped.
 func workingDir() string {
 	cwd, err := os.Getwd()
 	if err != nil {

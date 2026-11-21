@@ -67,6 +67,14 @@ func RunTimeout(cmd revier.Command) (time.Duration, error) {
 // A run writes no launch, waits for no window, and binds nothing, so it is
 // its own line of the log: goToResuming, which writes that line for the
 // other targets, is not on this path.
+//
+// Its "go" line carries project, target, landed, ran, focused and
+// duration_ms, and is an ERROR with err when the press fails. focused is the
+// window the run left the focus on, empty when the focus did not move or was
+// not read before the run. A second press that goes home writes the "go"
+// line of the way home first, then this line with ran false and landed the
+// home. A home still coming up writes the line that comingUp describes in
+// place of the line of the way home.
 func (c *Core) runCommand(ctx context.Context, p Project, i int, bound Bindings, st *state.State) (res Result, err error) {
 	name := p.Targets[i].Name
 	start := time.Now()
@@ -149,7 +157,11 @@ func (c *Core) focusMoved(ctx context.Context, before revier.TargetRef) revier.T
 }
 
 // focusedNow is what the focus authority reports has focus, zero when there
-// is none, and false when there is no authority or it cannot say.
+// is none, and false when there is no authority or it cannot say. A focus
+// that cannot be read logs a WARN "go: focused" with host and err. Before a
+// run the press then does not go home: it runs the command, and its focused
+// is empty. After a run, each read of focusMoved that fails writes one
+// line.
 func (c *Core) focusedNow(ctx context.Context) (revier.TargetRef, bool) {
 	auth := c.focusAuthority()
 	if auth == nil {

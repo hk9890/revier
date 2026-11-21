@@ -64,6 +64,8 @@ func (c *Core) curtainHost() (revier.Coverer, revier.Hider, error) {
 func (c *Core) OpenCurtains(ctx context.Context, argv func(revier.Monitor) []string) ([]revier.TargetRef, error) {
 	start := time.Now()
 	refs, err := c.openCurtains(ctx, argv)
+	// Logs "curtain open" with refs, the curtains found, primary first, and
+	// err when the open failed.
 	logging.Op("curtain open", start, err, "refs", refs)
 	return refs, err
 }
@@ -99,6 +101,8 @@ func (c *Core) openCurtains(ctx context.Context, argv func(revier.Monitor) []str
 	for i, m := range monitors {
 		if !windows[i].Ref.IsZero() {
 			refs = append(refs, windows[i].Ref)
+			// Logs "curtain: launched" for each curtain that came up, with
+			// ref, monitor and primary.
 			slog.Info("curtain: launched", "ref", windows[i].Ref, "monitor", m.Index, "primary", m.Primary)
 		}
 	}
@@ -160,6 +164,8 @@ func (c *Core) HideCurtains(ctx context.Context) error {
 		}
 		return hider.Hide(ctx, ref)
 	})
+	// Logs "curtain hide" with curtains, the number it found: Esc on a
+	// curtain while the walk runs.
 	logging.Op("curtain hide", start, err, "curtains", n)
 	return err
 }
@@ -175,6 +181,9 @@ func (c *Core) ShowCurtains(ctx context.Context) error {
 		}
 		return cov.Above(ctx, ref, true)
 	})
+	// Logs "curtain show" with curtains, the number it found: the end of a
+	// walk that did not go well, or, after "popup: show the curtain", the
+	// popup key that brings a hidden curtain back.
 	logging.Op("curtain show", start, err, "curtains", n)
 	return err
 }
@@ -204,7 +213,9 @@ func (c *Core) eachCurtain(ctx context.Context, do func(revier.Coverer, revier.H
 // FocusCurtain gives the keyboard back to the main curtain when it is open
 // and not minimized: a restore's return home takes the focus under the
 // curtain, and Esc and ctrl+c must reach the curtain again. A hidden curtain
-// stays hidden.
+// stays hidden. It logs "curtain focus" with ref, and err when the focus
+// fails, or with err alone when the listing fails; a hidden or missing
+// curtain, or a window host that cannot cover the monitors, logs nothing.
 func (c *Core) FocusCurtain(ctx context.Context) error {
 	if _, _, err := c.curtainHost(); err != nil {
 		return err

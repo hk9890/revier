@@ -386,6 +386,8 @@ func (sc *sessionsScreen) saved(root string, th theme.Theme, msg savedMsg) error
 		slog.Info("session save: nothing open")
 		return msg.err
 	case msg.err != nil:
+		// A save from this screen whose survey or write failed is an ERROR
+		// "session save" with err.
 		slog.Error("session save", "err", msg.err)
 		return fail("session save", "", msg.err)
 	}

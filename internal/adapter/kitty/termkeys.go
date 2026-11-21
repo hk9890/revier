@@ -134,10 +134,13 @@ func (TermKeyWriter) Write(_ context.Context, bindings []revier.TermBinding) err
 	return writeThrough(conf, includeMarker+"\n"+includeRevier+"\n"+string(main))
 }
 
-// Remove deletes revier.conf, through a link to the file it points at, and
-// the include revier wrote, and kitty.conf when nothing else is in it: an
-// install that created it leaves no empty file behind. An include the user
-// wrote stays.
+// Remove deletes revier.conf, through a link to the file it points at, and the
+// include revier wrote, and kitty.conf when nothing else is in it: an install
+// that created it leaves no empty file behind. An include the user wrote stays.
+// A deleted revier.conf logs "kitty keys removed", and a deleted kitty.conf
+// "kitty config removed", each with path, the file deleted. A kitty.conf that
+// keeps other lines, or is a link, logs "kitty config written", as writeThrough
+// says.
 func (TermKeyWriter) Remove(context.Context) error {
 	dir, err := checkedConfigDir()
 	if err != nil {
@@ -212,6 +215,8 @@ func readFile(path string) ([]byte, error) {
 	return data, err
 }
 
+// writeThrough writes data to path through any link, and logs
+// "kitty config written" with path, the file written.
 func writeThrough(path, data string) error {
 	real, err := fsutil.WriteThrough(path, []byte(data))
 	if err != nil {
