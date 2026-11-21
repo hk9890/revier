@@ -136,11 +136,12 @@ func TestAnAgentRowLeavesTheNameOut(t *testing.T) {
 	}
 }
 
-// The tokens and the cache are gray; the cache alone takes the warning colour,
-// and only in its last minutes.
+// The tokens and the cache are gray; the cache alone takes the warning colour
+// in its last 20 minutes, and the attention colour in its last 5.
 func TestTheCacheIsLitOnlyInItsLastMinutes(t *testing.T) {
 	th := theme.Default()
 	th.Warning = lipgloss.NewStyle().Transform(func(s string) string { return "!" + strings.TrimSpace(s) })
+	th.Attention = lipgloss.NewStyle().Transform(func(s string) string { return "^" + strings.TrimSpace(s) })
 	a := revier.AgentView{State: revier.AgentState{Harness: "claude"}}
 	now := time.Now()
 	for _, c := range []struct {
@@ -148,19 +149,21 @@ func TestTheCacheIsLitOnlyInItsLastMinutes(t *testing.T) {
 		want  string
 	}{
 		{40 * time.Minute, " 40m"},
-		{3 * time.Minute, "!3m"},
+		{9 * time.Minute, "!9m"},
+		{3 * time.Minute, "^3m"},
 		{-time.Minute, " --"},
 	} {
 		it := newAgentItem(a, revier.Project{Name: "revier"}, revier.AgentDetail{Context: 62_074, CacheUntil: now.Add(c.until)}, now)
 		row := ansi.Strip(agentLines(th, it, nil, 80, false, false, false, false))
-		if !strings.HasSuffix(strings.TrimRight(row, " "), c.want) || strings.Count(row, "!") != strings.Count(c.want, "!") {
+		if !strings.HasSuffix(strings.TrimRight(row, " "), c.want) || strings.Count(row, "!")+strings.Count(row, "^") != strings.Count(c.want, "!")+strings.Count(c.want, "^") {
 			t.Errorf("cache %v: row = %q, want it to end in %q and nothing else lit", c.until, row, c.want)
 		}
 	}
 }
 
 // A token count fits its column, and a cache says its minutes rounded up,
-// "--" once it is cold, and nothing where the harness said nothing.
+// how urgent its last 20 and 5 minutes are, "--" once it is cold, and nothing
+// where the harness said nothing.
 func TestTheUsageAsTheRowSaysIt(t *testing.T) {
 	for n, want := range map[int]string{0: "", 840: "840", 62_074: "62k", 999_999: "999k", 1_250_000: "1.2M", 1_299_999: "1.2M", 9_960_000: "9.9M", 12_500_000: "12M", 2_000_000_000: "999M"} {
 		if got := shortTokens(n); got != want || lipgloss.Width(got) > tokensWidth {
@@ -171,19 +174,22 @@ func TestTheUsageAsTheRowSaysIt(t *testing.T) {
 	for _, c := range []struct {
 		until   time.Time
 		want    string
-		cooling bool
+		urgency cacheUrgency
 	}{
-		{time.Time{}, "", false},
-		{now.Add(time.Hour), "60m", false},
-		{now.Add(3 * time.Hour), "99m", false},
-		{now.Add(59*time.Minute + 30*time.Second), "60m", false},
-		{now.Add(5 * time.Minute), "5m", true},
-		{now.Add(30 * time.Second), "1m", true},
-		{now, "--", false},
-		{now.Add(-time.Hour), "--", false},
+		{time.Time{}, "", cacheCalm},
+		{now.Add(time.Hour), "60m", cacheCalm},
+		{now.Add(3 * time.Hour), "99m", cacheCalm},
+		{now.Add(59*time.Minute + 30*time.Second), "60m", cacheCalm},
+		{now.Add(20*time.Minute + time.Second), "21m", cacheCalm},
+		{now.Add(20 * time.Minute), "20m", cacheCooling},
+		{now.Add(5*time.Minute + time.Second), "6m", cacheCooling},
+		{now.Add(5 * time.Minute), "5m", cacheExpiring},
+		{now.Add(30 * time.Second), "1m", cacheExpiring},
+		{now, "--", cacheCalm},
+		{now.Add(-time.Hour), "--", cacheCalm},
 	} {
-		if got, cooling := cacheLeft(now, c.until); got != c.want || cooling != c.cooling || lipgloss.Width(got) > minutesWidth {
-			t.Errorf("cacheLeft(%v) = %q, %v; want %q, %v", c.until.Sub(now), got, cooling, c.want, c.cooling)
+		if got, urgency := cacheLeft(now, c.until); got != c.want || urgency != c.urgency || lipgloss.Width(got) > minutesWidth {
+			t.Errorf("cacheLeft(%v) = %q, %v; want %q, %v", c.until.Sub(now), got, urgency, c.want, c.urgency)
 		}
 	}
 }
