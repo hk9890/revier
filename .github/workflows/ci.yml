@@ -64,13 +64,30 @@ jobs:
         run: go build -o bin/revier ./cmd/revier
 
       # A broken .goreleaser.yaml fails here, not at release time. The version
-      # is release.yml's; bump both together.
+      # of both goreleaser steps is release.yml's; bump all together.
       - name: goreleaser check
         uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
           distribution: goreleaser
           version: v2.19.0
           args: check
+
+      # `check` runs no hook and matches no file. The snapshot does both, so
+      # a hook that fails or a LICENSE that moved fails here too. GoReleaser
+      # only warns when the third-party pattern matches nothing: the step
+      # after this one fails then.
+      - name: goreleaser snapshot
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          distribution: goreleaser
+          version: v2.19.0
+          args: release --snapshot --clean --skip=sign,sbom
+
+      - name: each archive holds the third-party licences
+        run: |
+          for archive in dist/*.tar.gz; do
+            tar -tzf "$archive" | grep -qx third_party_licenses/go/LICENSE
+          done
 
   lint:
     name: Lint
