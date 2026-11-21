@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
@@ -80,5 +82,31 @@ func TestTheAgeColumnChangesUnitAtEachBoundary(t *testing.T) {
 	}
 	if got := shortAgo(now, time.Time{}); got != "" {
 		t.Errorf("shortAgo(zero) = %q, want no age", got)
+	}
+}
+
+// A row whose cache is warm carries the stripe in its gutter on both lines, in
+// the column after the cursor's bar; a cold cache and no cache carry none.
+func TestAWarmCacheStripesTheRowsGutter(t *testing.T) {
+	th := theme.Default()
+	now := time.Now()
+	for _, c := range []struct {
+		name  string
+		until time.Time
+		want  bool
+	}{
+		{"warm", now.Add(30 * time.Minute), true},
+		{"cooling", now.Add(2 * time.Minute), true},
+		{"cold", now.Add(-time.Minute), false},
+		{"none", time.Time{}, false},
+	} {
+		d := revier.AgentDetail{Context: 1000, CacheUntil: c.until}
+		row := ansi.Strip(agentLines(th, newAgentItem(revier.AgentView{}, revier.Project{Name: "p"}, d, now), nil, 60, false, false, false, false))
+		for i, line := range strings.Split(row, "\n") {
+			gutter := []rune(line)[1]
+			if got := string(gutter) == th.Glyphs.Warm; got != c.want {
+				t.Errorf("%s: line %d gutter = %q, want stripe %v", c.name, i, gutter, c.want)
+			}
+		}
 	}
 }

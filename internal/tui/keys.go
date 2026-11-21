@@ -33,6 +33,7 @@ type keyMap struct {
 	Switch   key.Binding
 	Shutdown key.Binding
 	Logs     key.Binding
+	Cooling  key.Binding
 
 	// actions are the configured action keys, in configuration order.
 	actions []key.Binding
@@ -79,6 +80,10 @@ func newKeyMap(actions []config.Action) keyMap {
 		Shutdown: key.NewBinding(key.WithKeys(shutdownBarKey), key.WithHelp(shutdownBarKey, "shutdown")),
 		// The log is read from every screen, so its key is on no bar.
 		Logs: key.NewBinding(key.WithKeys(logsKey), key.WithHelp(logsKey, "logs")),
+		// On the agent list, the agent whose prompt cache goes cold next. It is
+		// the agent list's alone, where no target key or action runs, so it is
+		// not among own(): a target or an action keeps alt+w on the projects.
+		Cooling: key.NewBinding(key.WithKeys("alt+w"), key.WithHelp("alt+w", "cache next")),
 	}
 	for _, act := range actions {
 		if act.Refused != nil {

@@ -104,6 +104,7 @@ func (m Model) helpSections() []helpSection {
 			{key: "enter", desc: "go to the agent's tab"},
 			{key: k.Close.Help().Key, desc: "close the agent's tab; asks first when it works or waits for you"},
 			{key: "type", desc: "filter the agents, by what each is on and by its project"},
+			{key: k.Cooling.Help().Key, desc: "go to the agent whose prompt cache goes cold next; again, to the one after it"},
 			{key: "wheel", desc: "over the agent's screen, scroll back through it"},
 			{key: "esc", desc: "clear the filter, or " + m.leaveWord()},
 		}},

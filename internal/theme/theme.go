@@ -115,6 +115,9 @@ type Glyphs struct {
 	// Cache stands in front of the minutes an agent's prompt cache stays
 	// warm.
 	Cache string
+	// Warm is the stripe down the gutter of an agent's row while its prompt
+	// cache is warm: rows next to each other join into one ruler.
+	Warm string
 }
 
 // The three glyph sets. Nerd is the default: it says things with icons - a
@@ -137,7 +140,7 @@ var glyphSets = map[string]Glyphs{
 		NeedsYou: "\u25c6", Working: "\u280b", Idle: "\u25c7", Unknown: "?",
 		Start: "\u25b6", Keep: "\u2713", Skip: "\u2715", Linked: "\u21c4",
 		Window: "\u25a1", Container: "\u25a3", Branch: "\u251c", LastBranch: "\u2514",
-		Cache: "\u26c1",
+		Cache: "\u26c1", Warm: "\u258e",
 	},
 	"nerd": {
 		Running:    "\uf111", // nf-fa-circle
@@ -160,12 +163,13 @@ var glyphSets = map[string]Glyphs{
 		Branch:     "\u251c", // a box-drawing tee, as in the unicode set
 		LastBranch: "\u2514", // a box-drawing corner
 		Cache:      "\uf472", // nf-oct-database
+		Warm:       "\u258e", // a quarter block, as in the unicode set
 	},
 	"ascii": {
 		Running: "*", Stopped: "-", Cursor: ">",
 		NeedsYou: "!", Working: "|", Idle: ".", Unknown: "?",
 		Start: "+", Keep: "=", Skip: "x", Linked: "~",
-		Branch: "|", LastBranch: "`", Cache: "c",
+		Branch: "|", LastBranch: "`", Cache: "c", Warm: ":",
 	},
 }
 

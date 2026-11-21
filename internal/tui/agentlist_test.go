@@ -92,8 +92,9 @@ func TestEveryAgentStateIsItsGlyphInOneColumn(t *testing.T) {
 
 // A row is the agent's state, by its glyph alone, and what it is on, without
 // its harness, over its project; the age of what it said last stands at the
-// row's right end, and the cache's minutes end under the age. The name its
-// harness gives it is the pane's.
+// row's right end, and the cache's minutes end under the age. The warm
+// cache's stripe stands in the gutter. The name its harness gives it is the
+// pane's.
 func TestAnAgentRowLeadsWithItsStateAndNamesItsProject(t *testing.T) {
 	now := time.Now()
 	m, _, _ := listedWorld(t, 140, 20,
@@ -102,7 +103,10 @@ func TestAnAgentRowLeadsWithItsStateAndNamesItsProject(t *testing.T) {
 	first, _, _ := strings.Cut(all[4], "│")
 	second, _, _ := strings.Cut(all[5], "│")
 	g := theme.Default().Glyphs
-	if !strings.HasPrefix(strings.TrimLeft(first, " "+g.Cursor), g.Idle+" Taskmgr tickets") || strings.Contains(first, "idle") || strings.Contains(first, "claude") {
+	if !strings.HasPrefix(strings.TrimLeft(first, " "+g.Cursor), g.Warm) || !strings.HasPrefix(strings.TrimLeft(second, " "+g.Cursor), g.Warm) {
+		t.Errorf("row = %q over %q, want the warm cache's stripe in the gutter of both lines", first, second)
+	}
+	if !strings.HasPrefix(strings.TrimLeft(first, " "+g.Cursor+g.Warm), g.Idle+" Taskmgr tickets") || strings.Contains(first, "idle") || strings.Contains(first, "claude") {
 		t.Errorf("row = %q, want the state's glyph leading the summary, no word for the state, and no harness", first)
 	}
 	if !strings.HasSuffix(strings.TrimSpace(first), "4m") {
@@ -120,9 +124,9 @@ func TestAnAgentRowLeadsWithItsStateAndNamesItsProject(t *testing.T) {
 }
 
 // The project pane's Agents draw a row as the agent list does: the state, what
-// the agent is on and its age, over its worktree and its tokens and cache. The
-// project, which every row there shares, is left out, and so is a second line
-// that would be blank.
+// the agent is on and its age, over its worktree and its tokens and cache,
+// with the warm cache's stripe in the gutter. The project, which every row
+// there shares, is left out, and so is a second line that would be blank.
 func TestTheProjectPaneDrawsAnAgentAsTheAgentListDoes(t *testing.T) {
 	m, _, _ := listedSurface(t, 160, 30,
 		listed{project: "alpha", status: revier.StatusIdle, on: "Taskmgr tickets", said: "done",
@@ -132,6 +136,11 @@ func TestTheProjectPaneDrawsAnAgentAsTheAgentListDoes(t *testing.T) {
 	if i := slices.IndexFunc(rows, func(r string) bool { return strings.Contains(r, "Taskmgr tickets") }); i >= 0 && i+1 < len(rows) {
 		first, second = rows[i], rows[i+1]
 	}
+	warm := theme.Default().Glyphs.Warm
+	if !strings.HasPrefix(first, warm) || !strings.HasPrefix(second, warm) {
+		t.Errorf("row = %q over %q, want the warm cache's stripe in the gutter of both lines", first, second)
+	}
+	first, second = strings.TrimLeft(first, " "+warm), strings.TrimLeft(second, " "+warm)
 	if !strings.HasPrefix(first, theme.Default().Glyphs.Idle+" Taskmgr tickets") || strings.Contains(first, "idle") || !strings.HasSuffix(first, "4m") || strings.Contains(first, "claude") {
 		t.Errorf("first line = %q, want the state's glyph, the summary and the age, and no harness", first)
 	}
@@ -511,5 +520,35 @@ func TestTheAgentPaneDrawsTheHarnessNameAsPlainText(t *testing.T) {
 	body := pane(m)
 	if !strings.Contains(body, "Name     redline") || strings.Contains(body, "\x07") {
 		t.Errorf("pane draws the name with its control text:\n%q", body)
+	}
+}
+
+// alt+w walks the warm caches in the order they go cold: the soonest first,
+// then each one after it, and from the last back to the first. A working
+// agent and a cold cache are passed over.
+func TestTheCoolingKeyWalksTheWarmCachesInTheOrderTheyGoCold(t *testing.T) {
+	now := time.Now()
+	m, _, _ := listedWorld(t, 140, 40,
+		listed{project: "alpha", status: revier.StatusAttention, on: "asks-late", at: now.Add(-10 * time.Minute), tokens: 1000},
+		listed{project: "alpha", status: revier.StatusIdle, on: "rest-soon", at: now.Add(-50 * time.Minute), tokens: 1000},
+		listed{project: "beta", status: revier.StatusIdle, on: "rest-mid", at: now.Add(-30 * time.Minute), tokens: 1000},
+		listed{project: "beta", status: revier.StatusRunning, on: "work", at: now.Add(-55 * time.Minute), tokens: 1000},
+		listed{project: "beta", status: revier.StatusIdle, on: "rest-cold", at: now.Add(-2 * time.Hour), tokens: 1000})
+	for _, want := range []string{"rest-soon", "rest-mid", "asks-late", "rest-soon"} {
+		m, _ = press(m, "alt+w")
+		if row := selectedRow(t, m); !strings.Contains(row, want) {
+			t.Fatalf("selected = %q after alt+w, want %s", row, want)
+		}
+	}
+
+	// A cursor the user moved onto a warm row starts a new walk, at the cache
+	// that goes cold first, not at the one after the row it is on.
+	m, _ = press(m, "up")
+	if row := selectedRow(t, m); !strings.Contains(row, "rest-mid") {
+		t.Fatalf("selected = %q after up, want rest-mid", row)
+	}
+	m, _ = press(m, "alt+w")
+	if row := selectedRow(t, m); !strings.Contains(row, "rest-soon") {
+		t.Errorf("selected = %q after up and alt+w, want rest-soon, the cache that goes cold first", row)
 	}
 }

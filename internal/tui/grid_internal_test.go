@@ -64,7 +64,8 @@ func TestANarrowAgentRowKeepsTheUsage(t *testing.T) {
 		{80, "revier · agent-key-starts"},
 		{width("revier · agent-k…"), "revier · agent-k…"},
 	} {
-		row := strings.TrimSpace(secondLine(a, "revier", d, now, c.width))
+		row := strings.TrimLeft(secondLine(a, "revier", d, now, c.width), " "+theme.Default().Glyphs.Warm)
+		row = strings.TrimSpace(row)
 		if !strings.HasPrefix(row, c.want+" ") || !strings.HasSuffix(row, " "+usage) {
 			t.Errorf("w=%d: second line = %q, want %q and the whole %q", c.width, row, c.want, usage)
 		}
@@ -136,8 +137,9 @@ func TestAnAgentRowLeavesTheNameOut(t *testing.T) {
 	}
 }
 
-// The tokens and the cache are gray; the cache alone takes the warning colour,
-// and only in its last minutes.
+// The tokens and the cache are gray; the cache and the gutter's stripe on
+// each of the row's two lines alone take the warning colour, and only in the
+// cache's last minutes.
 func TestTheCacheIsLitOnlyInItsLastMinutes(t *testing.T) {
 	th := theme.Default()
 	th.Warning = lipgloss.NewStyle().Transform(func(s string) string { return "!" + strings.TrimSpace(s) })
@@ -146,14 +148,15 @@ func TestTheCacheIsLitOnlyInItsLastMinutes(t *testing.T) {
 	for _, c := range []struct {
 		until time.Duration
 		want  string
+		lit   int
 	}{
-		{40 * time.Minute, " 40m"},
-		{3 * time.Minute, "!3m"},
-		{-time.Minute, " --"},
+		{40 * time.Minute, " 40m", 0},
+		{3 * time.Minute, "!3m", 3},
+		{-time.Minute, " --", 0},
 	} {
 		it := newAgentItem(a, revier.Project{Name: "revier"}, revier.AgentDetail{Context: 62_074, CacheUntil: now.Add(c.until)}, now)
 		row := ansi.Strip(agentLines(th, it, nil, 80, false, false, false, false))
-		if !strings.HasSuffix(strings.TrimRight(row, " "), c.want) || strings.Count(row, "!") != strings.Count(c.want, "!") {
+		if !strings.HasSuffix(strings.TrimRight(row, " "), c.want) || strings.Count(row, "!") != c.lit {
 			t.Errorf("cache %v: row = %q, want it to end in %q and nothing else lit", c.until, row, c.want)
 		}
 	}
