@@ -1143,3 +1143,13 @@ harness keeps the conversation, and marks one it does not keep as unfiled. A
 restore that finds it still not kept starts the agent empty and says so. The id
 stays: a close can stop before it ends the agent, which can then get its first
 prompt. Rejected: dropping the id at a shutdown save, which loses that prompt.
+
+### D195 — a warm cache stripes its row, and a key walks the caches in the order they go cold
+
+Extends D170. A row's minutes say how long its cache stays warm, but a cold one
+read only as `--` at the far edge. A stripe in the gutter of each warm row reads
+down the list, and a gap in it is a cold cache. The list stays sorted by state
+(D110): one key goes to the cache that goes cold next, and walks on from there,
+past working agents, whose own turn keeps their cache warm. Rejected: a line at
+the warm-to-cold boundary, which the sort by state and the two cache lifetimes
+leave in no one place.

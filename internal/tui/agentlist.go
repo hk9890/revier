@@ -61,6 +61,7 @@ type agentItem struct {
 	tokens  string // how many tokens its conversation holds, as the row says it
 	cache   string // how long until its prompt cache goes cold, as the row says it
 	cooling bool   // the cache is in its last minutes: the row warns of it
+	warm    bool   // the cache is warm: the row's gutter carries the stripe
 }
 
 // coolingFrom is how long before the cache goes cold the row warns of it.
@@ -99,6 +100,7 @@ func newAgentItem(a revier.AgentView, p revier.Project, d revier.AgentDetail, no
 	text, titled := summary(a, d)
 	it := agentItem{agent: a, project: p, detail: d, text: text, titled: titled, age: shortAgo(now, d.At), tokens: shortTokens(d.Context)}
 	it.cache, it.cooling = cacheLeft(now, d.CacheUntil)
+	it.warm = d.CacheUntil.After(now)
 	return it
 }
 
@@ -290,7 +292,18 @@ func agentLines(th theme.Theme, it agentItem, matches []int, width int, sel, ove
 	if sel && cursor {
 		bar = th.Cursor.Render(th.Glyphs.Cursor)
 	}
-	prefix := bar + space(1)
+	// The stripe stands next to the bar on every line of a row whose cache is
+	// warm, so the warm rows read down the list as one ruler, and a gap in it
+	// is a cold cache.
+	stripe := space(1)
+	if it.warm {
+		warm := th.Running
+		if it.cooling {
+			warm = th.Warning
+		}
+		stripe = style(warm).Render(th.Glyphs.Warm)
+	}
+	prefix := bar + stripe
 	indent := lipgloss.Width(prefix) + listedStateWidth
 
 	// The state leads, as its glyph alone (decisions.md D171): the agent list
@@ -326,7 +339,7 @@ func agentLines(th theme.Theme, it agentItem, matches []int, width int, sel, ove
 			// click lands on the row drawn under the pointer.
 			lines = append(lines, fill(clipTo(prefix+state+text+age, width), width, style))
 		} else {
-			lines = append(lines, fill(bar+space(indent-1)+text, width, style))
+			lines = append(lines, fill(prefix+space(indent-2)+text, width, style))
 		}
 	}
 
@@ -351,7 +364,7 @@ func agentLines(th theme.Theme, it agentItem, matches []int, width int, sel, ove
 	if right != "" {
 		room -= gridGap
 	}
-	second := bar + space(indent-1) + lit(ellipsis(where, room), from)
+	second := prefix + space(indent-2) + lit(ellipsis(where, room), from)
 	second += space(width-lipgloss.Width(second)-lipgloss.Width(right)) + right
 
 	return strings.Join(append(lines, fill(second, width, style)), "\n")
@@ -480,6 +493,36 @@ func (al *agentList) selectOpenRow() {
 	al.place = true
 }
 
+// selectCooling puts the cursor on the agent whose prompt cache goes cold
+// next, of those whose cache is warm at now. A working agent is passed over:
+// its own turn keeps its cache warm. With the cursor on one of them already,
+// it goes to the one that goes cold after it, and from the last back to the
+// first, so each press walks the warm caches in the order they go cold.
+func (al *agentList) selectCooling(now time.Time) {
+	type warm struct {
+		row   int
+		until time.Time
+	}
+	var rows []warm
+	for i, item := range al.list.VisibleItems() {
+		it, ok := item.(agentItem)
+		if ok && it.agent.State.Status != revier.StatusRunning && it.detail.CacheUntil.After(now) {
+			rows = append(rows, warm{row: i, until: it.detail.CacheUntil})
+		}
+	}
+	if len(rows) == 0 {
+		return
+	}
+	sort.SliceStable(rows, func(a, b int) bool { return rows[a].until.Before(rows[b].until) })
+	next := 0
+	for i, r := range rows {
+		if r.row == al.list.Index() {
+			next = (i + 1) % len(rows)
+		}
+	}
+	al.list.Select(rows[next].row)
+}
+
 // selected is the row under the cursor.
 func (al *agentList) selected() (agentItem, bool) {
 	it, ok := al.list.SelectedItem().(agentItem)
@@ -545,6 +588,11 @@ func (m Model) switchKey() string {
 // row to act on here.
 func (m Model) agentsKey(msg keyPress) (tea.Model, tea.Cmd) {
 	m.err = nil
+	if key.Matches(msg, m.keys.Cooling) {
+		m.agents.top = false
+		m.agents.selectCooling(m.now())
+		return m, nil
+	}
 	res, cmd := m.agents.key(m.surface(), msg)
 	switch {
 	case res.leave:
@@ -742,6 +790,7 @@ func (al *agentList) help(k keyMap) []key.Binding {
 	return []key.Binding{
 		helpKey("enter", "go to agent"),
 		helpKey("type", "filter"),
+		k.Cooling,
 		helpKey("esc", "clear/quit"),
 		k.Close,
 		k.Quit,

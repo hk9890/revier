@@ -125,8 +125,8 @@ yet. When every agent is working or `unknown`, it opens on the first row.
 Each agent takes two lines:
 
 ```
- ◇ Fix the login redirect                                     4m
-   shop · login-fix                                   62k  ⛁ 56m
+ ▎◇ Fix the login redirect                                    4m
+ ▎  shop · login-fix                                  62k  ⛁ 56m
 ```
 
 - The first line: the agent's state, what it does, and how long ago it spoke.
@@ -138,6 +138,13 @@ Each agent takes two lines:
   conversation holds, and the minutes until its prompt cache goes cold. The
   minutes turn yellow in the last 5, and show `--` once the cache is cold:
   the next prompt to that agent then reads the whole conversation again.
+- The stripe left of the state: the agent's prompt cache is warm. It is
+  green, and yellow in the last 5 minutes. The rows with a warm cache form
+  one ruler down the list, and a gap in it is an agent whose cache is cold.
+
+Press alt+w to go to the agent whose prompt cache goes cold next. Press it
+again to go to the one after that. Working agents are skipped: their own turn
+keeps the cache warm.
 
 Type to filter by what the agent does, its project or its worktree. The pane
 shows the agent's [address](agents.md#drive-an-agent-from-a-script), its

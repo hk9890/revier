@@ -33,6 +33,7 @@ type keyMap struct {
 	Switch   key.Binding
 	Shutdown key.Binding
 	Logs     key.Binding
+	Cooling  key.Binding
 
 	// actions are the configured action keys, in configuration order.
 	actions []key.Binding
@@ -79,6 +80,8 @@ func newKeyMap(actions []config.Action) keyMap {
 		Shutdown: key.NewBinding(key.WithKeys(shutdownBarKey), key.WithHelp(shutdownBarKey, "shutdown")),
 		// The log is read from every screen, so its key is on no bar.
 		Logs: key.NewBinding(key.WithKeys(logsKey), key.WithHelp(logsKey, "logs")),
+		// On the agent list, the agent whose prompt cache goes cold next.
+		Cooling: key.NewBinding(key.WithKeys("alt+w"), key.WithHelp("alt+w", "cache next")),
 	}
 	for _, act := range actions {
 		if act.Refused != nil {
@@ -122,7 +125,7 @@ func (k keyMap) claims(c core.Chord) bool {
 
 // own is every binding of the surface's own, the action bar's aside.
 func (k keyMap) own() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Home, k.End, k.PageUp, k.PageDown, k.Enter, k.Next, k.Prev, k.Back, k.Quit, k.Edit, k.Close, k.Delete, k.Targets, k.Switch, k.Shutdown}
+	return []key.Binding{k.Up, k.Down, k.Home, k.End, k.PageUp, k.PageDown, k.Enter, k.Next, k.Prev, k.Back, k.Quit, k.Edit, k.Close, k.Delete, k.Targets, k.Switch, k.Shutdown, k.Cooling}
 }
 
 // helpFor is the footer for a focus. Enter means something different in each
