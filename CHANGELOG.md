@@ -15,6 +15,9 @@ Each section is also the text of its release on the
 - **A window that opens but cannot take the focus or finish its tabs still
   goes to its configured place.** Before, it stayed where it opened, and later
   presses did not move it.
+- **A shutdown no longer says `safe to leave` while a second copy of a
+  workspace still runs.** It names that copy as still open and exits `1`, and
+  the next start does not offer a restore.
 
 ## v0.30.0
 

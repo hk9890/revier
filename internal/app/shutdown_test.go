@@ -491,3 +491,22 @@ func TestAnAbandonTakesTheRecordBackOnlyWhenAStepWasNotReached(t *testing.T) {
 		}
 	}
 }
+
+// A full shutdown that leaves an instance its plan did not name takes its
+// record back, so the next start offers no restore over what still runs.
+func TestAFullShutdownThatLeavesAnUnplannedInstanceIsNotRecorded(t *testing.T) {
+	c, rt, _, projects := desktop(t)
+	rt.Add("session:demo", "kitty")
+	report := surveyed(t, c, projects)
+
+	res, err := app.Close(t.Context(), fullShutdown(c, t.TempDir(), c.ShutdownPlan(report, "", core.ShutdownAll), projects))
+	if err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if _, open, _ := res.Closed.Counts(); open != 1 {
+		t.Errorf("result = %+v, want the extra instance still open", res.Closed)
+	}
+	if res.Recorded || shutDownOnRecord(c) {
+		t.Errorf("recorded %v, on record %v; want the record taken back", res.Recorded, shutDownOnRecord(c))
+	}
+}

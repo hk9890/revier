@@ -42,13 +42,19 @@ const (
 	// normal outcome too: the shutdown names it, leaves it open, and closes
 	// the rest of the plan.
 	CloseUnread
+	// CloseUnplanned is no step of the plan: a live instance a shut target's
+	// rule still matches, or a host that could not say whether one is left.
+	// The shutdown adds it to its result after the wait and closes nothing.
+	CloseUnplanned
 )
 
 // Leaves reports an action that closes nothing and leaves the step open. It
 // is one predicate rather than a list repeated at every place that counts,
 // waits on, or draws a step, so an action added later cannot be missed at one
 // of them.
-func (a CloseAction) Leaves() bool { return a == CloseUnsupported || a == CloseUnread }
+func (a CloseAction) Leaves() bool {
+	return a == CloseUnsupported || a == CloseUnread || a == CloseUnplanned
+}
 
 // CloseStep is one thing a shutdown closes. Target is empty for an attached
 // window and for an agent. Panel is set when panels close rather than the
@@ -66,8 +72,13 @@ type CloseStep struct {
 
 	// Unread is why the recheck could not read this step's agents. A step
 	// that carries one closes nothing and is named in the result; the rest
-	// of the plan closes (decisions.md D99).
+	// of the plan closes (decisions.md D99). On a CloseUnplanned result it is
+	// what the shutdown says about that instance.
 	Unread string
+
+	// Whole marks a target's step of a full close of its project, the one
+	// close after which no instance of that target's rule should be left.
+	Whole bool
 }
 
 // closes are the panels the step closes: its tab, or the one panel that
@@ -192,7 +203,7 @@ func (c *Core) ShutdownPlan(r Report, only revier.ProjectName, scope ShutdownSco
 			}
 			if k := key(tv.Ref); !seen[k] {
 				seen[k] = true
-				plan = append(plan, c.closeStep(CloseStep{Project: v.Project.Name, Target: tv.Name, Ref: tv.Ref, Agents: held}))
+				plan = append(plan, c.closeStep(CloseStep{Project: v.Project.Name, Target: tv.Name, Ref: tv.Ref, Agents: held, Whole: scope == ShutdownAll && !tv.Attached}))
 			}
 		}
 		for _, tv := range tabs {
@@ -467,6 +478,8 @@ type CloseResult struct {
 // Note is what a shutdown says about the step.
 func (r CloseResult) Note() string {
 	switch {
+	case r.Action == CloseUnplanned:
+		return r.Unread
 	case r.Action == CloseUnread:
 		return "left open: " + r.Unread
 	case r.Action == CloseUnsupported:
@@ -479,7 +492,8 @@ func (r CloseResult) Note() string {
 	return "closed"
 }
 
-// Closed is every step of one shutdown, in the order it walked them.
+// Closed is every step of one shutdown, in the order it walked them, then
+// each CloseUnplanned result of the check after the wait.
 type Closed []CloseResult
 
 // Counts is how many steps closed, how many are still open, and how many
@@ -496,6 +510,18 @@ func (cs Closed) Counts() (closed, open, failed int) {
 		}
 	}
 	return closed, open, failed
+}
+
+// Walked is how many steps of the plan the shutdown reached. The results after
+// them are the instances no step named.
+func (cs Closed) Walked() int {
+	n := 0
+	for _, r := range cs {
+		if r.Action != CloseUnplanned {
+			n++
+		}
+	}
+	return n
 }
 
 // ClosePoll is how soon a shutdown lists the hosts again while it waits for
@@ -617,7 +643,7 @@ func (r *BusyRefusal) Unwrap() error { return ErrAgentBusy }
 // is made, every step is asked to close, and the wait runs whole. Unlike the
 // save's, their budgets are out of the cancel's reach. A shutdown whose every
 // host hangs ends after RecheckBudget, SaveBudget, CloseBudget, the wait and
-// CloseListBudget.
+// two CloseListBudgets.
 //
 // A caller that cancels stops the walk between two steps: the step that runs
 // does not see the cancel and finishes, and the steps not yet reached are left
@@ -707,6 +733,13 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	waiting, stopWaiting := phaseContext(ctx, wait+CloseListBudget)
 	defer stopWaiting()
 	c.awaitClosed(waiting, out, wait)
+	_, waited, _ := out.Counts()
+	walked := len(out)
+	// A cancel that ended the wait with a step still listed wants out now, and
+	// that step already makes the shutdown incomplete.
+	if closes && walked == len(plan) && (!cancelled() || waited == 0) {
+		out = append(out, c.leftOpen(ctx, r, out, opts.Projects)...)
+	}
 	closed, open, failed := out.Counts()
 	// A cancel stopped something when it left a step unreached, or ended the
 	// wait with a step still listed; one after the last step stopped nothing
@@ -714,12 +747,13 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	// cancels. A cancel that stopped something logs "shutdown cancelled" with
 	// walked of steps; walked equal to steps is a cancel that ended the wait
 	// after the last step. The "shutdown" line still follows.
-	if cancelled() && (len(out) < len(plan) || open > 0) {
-		slog.Info("shutdown cancelled", "walked", len(out), "steps", len(plan))
+	if cancelled() && (walked < len(plan) || waited > 0) {
+		slog.Info("shutdown cancelled", "walked", walked, "steps", len(plan))
 	}
 	// The closing line of a shutdown that the guard let through and whose
 	// save, if any, succeeded: the closed, open and failed counts, and
-	// duration_ms from the start of the recheck to the end of the wait.
+	// duration_ms from the start of the recheck to the end of the check after
+	// the wait. open counts each instance that check reported.
 	logging.Op("shutdown", start, nil, "closed", closed, "open", open, "failed", failed)
 	c.note(record.Line{Kind: record.KindShutdown, Counts: map[string]int{"closed": closed, "open": open, "failed": failed}})
 	return out, nil
@@ -883,6 +917,86 @@ func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration) 
 		}
 		poll = min(2*poll, ClosePollMax)
 	}
+}
+
+// leftOpen lists once more after a full close of a project and returns what
+// its plan did not name: each live instance a shut target's rule still
+// matches, as a second workspace of one project is. Each is reported and none
+// is closed: the user confirmed the plan, and this instance is not in it. An
+// instance another project still holds is left open on purpose and is not
+// reported. A host that does not answer is reported too, because no answer is
+// not "nothing open", unless a step on that host is already reported open.
+// The listing has its own budget, out of the cancel's reach, so a cancel that
+// came after everything went does not read as a failed listing.
+func (c *Core) leftOpen(ctx context.Context, r Report, walked Closed, projects []Project) []CloseResult {
+	if !slices.ContainsFunc(walked, func(s CloseResult) bool { return s.Whole }) {
+		return nil
+	}
+	listing, stop := context.WithTimeout(context.WithoutCancel(ctx), CloseListBudget)
+	defer stop()
+	snap, failed := c.listing(listing)
+	known := map[string]bool{}
+	unchecked := map[string]bool{}
+	for _, s := range walked {
+		known[key(s.Ref)] = true
+		if s.Open || s.Err != nil || s.Action.Leaves() {
+			unchecked[s.Ref.Host] = true
+		}
+	}
+	for _, v := range r.Views {
+		if slices.ContainsFunc(walked, func(s CloseResult) bool { return s.Project == v.Project.Name }) {
+			continue
+		}
+		for _, tv := range v.Targets {
+			known[key(tv.Ref)] = true
+		}
+	}
+	var out []CloseResult
+	for _, s := range walked {
+		if !s.Whole {
+			continue
+		}
+		i := slices.IndexFunc(projects, func(p Project) bool { return p.Name == s.Project })
+		if i < 0 {
+			continue
+		}
+		t, ok := projects[i].index(s.Target)
+		if !ok {
+			continue
+		}
+		host, _, m, err := c.resolveAt(projects[i], t)
+		if err != nil {
+			continue
+		}
+		if ferr := failed[host.Name()]; ferr != nil {
+			if !unchecked[host.Name()] {
+				unchecked[host.Name()] = true
+				// One WARN per host whose listing failed after the wait, so a
+				// second instance of a shut target cannot be ruled out: the
+				// first such step's project and target, host and err.
+				slog.Warn("shutdown: instances not checked", "project", s.Project, "target", s.Target, "host", host.Name(), "err", ferr)
+				out = append(out, CloseResult{CloseStep: CloseStep{
+					Project: s.Project, Target: s.Target, Ref: revier.TargetRef{Host: host.Name()},
+					Action: CloseUnplanned, Unread: "not checked for other instances: " + ferr.Error(),
+				}})
+			}
+			continue
+		}
+		for _, inst := range snap[host.Name()] {
+			if known[key(inst.Ref)] || !m.Matches(inst) {
+				continue
+			}
+			known[key(inst.Ref)] = true
+			// One WARN per live instance a shut target's rule still matches
+			// and no step of the plan names: its project, target and ref.
+			slog.Warn("shutdown: instance left open", "project", s.Project, "target", s.Target, "ref", inst.Ref)
+			out = append(out, CloseResult{CloseStep: CloseStep{
+				Project: s.Project, Target: s.Target, Ref: inst.Ref,
+				Action: CloseUnplanned, Unread: "still open: another instance, " + inst.Ref.ID,
+			}})
+		}
+	}
+	return out
 }
 
 // listed reports what a step closes in a listing: its instance, or any panel

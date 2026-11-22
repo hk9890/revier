@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"os"
@@ -12,8 +13,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hk9890/revier/internal/adapter/hc"
 	"github.com/hk9890/revier/internal/session"
 	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // agentStatus makes the fake claude list every agent pane in the status, on
@@ -149,5 +152,37 @@ func TestShutdownAgentsKeepsTheWorkspace(t *testing.T) {
 	}
 	if pids := agentPanes(t); len(pids) != 0 {
 		t.Errorf("agent panes = %v, want none", pids)
+	}
+}
+
+// A second workspace of one project on a real core, which the plan does not
+// name, stays open and fails the shutdown, forced or not, and the shutdown is
+// not on record.
+func TestShutdownFailsOnASecondWorkspaceOfTheProject(t *testing.T) {
+	for _, args := range [][]string{{"shutdown"}, {"shutdown", "--force"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			work(t)
+			agentStatus(t, "idle")
+			second, err := (&hc.Host{Socket: liveSocket}).Open(t.Context(), revier.Realization{
+				Name: "work", Panels: []revier.PanelSpec{{Kind: revier.PanelShell, Command: []string{"sleep", "600"}}},
+			})
+			if err != nil {
+				t.Fatalf("open the second workspace: %v", err)
+			}
+
+			var out bytes.Buffer
+			if err := run(&out, args); !errors.Is(err, errShutdownIncomplete) {
+				t.Fatalf("err = %v, want the shutdown incomplete\n%s", err, out.String())
+			}
+			if strings.Contains(out.String(), "safe to leave") || !strings.Contains(out.String(), second.ID) {
+				t.Errorf("output = %q, want the second workspace named and no safe to leave", out.String())
+			}
+			if got := workspaces(t); !strings.Contains(got, "work") {
+				t.Errorf("workspaces = %q, want the second one still open", got)
+			}
+			if sd := shutDownOnRecord(t); sd != nil {
+				t.Errorf("shutdown on record = %+v, want none", sd)
+			}
+		})
 	}
 }

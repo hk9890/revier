@@ -26,7 +26,8 @@ var errShutdownBusy = errors.New("agents are busy; nothing saved and nothing clo
 var errShutdownTurnedBusy = errors.New("agents turned busy since the plan was made; nothing saved and nothing closed. use --force to shut down anyway")
 
 // errShutdownIncomplete is a shutdown that ended with a target still open or
-// not read, or that a cancel stopped with steps left. It fails the command,
+// not read, with an instance of a shut target that no step named, or that a
+// cancel stopped with steps left. It fails the command,
 // so `revier shutdown && poweroff` does not power off under an editor that
 // still asks about unsaved work.
 var errShutdownIncomplete = errors.New("shutdown incomplete; not safe to leave")
@@ -162,7 +163,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	// A step is listed once more after the wait when what came of it changed:
 	// it did not go, or a close that failed went all the same.
 	for i, r := range closed {
-		if r.Note() != said[i] {
+		if i >= len(said) || r.Note() != said[i] {
 			_, _ = fmt.Fprintf(a.out, "%-*s  %-*s  %s\n", pw, r.Project, nw, r.Name(), r.Note())
 		}
 	}
@@ -171,11 +172,12 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	// A cancel that came after the last step was walked left no step
 	// unreached; it can only have ended the wait, which is said when
 	// something was still open then.
-	left := len(plan) - len(closed)
+	walkedAll := closed.Walked()
+	left := len(plan) - walkedAll
 	switch {
 	case cancelled && left > 0:
 		_, _ = fmt.Fprintf(a.out, "cancelled: %s not reached\n", core.Count(left, "step"))
-	case cancelled && open > 0:
+	case cancelled && open > len(closed)-walkedAll:
 		_, _ = fmt.Fprintln(a.out, "cancelled: the wait for what was closed to go ended")
 	}
 	if failed > 0 {

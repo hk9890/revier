@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -76,7 +77,9 @@ type CloseResult struct {
 // neither does one cancelled before the record is written: the cancel stops
 // it before its first step. A record whose write did not reach the state does
 // not stop the close; the shutdown is then not on record. A close cancelled
-// on its walk takes the record back as ShutdownRecord says.
+// on its walk takes the record back as ShutdownRecord says. So does a close
+// that found an instance its plan did not name, or could not check for one:
+// the next surface must not offer a restore over what still runs.
 func Close(ctx context.Context, req CloseRequest) (CloseResult, error) {
 	c := req.Core
 	var res CloseResult
@@ -132,6 +135,9 @@ func Close(ctx context.Context, req CloseRequest) (CloseResult, error) {
 	closed, err := c.Shutdown(ctx, req.Plan, req.Wait, opts)
 	if record != nil && errors.Is(ctx.Err(), context.Canceled) {
 		record.takeBack()
+	}
+	if record != nil && slices.ContainsFunc(closed, func(r core.CloseResult) bool { return r.Action == core.CloseUnplanned }) {
+		record.withdraw()
 	}
 	res.Closed = closed
 	var refused *core.BusyRefusal
@@ -248,12 +254,24 @@ func (r *ShutdownRecord) write(ctx context.Context, sessionID string) {
 }
 
 // takeBack ends the record this shutdown wrote when its walk left a step not
-// reached. A record written since by another shutdown is not this one's.
+// reached.
 func (r *ShutdownRecord) takeBack() {
+	r.end(func() bool { return r.reached < r.steps })
+}
+
+// withdraw ends the record this shutdown wrote, however far its walk came: an
+// instance is still open that no step named.
+func (r *ShutdownRecord) withdraw() {
+	r.end(func() bool { return true })
+}
+
+// end clears this shutdown's record when applies, read under the record's
+// lock, says so. A record written since by another shutdown is not this one's.
+func (r *ShutdownRecord) end(applies func() bool) {
 	r.c.Ledger.Update(func(st *state.State) bool {
 		r.mu.Lock()
 		defer r.mu.Unlock()
-		if r.at.IsZero() || r.reached >= r.steps || st.ShutDown == nil || !st.ShutDown.At.Equal(r.at) {
+		if r.at.IsZero() || !applies() || st.ShutDown == nil || !st.ShutDown.At.Equal(r.at) {
 			return false
 		}
 		r.at = time.Time{}

@@ -675,7 +675,8 @@ leaving a running restore, which used the surface while it still opened windows.
 Extends D78. After a full shutdown the next start offered nothing, and the
 restore was three keys deep. The state now records a full shutdown, written
 after the save and before the first close, since the close may end revier's
-own terminal; a cancel takes it back only when it left a step not reached.
+own terminal; a cancel that left a step not reached takes it back, and so
+does a close that finds an instance of a shut target its plan did not name.
 The surface then quits, the popup too, so the next press is a cold start
 (D86) that opens on a start dialog: restore, pick another session, or start
 fresh. Any open clears the record: the user has started again.
