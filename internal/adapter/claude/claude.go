@@ -27,10 +27,12 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/hk9890/revier/internal/logging"
 	"github.com/hk9890/revier/internal/procgroup"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -109,8 +111,32 @@ func (p *Probe) Inspect(ctx context.Context, panel revier.Panel) (revier.AgentSt
 	state := revier.AgentState{Harness: "claude", Activity: Activity(panel.Title)}
 	if s, ok := listed[panel.PID]; ok && panel.PID != 0 {
 		state.Status, state.Dir, state.Session, state.Name = Status(s.Status), s.Cwd, revier.SessionID(s.SessionID), s.Name
+		logStatus(panel, s, state.Status)
 	}
 	return state, nil
+}
+
+// maxLoggedStatus is how many characters of a quoted status a log line keeps.
+const maxLoggedStatus = 48
+
+// logStatus writes a Warn "probe" for a listed status revier does not know,
+// once per session and different err, with probe, panel, agent_pid, the
+// agent's process, and err, which holds the status quoted and cut. The
+// session's next known status writes "probe: recovered", so a status that
+// comes and goes writes both each time. A session that ends first writes no
+// "probe: recovered". Each `revier list` process has its own memory, so one
+// that a surface runs for a link at each refresh writes a Warn each time. The
+// key holds the session because the system can reuse a pid.
+// Inspect still returns no error, so the state keeps the session's directory,
+// id and name.
+func logStatus(panel revier.Panel, s listedSession, status revier.Status) {
+	var err error
+	if status == revier.StatusUnknown {
+		quoted := []rune(strconv.Quote(s.Status))
+		err = fmt.Errorf("claude agents --json: unrecognised status %s", string(quoted[:min(len(quoted), maxLoggedStatus)]))
+	}
+	key := "probe\x00claude\x00status\x00" + strconv.Itoa(s.PID) + "\x00" + s.SessionID
+	logging.Repeat(key, "probe", err, "probe", "claude", "panel", panel.ID, "agent_pid", s.PID)
 }
 
 // Status maps a listed status. A value Claude Code adds later is unknown, not

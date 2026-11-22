@@ -1,9 +1,12 @@
 package claude_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -741,5 +744,57 @@ func TestHasConversation(t *testing.T) {
 	}
 	if claude.HasConversation(dir) {
 		t.Error("an older conversation counts while the newest transcript holds no turn of the user's")
+	}
+}
+
+// A status revier does not know is one WARN, its text cut, and the session's
+// next known status is one recovered line.
+func TestInspectLogsAnUnknownStatusOnce(t *testing.T) {
+	for i, status := range []string{"weird", "", strings.Repeat("x", 3000)} {
+		var out bytes.Buffer
+		previous := slog.Default()
+		slog.SetDefault(slog.New(slog.NewJSONHandler(&out, nil)))
+		t.Cleanup(func() { slog.SetDefault(previous) })
+
+		pid := 9100 + i
+		listing := func(s string) func(context.Context) ([]byte, error) {
+			line, err := json.Marshal([]map[string]any{{"pid": pid, "sessionId": fmt.Sprintf("unknown-%d", i), "status": s}})
+			return agents(string(line), err)
+		}
+		now := time.Now()
+		p := &claude.Probe{SessionsDir: t.TempDir()}
+		p.SetNow(func() time.Time { return now })
+		p.SetAgents(listing(status))
+		panel := revier.Panel{ID: "1", PID: pid}
+		for range 2 {
+			if st, err := p.Inspect(t.Context(), panel); err != nil || st.Status != revier.StatusUnknown || st.Session == "" {
+				t.Fatalf("Inspect = %+v, %v; want unknown with its session", st, err)
+			}
+		}
+		lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+		if len(lines) != 1 {
+			t.Fatalf("status %.10q: %d lines, want one: %s", status, len(lines), out.String())
+		}
+		var line struct {
+			Level, Msg, Err string
+			AgentPID        int `json:"agent_pid"`
+		}
+		if err := json.Unmarshal([]byte(lines[0]), &line); err != nil {
+			t.Fatal(err)
+		}
+		quoted := fmt.Sprintf("%q", status)
+		if line.Level != "WARN" || line.Msg != "probe" || line.AgentPID != pid || !strings.Contains(line.Err, quoted[:min(len(quoted), 40)]) || len(line.Err) >= 100 {
+			t.Errorf("line = %+v, want a WARN probe line with the status, under 100 characters", line)
+		}
+
+		out.Reset()
+		now = now.Add(claude.MaxAge + time.Second)
+		p.SetAgents(listing("busy"))
+		if _, err := p.Inspect(t.Context(), panel); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(out.String(), "probe: recovered") || strings.Count(out.String(), "\n") != 1 {
+			t.Errorf("after a known status: %s, want one recovered line", out.String())
+		}
 	}
 }
