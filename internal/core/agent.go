@@ -500,9 +500,9 @@ func (c *Core) StartedAgent(ctx context.Context, p Project, addr string) (Agent,
 //
 // It returns once an idle agent has left idle, so a following Wait sees the
 // turn it asked for rather than the rest before it. An agent not seen to leave
-// idle answers ErrStillIdle (decisions.md D196). An agent that was already
-// working queues the prompt, and nothing marks its arrival, so Prompt returns
-// at once.
+// idle answers ErrStillIdle (decisions.md D196), and one whose panel is gone
+// answers ErrAgentGone at once. An agent that was already working queues the
+// prompt, and nothing marks its arrival, so Prompt returns at once.
 func (c *Core) Prompt(ctx context.Context, a Agent, text string, poll time.Duration) (revier.AgentState, error) {
 	w, err := c.writer(a)
 	if err != nil {
@@ -537,10 +537,13 @@ func (c *Core) Prompt(ctx context.Context, a Agent, text string, poll time.Durat
 			return a.State, ErrStillIdle
 		case <-time.After(poll):
 		}
-		// A failed read proves nothing about a text already delivered, so it
-		// only costs a poll. A probe that failed reads as unknown, not as an
-		// error, and is no more proof of a turn.
+		// Any other failed read proves nothing about a text already delivered,
+		// so it only costs a poll. A probe that failed reads as unknown, not
+		// as an error, and is no more proof of a turn.
 		s, err := c.reread(ctx, a)
+		if errors.Is(err, ErrAgentGone) {
+			return a.State, err
+		}
 		if err == nil && s.Status != revier.StatusIdle && s.Status != revier.StatusUnknown {
 			return s, nil
 		}

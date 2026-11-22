@@ -207,3 +207,20 @@ func TestANameStartingWithADashNeedsTheSeparator(t *testing.T) {
 		t.Errorf("no file for -x: %v", err)
 	}
 }
+
+// A --panel that names nothing fails at the parse, naming the flag: read as no
+// flag, a script's empty variable would act on the directory's project.
+func TestAnEmptyPanelFlagFailsAtTheParse(t *testing.T) {
+	testenv.NoTools(t)
+	configRoot(t, "", nil)
+	for _, args := range [][]string{
+		{"agent", "new", "--panel", ""},
+		{"agent", "new", "--panel="},
+		{"shell", "new", "--panel", ""},
+	} {
+		err := run(io.Discard, args)
+		if err == nil || !strings.Contains(err.Error(), "flag -panel") {
+			t.Errorf("%q: err = %v, want a refusal naming the flag", args, err)
+		}
+	}
+}

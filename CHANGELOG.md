@@ -31,8 +31,9 @@ Each section is also the text of its release on the
   goes to its configured place.** Before, it stayed where it opened, and later
   presses did not move it.
 - **A shutdown no longer says `safe to leave` while a second copy of a
-  workspace still runs.** It names that copy as still open and exits `1`, and
-  the next start does not offer a restore.
+  workspace still runs.** `revier shutdown` names that copy as still open and
+  exits `1`, and the next start does not offer a restore. A window that only
+  matches a target's rule, such as a personal browser window, does not count.
 - **`revier agent prompt` exits `7` when the agent does not start on the
   prompt.** Before, it warned and exited `0`, so `revier agent prompt ... &&
   revier agent wait ...` went on as if a turn had run. A script that relied on

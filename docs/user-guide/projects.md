@@ -186,8 +186,9 @@ it, and its next start offers to restore the saved session or to start
 fresh; see [After a full shutdown](tui.md#after-a-full-shutdown). Anything
 you open first ends that offer. A full shutdown is not remembered when it
 found nothing left to close, when revier could not write its state, when you
-opened something while it ran, when you stopped it before its last step, or
-when a second copy of a closed target is still open after it.
+opened something while it ran, when you stopped it before its last step or
+while something it closed had not gone, or when a second copy of a closed
+workspace is still open after it.
 One you stopped before it saved the session leaves an earlier full shutdown
 remembered.
 
@@ -197,8 +198,8 @@ on the screen. A shutdown then waits for what it closed to go, and says
 `waiting for 3 to close`. When nothing failed, stayed open or was left by a
 cancel, its last line is `shutdown complete; safe to leave`. Otherwise it
 exits `1`, so `revier shutdown && poweroff` powers off only when it is safe.
-A second open copy of a target counts as still open: revier names it and
-leaves it running.
+A second copy of a workspace counts as still open: revier names it and
+leaves it running. A window that only matches a target's rule does not count.
 
 To stop a shutdown or a restore, press ctrl+c: the step that runs finishes,
 and the rest is not reached. After the last step, ctrl+c ends the wait for

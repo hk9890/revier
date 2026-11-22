@@ -524,10 +524,12 @@ func (al *agentList) selectKey(key listedKey) bool {
 // chooses; the project list is as it was left.
 //
 // Which row that is is known once every agent's last word is read, and that
-// answer comes after the list is drawn. Until it has come, every reload
-// chooses the row again, unless the user acts on the list first (took).
+// answer comes after the list is drawn. Until a complete answer, or the bound
+// of partial ones, has come, every reload chooses the row again, unless the
+// user acts on the list first (took).
 func (m Model) switchList() (tea.Model, tea.Cmd) {
 	m.err = nil
+	m.apartial = 0
 	m.toList()
 	m.agents.shown = !m.agents.shown
 	if !m.agents.shown {

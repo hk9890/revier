@@ -112,17 +112,24 @@ func (m Model) detailsWanted() (revier.ProjectName, []revier.AgentView) {
 // keeps what it said before, so one read that failed does not blank the row
 // that shows it. A partial answer does not count as the project answered until
 // partialAnswers of them came in a row, so the pane does not settle on an agent
-// before it knows when each spoke.
+// before it knows when each spoke. One for another project ends the answer the
+// pane held, whose details it replaces. A project answered by the bound alone
+// is forced: the first complete answer chooses again.
 func (m *Model) took(msg detailsMsg) {
 	if msg.project != m.aasked || msg.seq <= m.atook {
 		return
 	}
 	m.atook = msg.seq
-	if msg.partial {
+	switch {
+	case !msg.partial:
+		m.aanswered, m.apartial, m.aforced = msg.project, 0, false
+	case msg.project != m.aanswered:
 		m.apartial++
-	}
-	if !msg.partial || m.apartial >= partialAnswers {
-		m.aanswered, m.apartial = msg.project, 0
+		if m.apartial >= partialAnswers {
+			m.aanswered, m.apartial, m.aforced = msg.project, 0, true
+		} else {
+			m.aanswered, m.aforced = "", false
+		}
 	}
 	said := make(map[agentKey]revier.AgentDetail, len(msg.said))
 	for k, d := range msg.said {
@@ -139,9 +146,12 @@ func (m *Model) took(msg detailsMsg) {
 	m.adetails = said
 	// The agent list opened before this answer, on an order that did not
 	// know when each agent spoke. This reload chooses its row in the order
-	// that does, and is the last to choose it (switchList).
+	// that does. It is the last to choose it (switchList) unless the answer
+	// is partial and under the bound.
 	m.reloadAgents()
-	m.agents.top = false
+	if m.aanswered == msg.project {
+		m.agents.top = false
+	}
 }
 
 // pickAgent puts the pane's cursor on an agent row the user moved it to, and
@@ -192,7 +202,9 @@ func (m *Model) chooseAgent() {
 		m.apending = true
 		return
 	}
-	m.akept = keyOf(rows[m.acursor].agent)
+	if equals == 1 || !m.aforced {
+		m.akept = keyOf(rows[m.acursor].agent)
+	}
 }
 
 // agentRank orders the agents by how much each is worth a look: one that

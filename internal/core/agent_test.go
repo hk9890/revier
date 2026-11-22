@@ -555,3 +555,29 @@ func TestTheAgentOfARefusedTabIsAddressedAsTheSurveyLabelsIt(t *testing.T) {
 		t.Errorf("Agent(%s) = %+v, %v; want the agent the survey listed", rest, a, err)
 	}
 }
+
+// goneAfterEnter is a runtime whose agent exits on the Enter of a prompt.
+type goneAfterEnter struct{ *hosttest.FakeRuntime }
+
+func (g goneAfterEnter) SendText(ctx context.Context, ref revier.TargetRef, panel revier.PanelID, text string) error {
+	err := g.FakeRuntime.SendText(ctx, ref, panel, text)
+	if text == "\r" {
+		g.Remove(ref)
+	}
+	return err
+}
+
+// An agent that exits on the prompt is gone, not still idle: the watch ends at
+// once and says so.
+func TestPromptReportsAnAgentThatExits(t *testing.T) {
+	c, rt := agentCore(agentPanel("1", "idle"))
+	a, err := c.Agent(t.Context(), prepared(t, project()), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Runtime = goneAfterEnter{rt}
+
+	if _, err := c.Prompt(t.Context(), a, "hello", time.Millisecond); !errors.Is(err, core.ErrAgentGone) {
+		t.Fatalf("err = %v, want ErrAgentGone", err)
+	}
+}

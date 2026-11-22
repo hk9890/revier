@@ -545,3 +545,26 @@ func TestTheFactsRunToThePanesEdge(t *testing.T) {
 		t.Errorf("the rule under the name is %d columns, want it at the pane's edge", n)
 	}
 }
+
+// The choice forced by partial answers is not kept: the first complete answer
+// chooses again, by when each agent spoke.
+func TestTheFirstCompleteAnswerReplacesAForcedChoice(t *testing.T) {
+	now := time.Now()
+	m, _, fakes := unsaidWorld(t, 140, 30,
+		shownAgent{status: revier.StatusIdle, screen: "the older screen", at: now.Add(-2 * time.Hour)},
+		shownAgent{status: revier.StatusIdle, screen: "the newer screen", at: now.Add(-5 * time.Minute)})
+	for _, f := range fakes {
+		f.DetailErr = revier.ErrDetailPending
+	}
+	m = m.Said().Said().Said().Mirrored()
+	if body := pane(m); !strings.Contains(body, "the older screen") {
+		t.Fatalf("pane = %q after the bound, want the first row", body)
+	}
+	for _, f := range fakes {
+		f.DetailErr = nil
+	}
+	m = m.Said().Mirrored()
+	if body := pane(m); !strings.Contains(body, "the newer screen") || strings.Contains(body, "the older screen") {
+		t.Errorf("pane = %q, want the agent that spoke last", body)
+	}
+}

@@ -105,31 +105,35 @@ const pressLockPoll = 20 * time.Millisecond
 
 // HoldPress takes the project's press lock, a flock on one file per project
 // under the root, so a crash releases it. It waits for another press to
-// release it, and returns an error only when ctx ends first.
+// release it, reports whether it had to, and returns an error only when ctx
+// ends first.
 //
 // A lock file that cannot be opened or locked must not cost the press, so
 // the press runs unguarded. That writes "press lock" with root, project and
-// err through logging.Repeat, and the first lock taken after it writes
-// "press lock: recovered".
-func (f File) HoldPress(ctx context.Context, p revier.ProjectName) (func(), error) {
+// err through logging.Repeat, once per project. The first lock taken for that
+// project after it writes "press lock: recovered" with root and project.
+func (f File) HoldPress(ctx context.Context, p revier.ProjectName) (release func(), waited bool, err error) {
+	key := "press lock:" + string(p)
 	lock, err := openPressLock(f.Root, p)
-	logging.Repeat("press lock", "press lock", err, "root", f.Root, "project", p)
 	if err != nil {
-		return func() {}, nil
+		logging.Repeat(key, "press lock", err, "root", f.Root, "project", p)
+		return func() {}, false, nil
 	}
 	for {
 		err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 		if err == nil {
+			logging.Repeat(key, "press lock", nil, "root", f.Root, "project", p)
 			return func() {
 				_ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
 				_ = lock.Close()
-			}, nil
+			}, waited, nil
 		}
 		if !errors.Is(err, syscall.EWOULDBLOCK) {
 			_ = lock.Close()
-			logging.Repeat("press lock", "press lock", err, "root", f.Root, "project", p)
-			return func() {}, nil
+			logging.Repeat(key, "press lock", err, "root", f.Root, "project", p)
+			return func() {}, waited, nil
 		}
+		waited = true
 		select {
 		case <-ctx.Done():
 			_ = lock.Close()
@@ -137,7 +141,7 @@ func (f File) HoldPress(ctx context.Context, p revier.ProjectName) (func(), erro
 			// Written when a press gave up waiting for the lock, so it ran
 			// nothing and wrote no "go" line. It carries project and err.
 			slog.Error("press lock: gave up waiting", "project", p, "err", err)
-			return nil, err
+			return nil, waited, err
 		case <-time.After(pressLockPoll):
 		}
 	}

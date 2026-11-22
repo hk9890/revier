@@ -26,8 +26,8 @@ var errShutdownBusy = errors.New("agents are busy; nothing saved and nothing clo
 var errShutdownTurnedBusy = errors.New("agents turned busy since the plan was made; nothing saved and nothing closed. use --force to shut down anyway")
 
 // errShutdownIncomplete is a shutdown that ended with a target still open or
-// not read, with an instance of a shut target that no step named, or that a
-// cancel stopped with steps left. It fails the command,
+// not read, with a second workspace of a shut target that no step named, or
+// that a cancel stopped with steps left. It fails the command,
 // so `revier shutdown && poweroff` does not power off under an editor that
 // still asks about unsaved work.
 var errShutdownIncomplete = errors.New("shutdown incomplete; not safe to leave")
@@ -137,7 +137,7 @@ func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	}
 	// ctrl+c stops the close between two steps, and ends the wait after
 	// them. A second ctrl+c ends the command before the shutdown returns, so
-	// it abandons the record, which takes it back or keeps it. app.Close
+	// it abandons the record, which ends it or keeps it. app.Close
 	// decides whether the record is written at all, and the record of a close
 	// that is not full has nothing to take back.
 	req.Record = usecase.NewShutdownRecord(a.core, a.stateRoot)

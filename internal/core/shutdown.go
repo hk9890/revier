@@ -42,8 +42,9 @@ const (
 	// normal outcome too: the shutdown names it, leaves it open, and closes
 	// the rest of the plan.
 	CloseUnread
-	// CloseUnplanned is no step of the plan: a live instance a shut target's
-	// rule still matches, or a host that could not say whether one is left.
+	// CloseUnplanned is no step of the plan: a live runtime instance a shut
+	// target's rule still matches, or a runtime that could not say whether
+	// one is left.
 	// The shutdown adds it to its result after the wait and closes nothing.
 	CloseUnplanned
 )
@@ -736,7 +737,8 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	_, waited, _ := out.Counts()
 	walked := len(out)
 	// A cancel that ended the wait with a step still listed wants out now, and
-	// that step already makes the shutdown incomplete.
+	// that step already makes the shutdown incomplete. app.Close withdraws a
+	// full shutdown's record then, as this check did not run.
 	if closes && walked == len(plan) && (!cancelled() || waited == 0) {
 		out = append(out, c.leftOpen(ctx, r, out, opts.Projects)...)
 	}
@@ -920,12 +922,14 @@ func (c *Core) awaitClosed(ctx context.Context, out Closed, wait time.Duration) 
 }
 
 // leftOpen lists once more after a full close of a project and returns what
-// its plan did not name: each live instance a shut target's rule still
-// matches, as a second workspace of one project is. Each is reported and none
-// is closed: the user confirmed the plan, and this instance is not in it. An
-// instance another project still holds is left open on purpose and is not
-// reported. A host that does not answer is reported too, because no answer is
-// not "nothing open", unless a step on that host is already reported open.
+// its plan did not name: each live runtime instance a shut target's rule
+// still matches, as a second workspace of one project is. Each is reported
+// and none is closed: the user confirmed the plan, and this instance is not
+// in it. A window a window target's rule matches is not counted: a loose class
+// rule also matches the user's own windows. An instance another project still
+// holds is left open on purpose and is not reported. A runtime that does not
+// answer is reported too, because no answer is not "nothing open", unless a
+// step on that host is already reported open.
 // The listing has its own budget, out of the cancel's reach, so a cancel that
 // came after everything went does not read as a failed listing.
 func (c *Core) leftOpen(ctx context.Context, r Report, walked Closed, projects []Project) []CloseResult {
@@ -965,15 +969,15 @@ func (c *Core) leftOpen(ctx context.Context, r Report, walked Closed, projects [
 			continue
 		}
 		host, _, m, err := c.resolveAt(projects[i], t)
-		if err != nil {
+		if err != nil || host.Name() != nameOf(c.Runtime) {
 			continue
 		}
 		if ferr := failed[host.Name()]; ferr != nil {
 			if !unchecked[host.Name()] {
 				unchecked[host.Name()] = true
-				// One WARN per host whose listing failed after the wait, so a
-				// second instance of a shut target cannot be ruled out: the
-				// first such step's project and target, host and err.
+				// One WARN when the runtime's listing failed after the wait,
+				// so a second workspace of a shut target cannot be ruled out:
+				// the first such step's project and target, host and err.
 				slog.Warn("shutdown: instances not checked", "project", s.Project, "target", s.Target, "host", host.Name(), "err", ferr)
 				out = append(out, CloseResult{CloseStep: CloseStep{
 					Project: s.Project, Target: s.Target, Ref: revier.TargetRef{Host: host.Name()},
@@ -987,8 +991,9 @@ func (c *Core) leftOpen(ctx context.Context, r Report, walked Closed, projects [
 				continue
 			}
 			known[key(inst.Ref)] = true
-			// One WARN per live instance a shut target's rule still matches
-			// and no step of the plan names: its project, target and ref.
+			// One WARN per live runtime instance a shut target's rule still
+			// matches and no step of the plan names: its project, target and
+			// ref.
 			slog.Warn("shutdown: instance left open", "project", s.Project, "target", s.Target, "ref", inst.Ref)
 			out = append(out, CloseResult{CloseStep: CloseStep{
 				Project: s.Project, Target: s.Target, Ref: inst.Ref,

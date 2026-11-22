@@ -530,3 +530,74 @@ func TestAFullShutdownThatLeavesAnUnplannedInstanceIsNotRecorded(t *testing.T) {
 		t.Errorf("recorded %v, on record %v; want the record taken back", res.Recorded, shutDownOnRecord(c))
 	}
 }
+
+// A window a target's loose rule also matches is no second workspace: the
+// full shutdown stays on record.
+func TestAFullShutdownThatLeavesAMatchingWindowIsRecorded(t *testing.T) {
+	wm := hosttest.New("wm")
+	wm.Add("work", "firefox")
+	wm.Add("personal", "firefox")
+	c := &core.Core{Window: wm, Ledger: &ledger{}}
+	projects := []core.Project{core.PrepareProject(revier.Project{Name: "demo", Path: "/src/demo", Targets: []revier.Target{
+		{Name: "browser", Home: true, Window: &revier.Realization{Launch: []string{"firefox"}, Match: revier.Match{Class: "firefox"}}},
+	}})}
+	plan := c.ShutdownPlan(surveyed(t, c, projects), "", core.ShutdownAll)
+
+	res, err := app.Close(t.Context(), fullShutdown(c, t.TempDir(), plan, projects))
+	if err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if !res.Recorded || !shutDownOnRecord(c) {
+		t.Errorf("recorded %v, on record %v in %+v; want the record kept", res.Recorded, shutDownOnRecord(c), res.Closed)
+	}
+}
+
+// A cancel that ends the wait with a step still listed skips the check for a
+// second copy, so the full shutdown does not stay on record unchecked.
+func TestACancelThatEndsTheWaitWithdrawsTheRecord(t *testing.T) {
+	c, rt, report, projects := desktop(t)
+	plan := c.ShutdownPlan(report, "", core.ShutdownAll)
+	rt.Refuses = map[string]bool{plan[len(plan)-1].Ref.ID: true}
+	req := fullShutdown(c, t.TempDir(), plan, projects)
+	req.Wait = time.Minute
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	req.Progress = func(p core.Progress) {
+		if p.Phase == core.PhaseWait {
+			cancel()
+		}
+	}
+
+	if _, err := app.Close(ctx, req); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if shutDownOnRecord(c) {
+		t.Error("the shutdown stayed on record with its check for a second copy skipped")
+	}
+}
+
+// A second ctrl+c during the wait quits before the check for a second copy,
+// so the record does not outlive the surface unchecked.
+func TestAnAbandonDuringTheWaitWithdrawsTheRecord(t *testing.T) {
+	c, _, report, projects := desktop(t)
+	plan := c.ShutdownPlan(report, "", core.ShutdownAll)
+	req := fullShutdown(c, t.TempDir(), plan, projects)
+	req.Record = app.NewShutdownRecord(c, req.StateRoot)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	var onRecord bool
+	req.Progress = func(p core.Progress) {
+		if p.Phase == core.PhaseWait {
+			cancel()
+			req.Record.Abandon()
+			onRecord = shutDownOnRecord(c)
+		}
+	}
+
+	if _, err := app.Close(ctx, req); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if onRecord {
+		t.Error("the abandoned shutdown stayed on record with its check for a second copy not run")
+	}
+}

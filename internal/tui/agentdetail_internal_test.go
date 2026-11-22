@@ -90,3 +90,32 @@ func TestAgoSaysTheLargestWholeUnit(t *testing.T) {
 		}
 	}
 }
+
+// A partial answer replaces the details the pane holds, so they are no longer
+// the last project's: a return to it waits for its answer again.
+func TestAPartialAnswerEndsThePreviousProjectsAnswer(t *testing.T) {
+	m := bare(Model{aasked: "first"})
+	m.took(detailsMsg{project: "first", seq: 1})
+	m.aasked = "second"
+	m.took(detailsMsg{project: "second", seq: 2, partial: true})
+	if m.aanswered == "first" {
+		t.Error("the pane still counts the first project as answered, with the second's details")
+	}
+}
+
+// A partial answer leaves the agent list's opening choice standing, up to the
+// bound the pane waits through: its order does not yet know when each spoke.
+func TestAPartialAnswerKeepsTheAgentListsOpeningChoice(t *testing.T) {
+	m := bare(Model{aasked: everyAgent})
+	m.agents.top = true
+	for seq := 1; seq < partialAnswers; seq++ {
+		m.took(detailsMsg{project: everyAgent, seq: seq, partial: true})
+		if !m.agents.top {
+			t.Fatalf("partial answer %d ended the opening choice", seq)
+		}
+	}
+	m.took(detailsMsg{project: everyAgent, seq: partialAnswers, partial: true})
+	if m.agents.top {
+		t.Error("the bound of partial answers did not end the opening choice")
+	}
+}

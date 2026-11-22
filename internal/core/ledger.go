@@ -25,10 +25,11 @@ type Ledger interface {
 	// Update applies a change under the store's lock and returns the state
 	// after it. apply reports whether it changed anything.
 	Update(apply func(*state.State) bool) *state.State
-	// HoldPress waits for the project's press lock and returns its release.
-	// One press that can launch holds it from its listing through the write
-	// of what it did (decisions.md D195). It fails only when ctx ends first.
-	HoldPress(ctx context.Context, p revier.ProjectName) (release func(), err error)
+	// HoldPress waits for the project's press lock and returns its release,
+	// and whether another press held it first. One press that can launch
+	// holds it from its listing through the write of what it did
+	// (decisions.md D195). It fails only when ctx ends first.
+	HoldPress(ctx context.Context, p revier.ProjectName) (release func(), waited bool, err error)
 	// Record appends one event.
 	Record(e revier.Event)
 	// Note appends one line to the state record: what an operation did,

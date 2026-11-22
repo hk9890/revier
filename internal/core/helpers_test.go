@@ -98,10 +98,11 @@ type ledger struct {
 	writes      []string
 	notes       []record.Line
 	popupHidden bool
+	waited      bool // HoldPress reports a press that waited for another
 }
 
-func (l *ledger) HoldPress(context.Context, revier.ProjectName) (func(), error) {
-	return func() {}, nil
+func (l *ledger) HoldPress(context.Context, revier.ProjectName) (func(), bool, error) {
+	return func() {}, l.waited, nil
 }
 
 func (l *ledger) MarkPopupHidden() error {

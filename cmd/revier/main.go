@@ -504,6 +504,21 @@ func projectFlag(fs *flag.FlagSet) *string {
 	return &p
 }
 
+// panelFlag registers --panel on a flag set. An empty value fails the parse:
+// read as no flag, a script's empty variable would act on the project the
+// directory resolves to.
+func panelFlag(fs *flag.FlagSet) *string {
+	var panel string
+	fs.Func("panel", "the open workspace holding this panel", func(value string) error {
+		if value == "" {
+			return errors.New("it names no panel")
+		}
+		panel = value
+		return nil
+	})
+	return &panel
+}
+
 // parseArgs parses flags that appear anywhere, returning the positional
 // arguments in order.
 //

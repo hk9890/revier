@@ -385,9 +385,10 @@ func ownPanel(in revier.Instance) (revier.PanelID, bool) {
 // the press read as one made on the tab. goTab logs
 // "tab gone at its focus, pressed again" at INFO before the second pass, with
 // project, target and err, the focus error of the first pass. A second such end
-// fails the press with its own focus error.
-func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resumes []Resume) (Result, error) {
-	res, err := c.goTabOnce(ctx, p, i, bound, resumes, false)
+// fails the press with its own focus error. A press with raiseOnly, which
+// waited for another press's lock, does not go home either (decisions.md D195).
+func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resumes []Resume, raiseOnly bool) (Result, error) {
+	res, err := c.goTabOnce(ctx, p, i, bound, resumes, raiseOnly)
 	var gone tabGone
 	if !errors.As(err, &gone) {
 		return res, err
@@ -406,9 +407,9 @@ type tabGone struct{ err error }
 
 func (g tabGone) Error() string { return g.err.Error() }
 
-// goTabOnce is one press of goTab, on one listing. again is the press made
-// once more, which does not go home.
-func (c *Core) goTabOnce(ctx context.Context, p Project, i int, bound Bindings, resumes []Resume, again bool) (Result, error) {
+// goTabOnce is one press of goTab, on one listing. raiseOnly is a press that
+// does not go home: one made once more, or one that waited for the lock.
+func (c *Core) goTabOnce(ctx context.Context, p Project, i int, bound Bindings, resumes []Resume, raiseOnly bool) (Result, error) {
 	t := p.Targets[i]
 	opener, err := c.tabHost(p, i)
 	if err != nil {
@@ -460,7 +461,7 @@ func (c *Core) goTabOnce(ctx context.Context, p Project, i int, bound Bindings, 
 		}
 	}
 
-	if !again && !opened && open && c.focusedOn(ctx, snap, in) {
+	if !raiseOnly && !opened && open && c.focusedOn(ctx, snap, in) {
 		if cur, err := opener.FocusedPanel(ctx, in.Ref); err == nil && slices.Contains(tabAt(in, tab), cur) {
 			return c.goHomeFromTab(ctx, p, snap, in, bound, opener)
 		}

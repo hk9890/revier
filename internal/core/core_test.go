@@ -1479,3 +1479,22 @@ func (d detached) Open(context.Context, revier.Realization) (revier.TargetRef, e
 	d.appear()
 	return revier.TargetRef{}, nil
 }
+
+// A press that waited for another press's lock finds the target that press
+// focused. It raises the target and does not read that focus as a second press.
+func TestAPressThatWaitedForTheLockDoesNotToggleBack(t *testing.T) {
+	wm := hosttest.New("wm")
+	rt := hosttest.NewRuntime("rt")
+	editorRef := wm.Add("Visual Studio Code", "code")
+	rt.Add("session:revier", "kitty")
+	wm.SetFocus(editorRef)
+	c := &core.Core{Runtime: rt, View: rt, Window: wm, Ledger: &ledger{waited: true}}
+
+	res, err := press(t.Context(), c, prepared(t, project()), "editor")
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	if res.Ref != editorRef || len(rt.Focuses) != 0 {
+		t.Errorf("result %v, runtime focuses %v; want the editor raised and no way home", res.Ref, rt.Focuses)
+	}
+}

@@ -63,7 +63,7 @@ func cmdShell(out io.Writer, args []string) error {
 func cmdShellNew(out io.Writer, args []string) error {
 	fs := flag.NewFlagSet("shell new", flag.ContinueOnError)
 	project := projectFlag(fs)
-	panel := fs.String("panel", "", "the open workspace holding this panel")
+	panel := panelFlag(fs)
 	dir := fs.String("dir", "", "the directory the shell starts in")
 	pos, err := parseArgs(fs, args)
 	if err != nil {

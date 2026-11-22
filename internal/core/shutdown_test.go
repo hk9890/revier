@@ -1233,3 +1233,27 @@ func TestAShutdownWhoseLastListingFailsIsNotComplete(t *testing.T) {
 		t.Errorf("result = %+v, want the step closed and the check reported as not made", out)
 	}
 }
+
+// A window of the user's that a target's loose class rule also matches is no
+// second workspace: a full shutdown does not count it, and leaves it alone.
+func TestAShutdownDoesNotCountAWindowItsRuleAlsoMatches(t *testing.T) {
+	wm := hosttest.New("wm")
+	wm.Add("work", "firefox")
+	personal := wm.Add("personal", "firefox")
+	c := &core.Core{Window: wm}
+	projects := []core.Project{prepared(t, revier.Project{Name: "demo", Path: "/p", Targets: []revier.Target{
+		{Name: "browser", Home: true, Window: &revier.Realization{Launch: []string{"firefox"}, Match: revier.Match{Class: "firefox"}}},
+	}})}
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+
+	out, err := c.Shutdown(t.Context(), plan, 0, reading(projects))
+	if err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	if closed, open, failed := out.Counts(); closed != 1 || open != 0 || failed != 0 {
+		t.Errorf("counts = %d closed, %d open, %d failed in %+v; want the step closed alone", closed, open, failed, out)
+	}
+	if slices.Contains(wm.Closed, personal) {
+		t.Errorf("closed %v, want the personal window left", wm.Closed)
+	}
+}

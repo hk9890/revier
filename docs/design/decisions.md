@@ -675,8 +675,8 @@ leaving a running restore, which used the surface while it still opened windows.
 Extends D78. After a full shutdown the next start offered nothing, and the
 restore was three keys deep. The state now records a full shutdown, written
 after the save and before the first close, since the close may end revier's
-own terminal; a cancel that left a step not reached takes it back, and so
-does a close that finds an instance of a shut target its plan did not name.
+own terminal; a cancel that left a step not reached or unchecked takes it back,
+and so does a close that finds a second workspace of a shut target.
 The surface then quits, the popup too, so the next press is a cold start
 (D86) that opens on a start dialog: restore, pick another session, or start
 fresh. Any open clears the record: the user has started again.
@@ -1151,11 +1151,11 @@ prompt. Rejected: dropping the id at a shutdown save, which loses that prompt.
 Two processes that pressed a closed project both listed no instance and both
 launched, and revier kept one copy. A press that can launch now holds a flock
 per project, which a crash releases, until what it did is on record. The next
-press waits, lists again and raises. The wait for a detached window is outside
-the lock: the launch on record holds a press back. A command target holds none,
-as its command can press its own project. Rejected: recording the launch before
-Open, which must be undone when Open fails, and puts a launch with no window
-class on record, for which a survey's claim could take any window.
+press waits, lists again and raises, and never toggles back: the focus it finds
+is the first press's work. The wait for a detached window is outside the lock:
+the launch on record holds a press back. A command target holds none, as its
+command can press its own project. Rejected: recording the launch before Open,
+which must be undone when Open fails, and lets a survey bind a classless launch.
 
 ### D196 — a prompt the agent was not seen to start on exits 7
 

@@ -92,7 +92,7 @@ func (c *Core) runCommand(ctx context.Context, p Project, i int, st *state.State
 	before, read := c.focusedNow(ctx)
 	if home, ok := p.Home(); ok && onRun(st.LastRun, p.Name, name, before) {
 		// The way home can launch it, so it holds the lock a press does.
-		return c.holdingPress(ctx, p, func(st *state.State) (Result, error) {
+		return c.holdingPress(ctx, p, func(st *state.State, _ bool) (Result, error) {
 			bound := st.Bound[p.Name]
 			if coming, err := c.comingUp(ctx, p, home.Name, bound, st.Pending(p.Name, home.Name, time.Now())); err != nil || coming {
 				return Result{Target: home.Name, ComingUp: coming}, err

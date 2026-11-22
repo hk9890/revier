@@ -34,30 +34,33 @@ func (c *Core) activate(ctx context.Context, p Project, name revier.TargetName, 
 	if i, ok := p.index(name); ok && p.isCommand(i) {
 		return c.runCommand(ctx, p, i, c.state())
 	}
-	return c.holdingPress(ctx, p, func(st *state.State) (Result, error) {
+	return c.holdingPress(ctx, p, func(st *state.State, waited bool) (Result, error) {
 		bound := st.Bound[p.Name]
 		if coming, err := c.comingUp(ctx, p, name, bound, st.Pending(p.Name, name, time.Now())); err != nil || coming {
 			return Result{Target: name, ComingUp: coming}, err
 		}
-		return c.goToResuming(ctx, p, name, bound, resumes)
+		return c.goToResuming(ctx, p, name, bound, resumes, waited)
 	})
 }
 
 // holdingPress runs one press that can launch under the project's press
 // lock, from the state it reads through the write of what the press did
 // (decisions.md D195). A press of another process then waits, reads that
-// write, lists again and raises the instance. The wait for a detached
-// launch's window comes after the lock: its launch is on record by then, and
-// holds the next press back without it.
-func (c *Core) holdingPress(ctx context.Context, p Project, press func(*state.State) (Result, error)) (Result, error) {
+// write, lists again and raises the instance. press is told it waited: the
+// focus it then finds is the other press's work, so it does not toggle back.
+// The wait for a detached launch's window comes after the lock: its launch is
+// on record by then, and holds the next press back without it.
+func (c *Core) holdingPress(ctx context.Context, p Project, press func(st *state.State, waited bool) (Result, error)) (Result, error) {
+	waited := false
 	if c.Ledger != nil {
-		release, err := c.Ledger.HoldPress(ctx, p.Name)
+		release, held, err := c.Ledger.HoldPress(ctx, p.Name)
 		if err != nil {
 			return Result{}, err
 		}
 		defer release()
+		waited = held
 	}
-	res, err := press(c.state())
+	res, err := press(c.state(), waited)
 	if res.Launched && res.Ref.IsZero() && err == nil {
 		at := time.Now()
 		var class string

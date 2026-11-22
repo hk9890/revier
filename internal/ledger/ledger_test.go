@@ -305,22 +305,22 @@ func TestACorruptStateFileIsLogged(t *testing.T) {
 // another project is not held back, and a release frees the lock.
 func TestHoldPressHoldsOneProject(t *testing.T) {
 	f := ledger.File{Root: t.TempDir()}
-	release, err := f.HoldPress(t.Context(), "work")
+	release, _, err := f.HoldPress(t.Context(), "work")
 	if err != nil {
 		t.Fatal(err)
 	}
 	waited, cancel := context.WithTimeout(t.Context(), 60*time.Millisecond)
 	defer cancel()
-	if _, err := f.HoldPress(waited, "work"); !errors.Is(err, context.DeadlineExceeded) {
+	if _, _, err := f.HoldPress(waited, "work"); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want the wait to end with its context", err)
 	}
-	other, err := f.HoldPress(t.Context(), "other")
+	other, _, err := f.HoldPress(t.Context(), "other")
 	if err != nil {
 		t.Fatalf("another project: %v", err)
 	}
 	other()
 	release()
-	again, err := f.HoldPress(t.Context(), "work")
+	again, _, err := f.HoldPress(t.Context(), "work")
 	if err != nil {
 		t.Fatalf("after the release: %v", err)
 	}
@@ -333,7 +333,7 @@ func TestHoldPressWithNoLockFileLetsThePressRun(t *testing.T) {
 	if err := os.WriteFile(root, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	release, err := ledger.File{Root: root}.HoldPress(t.Context(), "work")
+	release, _, err := ledger.File{Root: root}.HoldPress(t.Context(), "work")
 	if err != nil {
 		t.Fatalf("err = %v, want the press to run unguarded", err)
 	}
@@ -357,4 +357,56 @@ func TestFileTakesThePopupMarkOnce(t *testing.T) {
 	if !f.TakePopupHidden() || f.TakePopupHidden() {
 		t.Error("the mark was not taken exactly once")
 	}
+}
+
+// A press lock that fails for one project is that project's: a lock taken for
+// another project is no recovery of it, and the project's own next lock is.
+func TestAPressLockRecoversPerProject(t *testing.T) {
+	var logged bytes.Buffer
+	was := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
+	t.Cleanup(func() { slog.SetDefault(was) })
+	root := t.TempDir()
+	blocked := filepath.Join(root, "press-locks", "recovers-a.lock")
+	if err := os.MkdirAll(blocked, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f := ledger.File{Root: root}
+	take := func(p revier.ProjectName) {
+		t.Helper()
+		release, _, err := f.HoldPress(t.Context(), p)
+		if err != nil {
+			t.Fatalf("HoldPress(%s): %v", p, err)
+		}
+		release()
+	}
+
+	take("recovers-a")
+	take("recovers-b")
+	if strings.Contains(logged.String(), "press lock: recovered") {
+		t.Fatalf("log = %q, want no recovery from another project's lock", logged.String())
+	}
+	if err := os.Remove(blocked); err != nil {
+		t.Fatal(err)
+	}
+	take("recovers-a")
+	if !strings.Contains(logged.String(), "press lock: recovered") {
+		t.Errorf("log = %q, want the project's own lock to recover it", logged.String())
+	}
+}
+
+// A press says whether it had to wait for the lock: one that found it free did
+// not, and one that found it held did.
+func TestHoldPressReportsAWait(t *testing.T) {
+	f := ledger.File{Root: t.TempDir()}
+	first, waited, err := f.HoldPress(t.Context(), "work")
+	if err != nil || waited {
+		t.Fatalf("the free lock: waited %v, err %v; want no wait", waited, err)
+	}
+	time.AfterFunc(200*time.Millisecond, first)
+	second, waited, err := f.HoldPress(t.Context(), "work")
+	if err != nil || !waited {
+		t.Fatalf("the held lock: waited %v, err %v; want a wait", waited, err)
+	}
+	second()
 }

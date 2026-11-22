@@ -660,7 +660,7 @@ type Result struct {
 // activation records Result.Ref there afterwards, so the next press needs no
 // rule.
 func (c *Core) goTo(ctx context.Context, p Project, name revier.TargetName, bound Bindings) (Result, error) {
-	return c.goToResuming(ctx, p, name, bound, nil)
+	return c.goToResuming(ctx, p, name, bound, nil, false)
 }
 
 // goToResuming is goTo with the agent panels of a launch started on the
@@ -668,7 +668,9 @@ func (c *Core) goTo(ctx context.Context, p Project, name revier.TargetName, boun
 // continuation rather than an empty one. It is goTo in every other respect,
 // toggle-back included, and resumes apply only to the run half: a target
 // already up is raised as it stands, because the agent in it is already the
-// one the recording named.
+// one the recording named. raiseOnly is a press that waited for another
+// press's lock: it raises what it finds and never toggles back (decisions.md
+// D195).
 //
 // Every call is one "go" line of the log when run-or-raise ends: at Info, or
 // at Error with err when the press failed. It carries project, target,
@@ -679,22 +681,22 @@ func (c *Core) goTo(ctx context.Context, p Project, name revier.TargetName, boun
 // press on a tab inside its home instance calls no goTo: it writes this one
 // line, with landed set to the home. A command target writes its own "go"
 // line (runCommand).
-func (c *Core) goToResuming(ctx context.Context, p Project, name revier.TargetName, bound Bindings, resumes []Resume) (res Result, err error) {
+func (c *Core) goToResuming(ctx context.Context, p Project, name revier.TargetName, bound Bindings, resumes []Resume, raiseOnly bool) (res Result, err error) {
 	start := time.Now()
 	defer func() {
 		logging.Op("go", start, err, "project", p.Name, "target", name, "landed", res.Target,
 			"launched", res.Launched, "tabs", res.Tabs, "ref", res.Ref, "resumes", len(resumes), "agents", res.Agents, "agent_err", res.AgentErr)
 	}()
-	return c.goResuming(ctx, p, name, bound, resumes)
+	return c.goResuming(ctx, p, name, bound, resumes, raiseOnly)
 }
 
-func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName, bound Bindings, resumes []Resume) (Result, error) {
+func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName, bound Bindings, resumes []Resume, raiseOnly bool) (Result, error) {
 	i, ok := p.index(name)
 	if !ok {
 		return Result{}, p.noTarget(name)
 	}
 	if p.isTab(i) {
-		return c.goTab(ctx, p, i, bound, resumes)
+		return c.goTab(ctx, p, i, bound, resumes, raiseOnly)
 	}
 	t := p.Targets[i]
 	host, real, m, err := c.resolveAt(p, i)
@@ -820,7 +822,7 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 
 	// Toggle back: the target is already where focus is, so the second press
 	// returns home instead of doing nothing.
-	if !t.Home && c.focusedOn(ctx, snap, inst) {
+	if !t.Home && !raiseOnly && c.focusedOn(ctx, snap, inst) {
 		if home, ok := p.Home(); ok {
 			return c.goTo(ctx, p, home.Name, bound)
 		}

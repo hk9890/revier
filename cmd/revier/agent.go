@@ -479,7 +479,7 @@ func busyAgent(address string, busy []core.CloseStep) error {
 func cmdAgentNew(out io.Writer, args []string) error {
 	fs := flag.NewFlagSet("agent new", flag.ContinueOnError)
 	project := projectFlag(fs)
-	panel := fs.String("panel", "", "the open workspace holding this panel")
+	panel := panelFlag(fs)
 	resume := fs.String("resume", "", "the conversation to start the agent on")
 	dir := fs.String("dir", "", "the directory the agent starts in")
 	noFocus := fs.Bool("no-focus", false, "leave the focus where it is, and print the agent's address")

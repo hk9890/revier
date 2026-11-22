@@ -43,6 +43,7 @@ the agent list.
   or `unknown`, because the Enter would answer a dialog. Use `send-keys` for
   those. When the agent is still idle after the text arrived, it warns and
   exits [`7`](cli.md#exit-codes), so a `prompt && wait` chain stops there.
+  When the agent exits instead, it says so and exits `1`.
 - `wait --until` takes `idle`, `running`, `attention`, or `stopped` (idle or
   attention: the turn stopped, the agent did not exit). A `--timeout` that
   runs out has its own [exit code](cli.md#exit-codes), so a script can tell a
