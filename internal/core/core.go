@@ -765,44 +765,57 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 			return res, nil
 		}
 		res.Ref = ref
-		var active revier.PanelID
-		if opener != nil {
-			if res.Tabs, active, err = tabs.rest(ctx, opener, ref); err != nil {
-				// The instance stays open with the tabs it has, and is reported
-				// with the failure, so the caller pins it and the next press
-				// raises it instead of opening another. The agents of the tabs
-				// that opened started; no other did.
-				res.Agents = notAdded(append(agents, make([]AgentOutcome, len(extra))...), tabs.laid[len(res.Tabs)-1])
-				return res, fmt.Errorf("%s: %w", host.Name(), err)
+		noWindow := false
+		err = func() error {
+			var active revier.PanelID
+			if opener != nil {
+				var err error
+				if res.Tabs, active, err = tabs.rest(ctx, opener, ref); err != nil {
+					// The instance stays open with the tabs it has, and is
+					// reported with the failure, so the caller pins it and the
+					// next press raises it instead of opening another. The
+					// agents of the tabs that opened started; no other did.
+					res.Agents = notAdded(append(agents, make([]AgentOutcome, len(extra))...), tabs.laid[len(res.Tabs)-1])
+					// A view that draws its own windows has drawn none yet.
+					_, noWindow = c.shower(ref)
+					return fmt.Errorf("%s: %w", host.Name(), err)
+				}
 			}
-		}
-		added, as, err := c.addAgents(ctx, host, p, layout, ref, extra)
-		res.Agents, res.AgentErr = append(agents, added...), err
-		res.As = append(make([]string, len(agents)), as...)
-		// A view that opens its own windows draws the instance once every
-		// tab of it runs (decisions.md D180).
-		if _, err := c.show(ctx, ref, true); err != nil {
-			return res, fmt.Errorf("%s: show new %s: %w", c.View.Name(), name, err)
-		}
-		// Focus explicitly. Some hosts focus what they launch and some do not,
-		// so without this the raise half of run-or-raise holds only by
-		// accident of the host - the window opens behind on the ones that do
-		// not. A press always leaves the target focused.
-		if err := host.Focus(ctx, ref); err != nil {
-			// The launch ran and the instance exists: its ref and agents are
-			// reported with the failure, so the caller pins it and the next
-			// press raises it instead of opening another.
-			return res, fmt.Errorf("%s: focus new %s: %w", host.Name(), name, err)
-		}
-		if opener != nil {
-			// After every tab and every agent tab is open, so that neither
-			// leaves another tab current.
-			if err := c.focusActive(ctx, opener, tabs, ref, active); err != nil {
-				return res, err
+			added, as, err := c.addAgents(ctx, host, p, layout, ref, extra)
+			res.Agents, res.AgentErr = append(agents, added...), err
+			res.As = append(make([]string, len(agents)), as...)
+			// A view that opens its own windows draws the instance once every
+			// tab of it runs (decisions.md D180).
+			if opened, err := c.show(ctx, ref, true); err != nil {
+				noWindow = !opened
+				return fmt.Errorf("%s: show new %s: %w", c.View.Name(), name, err)
 			}
+			// Focus explicitly. Some hosts focus what they launch and some do
+			// not, so without this the raise half of run-or-raise holds only by
+			// accident of the host - the window opens behind on the ones that
+			// do not. A press always leaves the target focused.
+			if err := host.Focus(ctx, ref); err != nil {
+				// The launch ran and the instance exists: its ref and agents
+				// are reported with the failure, so the caller pins it and the
+				// next press raises it instead of opening another.
+				return fmt.Errorf("%s: focus new %s: %w", host.Name(), name, err)
+			}
+			if opener != nil {
+				// After every tab and every agent tab is open, so that neither
+				// leaves another tab current.
+				return c.focusActive(ctx, opener, tabs, ref, active)
+			}
+			return nil
+		}()
+		// Also after a failure above: the instance is open, and the next press
+		// raises it and never places it (decisions.md D24). place returns no
+		// error, so the failure above is the one the press reports. A show
+		// that failed with no window leaves nothing to place: the press that
+		// opens the window places it.
+		if !noWindow {
+			res.placed, res.sought = c.place(ctx, real, ref)
 		}
-		res.placed, res.sought = c.place(ctx, real, ref)
-		return res, nil
+		return res, err
 	}
 
 	// Toggle back: the target is already where focus is, so the second press

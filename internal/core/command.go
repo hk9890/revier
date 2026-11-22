@@ -75,7 +75,7 @@ func RunTimeout(cmd revier.Command) (time.Duration, error) {
 // line of the way home first, then this line with ran false and landed the
 // home. A home still coming up writes the line that comingUp describes in
 // place of the line of the way home.
-func (c *Core) runCommand(ctx context.Context, p Project, i int, bound Bindings, st *state.State) (res Result, err error) {
+func (c *Core) runCommand(ctx context.Context, p Project, i int, st *state.State) (res Result, err error) {
 	name := p.Targets[i].Name
 	start := time.Now()
 	defer func() {
@@ -91,10 +91,14 @@ func (c *Core) runCommand(ctx context.Context, p Project, i int, bound Bindings,
 	}
 	before, read := c.focusedNow(ctx)
 	if home, ok := p.Home(); ok && onRun(st.LastRun, p.Name, name, before) {
-		if coming, err := c.comingUp(ctx, p, home.Name, bound, st.Pending(p.Name, home.Name, time.Now())); err != nil || coming {
-			return Result{Target: home.Name, ComingUp: coming}, err
-		}
-		return c.goTo(ctx, p, home.Name, bound)
+		// The way home can launch it, so it holds the lock a press does.
+		return c.holdingPress(ctx, p, func(st *state.State) (Result, error) {
+			bound := st.Bound[p.Name]
+			if coming, err := c.comingUp(ctx, p, home.Name, bound, st.Pending(p.Name, home.Name, time.Now())); err != nil || coming {
+				return Result{Target: home.Name, ComingUp: coming}, err
+			}
+			return c.goTo(ctx, p, home.Name, bound)
+		})
 	}
 	if c.Run == nil {
 		return Result{}, fmt.Errorf("%s: no command runner is configured", name)

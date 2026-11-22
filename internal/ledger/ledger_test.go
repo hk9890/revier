@@ -2,6 +2,8 @@ package ledger_test
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -297,6 +299,45 @@ func TestACorruptStateFileIsLogged(t *testing.T) {
 			t.Errorf("state = %+v, %v; want the write saved over the corrupt file", st, err)
 		}
 	})
+}
+
+// One press holds a project's lock at a time. A wait ends with its context,
+// another project is not held back, and a release frees the lock.
+func TestHoldPressHoldsOneProject(t *testing.T) {
+	f := ledger.File{Root: t.TempDir()}
+	release, err := f.HoldPress(t.Context(), "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waited, cancel := context.WithTimeout(t.Context(), 60*time.Millisecond)
+	defer cancel()
+	if _, err := f.HoldPress(waited, "work"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want the wait to end with its context", err)
+	}
+	other, err := f.HoldPress(t.Context(), "other")
+	if err != nil {
+		t.Fatalf("another project: %v", err)
+	}
+	other()
+	release()
+	again, err := f.HoldPress(t.Context(), "work")
+	if err != nil {
+		t.Fatalf("after the release: %v", err)
+	}
+	again()
+}
+
+// A lock file that cannot be made does not cost the press.
+func TestHoldPressWithNoLockFileLetsThePressRun(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "a-file")
+	if err := os.WriteFile(root, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	release, err := ledger.File{Root: root}.HoldPress(t.Context(), "work")
+	if err != nil {
+		t.Fatalf("err = %v, want the press to run unguarded", err)
+	}
+	release()
 }
 
 // The mark of a raise of the minimized popup is taken once, and leaves the

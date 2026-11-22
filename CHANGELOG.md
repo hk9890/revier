@@ -6,6 +6,16 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## Unreleased
+
+- **Pressing a closed project several times at once opens one workspace.**
+  Before, each press opened its own copy, and revier kept track of only one,
+  so the agents in the others were invisible. Now the later presses wait and
+  raise the workspace the first one opened.
+- **A window that opens but cannot take the focus or finish its tabs still
+  goes to its configured place.** Before, it stayed where it opened, and later
+  presses did not move it.
+
 ## v0.30.0
 
 - **A full shutdown or a restore that you start in the popup runs under a

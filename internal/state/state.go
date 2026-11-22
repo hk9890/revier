@@ -264,12 +264,14 @@ func (l *Launch) Pending(now time.Time) bool {
 	return now.Sub(l.At) <= limit
 }
 
-// Pending reports whether a launch of the project's target is on record and
-// still pending at now: a press that finds one must not launch the target
-// again.
+// Pending reports whether a launch of the project's target is still pending
+// at now: a press that finds one must not launch the target again. A launch
+// of another target can move it to Late inside its window, and it still
+// holds the press back there. A late launch past its window does not: the
+// user may press again, and the new launch replaces it.
 func (s *State) Pending(p revier.ProjectName, t revier.TargetName, now time.Time) bool {
-	l := s.Launch
-	return l.Pending(now) && l.Project == p && l.Target == t
+	of := func(l *Launch) bool { return l.Pending(now) && l.Project == p && l.Target == t }
+	return of(s.Launch) || slices.ContainsFunc(s.Late, func(l Launch) bool { return of(&l) })
 }
 
 // Launched records a launch whose window has not appeared, and makes its

@@ -100,6 +100,10 @@ type ledger struct {
 	popupHidden bool
 }
 
+func (l *ledger) HoldPress(context.Context, revier.ProjectName) (func(), error) {
+	return func() {}, nil
+}
+
 func (l *ledger) MarkPopupHidden() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()

@@ -1144,3 +1144,14 @@ harness keeps the conversation, and marks one it does not keep as unfiled. A
 restore that finds it still not kept starts the agent empty and says so. The id
 stays: a close can stop before it ends the agent, which can then get its first
 prompt. Rejected: dropping the id at a shutdown save, which loses that prompt.
+
+### D195 — a press holds a per-project lock from its listing through its Open and state write
+
+Two processes that pressed a closed project both listed no instance and both
+launched, and revier kept one copy. A press that can launch now holds a flock
+per project, which a crash releases, until what it did is on record. The next
+press waits, lists again and raises. The wait for a detached window is outside
+the lock: the launch on record holds a press back. A command target holds none,
+as its command can press its own project. Rejected: recording the launch before
+Open, which must be undone when Open fails, and puts a launch with no window
+class on record, for which a survey's claim could take any window.

@@ -13,7 +13,7 @@ A findability map: where things live, and how to search for them.
 | `internal/panelstart/` | What the hc host and the core say about a panel whose command does not start: not on the PATH the runtime starts it with, or ended at once. |
 | `internal/config/` | TOML loading and the validation that rejects a project before a keypress can fail on it; the template `revier new` writes. |
 | `internal/state/` | What revier learned at runtime: the last project, and hand-attached instances. |
-| `internal/ledger/` | The state file and the event file as the core reads and writes them, and the state record's line for each change a state write made: the one caller of the state lock. |
+| `internal/ledger/` | The state file and the event file as the core reads and writes them, and the state record's line for each change a state write made: the one caller of the state lock, and the owner of the per-project press lock. |
 | `internal/session/` | The saved sets of open projects `revier session` writes and reads, under the state root, and `seen.toml`, what a surface last saw, which an end with no shutdown saves. |
 | `internal/checkout/` | git and mise on a project's directory: the origin a new project records, the clone of a missing one. |
 | `internal/userunit/` | The start of a long-lived program as a service of the user's service manager, with the session's login environment: the workspace kitty and the hc core. |
