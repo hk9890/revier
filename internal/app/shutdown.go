@@ -87,6 +87,9 @@ func Close(ctx context.Context, req CloseRequest) (CloseResult, error) {
 	case record == nil:
 		record = NewShutdownRecord(c, req.StateRoot)
 	}
+	// A save that writes a session logs this reason in the by field of its
+	// "session saved" line: "shutdown" for every project, "project-closed" for
+	// one.
 	reason := session.ReasonShutdown
 	if req.Project != "" {
 		reason = session.ReasonProjectClosed
@@ -221,7 +224,9 @@ func (r *ShutdownRecord) reach() {
 // surface last saw: the end is a clean one, and a file left from before it
 // would read as an end with no shutdown once the record ends (decisions.md
 // D150). A record that did not reach the state leaves that file: the next
-// start finds no shutdown on record and offers it.
+// start finds no shutdown on record and offers it. A file that is there and
+// could not be removed logs a WARN "session seen" with err and path, the same
+// msg that tui/seen.go logs for a write that failed.
 func (r *ShutdownRecord) write(ctx context.Context, sessionID string) {
 	at := time.Now().Round(0)
 	r.c.Ledger.Update(func(st *state.State) bool {

@@ -39,7 +39,10 @@ func (m *Model) openUnclean(s session.Session) {
 	m.dialog = dialogResume
 }
 
-// said is what a choice's log line adds after an end with no shutdown.
+// said is what a choice's log line adds after an end with no shutdown:
+// unclean true. Each choice on the start dialog writes one line:
+// "start dialog: restore", with the id of the session it restores,
+// "start dialog: pick another session" or "start dialog: start fresh".
 func (r resumeScreen) said() []any {
 	if r.unclean {
 		return []any{"unclean", true}

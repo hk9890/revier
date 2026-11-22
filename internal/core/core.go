@@ -391,14 +391,16 @@ func (e hostErrs) err() error {
 	return errors.Join(errs...)
 }
 
-// listing is one bulk listing per host, with the hosts that could not list
-// left out and their failures returned beside it. A host that cannot answer
-// costs its own targets and no other's (decisions.md D89): a survey over the
-// other hosts still stands, and a press on a target of the failed host is
-// refused with its reason. The failure is logged here, once per host and
-// cause (logging.Repeat): a survey that degraded is not a survey that
-// failed, so nothing above logs it. The hosts are independent and listed at
-// once, so a listing costs the slowest host and not the sum of them.
+// listing is one bulk listing per host, with the hosts that could not list left
+// out and their failures returned beside it. A host that cannot answer costs
+// its own targets and no other's (decisions.md D89): a survey over the other
+// hosts still stands, its targets show unknown, and a press on a target of the
+// failed host is refused with its reason. The failure is logged here as
+// "instances" at Warn with host and err, once per host and cause, and the first
+// listing that succeeds after it logs "instances: recovered" (logging.Repeat):
+// a survey that degraded is not a survey that failed, so nothing above logs it.
+// The hosts are independent and listed at once, so a listing costs the slowest
+// host and not the sum of them.
 func (c *Core) listing(ctx context.Context) (snapshot, hostErrs) {
 	hosts := c.allHosts()
 	lists := make([][]revier.Instance, len(hosts))
@@ -609,12 +611,12 @@ func (c *Core) bindingHolds(p Project, i int, host revier.Host, inst revier.Inst
 
 // Result is what a press did. Target is the target the key landed on: the one
 // asked for, the project's home when the press toggled back, or the target a
-// tab is inside, and the one a caller pins Ref to. Ref is where the key
-// landed, and it survives a failure to focus an instance the launch made.
-// Launched reports that the run half ran; with a zero Ref the host could not
-// name the window it started, and Before is the window listing from before
-// the launch, which the wait for its window diffs against. Agents is what the launch did with
-// each recorded agent. ComingUp reports a press that did nothing because
+// tab is inside, and the one a caller pins Ref to. Ref is where the key landed,
+// and it survives a failure to focus an instance the launch made. Launched
+// reports that the run half ran; with a zero Ref the host could not name the
+// window it started, and Before is the window listing from before the launch,
+// which the wait for its window diffs against. Agents is what the launch did
+// with each recorded agent. ComingUp reports a press that did nothing because
 // the target's earlier launch has not produced its window yet.
 type Result struct {
 	Target revier.TargetName
@@ -668,8 +670,15 @@ func (c *Core) goTo(ctx context.Context, p Project, name revier.TargetName, boun
 // already up is raised as it stands, because the agent in it is already the
 // one the recording named.
 //
-// Every call is one line of the log, and a goTo that calls goTo writes one
-// more: a toggle back for the way home, a tab for its workspace.
+// Every call is one "go" line of the log when run-or-raise ends: at Info, or
+// at Error with err when the press failed. It carries project, target,
+// landed, launched, tabs, ref, resumes, agents, agent_err for an agent tab
+// that did not open, and duration_ms. A press that calls goTo writes the
+// line of that goTo first: a way home that is a goTo writes its line, and a
+// tab whose workspace is not open writes the line of its workspace. A second
+// press on a tab inside its home instance calls no goTo: it writes this one
+// line, with landed set to the home. A command target writes its own "go"
+// line (runCommand).
 func (c *Core) goToResuming(ctx context.Context, p Project, name revier.TargetName, bound Bindings, resumes []Resume) (res Result, err error) {
 	start := time.Now()
 	defer func() {
@@ -899,22 +908,29 @@ func (c *Core) isUp(ctx context.Context, p Project, name revier.TargetName, boun
 const BindPoll = 50 * time.Millisecond
 
 // bindWindow waits for the window a detached launch produces and binds it, then
-// raises it when raise is set. The window is the first one, new since before, that the target's
-// rule accepts by class alone: the class is right from the first frame while
-// a title settles later, which is exactly when a rule would miss it. A window
-// the full rule matches is taken at once; otherwise a single class candidate
-// is taken and two at once are left alone, because the launch does not say
-// which. A class candidate a binding or an attachment holds is not this
-// launch's: a press in another process, or a late launch's claim, bound it
+// raises it when raise is set. The window is the first one, new since before,
+// that the target's rule accepts by class alone: the class is right from the
+// first frame while a title settles later, which is exactly when a rule would
+// miss it. A window the full rule matches is taken at once; otherwise a single
+// class candidate is taken and two at once are left alone, because the launch
+// does not say which. A class candidate a binding or an attachment holds is not
+// this launch's: a press in another process, or a late launch's claim, bound it
 // while this one waited. Nor is one of a class another target's pending launch
 // awaits. Nor is one of a class another target's late launch awaits: a cold
 // application opens the windows of earlier launches late and in any order
-// (decisions.md D190). It gives up after wait and reports false. A window it found and
-// could not raise is placed and reported with the failure, as goTo reports an
-// instance it launched and could not focus, so the activation pins it: the
-// window is a launch's either way (D24).
+// (decisions.md D190). It gives up after wait and reports false. A window it
+// found and could not raise is placed and reported with the failure, as goTo
+// reports an instance it launched and could not focus, so the activation pins
+// it: the window is a launch's either way (D24).
 func (c *Core) bindWindow(ctx context.Context, p Project, name revier.TargetName, before []revier.Instance, wait time.Duration, raise bool) (inst revier.Instance, ok bool, err error) {
 	start := time.Now()
+	// Each call writes one "bind" line when it returns: at Info with
+	// project, target, bound, ref and duration_ms, and at Error with err as
+	// well. A target with no window rule, or a core with no window host,
+	// waits for nothing and writes bound false. A Warn "bind" with err comes
+	// first when no window appeared in the wait, with wait, or when more than
+	// one class candidate appeared, with candidates. No window is bound then:
+	// the window is left for a claim by the TUI.
 	defer func() {
 		logging.Op("bind", start, err, "project", p.Name, "target", name, "bound", ok, "ref", inst.Ref)
 	}()
@@ -976,9 +992,9 @@ var errNoNewWindow = errors.New("no new window appeared")
 
 // awaitNew asks the window host every poll, for at most wait, for the windows
 // not listed in before, and hands them to pick. pick returns the window it
-// settles on and found, or stop to end the wait without one. bindWindow and Popup
-// both wait for the window a detached launch produces, and share this so the
-// two waits cannot drift apart.
+// settles on and found, or stop to end the wait without one. bindWindow and
+// Popup both wait for the window a detached launch produces, and share this so
+// the two waits cannot drift apart.
 func (c *Core) awaitNew(ctx context.Context, before []revier.Instance, wait, poll time.Duration,
 	pick func(fresh []revier.Instance) (w revier.Instance, found, stop bool),
 ) (revier.Instance, bool, error) {
@@ -1021,6 +1037,11 @@ func (c *Core) awaitNew(ctx context.Context, before []revier.Instance, wait, pol
 // the press is one, with only the raise missing, as place says of a placement.
 // The OS window is the one place waited for, if it did; one place waited for
 // in vain is not looked for again, and place has said so in the log.
+//
+// A window the host never lists within PlaceWait logs a Warn
+// "raise: the window host never listed the new window" with ref and target: it
+// is not raised and not placed. A raise that fails logs a Warn "raise new" with
+// ref and err.
 func (c *Core) raiseNew(ctx context.Context, res Result) {
 	ref, name := res.Ref, res.Target
 	if !c.bridged(revier.Instance{Ref: ref}) {
@@ -1060,8 +1081,11 @@ const placePoll = 250 * time.Millisecond
 // would turn a cosmetic problem into a broken key. A window pinned by
 // maximize or tiling is refused by the host as a matter of course.
 //
-// It returns the OS window it waited for, of a runtime instance, and whether
-// it waited, found or not, so the raise after the press waits no second time.
+// It returns the OS window it waited for, of a runtime instance, and whether it
+// waited, found or not, so the raise after the press waits no second time. A
+// launch's window that the host never lists logs a Warn
+// "place: the window host never listed the new window" with ref and place: it
+// is not placed, and raiseNew does not raise it.
 func (c *Core) place(ctx context.Context, real revier.Realization, ref revier.TargetRef) (revier.TargetRef, bool) {
 	if real.Place == "" || c.Window == nil || ref.IsZero() {
 		return revier.TargetRef{}, false
@@ -1083,6 +1107,8 @@ func (c *Core) place(ctx context.Context, real revier.Realization, ref revier.Ta
 	return w, true
 }
 
+// placeOn puts the window w where place says. A placement the window host
+// refuses logs a Warn "place" with ref, place and err.
 func (c *Core) placeOn(ctx context.Context, placer revier.WindowPlacer, w revier.TargetRef, place string) {
 	if err := placer.Place(ctx, w, strings.Fields(place)); err != nil {
 		slog.Warn("place", "ref", w, "place", place, "err", err)
@@ -1094,6 +1120,10 @@ func (c *Core) placeOn(ctx context.Context, placer revier.WindowPlacer, w revier
 // compositor has mapped it, so the first look often finds nothing. It reads
 // the runtime and the window host alone, so another host that cannot list
 // does not cost the placement (decisions.md D89).
+//
+// When the last listing failed at PlaceWait, it logs a Warn
+// "place: listing the hosts" with err before it gives up; a cancel logs
+// nothing. The caller's Warn that the host never listed the window follows.
 func (c *Core) windowOfNew(ctx context.Context, ref revier.TargetRef) (revier.TargetRef, bool) {
 	deadline := time.Now().Add(PlaceWait)
 	for {
@@ -1129,15 +1159,15 @@ func (c *Core) classOK(p Project, i int, w revier.Instance) bool {
 }
 
 // osWindowOf finds the window-host instance that is the OS window of a runtime
-// instance. Only a runtime whose view reports OSWindows takes part: it gives each
-// instance the title a window host reports for the same window, so the two
+// instance. Only a runtime whose view reports OSWindows takes part: it gives
+// each instance the title a window host reports for the same window, so the two
 // listings describe one window from two sides. The pid is a filter on top -
 // every OS window of one kitty process shares it - never the identity.
 //
-// It refuses as soon as two windows answer to one terminal, as runtimeOf
-// read the other way does and for the same reason: the window that is
-// raised, and the window a row is folded into, are both the wrong one when
-// the title is shared and the pairing was a guess.
+// It refuses as soon as two windows answer to one terminal, as runtimeOf read
+// the other way does and for the same reason: the window that is raised, and
+// the window a row is folded into, are both the wrong one when the title is
+// shared and the pairing was a guess.
 func (c *Core) osWindowOf(snap snapshot, inst revier.Instance) (revier.Instance, bool) {
 	if !c.bridged(inst) || inst.Title == "" {
 		return revier.Instance{}, false
@@ -1285,6 +1315,10 @@ func (c *Core) focusAuthority() revier.Host {
 // A runtime instance is therefore judged through the OS window that holds it,
 // when its view can name one (osWindowOf). A view that cannot, and no view,
 // leave toggle-back unfired on a machine that has a window host.
+//
+// A focus that cannot be read logs a Warn
+// "toggle-back: focused, taken as not focused" with host and err: the press
+// raises, and does not go home.
 func (c *Core) focusedOn(ctx context.Context, snap snapshot, inst revier.Instance) bool {
 	auth := c.focusAuthority()
 	if auth == nil || inst.Ref.ID == "" {
@@ -1363,9 +1397,12 @@ func (r Report) HostErr() error { return hostErrs(r.Failed).err() }
 // the two parts apart instead, SurveyLocal and AskRemotes, and lays one over
 // the other with Lay (decisions.md D114).
 //
-// Its line names the linked hosts it waited for and why any gave no answer,
-// as a close's survey does: a slow survey is most often a host elsewhere,
-// whose own WARN may be another survey's.
+// Its line, "survey", is written only when the survey was slow
+// (slowSurvey), at most once a minute, with slow true. A fast survey writes
+// nothing, and a survey never fails. The line carries projects, hosts,
+// instances and duration_ms, and the fields surveyLine adds. It names the
+// linked hosts as a close's survey does: a slow survey is most often a host
+// elsewhere, whose own Warn may be another survey's.
 func (c *Core) Survey(ctx context.Context, projects []Project) (r Report, err error) {
 	start := time.Now()
 	var answers RemoteAnswers
@@ -1426,6 +1463,10 @@ func (c *Core) SurveyToClose(ctx context.Context, projects []Project, only revie
 		}
 		return v.Held()
 	})
+	// Logs "shutdown survey" at Info when the plan's survey ends: project,
+	// the project a close of one project closes, empty for a close of every
+	// project; asked, the linked hosts waited for; unanswered, why a host gave
+	// no answer for a link; and duration_ms.
 	logging.Op("shutdown survey", start, nil, "project", only, "asked", answers.hosts(), "unanswered", answers.failures())
 	return r
 }
@@ -1458,8 +1499,8 @@ func (c *Core) surveyAsking(ctx context.Context, projects []Project, ask func(re
 // returns, which a claim changes between surveys, so a claimed window shows
 // at once and not a refresh later.
 //
-// The TUI surveys every refresh, so a survey is logged only when it failed or
-// was slow, and a failure that repeats only once (logging.Poll).
+// The TUI surveys every refresh, so it logs "survey" as Survey describes,
+// slow at 500 ms (logging.Poll), and with no asked, unanswered or local_ms.
 func (c *Core) SurveyLocal(ctx context.Context, projects []Project) (r Report, err error) {
 	start := time.Now()
 	defer func() {
@@ -1508,13 +1549,13 @@ func (c *Core) lay(r *Report, answers RemoteAnswers) {
 	}
 }
 
-// Unsurveyed is the view of every project before any host has answered:
-// what the files alone say - the name, the path and whether it is here,
-// each target and whether a host here could realize it - with nothing
-// running and no agent. The TUI draws its first frame from it, so the names
-// are on the screen while the hosts are listed. It lists nothing and asks nobody: with
-// no listing there is no instance to bind to or to probe, so it takes no
-// bindings and no context.
+// Unsurveyed is the view of every project before any host has answered: what
+// the files alone say - the name, the path and whether it is here, each target
+// and whether a host here could realize it - with nothing running and no agent.
+// The TUI draws its first frame from it, so the names are on the screen while
+// the hosts are listed. It lists nothing and asks nobody: with no listing there
+// is no instance to bind to or to probe, so it takes no bindings and no
+// context.
 func (c *Core) Unsurveyed(projects []Project) []revier.ProjectView {
 	views := make([]revier.ProjectView, 0, len(projects))
 	probed := probeCache{}
@@ -1936,9 +1977,11 @@ func (c *Core) probeFor(panel revier.Panel) (revier.AgentProbe, bool) {
 // read runs a probe over a panel. A probe that fails reports unknown rather
 // than failing the survey: one broken harness must not blank the dashboard.
 //
-// A failure is logged once per panel and cause. A panel id is unique
-// only within its instance - a kitty window id within one kitty process - so
-// the instance names the panel too.
+// A failure is one Warn "probe" per probe, panel and different err, with
+// probe, ref, panel and err; the first success after it writes
+// "probe: recovered". A panel id is unique only within its
+// instance - a kitty window id within one kitty process - so the instance
+// names the panel too.
 func (c *Core) read(ctx context.Context, probe revier.AgentProbe, ref revier.TargetRef, panel revier.Panel) revier.AgentState {
 	state, err := probe.Inspect(ctx, panel)
 	logging.Repeat("probe\x00"+probe.Name()+"\x00"+key(ref)+"\x00"+string(panel.ID), "probe", err, "probe", probe.Name(), "ref", ref, "panel", panel.ID)

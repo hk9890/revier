@@ -96,6 +96,19 @@ func noteSaved(c *core.Core, stored session.Session, gaps core.SessionGaps) {
 	})
 }
 
+// logSaved writes the "session saved" line of a save: id, name, path, the
+// counts projects, targets and conversations, and the gaps unnamed_agents,
+// agents_in_tab and attached_not_recorded. by is the save's Reason: saved
+// (by hand), shutdown, project-closed, or last-seen for what a surface last
+// saw, saved after an end with no shutdown.
+//
+// One WARN "session save: probe could not be asked" with err follows per
+// probe here that failed or answered for a number of panels other than it
+// was asked, such as claude not on the PATH: its agents are saved with no
+// conversation. One also follows per linked host that did not answer, and
+// per link its host answered for and did not list, with err
+// `<host> did not list project "<name>"`: that link's target is saved with
+// no agents. A last-seen save has no gaps and writes none.
 func logSaved(stored session.Session, path string, gaps core.SessionGaps) {
 	slog.Info("session saved", "id", stored.ID, "name", stored.Name, "path", path, "by", string(stored.Reason),
 		"projects", len(stored.Projects), "targets", stored.Targets(), "conversations", stored.Conversations(),
@@ -169,6 +182,12 @@ func Recover(c *core.Core, stateRoot string, r core.Report) (session.Session, bo
 	if err != nil {
 		return session.Session{}, false, err
 	}
+	// Recover logs "unclean end" when it offers a session: seen_at, when the
+	// snapshot last changed; missing, the project:target of each target of the
+	// snapshot not open now; and session, the id of the save it offers. A
+	// surface asks it at its first survey in which every host here listed, and
+	// a plain revier session restore asks it. A dry run asks Unclean, which
+	// writes none.
 	var missing []string
 	for _, step := range c.RestorePlan(seen, r) {
 		if step.Action == core.RestoreLaunch {

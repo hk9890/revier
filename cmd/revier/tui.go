@@ -56,6 +56,8 @@ func cmdTUI(ctx context.Context, a *app) error {
 				return curtainArgv(self, mon, socket, isMain)
 			})
 		} else {
+			// A popup with no path to its own binary logs a WARN
+			// "popup: no curtain" with err at start.
 			slog.Warn("popup: no curtain", "err", err)
 		}
 		if ln := listenForSwitch(); ln != nil {
@@ -68,8 +70,9 @@ func cmdTUI(ctx context.Context, a *app) error {
 
 // listenForSwitch is the socket the popup's surface takes the second press
 // of the desktop's key on (decisions.md D182), and nil when it cannot have
-// one: the popup then runs as before, and that press raises it. Closing the
-// socket removes its file.
+// one: that press then raises the popup and does not switch its list. A
+// socket it cannot listen on logs a WARN "popup: no switch socket" with err.
+// Closing the socket removes its file.
 func listenForSwitch() net.Listener {
 	path, err := popupswitch.Path()
 	if err == nil {

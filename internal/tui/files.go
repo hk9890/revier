@@ -300,6 +300,8 @@ func (m *Model) removeTarget(name revier.ProjectName, target revier.TargetName) 
 	if err != nil {
 		return err
 	}
+	// Logs "target deleted" with project, target and path, the project's
+	// file.
 	slog.Info("target deleted", "project", name, "target", target, "path", p.File)
 	m.replaceProject(name, written)
 	m.tcursor = clampRow(m.tcursor, len(m.targetRows()))

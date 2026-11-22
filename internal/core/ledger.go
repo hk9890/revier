@@ -150,6 +150,14 @@ func (c *Core) settledProjects() []Project {
 // of p's target t, at at, replaced. A target's launch is set aside as late,
 // and its window is still bound when it comes; an action's is lost, because
 // the one launch on record is the only one a window is attached for.
+//
+// The line is "claim: launch set aside" for a target's launch, kept until
+// LateWindow after launched_at (decisions.md D190), and
+// "claim: launch replaced" for an action's. project, target and launched_at are
+// the replaced launch's, by_project and by_target the new one's, and age_ms is
+// the replaced launch's age at at. A target's launch past BindWindow, still
+// kept, that another replaces before a settle set it aside is set aside with no
+// line: Launched returns only a launch still pending.
 func LogReplacedLaunch(replaced *state.Launch, p revier.ProjectName, t revier.TargetName, at time.Time) {
 	if replaced == nil {
 		return
@@ -167,6 +175,8 @@ func LogReplacedLaunch(replaced *state.Launch, p revier.ProjectName, t revier.Ta
 func (c *Core) settle(st *state.State, r Report, prev []revier.Instance, surveyed bool, projects []Project, now time.Time, say func(msg string, args ...any)) bool {
 	dropped := st.Prune(r.Hosts, r.Instances, r.before)
 	for _, d := range dropped {
+		// Logs "binding dropped" for each ref the survey found gone, with
+		// project, target and ref (state.Dropped).
 		say("binding dropped", "project", d.Project, "target", d.Target, "ref", d.Ref)
 	}
 	changed := c.claimLate(st, r, projects, now, say) || len(dropped) > 0
@@ -179,6 +189,10 @@ func (c *Core) settle(st *state.State, r Report, prev []revier.Instance, surveye
 		return changed
 	}
 	if ref, ok := c.claim(prev, r.Windows, p, st, now, projects); ok {
+		// Logs "claim" with project, target and ref. An empty target is an
+		// action's launch, whose window is attached; else the window is bound.
+		// The first settle of a process claims nothing (Settle), so only the TUI
+		// writes this line.
 		say("claim", "project", p.Name, "target", l.Target, "ref", ref)
 		// An attachment records the terminal inside the window as well
 		// (decisions.md D95); a binding is of the window itself.
@@ -191,9 +205,15 @@ func (c *Core) settle(st *state.State, r Report, prev []revier.Instance, surveye
 	}
 	if !l.Pending(now) {
 		if l.Target != "" && l.Kept(now) {
+			// A target's launch past BindWindow with no window, and still
+			// kept: logs "claim: launch set aside" as LogReplacedLaunch
+			// describes, with no by_project or by_target.
 			say("claim: launch set aside", "project", p.Name, "target", l.Target, "launched_at", l.At, "age_ms", now.Sub(l.At).Milliseconds())
 			st.SetAside(*l)
 		} else {
+			// An action's launch past ClaimWindow, or a target's launch past
+			// LateWindow, ends here with no window claimed. The line carries
+			// project, target (empty for an action) and launched_at.
 			say("claim: launch expired with no window claimed", "project", p.Name, "target", l.Target, "launched_at", l.At)
 		}
 		st.Launch = nil
@@ -207,13 +227,18 @@ func (c *Core) settle(st *state.State, r Report, prev []revier.Instance, surveye
 // launches await one window: a window either awaits is matched by no other
 // target's rule, and a launch ends the late one of its own target. It needs
 // no previous listing: a late launch's window may have been listed for
-// minutes, under a title its rule came to match only now.
+// minutes, under a title its rule came to match only now. `revier list`
+// logs only WARN and ERROR, so its expiries and binds write no line.
 func (c *Core) claimLate(st *state.State, r Report, projects []Project, now time.Time, say func(msg string, args ...any)) bool {
 	n := len(st.Late)
 	st.Late = slices.DeleteFunc(st.Late, func(l state.Launch) bool {
 		if l.Kept(now) {
 			return false
 		}
+		// Logs "claim: late launch expired with no window bound" with
+		// project, target and launched_at: the late launch reached LateWindow
+		// with no window bound. Its window never came, or no settle found the
+		// one window it awaits (awaits).
 		say("claim: late launch expired with no window bound", "project", l.Project, "target", l.Target, "launched_at", l.At)
 		return true
 	})
@@ -239,6 +264,9 @@ func (c *Core) claimLate(st *state.State, r Report, projects []Project, now time
 		if len(awaited) != 1 {
 			continue
 		}
+		// The line carries project, target, ref and age_ms, the time since
+		// the launch: a late launch's window can come minutes after it
+		// (decisions.md D190). Any process that settles can bind one.
 		say("claim: late launch bound", "project", l.Project, "target", l.Target, "ref", awaited[0], "age_ms", now.Sub(l.At).Milliseconds())
 		st.ClaimLate(i, awaited[0])
 		changed = true

@@ -96,6 +96,9 @@ func (r *curtainRun) open(c *core.Core, argv curtainArgv) {
 			srv.Close()
 		}
 	}
+	// Logs "curtain: the walk runs without it" at Warn with mode and err: the
+	// socket or the open failed, the open found no monitor to cover, or a
+	// curtain did not connect. The walk runs with no curtain.
 	if err != nil {
 		slog.Warn("curtain: the walk runs without it", "mode", r.state.Mode, "err", err)
 		return

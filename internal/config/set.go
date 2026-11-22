@@ -254,7 +254,9 @@ func valueEnd(lines []string, i, col int) (int, int) {
 // replaceFile writes a file whole or not at all: a crash halfway through
 // leaves the old file, not half of the new one. A symlink is written through,
 // so a config.toml linked in from a dotfiles repository stays linked, and the
-// file keeps its permissions.
+// file keeps its permissions. A write that succeeds logs "config written" at
+// INFO with path, the file written through any link: config.toml or a
+// project's file.
 func replaceFile(path string, data []byte) error {
 	real, err := fsutil.WriteThrough(path, data)
 	if err != nil {

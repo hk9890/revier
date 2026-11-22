@@ -22,6 +22,9 @@ import (
 // processes of one project can each hold a panel 1 (D75).
 func (c *Core) goAgent(ctx context.Context, p Project, a revier.AgentView) (res Result, err error) {
 	start := time.Now()
+	// When it returns, logs "go agent" with project, ref, panel and
+	// duration_ms: at Info when it succeeded, at Error with err when it failed
+	// (logging.Op).
 	defer func() { logging.Op("go agent", start, err, "project", p.Name, "ref", a.Ref, "panel", a.Panel) }()
 	if !c.here(a) {
 		return Result{}, fmt.Errorf("agent %s: %w", a.Panel, ErrAgentElsewhere)

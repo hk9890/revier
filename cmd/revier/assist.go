@@ -182,7 +182,9 @@ func becomeAgent(path string, argv []string, dir string) error {
 		return err
 	}
 	// The exec replaces the process, so the command's own line is never
-	// written: this one stands for it.
+	// written: this "assist" line, at INFO, stands for it, with exec, the
+	// agent's path, and dir, where the agent runs. An exec that fails returns, and
+	// main writes the "command" line as for any end.
 	slog.Info("assist", "exec", path, "dir", dir)
 	return syscall.Exec(path, argv, os.Environ())
 }

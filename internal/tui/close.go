@@ -111,8 +111,10 @@ func (m Model) closeRow(project revier.ProjectName, row core.CloseRow, label str
 }
 
 // closePlanned takes the plan a del asked for. A screen opened since, a close
-// started since, or a raise of the popup since drops it: the press it answers
-// is no longer the last.
+// started since, a delete question open, or a raise of the popup since drops
+// it, and nothing is asked: the press it answers is no longer the last. A
+// dropped plan writes the INFO line "close: plan dropped", with project and
+// target.
 func (m Model) closePlanned(msg closePlannedMsg) (tea.Model, tea.Cmd) {
 	if msg.raises != m.raises || m.dialog != dialogNone || m.shut.running || m.confirm != "" {
 		slog.Info("close: plan dropped", "project", msg.project, "target", msg.row.Target)
@@ -130,12 +132,16 @@ func (m Model) closePlanned(msg closePlannedMsg) (tea.Model, tea.Cmd) {
 		for i, p := range msg.shared {
 			holders[i] = string(p)
 		}
-		// A normal outcome, said in the footer and not logged as a failure.
+		// Another project holds what is open of it. A normal outcome: the
+		// footer says so, and the INFO line "close: held open" names the
+		// holders in by. No ERROR line is written.
 		slog.Info("close: held open", "project", msg.project, "by", holders)
 		m.err = fmt.Errorf("%s: what is open of it stays open for %s", msg.label, strings.Join(holders, ", "))
 		return m, nil
 	}
 	if len(msg.plan) == 0 {
+		// Nothing of it is open here: the same normal outcome, with the INFO
+		// line "close: nothing open" and project.
 		slog.Info("close: nothing open", "project", msg.project)
 		m.err = fmt.Errorf("%s: nothing of it is open here", msg.label)
 		if msg.row == (core.CloseRow{}) && m.deletable(msg.project) {
@@ -219,7 +225,9 @@ func (m Model) closed(msg shutdownMsg, cancelled bool) (tea.Model, tea.Cmd) {
 			err = m.removeProject(one.project)
 		}
 		// Update logs no error a shutdownMsg brings, because the close logs
-		// its own steps; the delete after it is not one of them.
+		// its own steps; the delete after it is not one of them. A delete
+		// that fails after every step closed logs "delete after the close"
+		// at ERROR with project, target (empty for a project) and err.
 		if err != nil {
 			slog.Error("delete after the close", "project", one.project, "target", one.pick.Target, "err", err)
 		}

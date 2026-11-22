@@ -177,6 +177,17 @@ const exitEachFailed = 5
 // agent that failed.
 const exitNoAssistant = 6
 
+// main runs one CLI command and logs its end as one "command" line with args,
+// exit and duration_ms: at Info when it succeeded, at Error with err when it
+// failed. A surface that a signal ended, as a closed terminal does, adds signal
+// (hangup or terminated) and exits 128 plus its number; a doctor that found
+// problems adds problems, the count of files with problems, and exits 1. Both
+// are at Info (logCommand). `revier list` logs only at Warn and above, so only
+// its failure writes the line (openLog). A process with no "command" line was
+// killed, is still running, ended at a second interrupt, or replaced itself
+// with another program: `revier assist --exec` logs "assist" in its place
+// (becomeAgent), `revier open --attach` logs "attach" (app.attach), and `revier
+// agent exec` and `revier shell exec` write no line in its place (serve).
 func main() {
 	start := time.Now()
 	args := os.Args[1:]

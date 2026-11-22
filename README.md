@@ -70,13 +70,13 @@ territory.
   the restore.
   See [Save and restore sessions](docs/user-guide/projects.md#save-and-restore-sessions).
 
-![Alt+S and Alt+Q show the shutdown plan and close every project; the next start offers the restore](.github/assets/restore.webp)
+![The shutdown plan closes every project; the next start offers the restore](.github/assets/restore.webp)
 
 **Reach further**
 
 - **Projects on another machine.** `revier link buildbox far` adds a project
   on an ssh host as a row in your list. Its agents run on the host and show in
-  your local terminal. In the TUI, press alt+r.
+  your local terminal.
   See [Link a project](docs/user-guide/links.md#link-a-project).
 - **Drive agents from a script.** `revier agent prompt`, `wait`, `read` and
   `send-keys` work with an agent, and none of them raises a window.

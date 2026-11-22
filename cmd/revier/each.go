@@ -212,7 +212,9 @@ func runIn(r *runlog.Run, p core.Project, argv []string) runlog.Result {
 }
 
 // logEachResult is one project's line of a run. The run's own record holds its
-// output; the log holds only how it ended, beside every other operation.
+// output; the log holds only how it ended, beside every other operation. It
+// logs "each project" with project, status, exit, seconds and skip; a
+// project that failed logs it at Error, with err and output too.
 func logEachResult(res runlog.Result) {
 	attrs := []any{"project", res.Project, "status", res.Status, "exit", res.Exit, "seconds", res.Seconds, "skip", res.Skip}
 	if res.Status == runlog.StatusFailed {

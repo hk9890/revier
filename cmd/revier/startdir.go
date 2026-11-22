@@ -10,6 +10,10 @@ import (
 // outlives it: once it is removed, every process started from here inherits a
 // directory that no longer exists, and git, claude and a probe script each
 // refuse to run in one (decisions.md D92).
+//
+// A home it cannot move into writes one WARN "start directory" with err
+// for each call. A command calls it through leaveLostStartDir only when its
+// start directory is gone; the surface always calls it, in tuiStart.
 func leaveStartDir() {
 	home, err := os.UserHomeDir()
 	if err == nil {

@@ -79,7 +79,13 @@ func (f File) kept() *state.State {
 	return &state.State{}
 }
 
-// State is the state on disk, or the one read last.
+// State is the state on disk, or the one read last. A read that fails writes
+// "state load" with root and err, through logging.Repeat, and State goes on
+// with the state it read last, or an empty one when it read none. A file
+// that does not parse is read as an empty state, and its "state load" err
+// says so. The bindings and a shutdown on record are then lost. The next
+// write that changes the state replaces the file. The first read that
+// succeeds after a failure writes "state load: recovered".
 func (f File) State() *state.State {
 	st, err := state.Load(f.Root)
 	logging.Repeat("state load", "state load", err, "root", f.Root)
@@ -95,6 +101,12 @@ func (f File) State() *state.State {
 // it does no I/O. A change that could not be started changed nothing, and
 // the state after it is the one on disk: a caller that keeps what Update
 // returns must not lose its bindings to a lock it could not take.
+//
+// A failed update writes "state update" with root and err, through
+// logging.Repeat. A save that failed returns the changed state, which the
+// root does not hold. The first update that succeeds after a failure writes
+// "state update: recovered". A file that does not parse logs "state load",
+// as State describes, and the change applies to an empty state.
 func (f File) Update(apply func(*state.State) bool) *state.State {
 	changed := false
 	var before *state.ShutDown
@@ -128,6 +140,13 @@ func (f File) Update(apply func(*state.State) bool) *state.State {
 // logShutDown says when a write set or ended the full shutdown on record.
 // Every write goes through here, so one line covers the shutdown that sets
 // it, a second one that sets it over the first, and each open that ends it.
+//
+// "shutdown state set" carries at and the session the shutdown saved, empty
+// when it made no save; a full shutdown writes the record after its save
+// (decisions.md D141). "shutdown state cleared" carries set_at, the at of the
+// record that ended: something opened, a restore started, the start dialog
+// started fresh, or a cancel or a second ctrl+c took the record back because
+// its shutdown left a step not reached.
 func logShutDown(before, after *state.ShutDown) {
 	switch {
 	case after != nil && after != before:

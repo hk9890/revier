@@ -142,6 +142,9 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 	}
 
 	if *dry {
+		// A dry run logs "session restore" with dry_run true, and each step and
+		// its agents through core.LogRestore, as core.Restore's comments
+		// describe. It writes no "session restored" line.
 		slog.Info("session restore", "id", s.ID, "name", s.Name, "saved_at", s.At, "dry_run", true)
 		preview := a.core.RestorePreview(s, report, a.projects)
 		for _, r := range preview {

@@ -39,6 +39,15 @@ func (c *Core) activate(ctx context.Context, p Project, name revier.TargetName, 
 	return c.goToResuming(ctx, p, name, bound, resumes)
 }
 
+// comingUp reports whether the launch on record of the target name, when
+// pending, has not produced its instance yet. A press or a restore step then
+// launches nothing and logs "go: launch still coming up, not launched again"
+// with project and target. target is the pressed target, or the home: for
+// the second press of a command target, and for an agent press in a linked
+// project. A press of any other target writes no "go" line then; the second
+// press of a command target writes its "go" line after it, with ran false.
+// A check that fails logs "go: is the pending launch up" at Error with
+// project, target and err, and the press fails.
 func (c *Core) comingUp(ctx context.Context, p Project, name revier.TargetName, bound Bindings, pending bool) (bool, error) {
 	if !pending {
 		return false, nil
