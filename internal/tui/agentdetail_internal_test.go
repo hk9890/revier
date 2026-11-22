@@ -1,9 +1,11 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -52,6 +54,21 @@ func TestTheNewestAnswerForTheProjectShownIsTaken(t *testing.T) {
 	m.took(detailsMsg{project: "demo", seq: 5, said: map[agentKey]revier.AgentDetail{one: {Prompt: "now push it"}}})
 	if got := m.adetails[one]; got.Message != "newer" || !got.At.Equal(time.Unix(1, 0)) || got.Prompt != "now push it" {
 		t.Errorf("after a turn with no message the pane holds %+v, want the turn with the message and the time before it", got)
+	}
+}
+
+// The log of a link's agent is on its host, so its pane names no key here.
+func TestALinksUnknownAgentNamesNoLogsKey(t *testing.T) {
+	it := agentItem{
+		agent:   revier.AgentView{State: revier.AgentState{Status: revier.StatusUnknown}},
+		project: revier.Project{Name: "far", Remote: &revier.Link{Host: "box", Project: "far"}},
+	}
+	if got := agentFacts(theme.Default(), it, time.Now(), 80); strings.Contains(got, logsKey) {
+		t.Errorf("facts = %q, want no logs key for a link's agent", got)
+	}
+	it.project.Remote = nil
+	if got := agentFacts(theme.Default(), it, time.Now(), 80); !strings.Contains(got, logsKey) {
+		t.Errorf("facts = %q, want the logs key", got)
 	}
 }
 

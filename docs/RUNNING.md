@@ -112,7 +112,7 @@ st busy       # -> running
 st waiting    # -> attention
 st idle       # -> idle
 hcp ./bin/revier agent wait demo --until idle --timeout 5    # exit 0, or 2 on timeout
-hcp ./bin/revier agent prompt demo 'hello'                    # types into that terminal only; warns, as sleep never starts a turn
+hcp ./bin/revier agent prompt demo 'hello'                    # types into that terminal only; warns and exits 7, as sleep never starts a turn
 hcp hc read "$pane"                                           # the text arrived
 hcp ./bin/revier agent send-keys demo x enter                 # typed in any state, st waiting included
 hcp ./bin/revier agent read demo --screen --lines 5           # the terminal's last lines, as plain text

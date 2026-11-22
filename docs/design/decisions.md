@@ -1156,3 +1156,12 @@ the lock: the launch on record holds a press back. A command target holds none,
 as its command can press its own project. Rejected: recording the launch before
 Open, which must be undone when Open fails, and puts a launch with no window
 class on record, for which a survey's claim could take any window.
+
+### D196 — a prompt the agent was not seen to start on exits 7
+
+D31's refusals come before the text is typed. After it, an agent still idle at
+the end of the prompt's watch kept the exit at 0, so `prompt && wait --until
+stopped` ran the wait on the rest before a turn that never began. It now keeps
+its warning and exits 7. A slow agent gets a false 7. The text is in the panel
+either way, so a script checks the panel before it prompts again. Rejected: a
+longer watch, which still ends in the same choice and holds every script.

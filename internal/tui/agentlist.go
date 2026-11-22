@@ -688,6 +688,10 @@ func agentFacts(th theme.Theme, it agentItem, now time.Time, w int) string {
 
 	status := it.agent.State.Status
 	line("Status", statusLabel(th, status), statusStyle(th, status))
+	// A link's probe runs on its host, and its log is there.
+	if status == revier.StatusUnknown && it.project.Remote == nil {
+		line("", "if a probe failed, "+logsKey+" shows why in the log", th.Meta)
+	}
 	line("Project", it.project.Label(), th.ProjectName)
 	if it.project.Remote != nil {
 		line("Host", it.project.Remote.Host, th.Path)

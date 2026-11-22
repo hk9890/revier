@@ -73,7 +73,8 @@ The config screen (alt+c) shows which hosts revier uses.
 - opencode reports no state. See [integrations/opencode.md](integrations/opencode.md).
 - Any other harness needs a [probe](extending/probes.md).
 
-When a probe fails, the agent shows `unknown` and the log has the reason.
+When a probe fails, the agent shows `unknown` and the log has the reason. The
+agent's pane names the key that opens it: alt+l.
 
 ## A link will not connect
 

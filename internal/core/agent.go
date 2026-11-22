@@ -48,6 +48,11 @@ var (
 	// it has said nothing yet. It is a normal outcome, and what the agent's
 	// panel shows can still be read (Screen).
 	ErrNoMessage = errors.New("the agent's last message cannot be read")
+
+	// ErrStillIdle means a prompt was delivered and the agent was still idle
+	// when Prompt stopped watching it (decisions.md D196). The text is in the
+	// panel, so prompting again can type it twice.
+	ErrStillIdle = errors.New("the agent was still idle after the prompt was delivered")
 )
 
 // AgentPoll is how often a core whose Poll is zero reads an agent again
@@ -494,10 +499,10 @@ func (c *Core) StartedAgent(ctx context.Context, p Project, addr string) (Agent,
 // text too, whose Enter starts no turn that a wait could follow.
 //
 // It returns once an idle agent has left idle, so a following Wait sees the
-// turn it asked for rather than the rest before it. The state returned is the
-// last one read: still idle means the agent was not seen to take the prompt.
-// An agent that was already working queues the prompt, and nothing marks its
-// arrival, so Prompt returns at once.
+// turn it asked for rather than the rest before it. An agent not seen to leave
+// idle answers ErrStillIdle (decisions.md D196). An agent that was already
+// working queues the prompt, and nothing marks its arrival, so Prompt returns
+// at once.
 func (c *Core) Prompt(ctx context.Context, a Agent, text string, poll time.Duration) (revier.AgentState, error) {
 	w, err := c.writer(a)
 	if err != nil {
@@ -529,7 +534,7 @@ func (c *Core) Prompt(ctx context.Context, a Agent, text string, poll time.Durat
 	for range PromptConfirmPolls {
 		select {
 		case <-ctx.Done():
-			return a.State, nil
+			return a.State, ErrStillIdle
 		case <-time.After(poll):
 		}
 		// A failed read proves nothing about a text already delivered, so it
@@ -540,7 +545,7 @@ func (c *Core) Prompt(ctx context.Context, a Agent, text string, poll time.Durat
 			return s, nil
 		}
 	}
-	return a.State, nil
+	return a.State, ErrStillIdle
 }
 
 // writer is the runtime as it types into the agent's panel.
@@ -692,14 +697,18 @@ func (c *Core) reread(ctx context.Context, a Agent) (revier.AgentState, error) {
 // A read whose error is the ctx's end cuts its probe: the probe is not asked
 // again in this walk, and its agents not yet read stay empty. A read that fails
 // for another cause after the deadline is logged as its own. The cut is logged
-// once per probe, not once per agent: the claude probe reads every panel
-// through one listing, and a listing the ctx killed fails each read after it at
-// once. The cut writes one WARN "detail" with err errCut and probe. cut is the
-// error of the read that the deadline ended. read, failed and unread count the
-// probe's agents that were read, whose read failed, and that were not read. Its
-// "detail: recovered" comes at the next walk that reads that probe with no cut.
-// Another probe's agents are still read.
-func (c *Core) Details(ctx context.Context, agents []revier.AgentView) []revier.AgentDetail {
+// once per probe, not once per agent: a probe that reads every panel through
+// one shared source fails each read after a cut at once. The cut writes one
+// WARN "detail" with err errCut and probe. cut is the error of the read that
+// the deadline ended. read, failed and unread count the probe's agents that
+// were read, whose read failed, and that were not read. Its "detail: recovered"
+// comes at the next walk that reads that probe with no cut. Another probe's
+// agents are still read.
+//
+// A read that answers revier.ErrDetailPending is not logged, and its agent
+// counts as unread. complete is false when a cut or such a read left an agent
+// unread: the caller then does not know when every agent spoke.
+func (c *Core) Details(ctx context.Context, agents []revier.AgentView) (details []revier.AgentDetail, complete bool) {
 	c.seenMu.Lock()
 	seen := c.seen
 	c.seenMu.Unlock()
@@ -712,6 +721,7 @@ func (c *Core) Details(ctx context.Context, agents []revier.AgentView) []revier.
 		wanted[at] = append(wanted[at], i)
 	}
 	out := make([]revier.AgentDetail, len(agents))
+	complete = true
 	walked := map[string]*probeWalk{}
 	for _, instances := range seen {
 		for _, inst := range instances {
@@ -739,12 +749,17 @@ func (c *Core) Details(ctx context.Context, agents []revier.AgentView) []revier.
 				}
 				d, err := detailed.Detail(ctx, panel)
 				switch {
+				case errors.Is(err, revier.ErrDetailPending):
+					w.unread += len(at)
+					complete = false
+					continue
 				// A probe with nothing to read is a normal outcome and says
 				// nothing to the log: a panel whose harness lists no session,
 				// and a session that has not spoken yet, are both ordinary.
 				case errors.Is(err, revier.ErrNoDetail):
 				case ctx.Err() != nil && errors.Is(err, ctx.Err()):
 					w.cut, w.unread = err.Error(), w.unread+len(at)
+					complete = false
 					continue
 				default:
 					logging.Repeat("detail\x00"+probe.Name()+"\x00"+key(inst.Ref)+"\x00"+string(panel.ID), "detail", err, "probe", probe.Name(), "ref", inst.Ref, "panel", panel.ID)
@@ -761,13 +776,18 @@ func (c *Core) Details(ctx context.Context, agents []revier.AgentView) []revier.
 		}
 	}
 	for name, w := range walked {
+		// A walk that read nothing and was not cut says nothing about the cut:
+		// it must not write the "detail: recovered" of one.
+		if w.cut == "" && w.read+w.failed == 0 {
+			continue
+		}
 		var err error
 		if w.cut != "" {
 			err = errCut
 		}
 		logging.Repeat("detail\x00cut\x00"+name, "detail", err, "probe", name, "read", w.read, "failed", w.failed, "unread", w.unread, "cut", w.cut)
 	}
-	return out
+	return out, complete
 }
 
 // errCut is the err of the line for a probe a walk's ctx cut: one text

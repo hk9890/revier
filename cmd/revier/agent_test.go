@@ -64,6 +64,25 @@ func agentDesktop(t *testing.T, status revier.Status) (*app, *hosttest.FakeRunti
 	return a, rt
 }
 
+// An agent held idle has the text in its panel and starts no turn: the
+// command fails with the status of its own, so `prompt && wait` stops there.
+func TestAgentPromptToAnAgentThatStaysIdleExitsSeven(t *testing.T) {
+	a, rt := agentDesktop(t, revier.StatusIdle)
+	a.core.Poll = time.Millisecond
+	open := func(context.Context, io.Writer) (*app, error) { return a, nil }
+
+	err := agentPrompt(io.Discard, []string{"demo:home:2", "hello"}, open)
+	if !errors.Is(err, core.ErrStillIdle) {
+		t.Fatalf("err = %v, want core.ErrStillIdle", err)
+	}
+	if status, say := outcome(err); status != 7 || say {
+		t.Errorf("outcome = %d, %v; want 7 and no second message after the warning", status, say)
+	}
+	if len(rt.Sent) != 2 || rt.Sent[0].Text != "hello" || rt.Sent[1].Text != "\r" {
+		t.Errorf("sent = %+v, want the text and its Enter delivered", rt.Sent)
+	}
+}
+
 // closeAgent runs `revier agent close` on the app, and returns what it
 // printed and its error.
 func closeAgent(a *app, address string, force bool) (string, error) {

@@ -71,6 +71,7 @@ doctor` says why), `?` its host did not answer.
 | `4` | `revier setup install` or `uninstall`: some key or rule is not as asked, or install skipped a part this machine does not have. |
 | `5` | `revier each`: the command failed in at least one project. |
 | `6` | `revier assist`: `claude` is not on `PATH`. |
+| `7` | `revier agent prompt`: the text was delivered, but the agent was still idle when revier stopped watching. Check the panel before you prompt again. |
 | other | `revier run` passes on the action's own exit status. |
 
 ## Environment variables

@@ -100,6 +100,9 @@ func TestDetailForgetsASessionTheListingNoLongerHolds(t *testing.T) {
 	now := time.Now()
 	p.SetNow(func() time.Time { return now })
 	writeTranscript(t, root, "-demo", "s1", said("the last word"))
+	if _, err := p.Inspect(t.Context(), revier.Panel{PID: 101}); err != nil {
+		t.Fatal(err)
+	}
 
 	if d, err := p.Detail(context.Background(), revier.Panel{PID: 101}); err != nil || d.Message != "the last word" {
 		t.Fatalf("Detail = %+v, %v; want the message read", d, err)
@@ -110,6 +113,9 @@ func TestDetailForgetsASessionTheListingNoLongerHolds(t *testing.T) {
 
 	live = `[]`
 	now = now.Add(claude.MaxAge)
+	if _, err := p.Inspect(t.Context(), revier.Panel{PID: 101}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := p.Detail(context.Background(), revier.Panel{PID: 101}); !errors.Is(err, revier.ErrNoDetail) {
 		t.Fatalf("Detail = %v for a session that ended, want revier.ErrNoDetail", err)
 	}

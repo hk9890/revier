@@ -217,6 +217,7 @@ type Model struct {
 	akept        agentKey                         // the agent the pane chose itself, kept while no other is more worth a look
 	apending     bool                             // the pane waits for when each agent spoke before it chooses among equals
 	aanswered    revier.ProjectName               // the project the details the pane holds are for
+	apartial     int                              // the partial answers in a row for the project under the cursor
 	mirror       mirror                           // the screen of the agent the pane shows, beside either list (mirror.go)
 	barMore      bool                             // the bar shows the buttons a narrow terminal has no room for beside the first ones
 	press        *press                           // where the left button went down, while it is down

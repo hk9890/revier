@@ -12,13 +12,15 @@ import (
 )
 
 // detailWait bounds one read of what a project's agents said, and one read of
-// the mirror's screen. A detail read asks no host: it is the end of a file per
-// agent, which answers in milliseconds, and for a Claude agent the claude
-// probe's `claude agents --json`, which can take seconds on a loaded machine.
-// That command has its own, longer bound (listWait in internal/adapter/claude):
-// this one ends it first, the agents of that probe not yet read keep what they
-// said before, and the core logs the cut once for the probe.
+// the mirror's screen. A detail read asks no host and runs no listing: it is
+// the end of a file per agent, which answers in milliseconds, through the
+// listing the survey keeps.
 const detailWait = 2 * time.Second
+
+// partialAnswers is how many answers in a row that left an agent unread the
+// pane waits through before it chooses among equals anyway. Without a bound, a
+// machine where no answer is complete never shows the mirror.
+const partialAnswers = 3
 
 // agentKey names one agent across surveys: the instance that holds it, by
 // host and id as the core names one, and its panel, whose id is unique only
@@ -39,6 +41,7 @@ type detailsMsg struct {
 	project revier.ProjectName
 	seq     int
 	said    map[agentKey]revier.AgentDetail
+	partial bool // an agent was left unread, so when each spoke is not known
 }
 
 // askDetails sends for what every agent of the project under the list's
@@ -65,10 +68,11 @@ func (m *Model) askDetails(msg tea.Msg) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), detailWait)
 		defer cancel()
 		said := map[agentKey]revier.AgentDetail{}
-		for i, d := range c.Details(ctx, agents) {
+		details, complete := c.Details(ctx, agents)
+		for i, d := range details {
 			said[keyOf(agents[i])] = d
 		}
-		return detailsMsg{project: name, seq: seq, said: said}
+		return detailsMsg{project: name, seq: seq, said: said, partial: !complete}
 	}
 }
 
@@ -106,12 +110,20 @@ func (m Model) detailsWanted() (revier.ProjectName, []revier.AgentView) {
 // since left is dropped, and so is one older than the answer already taken:
 // the asks are not answered in order. An agent the answer has nothing for
 // keeps what it said before, so one read that failed does not blank the row
-// that shows it.
+// that shows it. A partial answer does not count as the project answered until
+// partialAnswers of them came in a row, so the pane does not settle on an agent
+// before it knows when each spoke.
 func (m *Model) took(msg detailsMsg) {
 	if msg.project != m.aasked || msg.seq <= m.atook {
 		return
 	}
-	m.atook, m.aanswered = msg.seq, msg.project
+	m.atook = msg.seq
+	if msg.partial {
+		m.apartial++
+	}
+	if !msg.partial || m.apartial >= partialAnswers {
+		m.aanswered, m.apartial = msg.project, 0
+	}
 	said := make(map[agentKey]revier.AgentDetail, len(msg.said))
 	for k, d := range msg.said {
 		// A turn with no message is one whose last message is further back

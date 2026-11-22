@@ -177,6 +177,11 @@ const exitEachFailed = 5
 // agent that failed.
 const exitNoAssistant = 6
 
+// exitPromptIdle is returned when `revier agent prompt` delivered its text and
+// the agent stayed idle (decisions.md D196). It is not 1, so a script can tell
+// a text that is in the panel from a prompt that was refused.
+const exitPromptIdle = 7
+
 // main runs one CLI command and logs its end as one "command" line with args,
 // exit and duration_ms: at Info when it succeeded, at Error with err when it
 // failed. A surface that a signal ended, as a closed terminal does, adds signal
@@ -281,6 +286,9 @@ func outcome(err error) (status int, say bool) {
 		return exitEachFailed, false
 	case errors.Is(err, errNoAssistant):
 		return exitNoAssistant, true
+	// `revier agent prompt` has already printed its warning.
+	case errors.Is(err, core.ErrStillIdle):
+		return exitPromptIdle, false
 	// The surface a signal ended has no terminal left to say it on.
 	case errors.As(err, &ended):
 		return 128 + int(ended.sig), false

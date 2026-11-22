@@ -51,7 +51,7 @@ func TestDetailsAreWhatEachAgentSaidAndAskNoHost(t *testing.T) {
 	c, rt, agents := detailWorld(t, probe, 2)
 
 	listed := rt.InstancesCalls
-	got := c.Details(context.Background(), agents)
+	got, _ := c.Details(context.Background(), agents)
 	if len(got) != 2 || got[0].Message != "one said this" || !got[0].At.Equal(at) || got[1].Message != "two said that" {
 		t.Errorf("Details = %+v, want each agent's own, in order", got)
 	}
@@ -74,7 +74,8 @@ func TestDetailsAreEmptyWhenTheProbeCannotSay(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			c, _, agents := detailWorld(t, probe, 2)
-			for i, d := range c.Details(context.Background(), agents) {
+			details, _ := c.Details(context.Background(), agents)
+			for i, d := range details {
 				if !d.IsZero() {
 					t.Errorf("detail %d = %+v, want it empty", i, d)
 				}
@@ -83,13 +84,11 @@ func TestDetailsAreEmptyWhenTheProbeCannotSay(t *testing.T) {
 	}
 }
 
-// listingProbe reads each detail through one listing, as the claude probe's
-// `claude agents --json` is. With slow set, the listing outlasts the read's
-// ctx: the first read is killed at the deadline, and every later one fails at
-// once, each with an error that wraps the ctx's, as the claude probe's does.
-// With late set, the first read waits for the deadline and then answers, as a
-// read that waited on the listing a survey was running does. The panel named
-// broken fails for a cause of its own.
+// listingProbe reads each detail through one shared source. With slow set, the
+// source outlasts the read's ctx: the first read is killed at the deadline, and
+// every later one fails at once, each with an error that wraps the ctx's. With
+// late set, the first read waits for the deadline and then answers. The panel
+// named broken fails for a cause of its own.
 type listingProbe struct {
 	*hosttest.FakeDetailedProbe
 	slow, late bool
@@ -143,7 +142,7 @@ func TestDetailsCutByTheirDeadlineLogItOncePerProbe(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
 	defer cancel()
-	got := c.Details(ctx, agents)
+	got, _ := c.Details(ctx, agents)
 	if len(got) != len(agents) {
 		t.Fatalf("Details = %+v, want one detail per agent", got)
 	}
@@ -161,7 +160,7 @@ func TestDetailsCutByTheirDeadlineLogItOncePerProbe(t *testing.T) {
 	}
 
 	probe.slow, probe.asked = false, 0
-	got = c.Details(t.Context(), agents)
+	got, _ = c.Details(t.Context(), agents)
 	if len(got) != len(agents) {
 		t.Fatalf("Details after the cut = %+v, want one detail per agent", got)
 	}
@@ -186,7 +185,7 @@ func TestDetailsReadOnPastTheDeadlineWhileReadsAnswer(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
 	defer cancel()
-	got := c.Details(ctx, agents)
+	got, _ := c.Details(ctx, agents)
 	if len(got) != len(agents) {
 		t.Fatalf("Details = %+v, want one detail per agent", got)
 	}
@@ -209,6 +208,46 @@ func TestDetailsReadOnPastTheDeadlineWhileReadsAnswer(t *testing.T) {
 	c.Details(t.Context(), agents)
 }
 
+// A probe whose listing is not there yet leaves its agents unread: the walk
+// says it is not complete, logs no failure, and writes no "recovered" line.
+func TestDetailsOfAProbeWithNoListingYetAreNotComplete(t *testing.T) {
+	logged := captureLog(t)
+	probe := hosttest.NewDetailedProbe("claude", "claude")
+	probe.Said["1"] = revier.AgentDetail{Message: "said"}
+	c, _, agents := detailWorld(t, probe, 1)
+
+	probe.DetailErr = fmt.Errorf("%w: no listing yet", revier.ErrDetailPending)
+	got, complete := c.Details(t.Context(), agents)
+	if complete || !got[0].IsZero() {
+		t.Errorf("Details = %+v, complete = %v; want it empty and not complete", got, complete)
+	}
+	if strings.Contains(logged.String(), `"msg":"detail`) {
+		t.Errorf("a pending read logged:\n%s", logged.String())
+	}
+
+	probe.DetailErr = nil
+	if got, complete := c.Details(t.Context(), agents); !complete || got[0].Message != "said" {
+		t.Errorf("Details = %+v, complete = %v; want the message and complete", got, complete)
+	}
+	if strings.Contains(logged.String(), `"msg":"detail`) {
+		t.Errorf("a walk after a pending one logged:\n%s", logged.String())
+	}
+}
+
+// A read cut by its deadline leaves the walk not complete.
+func TestDetailsCutByTheirDeadlineAreNotComplete(t *testing.T) {
+	captureLog(t)
+	probe := &listingProbe{FakeDetailedProbe: hosttest.NewDetailedProbe("claude", "claude"), slow: true}
+	c, _, agents := detailWorld(t, probe, 2)
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer cancel()
+	if _, complete := c.Details(ctx, agents); complete {
+		t.Error("a cut walk says it is complete")
+	}
+	probe.slow, probe.asked = false, 0
+	c.Details(t.Context(), agents)
+}
+
 // Before any survey there is no listing to find a panel in, and an agent is
 // given no detail rather than a host call.
 func TestDetailsBeforeAnySurveyAreEmpty(t *testing.T) {
@@ -216,7 +255,7 @@ func TestDetailsBeforeAnySurveyAreEmpty(t *testing.T) {
 	probe.Said["1"] = revier.AgentDetail{Message: "said"}
 	rt := hosttest.NewRuntime("rt")
 	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{probe}}
-	got := c.Details(context.Background(), []revier.AgentView{{Panel: "1", Ref: revier.TargetRef{Host: "rt", ID: "1"}}})
+	got, _ := c.Details(context.Background(), []revier.AgentView{{Panel: "1", Ref: revier.TargetRef{Host: "rt", ID: "1"}}})
 	if len(got) != 1 || !got[0].IsZero() {
 		t.Errorf("Details = %+v, want one empty detail", got)
 	}

@@ -18,6 +18,17 @@ Each section is also the text of its release on the
 - **A shutdown no longer says `safe to leave` while a second copy of a
   workspace still runs.** It names that copy as still open and exits `1`, and
   the next start does not offer a restore.
+- **`revier agent prompt` exits `7` when the agent does not start on the
+  prompt.** Before, it warned and exited `0`, so `revier agent prompt ... &&
+  revier agent wait ...` went on as if a turn had run. A script that relied on
+  exit `0` now sees the failure. The text is in the panel, so check it before
+  you prompt again.
+- **On a loaded machine, the project pane mirrors the agent that spoke last.**
+  A slow `claude agents --json` could leave what each agent said unread, and
+  the pane then stayed on the first agent. Reading what agents said also no
+  longer delays the refresh.
+- **The pane of an agent in state `unknown` says where the reason is.** It
+  names alt+l, the logs screen, which holds the error of a probe that failed.
 
 ## v0.30.0
 

@@ -149,6 +149,63 @@ func TestNoPanelIsReadBeforeThePaneChoosesAmongEquals(t *testing.T) {
 	}
 }
 
+// Among equals, an answer that left the agents unread does not settle the
+// pane: the answer that knows when each spoke then picks the one that spoke
+// last, not the first row.
+func TestAnUnreadAnswerDoesNotLockThePaneOnAnEqual(t *testing.T) {
+	now := time.Now()
+	m, rt, fakes := unsaidWorld(t, 140, 30,
+		shownAgent{status: revier.StatusIdle, screen: "the older screen", at: now.Add(-2 * time.Hour)},
+		shownAgent{status: revier.StatusIdle, screen: "the newer screen", at: now.Add(-5 * time.Minute)})
+	for _, f := range fakes {
+		f.DetailErr = revier.ErrDetailPending
+	}
+	m = m.Said().Mirrored()
+	if len(rt.ScreenReads) != 0 {
+		t.Fatalf("reads = %v after an unread answer, want none", rt.ScreenReads)
+	}
+	for _, f := range fakes {
+		f.DetailErr = nil
+	}
+	m = m.Said().Mirrored()
+	if body := pane(m); !strings.Contains(body, "the newer screen") || strings.Contains(body, "the older screen") {
+		t.Errorf("pane = %q, want the agent that spoke last", body)
+	}
+}
+
+// On a machine where no answer is ever complete the pane still chooses, after
+// a bounded number of answers: the mirror does not stay hidden.
+func TestThePaneChoosesAfterABoundedNumberOfUnreadAnswers(t *testing.T) {
+	m, _, fakes := unsaidWorld(t, 140, 30,
+		shownAgent{status: revier.StatusIdle, screen: "first screen"},
+		shownAgent{status: revier.StatusIdle, screen: "second screen"})
+	for _, f := range fakes {
+		f.DetailErr = revier.ErrDetailPending
+	}
+	m = m.Said().Said().Mirrored()
+	if body := pane(m); strings.Contains(body, "first screen") || strings.Contains(body, "second screen") {
+		t.Fatalf("pane = %q after two unread answers, want it still waiting", body)
+	}
+	m = m.Said().Mirrored()
+	if body := pane(m); !strings.Contains(body, "first screen") {
+		t.Errorf("pane = %q after the third unread answer, want a mirror", body)
+	}
+}
+
+// An agent in state unknown says where the reason is, and names the key that
+// opens the logs; a known state does not.
+func TestAnUnknownAgentsPaneNamesTheLogsKey(t *testing.T) {
+	const hint = "if a probe failed, alt+l shows why in the log"
+	m, _, _ := listedWorld(t, 160, 30, listed{project: "alpha", status: revier.StatusUnknown, on: "lost"})
+	if body := pane(m); !strings.Contains(body, hint) {
+		t.Errorf("pane = %q, want the line that names the logs key", body)
+	}
+	m, _, _ = listedWorld(t, 160, 30, listed{project: "alpha", status: revier.StatusIdle, on: "fine"})
+	if body := pane(m); strings.Contains(body, "alt+l shows why") {
+		t.Errorf("pane = %q for a known state, want no such line", body)
+	}
+}
+
 // One agent more worth a look than the rest is mirrored at once: when each
 // spoke decides nothing.
 func TestTheOneAgentMostWorthALookIsMirroredAtOnce(t *testing.T) {

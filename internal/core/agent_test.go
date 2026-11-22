@@ -287,8 +287,8 @@ func TestPromptReportsAnAgentThatStaysIdle(t *testing.T) {
 		t.Fatal(err)
 	}
 	state, err := c.Prompt(context.Background(), a, "hello", time.Millisecond)
-	if err != nil || state.Status != revier.StatusIdle {
-		t.Fatalf("Prompt = %v, %v; want idle and no error", state.Status, err)
+	if !errors.Is(err, core.ErrStillIdle) || state.Status != revier.StatusIdle {
+		t.Fatalf("Prompt = %v, %v; want idle and ErrStillIdle", state.Status, err)
 	}
 }
 
@@ -372,8 +372,8 @@ func TestPromptDoesNotTakeAnUnknownReadForTheTurn(t *testing.T) {
 		t.Fatal(err)
 	}
 	state, err := c.Prompt(context.Background(), a, "hello", time.Millisecond)
-	if err != nil || state.Status != revier.StatusIdle {
-		t.Fatalf("Prompt = %v, %v; want idle: an unknown read is not the turn", state.Status, err)
+	if !errors.Is(err, core.ErrStillIdle) || state.Status != revier.StatusIdle {
+		t.Fatalf("Prompt = %v, %v; want idle and ErrStillIdle: an unknown read is not the turn", state.Status, err)
 	}
 }
 
