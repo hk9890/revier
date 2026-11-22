@@ -35,16 +35,29 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 		}
 	}
 	// A name revier does not know, typed in a directory, is a project being
-	// started: the file is written and the workspace opened in one step, as
-	// `os open` does. Without a name there is nothing to call it, and the
-	// usual resolution applies.
+	// started: the file is written and the workspace opened in one command, as
+	// `os open` does. An open that then fails keeps the file, and its error
+	// says so (decisions.md D197). Without a name there is nothing to call it,
+	// and the usual resolution applies.
+	createdFile := ""
 	if _, known := a.project(revier.ProjectName(name)); name != "" && !known {
 		p, err := createProject(a.out, a.cfgRoot, a.core.Ledger, a.projects, revier.ProjectName(name))
 		if err != nil {
 			return err
 		}
 		a.projects = append(a.projects, p)
+		createdFile = p.File
 	}
+	err = a.openProject(ctx, name, *attach)
+	if err != nil && createdFile != "" {
+		return fmt.Errorf("%w (the project file %s stays)", err, createdFile)
+	}
+	return err
+}
+
+// openProject opens the project name resolves to, clones its directory when
+// it is missing, and goes to its home target.
+func (a *app) openProject(ctx context.Context, name string, attach bool) error {
 	p, err := a.resolveProject(ctx, name)
 	if err != nil {
 		return err
@@ -70,7 +83,7 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	if *attach {
+	if attach {
 		if err := a.attach(ref); err != nil {
 			return err
 		}

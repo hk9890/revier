@@ -1,10 +1,12 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	usecase "github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/config"
@@ -25,6 +27,9 @@ func cmdNew(out io.Writer, args []string) error {
 	}
 	if len(pos) > 1 {
 		return fmt.Errorf("usage: revier new [name]")
+	}
+	if len(pos) == 1 && pos[0] == "" {
+		return errors.New("the project name is empty")
 	}
 	root, err := config.Root()
 	if err != nil {
@@ -48,7 +53,8 @@ func cmdNew(out io.Writer, args []string) error {
 }
 
 // createProject writes the project for the working directory, as
-// internal/app's CreateProject writes it. An empty name is the directory's own.
+// internal/app's CreateProject writes it. An empty name is the directory's own,
+// and a line says so when the project cannot carry it unchanged.
 func createProject(out io.Writer, root string, l core.Ledger, projects []core.Project, name revier.ProjectName) (core.Project, error) {
 	dir, err := os.Getwd()
 	if err != nil {
@@ -57,6 +63,9 @@ func createProject(out io.Writer, root string, l core.Ledger, projects []core.Pr
 	p, err := usecase.CreateProject(root, l, projects, name, dir, "", os.Stderr)
 	if err != nil {
 		return core.Project{}, err
+	}
+	if base := filepath.Base(dir); name == "" && string(p.Name) != base {
+		_, _ = fmt.Fprintf(out, "project name %s: the directory name %q cannot be a project name\n", p.Name, base)
 	}
 	_, _ = fmt.Fprintf(out, "created %s\n", p.File)
 	return p, nil

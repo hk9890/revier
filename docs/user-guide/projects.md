@@ -14,8 +14,14 @@ revier new    # the project is called shop; or: revier new storefront
 ```
 
 A directory can be one project only. `revier new` prints the file it wrote.
+With no name, each `:` and whitespace character in the directory name becomes
+`_`, and `revier new` prints both names: the directory `sp ace` makes the
+project `sp_ace`.
+
 `revier open shop`, with a name revier does not know, makes the project for
-the current directory and opens it. In the TUI, alt+n takes a path, a name or
+the current directory and opens it. If the open then fails, the project file
+stays and the error names it: fix the cause and run the command again, or
+delete the file. In the TUI, alt+n takes a path, a name or
 a git URL. In a git checkout, the file records `origin` as `git_url`, and
 `revier open` clones the directory from it when it is missing.
 

@@ -8,6 +8,21 @@ Each section is also the text of its release on the
 
 ## Unreleased
 
+- **Action required: a script that passes an empty `-p` now fails.** `-p ""`,
+  `--project=` and `-p ":"` exit `1` and name the flag. Before, they acted on
+  the project of the current directory, which may be the wrong one. Leave `-p`
+  out to use that project. `-p :target` still works. `revier new ""` also
+  exits `1` and writes no file.
+- **`revier new` says when the project name differs from the directory name.**
+  In a directory called `sp ace`, it prints both `sp ace` and `sp_ace`.
+- **When `revier open <new name>` fails after it created the project, the error
+  names the project file and says that it stays.** Fix the cause and run the
+  command again, or delete the file.
+- **`revier list --agents` prints its header when there is no agent.** Before,
+  it printed nothing.
+- **`revier doctor` notes a project file named `revier-config-assistant`.** That
+  file replaces the built-in config assistant. Delete it to bring the built-in
+  back.
 - **Pressing a closed project several times at once opens one workspace.**
   Before, each press opened its own copy, and revier kept track of only one,
   so the agents in the others were invisible. Now the later presses wait and

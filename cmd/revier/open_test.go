@@ -2,14 +2,57 @@ package main
 
 import (
 	"context"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/hosttest"
 	"github.com/hk9890/revier/internal/state"
+	"github.com/hk9890/revier/internal/testenv"
+	"github.com/hk9890/revier/pkg/revier"
 )
+
+// failingOpenRuntime is a runtime whose every Open fails with err.
+type failingOpenRuntime struct {
+	*hosttest.FakeRuntime
+	err error
+}
+
+func (r failingOpenRuntime) Open(context.Context, revier.Realization) (revier.TargetRef, error) {
+	return revier.TargetRef{}, r.err
+}
+
+// An open that fails after it created the project keeps the file and names
+// it, and the cause stays readable for the exit status. A project that was
+// already there gets no such words: this call did not create it.
+func TestAFailedOpenNamesTheFileOnlyWhenItCreatedIt(t *testing.T) {
+	testenv.NoTools(t)
+	root := configRoot(t, "", nil)
+	t.Chdir(t.TempDir())
+	cause := errors.New("the panel did not start")
+	rt := failingOpenRuntime{FakeRuntime: hosttest.NewRuntime("hc"), err: cause}
+	a := withState(t, &app{out: io.Discard, cfg: &config.Config{}, cfgRoot: root, stateRoot: t.TempDir(), core: &core.Core{Runtime: rt, View: rt}}, &state.State{})
+
+	err := cmdOpen(t.Context(), a, []string{"typo-name"})
+	file := filepath.Join(config.ProjectsDir(root), "typo-name.toml")
+	if !errors.Is(err, cause) || !strings.Contains(err.Error(), file) || !strings.Contains(err.Error(), "stays") {
+		t.Fatalf("err = %v, want the cause, the file %s and that it stays", err, file)
+	}
+	if _, statErr := os.Stat(file); statErr != nil {
+		t.Errorf("the project file is gone: %v", statErr)
+	}
+
+	err = cmdOpen(t.Context(), a, []string{"typo-name"})
+	if !errors.Is(err, cause) || strings.Contains(err.Error(), "stays") {
+		t.Errorf("second open: err = %v, want the cause alone", err)
+	}
+}
 
 // openAttach runs `revier open demo --attach` against rt, with the exec
 // recorded instead of done, and returns the argv exec'd.

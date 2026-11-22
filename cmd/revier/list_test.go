@@ -183,8 +183,12 @@ func TestListAgentsListsTheSurveyedAgents(t *testing.T) {
 		t.Errorf("rows = %+v, want demo's agent at demo:home:7", rows)
 	}
 	out = output(t, a, func() error { return cmdList(ctx, a, []string{"--agents", "tm"}) })
-	if out != "" {
-		t.Errorf("list --agents tm = %q, want nothing for a project with no agent", out)
+	if want := "ADDRESS  NAME  STATUS  ACTIVITY  HARNESS  DIR\n"; out != want {
+		t.Errorf("list --agents tm = %q, want the header alone, %q", out, want)
+	}
+	out = output(t, a, func() error { return cmdList(ctx, a, []string{"--agents", "--json", "tm"}) })
+	if strings.TrimSpace(out) != "[]" {
+		t.Errorf("list --agents --json tm = %q, want []", out)
 	}
 }
 

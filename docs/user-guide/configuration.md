@@ -63,9 +63,12 @@ board = "https://github.com/example/shop/projects/1"
 | `[[status]]` | array of tables | none | Statuses in this project's pane. See [extending/status.md](extending/status.md). |
 
 - Do not write `name =` at the top level. The file name is the project's name.
-- A project name has no whitespace, no control character, no `/` and no `:`.
-  `revier new` and a rename refuse such a name, and revier refuses a project
-  whose file you named so yourself.
+- A project name is not empty, `.` or `..`, and has no whitespace, no control
+  or other non-printing character, no `/` and no `:`. `revier new` and a
+  rename refuse any other name, and revier refuses a project whose file you
+  named so yourself. Every other character is allowed: a name can start with
+  `.` or `-`, and hold `\` or non-ASCII letters. On the command line, put `--`
+  before a name that starts with `-`: `revier open -- -x`.
 - A project needs exactly one target with `home = true`. With a
   [shared](#shared-targets) home, `path` alone is a complete project. A home
   with an agent tab is in [Tabs](#tabs).

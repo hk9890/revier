@@ -579,3 +579,27 @@ func TestDoctorNamesTheAttachOnlyForARuntimeThatAttaches(t *testing.T) {
 		t.Errorf("kitty: %q, want no view named and no hint %q", line, attach)
 	}
 }
+
+// A file of the assistant's name replaces the built-in, which alt+a then no
+// longer raises. Doctor names it, and the exit status stays what it was.
+func TestDoctorNotesAFileThatReplacesTheAssistant(t *testing.T) {
+	file := string(config.Assistant) + ".toml"
+	doctorRoot(t, map[string]string{"sound.toml": sound, file: soundAt("/tmp/own-assistant")})
+
+	var out strings.Builder
+	if err := cmdDoctor(&out, nil); err != nil {
+		t.Fatalf("err = %v, want no problem", err)
+	}
+	if !strings.Contains(out.String(), file+" replaces the built-in config assistant") {
+		t.Errorf("report should name the file:\n%s", out.String())
+	}
+
+	doctorRoot(t, map[string]string{"sound.toml": sound})
+	out.Reset()
+	if err := cmdDoctor(&out, nil); err != nil {
+		t.Fatalf("err = %v, want no problem", err)
+	}
+	if strings.Contains(out.String(), "built-in") {
+		t.Errorf("no such file, so no note:\n%s", out.String())
+	}
+}

@@ -1165,3 +1165,12 @@ stopped` ran the wait on the rest before a turn that never began. It now keeps
 its warning and exits 7. A slow agent gets a false 7. The text is in the panel
 either way, so a script checks the panel before it prompts again. Rejected: a
 longer watch, which still ends in the same choice and holds every script.
+
+### D197 — an open that fails keeps the project it created, and says so
+
+`revier open <unknown>` writes the project file, then opens it. When a later
+step fails, the file stays and the error names it. The usual cause is the
+environment, such as an agent that does not start, and the user then fixes it
+and runs the same command again. A mistyped name leaves a file to delete by
+hand. Rejected: removing the file, which also has to undo the mise trust
+without untrusting a directory the user trusted before.

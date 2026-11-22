@@ -160,5 +160,7 @@ In the TUI, alt+a raises `revier-config-assistant`, a project revier builds
 in: the same agent, in a workspace of its own beside the TUI. Its row has a
 cog where other rows have a folder. It shows in the agent list, and a saved
 session restores it. It is not told which project the cursor is on: name it.
+A project file named `revier-config-assistant` replaces it, and deleting the
+file brings it back.
 What the TUI reads again after its edits is in [Files](configuration.md#files).
 With no runtime host, alt+a hands the terminal over, as `revier assist` does.

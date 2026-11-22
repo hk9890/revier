@@ -486,11 +486,21 @@ func asksHelp(cmd string, args []string) bool {
 // commandWait bounds a command that has no bound of its own.
 var commandWait = core.BindWait + 30*time.Second
 
-// projectFlag registers -p/--project on a flag set.
+// projectFlag registers -p/--project on a flag set. A value that names no
+// project and no target fails the parse: read as no flag, a script's empty
+// variable would act on the project the directory resolves to. ":target"
+// names a target of that project, so it stays.
 func projectFlag(fs *flag.FlagSet) *string {
 	var p string
-	fs.StringVar(&p, "project", "", "act on this project")
-	fs.StringVar(&p, "p", "", "act on this project (shorthand)")
+	set := func(value string) error {
+		if value == "" || value == ":" {
+			return errors.New("it names no project")
+		}
+		p = value
+		return nil
+	}
+	fs.Func("project", "act on this project", set)
+	fs.Func("p", "act on this project (shorthand)", set)
 	return &p
 }
 

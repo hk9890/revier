@@ -159,14 +159,11 @@ func agentRows(views []revier.ProjectView) []agentRow {
 	return rows
 }
 
-// agentTable is the agents of views, one row each, as a person reads them. An
-// agent no target holds has no address, so its row names its project and
+// agentTable is the agents of views, one row each, as a person reads them,
+// and its header alone when there is none. An agent no target holds has no address, so its row names its project and
 // panel instead, for the agent list to find it by.
 func (a *app) agentTable(views []revier.ProjectView) error {
 	rows := agentRows(views)
-	if len(rows) == 0 {
-		return nil
-	}
 	w := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
 	_, _ = fmt.Fprintln(w, "ADDRESS\tNAME\tSTATUS\tACTIVITY\tHARNESS\tDIR")
 	for _, r := range rows {
