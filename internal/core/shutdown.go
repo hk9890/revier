@@ -631,7 +631,8 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	r, plan := c.recheck(ctx, plan, opts)
 	if busy := Busy(plan); len(busy) > 0 && !opts.Force {
 		// Logs "shutdown refused" at Info with the plan's steps and busy
-		// counts (decisions.md D99): nothing closes and nothing is saved.
+		// counts. The guard refuses the whole plan while one is busy
+		// (decisions.md D99), so nothing closes and nothing is saved.
 		slog.Info("shutdown refused", "steps", len(plan), "busy", len(busy))
 		c.note(record.Line{Kind: record.KindShutdownRefused, Counts: map[string]int{"steps": len(plan), "busy": len(busy)}})
 		return nil, &BusyRefusal{Plan: plan}
