@@ -139,7 +139,8 @@ Each agent takes two lines:
 - The second line: the project, then the worktree the agent works in, if it
   works in one. At the right, for a Claude Code agent: how many tokens its
   conversation holds, and the minutes until its prompt cache goes cold. The
-  minutes turn yellow in the last 5, and show `--` once the cache is cold:
+  minutes turn yellow in the last 20 and red in the last 5, and show `--`
+  once the cache is cold:
   the next prompt to that agent then reads the whole conversation again.
 
 Type to filter by what the agent does, its project or its worktree. The pane

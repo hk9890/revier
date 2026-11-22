@@ -55,16 +55,30 @@ type agentItem struct {
 	agent   revier.AgentView
 	project revier.Project
 	detail  revier.AgentDetail
-	text    string // what it is on (summary)
-	titled  bool   // whether the agent said so itself
-	age     string // how long ago it spoke, as the row says it
-	tokens  string // how many tokens its conversation holds, as the row says it
-	cache   string // how long until its prompt cache goes cold, as the row says it
-	cooling bool   // the cache is in its last minutes: the row warns of it
+	text    string       // what it is on (summary)
+	titled  bool         // whether the agent said so itself
+	age     string       // how long ago it spoke, as the row says it
+	tokens  string       // how many tokens its conversation holds, as the row says it
+	cache   string       // how long until its prompt cache goes cold, as the row says it
+	urgency cacheUrgency // how near the cache is to going cold: the colour of its minutes
 }
 
-// coolingFrom is how long before the cache goes cold the row warns of it.
-const coolingFrom = 5 * time.Minute
+// cacheUrgency is how near a warm cache is to going cold. A cold cache, and
+// one nothing says, is cacheCalm: its "--" or its absence says it.
+type cacheUrgency int
+
+const (
+	cacheCalm     cacheUrgency = iota
+	cacheCooling               // yellow: at most coolingFrom left
+	cacheExpiring              // red: at most expiringFrom left
+)
+
+// coolingFrom and expiringFrom are how long before the cache goes cold the row
+// warns of it, in yellow and then in red.
+const (
+	coolingFrom  = 20 * time.Minute
+	expiringFrom = 5 * time.Minute
+)
 
 // listedKey names one row of the agent list across refreshes. An agent a
 // user attached to two projects is a row under each, so its panel alone does
@@ -98,7 +112,7 @@ func summary(a revier.AgentView, said revier.AgentDetail) (text string, titled b
 func newAgentItem(a revier.AgentView, p revier.Project, d revier.AgentDetail, now time.Time) agentItem {
 	text, titled := summary(a, d)
 	it := agentItem{agent: a, project: p, detail: d, text: text, titled: titled, age: shortAgo(now, d.At), tokens: shortTokens(d.Context)}
-	it.cache, it.cooling = cacheLeft(now, d.CacheUntil)
+	it.cache, it.urgency = cacheLeft(now, d.CacheUntil)
 	return it
 }
 
@@ -121,18 +135,23 @@ func shortTokens(n int) string {
 }
 
 // cacheLeft is how long after now a prompt cache goes cold, in whole minutes
-// rounded up to "99m" at most, or "--" once it is, and whether it is in its
-// last minutes. A time nothing says is no text. A cache lives an hour at
+// rounded up to "99m" at most, or "--" once it is, and how urgent that is. A
+// time nothing says is no text. A cache lives an hour at
 // most; the cap holds the column where a clock ahead of this one says more.
-func cacheLeft(now, until time.Time) (text string, cooling bool) {
+func cacheLeft(now, until time.Time) (text string, urgency cacheUrgency) {
 	if until.IsZero() {
-		return "", false
+		return "", cacheCalm
 	}
 	left := until.Sub(now)
-	if left <= 0 {
-		return "--", false
+	switch {
+	case left <= 0:
+		return "--", cacheCalm
+	case left <= expiringFrom:
+		urgency = cacheExpiring
+	case left <= coolingFrom:
+		urgency = cacheCooling
 	}
-	return fmt.Sprintf("%dm", min(int((left+time.Minute-1)/time.Minute), 99)), left <= coolingFrom
+	return fmt.Sprintf("%dm", min(int((left+time.Minute-1)/time.Minute), 99)), urgency
 }
 
 // The usage columns at the right end of a row's second line: the tokens, and
@@ -145,7 +164,7 @@ const (
 )
 
 // usage is the row's usage columns, usageWidth wide: the tokens, and the
-// cache's minutes left, gray but for a cache in its last minutes. No count
+// cache's minutes left: gray, yellow in its last 20 minutes, red in its last 5. No count
 // and no cache is no columns.
 func (i agentItem) usage(th theme.Theme, style func(lipgloss.Style) lipgloss.Style) string {
 	if i.tokens == "" && i.cache == "" {
@@ -155,8 +174,11 @@ func (i agentItem) usage(th theme.Theme, style func(lipgloss.Style) lipgloss.Sty
 		return style(s).Width(w).Align(lipgloss.Right).Render(text)
 	}
 	minutes := th.Path
-	if i.cooling {
+	switch i.urgency {
+	case cacheCooling:
 		minutes = th.Warning
+	case cacheExpiring:
+		minutes = th.Attention
 	}
 	glyph := ""
 	if i.cache != "" {
