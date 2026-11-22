@@ -490,7 +490,8 @@ func (c *Core) StartedAgent(ctx context.Context, p Project, addr string) (Agent,
 
 // Prompt types one line into an agent and submits it. It refuses an agent that
 // is waiting for the human, and one whose state is unknown, since either may
-// be showing a dialog the Enter would answer.
+// be showing a dialog the Enter would answer. It refuses an empty or blank
+// text too, whose Enter starts no turn that a wait could follow.
 //
 // It returns once an idle agent has left idle, so a following Wait sees the
 // turn it asked for rather than the rest before it. The state returned is the
