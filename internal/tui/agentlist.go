@@ -526,7 +526,8 @@ func (al *agentList) selectKey(key listedKey) bool {
 // Which row that is is known once every agent's last word is read, and that
 // answer comes after the list is drawn. Until a complete answer, or the bound
 // of partial ones, has come, every reload chooses the row again, unless the
-// user acts on the list first (took).
+// user acts on the list first (took). An answer from when the list was last
+// open does not count for this opening.
 func (m Model) switchList() (tea.Model, tea.Cmd) {
 	m.err = nil
 	m.apartial = 0
@@ -537,6 +538,9 @@ func (m Model) switchList() (tea.Model, tea.Cmd) {
 	}
 	m.agents.setFilter("")
 	m.agents.top = true
+	if m.aanswered == everyAgent {
+		m.aanswered, m.aforced = "", false
+	}
 	m.reloadAgents()
 	return m, m.agents.query.Focus()
 }

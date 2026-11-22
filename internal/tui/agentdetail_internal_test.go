@@ -5,6 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/ledger"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
@@ -117,5 +120,19 @@ func TestAPartialAnswerKeepsTheAgentListsOpeningChoice(t *testing.T) {
 	m.took(detailsMsg{project: everyAgent, seq: partialAnswers, partial: true})
 	if m.agents.top {
 		t.Error("the bound of partial answers did not end the opening choice")
+	}
+}
+
+// An answer from when the agent list was last open does not end the opening
+// choice of the next opening on a partial answer.
+func TestAReopenedAgentListWaitsThroughAPartialAnswer(t *testing.T) {
+	root := t.TempDir()
+	m := New(&core.Core{Ledger: ledger.File{Root: root}}, nil, root, &config.Config{}, time.Second, theme.Default(), "")
+	m.aasked, m.aanswered = everyAgent, everyAgent
+	next, _ := m.switchList()
+	reopened := next.(Model)
+	reopened.took(detailsMsg{project: everyAgent, seq: 1, partial: true})
+	if !reopened.agents.top {
+		t.Error("a partial answer ended the opening choice of a reopened list")
 	}
 }

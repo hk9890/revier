@@ -738,8 +738,10 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	walked := len(out)
 	// A cancel that ended the wait with a step still listed wants out now, and
 	// that step already makes the shutdown incomplete. app.Close withdraws a
-	// full shutdown's record then, as this check did not run.
-	if closes && walked == len(plan) && (!cancelled() || waited == 0) {
+	// full shutdown's record then, as this check did not run. A step no host
+	// can close is not listed as open, so it does not skip the check.
+	stillListed := slices.ContainsFunc(out, func(r CloseResult) bool { return r.Open })
+	if closes && walked == len(plan) && (!cancelled() || !stillListed) {
 		out = append(out, c.leftOpen(ctx, r, out, opts.Projects)...)
 	}
 	closed, open, failed := out.Counts()

@@ -576,6 +576,40 @@ func TestACancelThatEndsTheWaitWithdrawsTheRecord(t *testing.T) {
 	}
 }
 
+// closeless is a window host that cannot close what it lists.
+type closeless struct{ revier.WindowController }
+
+// A step no host can close does not skip the check on a cancel: a second copy
+// still takes the full shutdown off the record.
+func TestACancelWithAStepNoHostClosesStillChecksForASecondCopy(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:demo", "kitty")
+	rt.Add("session:demo", "kitty")
+	wm := hosttest.New("wm")
+	wm.Add("work", "firefox")
+	c := &core.Core{Runtime: rt, View: rt, Window: closeless{wm}, Ledger: &ledger{}}
+	projects := []core.Project{core.PrepareProject(revier.Project{Name: "demo", Path: "/src/demo", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "session:demo", Match: revier.Match{Title: "^session:demo$"}}},
+		{Name: "browser", Window: &revier.Realization{Launch: []string{"firefox"}, Match: revier.Match{Class: "firefox"}}},
+	}})}
+	plan := c.ShutdownPlan(surveyed(t, c, projects), "", core.ShutdownAll)
+	req := fullShutdown(c, t.TempDir(), plan, projects)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	req.Progress = func(p core.Progress) {
+		if p.Phase == core.PhaseWait {
+			cancel()
+		}
+	}
+
+	if _, err := app.Close(ctx, req); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if shutDownOnRecord(c) {
+		t.Error("the shutdown stayed on record with a second copy open")
+	}
+}
+
 // A second ctrl+c during the wait quits before the check for a second copy,
 // so the record does not outlive the surface unchecked.
 func TestAnAbandonDuringTheWaitWithdrawsTheRecord(t *testing.T) {
