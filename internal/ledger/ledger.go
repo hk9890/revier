@@ -1,6 +1,6 @@
-// Package ledger is the state file, the event file and the state record as
-// the core reads and writes them: the one implementation of core.Ledger
-// outside a test (decisions.md D120).
+// Package ledger is the state file, the event file, the state record and the
+// per-project press lock as the core uses them: the one implementation of
+// core.Ledger outside a test (decisions.md D120).
 package ledger
 
 import (

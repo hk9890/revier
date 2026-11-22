@@ -321,14 +321,14 @@ func TestDetailDoesNotWaitForTheListingARunningInspectHolds(t *testing.T) {
 	writeTranscript(t, root, "-demo", "s1", said("the last word"))
 	inspected := make(chan error, 1)
 	go func() {
-		_, err := p.Inspect(context.Background(), revier.Panel{PID: 101})
+		_, err := p.Inspect(t.Context(), revier.Panel{PID: 101})
 		inspected <- err
 	}()
 	<-started
 
 	read := make(chan error, 1)
 	go func() {
-		_, err := p.Detail(context.Background(), revier.Panel{PID: 101})
+		_, err := p.Detail(t.Context(), revier.Panel{PID: 101})
 		read <- err
 	}()
 	select {

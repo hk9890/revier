@@ -39,9 +39,8 @@ Each section is also the text of its release on the
   exit `0` now sees the failure. The text is in the panel, so check it before
   you prompt again.
 - **On a loaded machine, the project pane mirrors the agent that spoke last.**
-  A slow `claude agents --json` could leave what each agent said unread, and
-  the pane then stayed on the first agent. Reading what agents said also no
-  longer delays the refresh.
+  Before, the pane could stay on the first agent, and the refresh could slow
+  down.
 - **The pane of an agent in state `unknown` says where the reason is.** It
   names alt+l, the logs screen, which holds the error of a probe that failed.
 

@@ -70,7 +70,7 @@ func TestAShutdownThatLeavesASecondInstanceFails(t *testing.T) {
 		second := rt.Add("home", "")
 
 		var err error
-		out := output(t, a, func() error { err = cmdShutdown(context.Background(), a, args); return nil })
+		out := output(t, a, func() error { err = cmdShutdown(t.Context(), a, args); return nil })
 		if !errors.Is(err, errShutdownIncomplete) {
 			t.Errorf("args %v: err = %v, want the shutdown incomplete", args, err)
 		}
