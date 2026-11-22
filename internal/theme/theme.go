@@ -47,8 +47,8 @@ type Theme struct {
 	Remote      lipgloss.Style // anything living on another machine
 	Running     lipgloss.Style // an agent or target that is up
 	Idle        lipgloss.Style // an agent at rest
-	Attention   lipgloss.Style // an agent waiting for the user, and errors
-	Warning     lipgloss.Style // a status its command says is near a limit
+	Attention   lipgloss.Style // an agent waiting for the user, errors, and a cache in its last 5 minutes
+	Warning     lipgloss.Style // a status its command says is near a limit, and a cache in its last 20 minutes
 	Border      lipgloss.Style // pane separators
 	Help        lipgloss.Style // every key hint: the legend, a button's key, a target key
 	Frame       lipgloss.Style // the block the whole surface is rendered in
