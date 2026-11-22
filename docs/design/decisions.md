@@ -797,13 +797,13 @@ revier lists the projects; ssh's own failures are told apart by exit 255.
 ### D155 — an agent's one address is its project, its target and its panel
 
 `<project>:<target>:<panel>` names an agent once: the target names the process
-a panel id is unique in, which D75 carried as a ref no one types. The bare
-`<project>:<panel>` failed when two kitty processes held one project; it is
-gone. `<project>` and `<project>:<target>` stay for the default agent (D145).
-The survey labels each agent, an open tab first, so a surface prints what
-`revier agent` resolves; a link's agent goes
-through the target here that shows it (D84). An agent no target holds - a
-link's tab moved away, a terminal attached by hand (D95) - has no address.
+a panel id is unique in (D75). The bare `<project>:<panel>` is gone: two kitty
+processes can hold one project. `<project>` and `<project>:<target>` stay for
+the default agent (D145). The survey labels each agent, an open tab first, so
+a surface prints what `revier agent` resolves; a link's agent goes through the
+target here that shows it (D84). An agent no target holds (D95) has no address.
+A panel of an instance that two non-tab targets match answers to both
+addresses, and the survey prints the first; it never reaches another agent.
 
 ### D157 — the footer names what failed, and the logs screen holds the rest
 
@@ -1174,3 +1174,21 @@ environment, such as an agent that does not start, and the user then fixes it
 and runs the same command again. A mistyped name leaves a file to delete by
 hand. Rejected: removing the file, which also has to undo the mise trust
 without untrusting a directory the user trusted before.
+
+### D198 — a press on an open tab that lost a declared panel only raises it
+
+Supplements D64. The tab is found while any of its panels is open, and a press
+raises it. The press does not run the lost panel again: a panel the user closed
+on purpose would come back, and a re-run needs a new runtime capability and a
+mark for each panel. Closing the tab and pressing again opens every declared
+panel.
+
+### D199 — a window bound after its launch's wait is not placed, and closing a project leaves its late launches
+
+Extends D24 and D190. A window that a late launch or the survey's claim binds
+is not placed: it may have been on screen for minutes, and the user may have
+moved it. Closing one project does not end its late launches. The record is
+also the class hold that stops another project taking the window and the guard
+that stops a second launch. So a late window can still bind to the closed
+project, and a rename or delete waits, for up to ten minutes. A full shutdown
+ends them.

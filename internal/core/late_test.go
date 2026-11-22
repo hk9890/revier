@@ -149,6 +149,34 @@ func TestALateLaunchTakesNoWindowAnotherRuleMatches(t *testing.T) {
 	}
 }
 
+// A window bound after its launch's wait, by a late launch or by the survey's
+// claim, stays where it is: the user may have moved it (decisions.md D199).
+func TestAWindowBoundAfterItsLaunchsWaitIsNotPlaced(t *testing.T) {
+	now := time.Now()
+	launch := state.Launch{Project: "foo", Target: "editor", Class: "^" + ideaClass, At: now}
+	for name, record := range map[string]func(*state.State){
+		"late launch": func(st *state.State) { st.SetAside(launch) },
+		"slot claim":  func(st *state.State) { st.Launch = &launch },
+	} {
+		t.Run(name, func(t *testing.T) {
+			wm := hosttest.New("wm")
+			l := &ledger{}
+			record(&l.st)
+			c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm, Ledger: l}
+			p := ideaProject(t, "foo")
+			p.Targets[0].Window.Place = "right top 75% 100%"
+			projects := []core.Project{p}
+			settleAt(t, c, projects, now)
+
+			w := wm.Add("foo - Main.java", ideaClass)
+			st := settleAt(t, c, projects, now.Add(time.Second))
+			if st.Bound["foo"]["editor"] != w || len(wm.Placements) != 0 {
+				t.Errorf("bound %v, placements %v; want the window bound and not placed", st.Bound, wm.Placements)
+			}
+		})
+	}
+}
+
 // A target's launch past its window is set aside, not lost, and a late
 // launch past LateWindow ends with its line: its window never came.
 func TestALaunchPastItsWindowIsLateThenEnds(t *testing.T) {

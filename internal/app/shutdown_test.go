@@ -103,6 +103,26 @@ func TestACloseKeepsTheIdOfAnAgentItsHarnessNeverFiled(t *testing.T) {
 	}
 }
 
+// A close of one project leaves its late launch: the record is also the class
+// hold and the duplicate guard. A full shutdown ends it (decisions.md D199).
+func TestACloseOfOneProjectKeepsItsLateLaunch(t *testing.T) {
+	for only, want := range map[revier.ProjectName]int{"demo": 1, "": 0} {
+		c, _, report, projects := desktop(t)
+		c.Ledger.Update(func(st *state.State) bool {
+			st.SetAside(state.Launch{Project: "demo", Target: "editor", Class: "^code$", At: time.Now()})
+			return true
+		})
+		req := fullShutdown(c, t.TempDir(), c.ShutdownPlan(report, only, core.ShutdownAll), projects)
+		req.Project = only
+		if _, err := app.Close(t.Context(), req); err != nil {
+			t.Fatalf("%q: Close: %v", only, err)
+		}
+		if got := len(c.Ledger.State().Late); got != want {
+			t.Errorf("%q: late launches = %d, want %d", only, got, want)
+		}
+	}
+}
+
 // A full shutdown on record removes what a surface last saw: it was a clean
 // end, and the file would read as an end with no shutdown once something
 // opened and ended the record. One that is not full leaves it.

@@ -501,6 +501,33 @@ func TestAPanelOfATabInsideHomeIsNotAddressedThroughHome(t *testing.T) {
 	}
 }
 
+// A panel of an instance two non-tab targets match answers to both addresses,
+// the survey prints the first, and neither reaches another agent
+// (decisions.md D155).
+func TestAPanelOfTwoNonTabTargetsAnswersToBothAddresses(t *testing.T) {
+	p := prepared(t, revier.Project{Name: "demo", Path: "/srv/demo", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{Match: revier.Match{Title: "^session:demo$"}}},
+		{Name: "mirror", Runtime: &revier.Realization{Match: revier.Match{Title: "^session:"}}},
+	}})
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:demo", "", agentPanel("2", "idle"), agentPanel("3", "busy"))
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+
+	for _, addr := range []string{"home", "mirror"} {
+		for _, panel := range []revier.PanelID{"2", "3"} {
+			a, err := c.Agent(t.Context(), p, addr+":"+panel.String())
+			if err != nil || a.Panel.ID != panel {
+				t.Errorf("Agent(%s:%s) = %+v, %v; want panel %s", addr, panel, a, err, panel)
+			}
+		}
+	}
+	for _, a := range agentsOf(t, c, p) {
+		if a.Target != "home" {
+			t.Errorf("survey labels panel %s with %s, want the first target, home", a.Panel, a.Target)
+		}
+	}
+}
+
 // A refused tab target places no panel: the survey labels the agent of its
 // open tab as the home's, and that address names it back.
 func TestTheAgentOfARefusedTabIsAddressedAsTheSurveyLabelsIt(t *testing.T) {
