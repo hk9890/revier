@@ -651,9 +651,10 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 		err := opts.Before(saving, r)
 		stop()
 		// Logs "shutdown save" with duration_ms, at Error with err when the
-		// save failed: the shutdown then ends with no "shutdown" line. A save
-		// made before a cancel logs no err: the cancel is "shutdown cancelled"
-		// with walked 0.
+		// save failed: the shutdown then ends with no "shutdown" line. A cancel
+		// during the save can fail it, and is then this Error line alone. A
+		// save made before a cancel logs no err: the cancel is "shutdown
+		// cancelled" with walked 0.
 		logging.Op("shutdown save", saved, err)
 		if err != nil {
 			return nil, err
@@ -709,8 +710,8 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	closed, open, failed := out.Counts()
 	// A cancel stopped something when it left a step unreached, or ended the
 	// wait with a step still listed; one after the last step stopped nothing
-	// else. ctrl+c in the TUI or on revier shutdown cancels (decisions.md
-	// D140). A cancel that stopped something logs "shutdown cancelled" with
+	// else. ctrl+c in the TUI (decisions.md D140) or on revier shutdown
+	// cancels. A cancel that stopped something logs "shutdown cancelled" with
 	// walked of steps; walked equal to steps is a cancel that ended the wait
 	// after the last step. The "shutdown" line still follows.
 	if cancelled() && (len(out) < len(plan) || open > 0) {

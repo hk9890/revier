@@ -201,8 +201,10 @@ func (c *Core) switchPopup(ctx context.Context, windows []revier.Instance, focus
 // it makes current, and duration_ms; at Error with err when the raise
 // failed. A runtime listing that failed writes the line at Error with err
 // and duration_ms alone. A surface that no runtime here lists, or with no
-// Self, writes no line. One whose window the window host cannot pair with
-// it writes the line at Error, with err.
+// Self, writes no line. One whose window the view did not open and the window
+// host cannot pair with it writes the line at Error, with err. A window the
+// view opened that the host never lists writes the Warn of placeShown, then
+// the line at Info: nothing is raised.
 func (c *Core) RaiseSelf(ctx context.Context) error {
 	if c.Self == nil || c.Runtime == nil {
 		return nil

@@ -215,9 +215,9 @@ func (m Model) shutdownKey(msg keyPress) (tea.Model, tea.Cmd) {
 
 // declined writes the closing line of a close left at its confirm unrun, by
 // Esc, No, a raise of the popup or a quit: its survey wrote one, and nothing
-// else ends it. planned false is a survey that had not answered, whose line
-// comes after this one; target is the row a del picked, empty for its
-// project.
+// else ends it. project is empty for a full shutdown. planned false is a
+// survey that had not answered, whose line comes after this one; target is
+// the row a del picked, empty for its project; steps counts the plan.
 func (m *Model) declined() {
 	s := &m.shut
 	if s.step != shutConfirm || s.running {

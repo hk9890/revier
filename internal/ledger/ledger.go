@@ -84,7 +84,8 @@ func (f File) kept() *state.State {
 // with the state it read last, or an empty one when it read none. A file
 // that does not parse is read as an empty state, and its "state load" err
 // says so. The bindings and a shutdown on record are then lost. The next
-// write that changes the state replaces the file.
+// write that changes the state replaces the file. The first read that
+// succeeds after a failure writes "state load: recovered".
 func (f File) State() *state.State {
 	st, err := state.Load(f.Root)
 	logging.Repeat("state load", "state load", err, "root", f.Root)
@@ -103,8 +104,9 @@ func (f File) State() *state.State {
 //
 // A failed update writes "state update" with root and err, through
 // logging.Repeat. A save that failed returns the changed state, which the
-// root does not hold. A file that does not parse logs "state load", as State
-// describes, and the change applies to an empty state.
+// root does not hold. The first update that succeeds after a failure writes
+// "state update: recovered". A file that does not parse logs "state load",
+// as State describes, and the change applies to an empty state.
 func (f File) Update(apply func(*state.State) bool) *state.State {
 	changed := false
 	var before *state.ShutDown

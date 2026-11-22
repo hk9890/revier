@@ -674,9 +674,11 @@ func (c *Core) goTo(ctx context.Context, p Project, name revier.TargetName, boun
 // at Error with err when the press failed. It carries project, target,
 // landed, launched, tabs, ref, resumes, agents, agent_err for an agent tab
 // that did not open, and duration_ms. A press that calls goTo writes the
-// line of that goTo first: a press that goes home writes the line of the way
-// home, and a tab whose workspace is not open writes the line of its
-// workspace. A command target writes its own "go" line (runCommand).
+// line of that goTo first: a way home that is a goTo writes its line, and a
+// tab whose workspace is not open writes the line of its workspace. A second
+// press on a tab inside its home instance calls no goTo: it writes this one
+// line, with landed set to the home. A command target writes its own "go"
+// line (runCommand).
 func (c *Core) goToResuming(ctx context.Context, p Project, name revier.TargetName, bound Bindings, resumes []Resume) (res Result, err error) {
 	start := time.Now()
 	defer func() {
