@@ -14,14 +14,14 @@ the behaviour associated with it.
 |---|---|
 | A new port, or a type crossing the port boundary | `pkg/revier` |
 | Any decision: which realization wins, what matches, when to toggle | `internal/core` |
-| A sequence that crosses project files, checkout, state, sessions or events | `internal/app` (`docs/design/decisions.md` D121) |
+| A sequence that crosses project files, checkout, state, sessions or events | `internal/app` |
 | Speaking to one tool | `internal/adapter/<tool>` |
 | A test fake of a port that a test configures and reads back | `internal/hosttest` |
 | Any other fake, such as a port that fails or blocks | the test files of its package, as [TESTING.md](TESTING.md#conventions) says |
 
-Before a change to a port or to a decision the core makes, search
-[decisions.md](design/decisions.md) for the concept: an entry in force may
-already settle it, or name the alternative it rejected.
+Before a change to a port or to a decision the core makes, read the records in
+[docs/decisions/](decisions/) that bear on it: one may already settle it, or
+name the alternative it rejected.
 
 Keep the project model in `pkg/revier`: `Project`, `Target`, and the types of
 their fields, such as `Command`, `Link` and `HostKind`. It crosses a port: the
@@ -54,7 +54,7 @@ Otherwise every keypress opens another copy. `Realization.Name` exists for hosts
 that assign their own identity — an hc instance's name label, a browser
 `--class`. See `internal/adapter/hc.Host.Open`. A command target has no `Open`
 and no `Match`: its command does the run-or-raise, and the core runs it
-through `Core.Run` (`docs/design/decisions.md` D166).
+through `Core.Run`.
 
 **`Instances` must cost the same whatever the project count.** It runs on every
 TUI refresh, and this repository expects roughly ninety projects.
@@ -75,8 +75,8 @@ Reserve errors for a tool that misbehaved.
 A probe that fails reports `StatusUnknown`. One broken harness must not blank
 the dashboard.
 
-**A refusal disables the smallest thing that is wrong** (`docs/design/decisions.md`
-D85). A rule about one target refuses that target, through
+**A refusal disables the smallest thing that is wrong** (decisions/0085). A
+rule about one target refuses that target, through
 `core.Project.Refuse`; a rule about the project sets `Project.Invalid`; nothing
 refuses the set. Add a rule to `config.validateTargets` unless it is about the
 project as a whole, in which case `config.validateProject`. Both keep the

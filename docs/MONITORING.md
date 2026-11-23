@@ -19,9 +19,8 @@ doc reads what it already did.
   kept, newest first (`internal/logging.Read`). It writes nothing to the log,
   and counts the lines it cannot decode on its rule.
 - A footer error opens that screen on the newest `WARN` or `ERROR` line of the
-  TUI's `pid` at or before the time the footer took the error
-  (`docs/design/decisions.md` D157). That is the error's line only when the
-  error has one:
+  TUI's `pid` at or before the time the footer took the error. That is the
+  error's line only when the error has one:
   - A survey error has no time: the cursor starts on the newest line.
   - An outcome logged at `INFO`, such as `session save: nothing open` or a
     cancelled restore or shutdown, has no line: the cursor starts on an older
@@ -43,7 +42,7 @@ doc reads what it already did.
 - `ERROR` — an operation that failed. An error the TUI showed in its footer that no operation logged has `msg` `tui`.
 - `WARN` — an error revier carried on past: a state file it could not read or save, a probe that reported unknown, a window it could not place or bind.
 - A failure that recurs every refresh — a probe, a host's listing (`instances`), a remote host, the TUI's state file — is one `WARN` per different `err`, then one `INFO` `<msg>: recovered` (`logging.Repeat`). Its `was` is the `err` of the last failed refresh, `last_failed` when that refresh failed, and `failures` how many refreshes failed.
-- Silence after a `WARN` means no refresh of that process succeeded since: it still failed, with an `err` already written, or it did not refresh. A hidden popup does not refresh (`docs/design/decisions.md` D86), so its `recovered` comes at its next raise. Read the end of an outage from `last_failed`, not from the time of the line.
+- Silence after a `WARN` means no refresh of that process succeeded since: it still failed, with an `err` already written, or it did not refresh. A hidden popup does not refresh, so its `recovered` comes at its next raise. Read the end of an outage from `last_failed`, not from the time of the line.
 
 ## Operations
 
@@ -60,7 +59,7 @@ search its comment for the same quoted text, without the closing quote.
 ## The event file
 
 - `$STATE/events.jsonl` holds one JSON line per operation that succeeded in a
-  project, and is never pruned (`docs/design/decisions.md` D112).
+  project, and is never pruned (decisions/0112).
 - Read it with `revier events --days <n>`; `revier events --help` lists the
   fields. `--local` leaves out the linked hosts.
 - A press is in the log and in the event file. Explain a failure from the
@@ -73,7 +72,7 @@ search its comment for the same quoted text, without the closing quote.
 
 - `$STATE/record/YYYY-MM-DD.jsonl` holds one JSON line per thing revier did,
   `by` `did`, with `err` when it failed, and per change a surface's survey
-  saw, `by` `saw`. It is never pruned (`docs/design/decisions.md` D151).
+  saw, `by` `saw`. It is never pruned (decisions/0151).
 - Read it with `revier state --at <time>`: what was open then, per machine.
   `revier state --session <id>` names why each difference between a save and
   what was open when it was made is one; `revier state --help` lists the
@@ -81,12 +80,12 @@ search its comment for the same quoted text, without the closing quote.
 - A `ran` line is a run of a command target that moved the focus, with the
   `host` and `ref` the focus moved to. It is written only when that differs
   from the run on record, and it opens nothing: `revier state` lists it as
-  done and holds no target open for it (`docs/design/decisions.md` D166).
+  done and holds no target open for it.
 - A `saw` line comes from a surface alone: with no TUI or popup running, the
   record holds only what operations did. `revier list` writes no `saw`
   line, only what its prune changed in the state file.
 - A hidden popup surveys nothing unless a launch of its own is still coming
-  up (`docs/design/decisions.md` D86), so it writes no `saw` line until its
+  up, so it writes no `saw` line until its
   next raise. A change made while it was hidden carries the time of that
   raise, not of the change.
 - A popup that wctl's overlay hid logs `popup: hidden by the desktop` when
@@ -94,7 +93,7 @@ search its comment for the same quoted text, without the closing quote.
   minimized; until then it surveys every ten seconds and writes `saw` lines.
   A `popup: raise` line with `minimized=true` follows Esc's hide too. A popup
   that shows a screen, asks a question, such as a delete, or walks a restore
-  or a shutdown logs no such line (`docs/design/decisions.md` D169).
+  or a shutdown logs no such line.
 - A `snapshot` is a whole survey of one scope, this machine or one linked
   host (`machine`): at a surface's first survey, at the first of a day, when
   the project list changed, and at each save, with `saved`. Each other `saw`

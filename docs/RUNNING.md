@@ -92,9 +92,8 @@ Do not run `revier open --attach` here: the attach takes over the shell
 that runs it.
 
 To exercise the agent monitor, use the demo's agent panel. Its state is what
-`claude agents --json` lists for the terminal's pid (`docs/design/decisions.md`
-D57), so put a `claude` first on PATH that lists the files of a scratch
-sessions directory, and write the terminal's file there. hc reads a
+`claude agents --json` lists for the terminal's pid, so put a `claude` first on
+PATH that lists the files of a scratch sessions directory, and write the terminal's file there. hc reads a
 terminal's foreground process about twice a second, so `agentpane` finds a
 new agent a moment after it starts:
 

@@ -38,8 +38,8 @@ Call the Skill tool with `commit-commands:commit` for the standard flow.
 
 - `mise run quality:full` passes — `quality` alone skips the live substrates,
   the only layers that prove an adapter drives its tool.
-- A change to the model is recorded in `docs/design/decisions.md`, as
-  [DOCUMENTING.md](DOCUMENTING.md) says.
+- A decision that passes the standard's three tests is a record in
+  `docs/decisions/`, as [DOCUMENTING.md](DOCUMENTING.md) says.
 - A new host ships the host tests [TESTING.md](TESTING.md) requires.
 - A change to behaviour updates every place that describes it: `README.md`,
   the page of `docs/user-guide/` that covers it, package doc comments, test

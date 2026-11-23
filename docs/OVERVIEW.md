@@ -36,6 +36,7 @@ A findability map: where things live, and how to search for them.
 | `scripts/drive/` | Manual headless driver, on an hc core of its own. |
 | `scripts/release-notes` | One version's `CHANGELOG.md` section, the text of its GitHub release. |
 | `scripts/demo/` | The README's clips, `.github/assets/*.webp`: the recording scripts run here, `guest/` on a VM's GNOME desktop. |
+| `docs/decisions/` | One record per decision in force. |
 | `docs/user-guide/` | The [user guide](user-guide/README.md). The package carries its reference pages (`configuration.md`, `extending/`) into the binary, which `revier assist --reference` prints. |
 | `cmd/revier/` | CLI entry point. Constructs every port's adapter, also calls the `claude` adapter directly, and reads `proc`'s variable names. |
 
@@ -58,7 +59,7 @@ rg 'revier\.(Runtime|View|Host)\b' --type go   # what implements or consumes a t
 rg -l '//go:build live'                   # tests needing a real substrate
 rg 'ErrNo' pkg internal                   # the normal-outcome sentinels
 rg 'func cmd' cmd/revier                  # every CLI command
-rg 'D85\b' docs                           # replace 85 with the cited number: the entry, the design text tagged (D85), and docs/ citations
+rg 'decisions/0085'                       # replace 0085 with the cited number: every citation of that record
 ```
 
 Behaviour is almost never in the adapter named after the tool. Search
