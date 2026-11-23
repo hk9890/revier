@@ -14,8 +14,9 @@ Each section is also the text of its release on the
   out to use that project. `-p :target` still works. `revier new ""` also
   exits `1` and writes no file. An empty `--panel` exits `1` too.
 - **Action required: `revier open ""` now fails with `the project name is
-  empty`.** Before, a script whose variable was empty opened the last project
-  and exited `0`. Leave the argument out to use the usual project.
+  empty`.** Before, a script whose variable was empty opened the project that
+  revier resolved, which may be the wrong one, and exited `0`. Leave the
+  argument out to use that project.
 - **Action required: `revier list --conversations` needs `--json` and no
   `--agents`.** Any other form now ends with a usage error. Before, it ignored
   the flag.
@@ -62,6 +63,8 @@ Each section is also the text of its release on the
   Before, each press opened its own copy, and revier kept track of only one,
   so the agents in the others were invisible. Now the later presses wait and
   raise the workspace the first one opened.
+- **A press on a target that is still launching opens no second copy after you
+  pressed another target.** Before, the second press opened a duplicate window.
 - **A window that opens but cannot take the focus or finish its tabs still
   goes to its configured place.** Before, it stayed where it opened, and later
   presses did not move it.
@@ -69,11 +72,15 @@ Each section is also the text of its release on the
   workspace still runs.** `revier shutdown` names that copy as still open and
   exits `1`, and the next start does not offer a restore. A window that only
   matches a target's rule, such as a personal browser window, does not count.
+  When revier cannot list what runs after the wait, it says `not checked for
+  other instances` and exits `1`. A ctrl+c during the wait, while a closed step
+  is still listed, withdraws the shutdown, so the next start offers no restore.
 - **Action required: `revier agent prompt` exits `7` when the agent does not
   start on the prompt.** A script that relied on exit `0` must handle it. The
   text is in the panel, so check it before you prompt again. Before, the
   command warned and exited `0`, so `revier agent prompt ... && revier agent
-  wait ...` went on as if a turn had run.
+  wait ...` went on as if a turn had run. When the agent exits instead, the
+  command says so and exits `1`.
 - **On a loaded machine, the project pane mirrors the agent that spoke last.**
   Before, the pane could stay on the first agent, and the refresh could slow
   down.
