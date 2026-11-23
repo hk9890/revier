@@ -1,4 +1,4 @@
-# 0151: The state record is a per-machine file apart from usage events.
+# 0151: The state record is kept per machine, apart from usage events.
 
 A failure or a closed window is no use of a project, so usage events cannot hold
 it. An operation records what it did, failed or not, and a surface records what

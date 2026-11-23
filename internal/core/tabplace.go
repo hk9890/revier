@@ -118,7 +118,9 @@ func (p Project) homeTarget() (revier.TargetName, error) {
 // panelTabDir is the directory a tab asked for at req's panel in w starts
 // in: Dir, else for a shell tab, and for every tab outside a workspace, the
 // panel's own; each only while it is a directory. A key passes the directory
-// its terminal names for the panel, which can be one removed since.
+// its terminal names for the panel, which can be one removed since. A shell
+// tab keeps the directory: without it, a tab from a worktree opens in the
+// project.
 func panelTabDir(w Workspace, req TabRequest, outside bool) string {
 	if dirExists(req.Dir) {
 		return req.Dir
@@ -188,8 +190,8 @@ func (c *Core) openPlaced(ctx context.Context, projects []Project, w Workspace, 
 // agent an agent key asks for, or nothing. Every other failure is returned,
 // so the key's own fallback runs; so is an
 // agent that cannot run there, as OutsideKey's agent says. The key sits on the
-// terminal's new-tab chord and most windows are no project's, so a refusal
-// would take the new-tab key from the user's terminal.
+// terminal's new-tab chord and most windows are no project's, so a plain tab
+// there is the result asked for and no failure.
 //
 // Before anything opens, it logs "tab outside a workspace" at Info in place
 // of the "shell new" or "agent new" line, with panel, ref (empty for a

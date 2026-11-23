@@ -314,10 +314,10 @@ func agentLines(th theme.Theme, it agentItem, matches []int, width int, sel, ove
 	prefix := bar + space(1)
 	indent := lipgloss.Width(prefix) + listedStateWidth
 
-	// The state leads, as its glyph alone: the agent list
-	// is sorted by it, and its pane says it in words. The age stands at the
-	// right edge, in a column of its own, so the order within a state reads
-	// down it.
+	// The state leads, as its glyph alone: the agent list is sorted by it,
+	// and its pane says it in words. A word for the ascii glyphs alone would
+	// be a second rule for one row. The age stands at the right edge, in a
+	// column of its own, so the order within a state reads down it.
 	status := it.agent.State.Status
 	state := cell(style(statusStyle(th, status)).Render(statusGlyph(th, status)), listedStateWidth)
 	age := ""

@@ -234,9 +234,11 @@ func (c *Core) settle(st *state.State, r Report, prev []revier.Instance, surveye
 // target's rule, and a launch ends the late one of its own target. It needs
 // no previous listing: a late launch's window may have been listed for
 // minutes, under a title its rule came to match only now. `revier list`
-// logs only WARN and ERROR, so its expiries and binds write no line. A broader
-// rule of another project can take the window first: holding it back would
-// make claim and bind read every late launch's rendered rule.
+// logs only WARN and ERROR, so its expiries and binds write no line. A rule of
+// another target that also matches a window stops this bind, and the launch
+// then ends at LateWindow unless that target takes the window. Holding the
+// window back for the launch would make claim and bind read every late
+// launch's rendered rule.
 func (c *Core) claimLate(st *state.State, r Report, projects []Project, now time.Time, say func(msg string, args ...any)) bool {
 	n := len(st.Late)
 	st.Late = slices.DeleteFunc(st.Late, func(l state.Launch) bool {

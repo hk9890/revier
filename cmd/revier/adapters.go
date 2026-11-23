@@ -78,8 +78,8 @@ func (e hostRemoved) Error() string {
 }
 
 // removedHosts are the runtimes and the views an earlier release had, by
-// kind. herdr is no second host: it is the same
-// makers' product as hc, and gives nothing that hc does not.
+// kind. Keeping herdr beside hc meant a second host and probe to track for
+// the same makers' product. Its interface may come back as a view over hc.
 var removedHosts = map[string][]string{"runtime": {"herdr", "tmux"}, "view": {"tmux"}}
 
 // unknownHost is the error for a name in [hosts] that none of the adapters

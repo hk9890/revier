@@ -86,7 +86,8 @@ var workspaceSocket = regexp.MustCompile(`/revier-kitty-\d+$`)
 // of the window it hides, and of any window opened in it without a name, as
 // one opened by hand. kitty takes a process's `--name` for those, and a
 // workspace's name would make that window a second copy of the workspace.
-// No such window is listed: none is a workspace.
+// No such window is listed: none is a workspace, and pairing them in the
+// core would cost core work for a terminal the user has elsewhere.
 const workspaceName = "revier-kitty"
 
 // openVar is the user var every window an Open or an OpenTab launches carries,

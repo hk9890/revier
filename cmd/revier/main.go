@@ -230,8 +230,8 @@ func logCommand(start time.Time, args []string, err error, status int) {
 // costs the record, not the command.
 //
 // `list` records only what went wrong. A surface with a linked project runs
-// `revier list` on that host every refresh (decisions/0040), one process a
-// second, so its successes would bury the host's own log.
+// `revier list` on that host every few seconds (decisions/0040), so its
+// successes would bury the host's own log.
 func openLog(args []string) {
 	cmd := "tui"
 	if len(args) > 0 {

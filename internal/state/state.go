@@ -51,6 +51,9 @@ type State struct {
 	// launch replaced it, or it passed its window. A cold application opens
 	// its windows minutes late and in any order, so each is kept for
 	// LateWindow and bound to the one window its full rule alone matches.
+	// Closing a project keeps its late launches: each is also the class hold
+	// that stops another project taking the window, and the guard against a
+	// second launch. So a late window can still bind to the closed project.
 	Late []Launch `json:"late,omitempty"`
 
 	// ShutDown is the full shutdown on record, until anything opens again:

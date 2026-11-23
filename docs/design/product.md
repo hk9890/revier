@@ -201,6 +201,4 @@ The mechanism is portable. An individual target may not be, and its config says
 so by which realizations it declares.
 
 A mistake in the configuration degrades the same way: what is wrong is
-disabled, and nothing above it is (decisions/0085). A rule about one target
-disables that target, a rule about the project disables that project, and
-neither disables the rest. What is disabled stays listed with its reason.
+disabled, and nothing above it is (decisions/0085).

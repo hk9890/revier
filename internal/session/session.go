@@ -79,7 +79,8 @@ const (
 	ReasonShutdown Reason = "shutdown"
 	// ReasonProjectClosed is the save made before one project is closed.
 	// It is not what a plain restore opens: a run of closes leaves the
-	// smallest set as the newest save.
+	// smallest set as the newest save. A plain restore neither falls back
+	// to it nor guesses a run of closes from sets that shrink.
 	ReasonProjectClosed Reason = "project-closed"
 	// ReasonSaved is a save asked for by hand.
 	ReasonSaved Reason = "saved"

@@ -13,8 +13,9 @@ import (
 )
 
 // A shared target is a [[target]] table in config.toml. Every project file
-// that is not a link gets it, merged with the project's own target of the
-// same name (decisions/0059). The merge is on the tables as TOML decoded
+// gets it, merged with the project's own target of the same name
+// (decisions/0059). A local project takes its local part, and a link its
+// remote part (decisions/0082). The merge is on the tables as TOML decoded
 // them, not on revier.Target, because a decoded struct cannot tell a field
 // the project left out from one it set to its zero value.
 //

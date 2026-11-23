@@ -136,7 +136,7 @@ func warnState(err error) {
 // main configuration.
 //
 // `list` is left out, for the reason openLog leaves it out of the log: a
-// surface with a linked project runs it on that host every refresh
+// surface with a linked project runs it on that host every few seconds
 // (decisions/0040), and a configuration problem is the same on every one of
 // those runs. Its own output already marks the projects concerned.
 func warnProblems(cfg *config.Config, projects []core.Project) {
