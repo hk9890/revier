@@ -40,8 +40,9 @@ Each section is also the text of its release on the
   project's new window for its own.**
 - **`revier go` names the tab it reached**, as in `demo: agent in home (...)`.
   Before, it named only the home.
-- **`revier doctor` gives the rename that fixes a refused project name.** The
-  name is quoted, so you can paste the line into a shell.
+- **`revier doctor` gives the rename that fixes a refused project name.** It
+  quotes the old name for the shell. Replace `<new name>` with the name you
+  want. A name with a control character gets no such line.
 - **The TUI footer offers no row keys when the filter matches no project.**
   Before, it offered keys that did nothing.
 - **`revier agent` refusals say what is wrong.** A negative `--lines` names the
@@ -63,8 +64,9 @@ Each section is also the text of its release on the
   Before, each press opened its own copy, and revier kept track of only one,
   so the agents in the others were invisible. Now the later presses wait and
   raise the workspace the first one opened.
-- **A press on a target that is still launching opens no second copy after you
-  pressed another target.** Before, the second press opened a duplicate window.
+- **A press on a target in the first minute of its launch opens no second copy,
+  also after you pressed another target.** Before, that press opened a
+  duplicate window.
 - **A window that opens but cannot take the focus or finish its tabs still
   goes to its configured place.** Before, it stayed where it opened, and later
   presses did not move it.
@@ -72,8 +74,9 @@ Each section is also the text of its release on the
   workspace still runs.** `revier shutdown` names that copy as still open and
   exits `1`, and the next start does not offer a restore. A window that only
   matches a target's rule, such as a personal browser window, does not count.
-  When revier cannot list what runs after the wait, it says `not checked for
-  other instances` and exits `1`. A ctrl+c during the wait, while a closed step
+  When the terminal host cannot list after the wait and no step on it failed
+  or stayed open, revier says `not checked for other instances` and exits `1`.
+  A ctrl+c during the wait, while a closed step
   is still listed, withdraws the shutdown, so the next start offers no restore.
 - **Action required: `revier agent prompt` exits `7` when the agent does not
   start on the prompt.** A script that relied on exit `0` must handle it. The
