@@ -12,7 +12,44 @@ Each section is also the text of its release on the
   `--project=` and `-p ":"` exit `1` and name the flag. Before, they acted on
   the project of the current directory, which may be the wrong one. Leave `-p`
   out to use that project. `-p :target` still works. `revier new ""` also
-  exits `1` and writes no file.
+  exits `1` and writes no file. An empty `--panel` exits `1` too.
+- **Action required: `revier open ""` now fails with `the project name is
+  empty`.** Before, a script whose variable was empty opened the project that
+  revier resolved, which may be the wrong one, and exited `0`. Leave the
+  argument out to use that project.
+- **Action required: `revier list --conversations` needs `--json` and no
+  `--agents`.** Any other form now ends with a usage error. Before, it ignored
+  the flag.
+- **Action required: `revier agent prompt` refuses an empty or blank prompt.**
+  Before, it sent an Enter that started no turn and exited `0`. Use `revier
+  agent send-keys` to send an Enter.
+- **Action required: a panel in a tab has one address, the one with the tab's
+  target.** `shop:home:8` for a panel in the tab `agent` now fails, and the
+  error gives the address to use, `shop:agent:8`.
+- **Action required: a release archive now holds `LICENSE` and
+  `third_party_licenses/` beside the binary.** If you install with `tar`, add
+  `revier` to the command, as in `tar -xzf <file> -C ~/.local/bin revier`, or
+  these files land in that directory too. When root extracts an archive, root
+  now owns the files. Before, they kept the user id of the release build.
+- **An agent's cache minutes turn yellow at 20 and red at 5.** Before, they
+  turned yellow only in the last 5, too late to reach the agent in time.
+- **A rename or delete waits for a late launch of the project.** It is refused
+  and names the target until the window appears or the launch expires. Before,
+  the rename went through and revier then lost track of that window.
+- **An action that you start just after its project opened no longer takes the
+  project's new window for its own.**
+- **`revier go` names the tab it reached**, as in `demo: agent in home (...)`.
+  Before, it named only the home.
+- **`revier doctor` gives the rename that fixes a refused project name.** It
+  quotes the old name for the shell. Replace `<new name>` with the name you
+  want. A name with a control character gets no such line.
+- **The TUI footer offers no row keys when the filter matches no project.**
+  Before, it offered keys that did nothing.
+- **`revier agent` refusals say what is wrong.** A negative `--lines` names the
+  flag. A shell panel is refused as a shell, not an agent, without the false
+  claim that the text would run as a command.
+- **A status of Claude Code that revier does not know now writes a warning to
+  the logs.** Before, the agent showed `unknown` with no line to explain it.
 - **`revier new` says when the project name differs from the directory name.**
   In a directory called `sp ace`, it prints both `sp ace` and `sp_ace`.
 - **When `revier open <new name>` fails after it created the project, the error
@@ -27,6 +64,9 @@ Each section is also the text of its release on the
   Before, each press opened its own copy, and revier kept track of only one,
   so the agents in the others were invisible. Now the later presses wait and
   raise the workspace the first one opened.
+- **A press on a target in the first minute of its launch opens no second copy,
+  also after you pressed another target.** Before, that press opened a
+  duplicate window.
 - **A window that opens but cannot take the focus or finish its tabs still
   goes to its configured place.** Before, it stayed where it opened, and later
   presses did not move it.
@@ -34,11 +74,16 @@ Each section is also the text of its release on the
   workspace still runs.** `revier shutdown` names that copy as still open and
   exits `1`, and the next start does not offer a restore. A window that only
   matches a target's rule, such as a personal browser window, does not count.
+  When the terminal host cannot list after the wait and no step on it failed
+  or stayed open, revier says `not checked for other instances` and exits `1`.
+  A ctrl+c during the wait, while a closed step
+  is still listed, withdraws the shutdown, so the next start offers no restore.
 - **Action required: `revier agent prompt` exits `7` when the agent does not
   start on the prompt.** A script that relied on exit `0` must handle it. The
   text is in the panel, so check it before you prompt again. Before, the
   command warned and exited `0`, so `revier agent prompt ... && revier agent
-  wait ...` went on as if a turn had run.
+  wait ...` went on as if a turn had run. When the agent exits instead, the
+  command says so and exits `1`.
 - **On a loaded machine, the project pane mirrors the agent that spoke last.**
   Before, the pane could stay on the first agent, and the refresh could slow
   down.
