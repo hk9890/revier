@@ -64,6 +64,25 @@ func agentDesktop(t *testing.T, status revier.Status) (*app, *hosttest.FakeRunti
 	return a, rt
 }
 
+// An agent held idle has the text in its panel and starts no turn: the
+// command fails with the status of its own, so `prompt && wait` stops there.
+func TestAgentPromptToAnAgentThatStaysIdleExitsSeven(t *testing.T) {
+	a, rt := agentDesktop(t, revier.StatusIdle)
+	a.core.Poll = time.Millisecond
+	open := func(context.Context, io.Writer) (*app, error) { return a, nil }
+
+	err := agentPrompt(io.Discard, []string{"demo:home:2", "hello"}, open)
+	if !errors.Is(err, core.ErrStillIdle) {
+		t.Fatalf("err = %v, want core.ErrStillIdle", err)
+	}
+	if status, say := outcome(err); status != 7 || say {
+		t.Errorf("outcome = %d, %v; want 7 and no second message after the warning", status, say)
+	}
+	if len(rt.Sent) != 2 || rt.Sent[0].Text != "hello" || rt.Sent[1].Text != "\r" {
+		t.Errorf("sent = %+v, want the text and its Enter delivered", rt.Sent)
+	}
+}
+
 // closeAgent runs `revier agent close` on the app, and returns what it
 // printed and its error.
 func closeAgent(a *app, address string, force bool) (string, error) {
@@ -327,4 +346,32 @@ func TestATabFromADirOpensInItsProject(t *testing.T) {
 	if len(rt.Tabs) != 1 || rt.Tabs[0].Ref != home {
 		t.Errorf("tabs = %+v, want one in %v", rt.Tabs, home)
 	}
+}
+
+// An agent that exits on the prompt fails as a gone agent, not as exit 7: no
+// panel is left to check before a second prompt.
+func TestAgentPromptToAnAgentThatExitsIsNoExitSeven(t *testing.T) {
+	a, rt := agentDesktop(t, revier.StatusIdle)
+	a.core.Poll = time.Millisecond
+	a.core.Runtime = goneAfterEnter{rt}
+	open := func(context.Context, io.Writer) (*app, error) { return a, nil }
+
+	err := agentPrompt(io.Discard, []string{"demo:home:2", "hello"}, open)
+	if !errors.Is(err, core.ErrAgentGone) {
+		t.Fatalf("err = %v, want core.ErrAgentGone", err)
+	}
+	if status, say := outcome(err); status != 1 || !say {
+		t.Errorf("outcome = %d, %v; want 1 and the message", status, say)
+	}
+}
+
+// goneAfterEnter is a runtime whose agent exits on the Enter of a prompt.
+type goneAfterEnter struct{ *hosttest.FakeRuntime }
+
+func (g goneAfterEnter) SendText(ctx context.Context, ref revier.TargetRef, panel revier.PanelID, text string) error {
+	err := g.FakeRuntime.SendText(ctx, ref, panel, text)
+	if text == "\r" {
+		g.Remove(ref)
+	}
+	return err
 }

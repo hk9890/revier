@@ -103,6 +103,26 @@ func TestACloseKeepsTheIdOfAnAgentItsHarnessNeverFiled(t *testing.T) {
 	}
 }
 
+// A close of one project leaves its late launch: the record is also the class
+// hold and the duplicate guard. A full shutdown ends it (decisions.md D199).
+func TestACloseOfOneProjectKeepsItsLateLaunch(t *testing.T) {
+	for only, want := range map[revier.ProjectName]int{"demo": 1, "": 0} {
+		c, _, report, projects := desktop(t)
+		c.Ledger.Update(func(st *state.State) bool {
+			st.SetAside(state.Launch{Project: "demo", Target: "editor", Class: "^code$", At: time.Now()})
+			return true
+		})
+		req := fullShutdown(c, t.TempDir(), c.ShutdownPlan(report, only, core.ShutdownAll), projects)
+		req.Project = only
+		if _, err := app.Close(t.Context(), req); err != nil {
+			t.Fatalf("%q: Close: %v", only, err)
+		}
+		if got := len(c.Ledger.State().Late); got != want {
+			t.Errorf("%q: late launches = %d, want %d", only, got, want)
+		}
+	}
+}
+
 // A full shutdown on record removes what a surface last saw: it was a clean
 // end, and the file would read as an end with no shutdown once something
 // opened and ended the record. One that is not full leaves it.
@@ -489,5 +509,129 @@ func TestAnAbandonTakesTheRecordBackOnlyWhenAStepWasNotReached(t *testing.T) {
 		if want := at == len(plan); onRecord != want || shutDownOnRecord(c) != want {
 			t.Errorf("abandoned after %d of %d steps: on record %v, then %v; want %v", at, len(plan), onRecord, shutDownOnRecord(c), want)
 		}
+	}
+}
+
+// A full shutdown that leaves an instance its plan did not name takes its
+// record back, so the next start offers no restore over what still runs.
+func TestAFullShutdownThatLeavesAnUnplannedInstanceIsNotRecorded(t *testing.T) {
+	c, rt, _, projects := desktop(t)
+	rt.Add("session:demo", "kitty")
+	report := surveyed(t, c, projects)
+
+	res, err := app.Close(t.Context(), fullShutdown(c, t.TempDir(), c.ShutdownPlan(report, "", core.ShutdownAll), projects))
+	if err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if _, open, _ := res.Closed.Counts(); open != 1 {
+		t.Errorf("result = %+v, want the extra instance still open", res.Closed)
+	}
+	if res.Recorded || shutDownOnRecord(c) {
+		t.Errorf("recorded %v, on record %v; want the record taken back", res.Recorded, shutDownOnRecord(c))
+	}
+}
+
+// A window a target's loose rule also matches is no second workspace: the
+// full shutdown stays on record.
+func TestAFullShutdownThatLeavesAMatchingWindowIsRecorded(t *testing.T) {
+	wm := hosttest.New("wm")
+	wm.Add("work", "firefox")
+	wm.Add("personal", "firefox")
+	c := &core.Core{Window: wm, Ledger: &ledger{}}
+	projects := []core.Project{core.PrepareProject(revier.Project{Name: "demo", Path: "/src/demo", Targets: []revier.Target{
+		{Name: "browser", Home: true, Window: &revier.Realization{Launch: []string{"firefox"}, Match: revier.Match{Class: "firefox"}}},
+	}})}
+	plan := c.ShutdownPlan(surveyed(t, c, projects), "", core.ShutdownAll)
+
+	res, err := app.Close(t.Context(), fullShutdown(c, t.TempDir(), plan, projects))
+	if err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if !res.Recorded || !shutDownOnRecord(c) {
+		t.Errorf("recorded %v, on record %v in %+v; want the record kept", res.Recorded, shutDownOnRecord(c), res.Closed)
+	}
+}
+
+// A cancel that ends the wait with a step still listed skips the check for a
+// second copy, so the full shutdown does not stay on record unchecked.
+func TestACancelThatEndsTheWaitWithdrawsTheRecord(t *testing.T) {
+	c, rt, report, projects := desktop(t)
+	plan := c.ShutdownPlan(report, "", core.ShutdownAll)
+	rt.Refuses = map[string]bool{plan[len(plan)-1].Ref.ID: true}
+	req := fullShutdown(c, t.TempDir(), plan, projects)
+	req.Wait = time.Minute
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	req.Progress = func(p core.Progress) {
+		if p.Phase == core.PhaseWait {
+			cancel()
+		}
+	}
+
+	if _, err := app.Close(ctx, req); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if shutDownOnRecord(c) {
+		t.Error("the shutdown stayed on record with its check for a second copy skipped")
+	}
+}
+
+// closeless is a window host that cannot close what it lists.
+type closeless struct{ revier.WindowController }
+
+// A step no host can close does not skip the check on a cancel: a second copy
+// still takes the full shutdown off the record.
+func TestACancelWithAStepNoHostClosesStillChecksForASecondCopy(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:demo", "kitty")
+	rt.Add("session:demo", "kitty")
+	wm := hosttest.New("wm")
+	wm.Add("work", "firefox")
+	c := &core.Core{Runtime: rt, View: rt, Window: closeless{wm}, Ledger: &ledger{}}
+	projects := []core.Project{core.PrepareProject(revier.Project{Name: "demo", Path: "/src/demo", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "session:demo", Match: revier.Match{Title: "^session:demo$"}}},
+		{Name: "browser", Window: &revier.Realization{Launch: []string{"firefox"}, Match: revier.Match{Class: "firefox"}}},
+	}})}
+	plan := c.ShutdownPlan(surveyed(t, c, projects), "", core.ShutdownAll)
+	req := fullShutdown(c, t.TempDir(), plan, projects)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	req.Progress = func(p core.Progress) {
+		if p.Phase == core.PhaseWait {
+			cancel()
+		}
+	}
+
+	if _, err := app.Close(ctx, req); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if shutDownOnRecord(c) {
+		t.Error("the shutdown stayed on record with a second copy open")
+	}
+}
+
+// A second ctrl+c during the wait quits before the check for a second copy,
+// so the record does not outlive the surface unchecked.
+func TestAnAbandonDuringTheWaitWithdrawsTheRecord(t *testing.T) {
+	c, _, report, projects := desktop(t)
+	plan := c.ShutdownPlan(report, "", core.ShutdownAll)
+	req := fullShutdown(c, t.TempDir(), plan, projects)
+	req.Record = app.NewShutdownRecord(c, req.StateRoot)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	var onRecord bool
+	req.Progress = func(p core.Progress) {
+		if p.Phase == core.PhaseWait {
+			cancel()
+			req.Record.Abandon()
+			onRecord = shutDownOnRecord(c)
+		}
+	}
+
+	if _, err := app.Close(ctx, req); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if onRecord {
+		t.Error("the abandoned shutdown stayed on record with its check for a second copy not run")
 	}
 }

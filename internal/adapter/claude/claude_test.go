@@ -280,20 +280,85 @@ func TestInspectDoesNotKeepARunItsCallerCancelled(t *testing.T) {
 	}
 }
 
-// The error of a run the caller's context cut short is the context's, though
-// the command killed at the deadline says only that it was killed: the core
-// tells a cut read from a read that failed by it.
-func TestDetailOfARunItsCallerCutIsTheContextsError(t *testing.T) {
-	run := func(context.Context) ([]byte, error) {
-		return nil, errors.New("claude agents --json: signal: killed")
-	}
-	p := &claude.Probe{SessionsDir: filepath.Join(t.TempDir(), "absent")}
-	p.SetAgents(run)
+// Detail reads the listing Inspect keeps and never runs the command: with
+// none kept it says so, and a second read takes the kept answer without a
+// second run.
+func TestDetailReadsTheKeptListingAndRunsNone(t *testing.T) {
+	root := t.TempDir()
+	src := &counted{out: `[{"pid": 101, "sessionId": "s1", "status": "idle"}]`}
+	p := &claude.Probe{SessionsDir: filepath.Join(root, "sessions")}
+	p.SetAgents(src.agents)
+	writeTranscript(t, root, "-demo", "s1", said("the last word"))
 
-	cancelled, cancel := context.WithCancel(t.Context())
-	cancel()
-	if _, err := p.Detail(cancelled, revier.Panel{PID: 101}); !errors.Is(err, context.Canceled) || !strings.Contains(err.Error(), "signal: killed") {
-		t.Errorf("Detail = %v, want the context's error with the command's", err)
+	if _, err := p.Detail(t.Context(), revier.Panel{PID: 101}); !errors.Is(err, revier.ErrDetailPending) {
+		t.Fatalf("Detail with no listing kept = %v, want revier.ErrDetailPending", err)
+	}
+	if src.runs != 0 {
+		t.Fatalf("Detail ran the listing %d times, want none", src.runs)
+	}
+	inspect(t, p, 101)
+	for range 2 {
+		if d, err := p.Detail(t.Context(), revier.Panel{PID: 101}); err != nil || d.Message != "the last word" {
+			t.Fatalf("Detail = %+v, %v; want the message", d, err)
+		}
+	}
+	if src.runs != 1 {
+		t.Errorf("the listing ran %d times, want Inspect's one", src.runs)
+	}
+}
+
+// A listing that outlasts any detail read's bound still ends and is kept, and
+// a read while it runs neither waits for it nor takes the lock Inspect holds.
+func TestDetailDoesNotWaitForTheListingARunningInspectHolds(t *testing.T) {
+	root := t.TempDir()
+	started, release := make(chan struct{}), make(chan struct{})
+	p := &claude.Probe{SessionsDir: filepath.Join(root, "sessions")}
+	p.SetAgents(func(context.Context) ([]byte, error) {
+		close(started)
+		<-release
+		return []byte(`[{"pid": 101, "sessionId": "s1", "status": "idle"}]`), nil
+	})
+	writeTranscript(t, root, "-demo", "s1", said("the last word"))
+	inspected := make(chan error, 1)
+	go func() {
+		_, err := p.Inspect(t.Context(), revier.Panel{PID: 101})
+		inspected <- err
+	}()
+	<-started
+
+	read := make(chan error, 1)
+	go func() {
+		_, err := p.Detail(t.Context(), revier.Panel{PID: 101})
+		read <- err
+	}()
+	select {
+	case err := <-read:
+		if !errors.Is(err, revier.ErrDetailPending) {
+			t.Errorf("Detail during the listing = %v, want revier.ErrDetailPending", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("Detail waited for the listing Inspect is running")
+	}
+	close(release)
+	if err := <-inspected; err != nil {
+		t.Fatal(err)
+	}
+	if d, err := p.Detail(t.Context(), revier.Panel{PID: 101}); err != nil || d.Message != "the last word" {
+		t.Errorf("Detail after the listing = %+v, %v; want the message", d, err)
+	}
+}
+
+// A listing that failed is kept as failed: Detail names its error, so `revier
+// agent read` still says why, and is pending rather than a broken transcript.
+func TestDetailOfAFailedListingIsPendingWithItsError(t *testing.T) {
+	p := &claude.Probe{SessionsDir: filepath.Join(t.TempDir(), "absent")}
+	p.SetAgents(agents("", errors.New("exec: claude: not found")))
+	if _, err := p.Inspect(t.Context(), revier.Panel{PID: 101}); err == nil {
+		t.Fatal("Inspect returned no error")
+	}
+	_, err := p.Detail(t.Context(), revier.Panel{PID: 101})
+	if !errors.Is(err, revier.ErrDetailPending) || !strings.Contains(err.Error(), "claude: not found") {
+		t.Errorf("Detail = %v, want pending with the listing's error", err)
 	}
 }
 

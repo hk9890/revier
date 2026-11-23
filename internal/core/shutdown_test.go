@@ -3,8 +3,10 @@
 package core_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -1099,5 +1101,159 @@ func TestShutdownStopsWhenTheCallerCancelledBeforeIt(t *testing.T) {
 	}
 	if len(out) != 0 || len(rt.Closed) != 0 || len(rt.ClosedPanels) != 0 || len(wm.Closed) != 0 {
 		t.Errorf("walked %d steps, closed %v, %v, %v; want the cancel to stop the walk before any close", len(out), rt.Closed, rt.ClosedPanels, wm.Closed)
+	}
+}
+
+// twoHomes is one project whose home rule matches two live instances, as two
+// concurrent presses left them, and the second instance's ref.
+func twoHomes(t *testing.T) (*core.Core, *hosttest.FakeRuntime, []core.Project, revier.TargetRef) {
+	t.Helper()
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:demo", "kitty", revier.Panel{ID: "1", Kind: revier.PanelShell})
+	second := rt.Add("session:demo", "kitty", revier.Panel{ID: "2", Kind: revier.PanelShell})
+	projects := []core.Project{prepared(t, revier.Project{Name: "demo", Path: "/p", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{Name: "session:demo", Match: revier.Match{Title: "^session:demo$"}}},
+	}})}
+	return &core.Core{Runtime: rt, View: rt}, rt, projects, second
+}
+
+// A second live instance of a shut target has no step, and still counts as
+// open: the shutdown names it, closes nothing the plan did not name, and logs
+// one WARN with its project, target and ref. Forcing changes none of it.
+func TestAShutdownCountsAnInstanceItsPlanDidNotNameAsOpen(t *testing.T) {
+	for _, force := range []bool{false, true} {
+		c, rt, projects, second := twoHomes(t)
+		var logged bytes.Buffer
+		was := slog.Default()
+		slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
+		t.Cleanup(func() { slog.SetDefault(was) })
+		plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+		if len(plan) != 1 {
+			t.Fatalf("plan = %+v, want one step", plan)
+		}
+
+		out, err := c.Shutdown(t.Context(), plan, 0, core.ShutdownOpts{Projects: projects, Force: force})
+		if err != nil {
+			t.Fatalf("Shutdown: %v", err)
+		}
+		if closed, open, failed := out.Counts(); closed != 1 || open != 1 || failed != 0 {
+			t.Errorf("force %v: counts = %d closed, %d open, %d failed; want 1, 1, 0", force, closed, open, failed)
+		}
+		if len(out) != 2 || out[1].Action != core.CloseUnplanned || out[1].Ref != second || out[0].Ref == second {
+			t.Errorf("force %v: result = %+v, want the second instance reported last", force, out)
+		}
+		if len(rt.Closed) != 1 {
+			t.Errorf("force %v: closed %v, want the planned step alone", force, rt.Closed)
+		}
+		line := logged.String()
+		if strings.Count(line, "shutdown: instance left open") != 1 || !strings.Contains(line, "level=WARN") ||
+			!strings.Contains(line, "project=demo") || !strings.Contains(line, "target=home") || !strings.Contains(line, second.ID) {
+			t.Errorf("force %v: log = %q, want one WARN naming project, target and ref", force, line)
+		}
+	}
+}
+
+// A shutdown of the agents or the targets alone, and the close of one row,
+// leave instances open on purpose: none of them reports what stays.
+func TestACloseThatIsNotWholeReportsNoExtraInstance(t *testing.T) {
+	c, _, _, projects := openDesktop(t, revier.StatusIdle)
+	r := survey(t, c, projects, nil)
+	for name, plan := range map[string][]core.CloseStep{
+		"agents":  c.ShutdownPlan(r, "", core.ShutdownAgents),
+		"targets": c.ShutdownPlan(r, "", core.ShutdownTargets),
+		"row":     c.ClosePlan(r, "revier", core.CloseRow{Target: "notes"}),
+	} {
+		out, err := c.Shutdown(t.Context(), plan, 0, reading(projects))
+		if err != nil {
+			t.Fatalf("%s: Shutdown: %v", name, err)
+		}
+		if slices.ContainsFunc(out, func(res core.CloseResult) bool { return res.Action == core.CloseUnplanned }) {
+			t.Errorf("%s: result = %+v, want no extra instance", name, out)
+		}
+	}
+}
+
+// An instance another project holds stays open for it, also when the shut
+// project's rule matches it too.
+func TestAShutdownOfOneProjectDoesNotReportWhatAnotherHolds(t *testing.T) {
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:one", "kitty", revier.Panel{ID: "1", Kind: revier.PanelShell})
+	rt.Add("session:two", "kitty", revier.Panel{ID: "2", Kind: revier.PanelShell})
+	c := &core.Core{Runtime: rt, View: rt}
+	projects := []core.Project{
+		prepared(t, revier.Project{Name: "one", Path: "/one", Targets: []revier.Target{
+			{Name: "home", Home: true, Runtime: &revier.Realization{Name: "session:one", Match: revier.Match{Title: "^session:"}}},
+		}}),
+		prepared(t, revier.Project{Name: "two", Path: "/two", Targets: []revier.Target{
+			{Name: "home", Home: true, Runtime: &revier.Realization{Name: "session:two", Match: revier.Match{Title: "^session:two$"}}},
+		}}),
+	}
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "one", core.ShutdownAll)
+
+	out, err := c.Shutdown(t.Context(), plan, 0, reading(projects))
+	if err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	if _, open, _ := out.Counts(); open != 0 {
+		t.Errorf("result = %+v, want nothing reported as open", out)
+	}
+}
+
+// failsLater is a runtime whose listing fails from a given call on, so the
+// wait reads a good listing and the check after it does not.
+type failsLater struct {
+	*hosttest.FakeRuntime
+	calls, from *atomic.Int32
+}
+
+func (f failsLater) Instances(ctx context.Context) ([]revier.Instance, error) {
+	if f.calls.Add(1) >= f.from.Load() {
+		return nil, errors.New("went away")
+	}
+	return f.FakeRuntime.Instances(ctx)
+}
+
+// A check that could not list says nothing of what is left, so the shutdown
+// is not complete even though every step of its plan went.
+func TestAShutdownWhoseLastListingFailsIsNotComplete(t *testing.T) {
+	_, rt, projects, _ := twoHomes(t)
+	host := failsLater{FakeRuntime: rt, calls: &atomic.Int32{}, from: &atomic.Int32{}}
+	host.from.Store(1 << 30)
+	c := &core.Core{Runtime: host, View: host}
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+	rt.OnClose = func(revier.TargetRef) { host.from.Store(host.calls.Load() + 2) }
+
+	out, err := c.Shutdown(t.Context(), plan, 0, reading(projects))
+	if err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	last := out[len(out)-1]
+	if closed, open, _ := out.Counts(); closed != 1 || open != 1 || last.Action != core.CloseUnplanned ||
+		!strings.Contains(last.Note(), "not checked") {
+		t.Errorf("result = %+v, want the step closed and the check reported as not made", out)
+	}
+}
+
+// A window of the user's that a target's loose class rule also matches is no
+// second workspace: a full shutdown does not count it, and leaves it alone.
+func TestAShutdownDoesNotCountAWindowItsRuleAlsoMatches(t *testing.T) {
+	wm := hosttest.New("wm")
+	wm.Add("work", "firefox")
+	personal := wm.Add("personal", "firefox")
+	c := &core.Core{Window: wm}
+	projects := []core.Project{prepared(t, revier.Project{Name: "demo", Path: "/p", Targets: []revier.Target{
+		{Name: "browser", Home: true, Window: &revier.Realization{Launch: []string{"firefox"}, Match: revier.Match{Class: "firefox"}}},
+	}})}
+	plan := c.ShutdownPlan(survey(t, c, projects, nil), "", core.ShutdownAll)
+
+	out, err := c.Shutdown(t.Context(), plan, 0, reading(projects))
+	if err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	if closed, open, failed := out.Counts(); closed != 1 || open != 0 || failed != 0 {
+		t.Errorf("counts = %d closed, %d open, %d failed in %+v; want the step closed alone", closed, open, failed, out)
+	}
+	if slices.Contains(wm.Closed, personal) {
+		t.Errorf("closed %v, want the personal window left", wm.Closed)
 	}
 }

@@ -333,8 +333,7 @@ func (c *Core) ActivateWaiting(ctx context.Context, p Project, name revier.Targe
 }
 
 func (c *Core) activateWaiting(ctx context.Context, p Project, name revier.TargetName, resumes []Resume, raise bool) (revier.TargetRef, Result, error) {
-	st := c.state()
-	res, err := c.activate(ctx, p, name, st, resumes)
+	res, err := c.activate(ctx, p, name, resumes)
 	if res.Ran && err == nil {
 		c.update(func(st *state.State) { st.RanCommand(p.Name, res.Target, res.Focused) })
 	}
@@ -343,23 +342,13 @@ func (c *Core) activateWaiting(ctx context.Context, p Project, name revier.Targe
 		c.raiseNew(ctx, res)
 	}
 	if res.Launched && ref.IsZero() && err == nil {
-		at := time.Now()
-		var class string
-		if t, ok := p.Target(res.Target); ok && t.Window != nil {
-			class = t.Window.Match.Class
-		}
-		var replaced *state.Launch
-		c.update(func(st *state.State) { replaced = st.Launched(p.Name, res.Target, class, at) })
-		LogReplacedLaunch(replaced, p.Name, res.Target, at)
 		var inst revier.Instance
 		var ok bool
 		inst, ok, err = c.bindWindow(ctx, p, res.Target, res.Before, BindWait, raise)
 		if ok {
 			ref = inst.Ref
+			c.update(func(st *state.State) { st.Landed(p.Name, res.Target, ref) })
 		}
-	}
-	if !ref.IsZero() {
-		c.update(func(st *state.State) { st.Landed(p.Name, res.Target, ref) })
 	}
 	return ref, res, err
 }

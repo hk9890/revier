@@ -660,7 +660,7 @@ type Result struct {
 // activation records Result.Ref there afterwards, so the next press needs no
 // rule.
 func (c *Core) goTo(ctx context.Context, p Project, name revier.TargetName, bound Bindings) (Result, error) {
-	return c.goToResuming(ctx, p, name, bound, nil)
+	return c.goToResuming(ctx, p, name, bound, nil, false)
 }
 
 // goToResuming is goTo with the agent panels of a launch started on the
@@ -668,7 +668,9 @@ func (c *Core) goTo(ctx context.Context, p Project, name revier.TargetName, boun
 // continuation rather than an empty one. It is goTo in every other respect,
 // toggle-back included, and resumes apply only to the run half: a target
 // already up is raised as it stands, because the agent in it is already the
-// one the recording named.
+// one the recording named. raiseOnly is a press that waited for another
+// press's lock: it raises what it finds and never toggles back (decisions.md
+// D195).
 //
 // Every call is one "go" line of the log when run-or-raise ends: at Info, or
 // at Error with err when the press failed. It carries project, target,
@@ -679,22 +681,22 @@ func (c *Core) goTo(ctx context.Context, p Project, name revier.TargetName, boun
 // press on a tab inside its home instance calls no goTo: it writes this one
 // line, with landed set to the home. A command target writes its own "go"
 // line (runCommand).
-func (c *Core) goToResuming(ctx context.Context, p Project, name revier.TargetName, bound Bindings, resumes []Resume) (res Result, err error) {
+func (c *Core) goToResuming(ctx context.Context, p Project, name revier.TargetName, bound Bindings, resumes []Resume, raiseOnly bool) (res Result, err error) {
 	start := time.Now()
 	defer func() {
 		logging.Op("go", start, err, "project", p.Name, "target", name, "landed", res.Target,
 			"launched", res.Launched, "tabs", res.Tabs, "ref", res.Ref, "resumes", len(resumes), "agents", res.Agents, "agent_err", res.AgentErr)
 	}()
-	return c.goResuming(ctx, p, name, bound, resumes)
+	return c.goResuming(ctx, p, name, bound, resumes, raiseOnly)
 }
 
-func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName, bound Bindings, resumes []Resume) (Result, error) {
+func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName, bound Bindings, resumes []Resume, raiseOnly bool) (Result, error) {
 	i, ok := p.index(name)
 	if !ok {
 		return Result{}, p.noTarget(name)
 	}
 	if p.isTab(i) {
-		return c.goTab(ctx, p, i, bound, resumes)
+		return c.goTab(ctx, p, i, bound, resumes, raiseOnly)
 	}
 	t := p.Targets[i]
 	host, real, m, err := c.resolveAt(p, i)
@@ -765,49 +767,62 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 			return res, nil
 		}
 		res.Ref = ref
-		var active revier.PanelID
-		if opener != nil {
-			if res.Tabs, active, err = tabs.rest(ctx, opener, ref); err != nil {
-				// The instance stays open with the tabs it has, and is reported
-				// with the failure, so the caller pins it and the next press
-				// raises it instead of opening another. The agents of the tabs
-				// that opened started; no other did.
-				res.Agents = notAdded(append(agents, make([]AgentOutcome, len(extra))...), tabs.laid[len(res.Tabs)-1])
-				return res, fmt.Errorf("%s: %w", host.Name(), err)
+		noWindow := false
+		err = func() error {
+			var active revier.PanelID
+			if opener != nil {
+				var err error
+				if res.Tabs, active, err = tabs.rest(ctx, opener, ref); err != nil {
+					// The instance stays open with the tabs it has, and is
+					// reported with the failure, so the caller pins it and the
+					// next press raises it instead of opening another. The
+					// agents of the tabs that opened started; no other did.
+					res.Agents = notAdded(append(agents, make([]AgentOutcome, len(extra))...), tabs.laid[len(res.Tabs)-1])
+					// A view that draws its own windows has drawn none yet.
+					_, noWindow = c.shower(ref)
+					return fmt.Errorf("%s: %w", host.Name(), err)
+				}
 			}
-		}
-		added, as, err := c.addAgents(ctx, host, p, layout, ref, extra)
-		res.Agents, res.AgentErr = append(agents, added...), err
-		res.As = append(make([]string, len(agents)), as...)
-		// A view that opens its own windows draws the instance once every
-		// tab of it runs (decisions.md D180).
-		if _, err := c.show(ctx, ref, true); err != nil {
-			return res, fmt.Errorf("%s: show new %s: %w", c.View.Name(), name, err)
-		}
-		// Focus explicitly. Some hosts focus what they launch and some do not,
-		// so without this the raise half of run-or-raise holds only by
-		// accident of the host - the window opens behind on the ones that do
-		// not. A press always leaves the target focused.
-		if err := host.Focus(ctx, ref); err != nil {
-			// The launch ran and the instance exists: its ref and agents are
-			// reported with the failure, so the caller pins it and the next
-			// press raises it instead of opening another.
-			return res, fmt.Errorf("%s: focus new %s: %w", host.Name(), name, err)
-		}
-		if opener != nil {
-			// After every tab and every agent tab is open, so that neither
-			// leaves another tab current.
-			if err := c.focusActive(ctx, opener, tabs, ref, active); err != nil {
-				return res, err
+			added, as, err := c.addAgents(ctx, host, p, layout, ref, extra)
+			res.Agents, res.AgentErr = append(agents, added...), err
+			res.As = append(make([]string, len(agents)), as...)
+			// A view that opens its own windows draws the instance once every
+			// tab of it runs (decisions.md D180).
+			if opened, err := c.show(ctx, ref, true); err != nil {
+				noWindow = !opened
+				return fmt.Errorf("%s: show new %s: %w", c.View.Name(), name, err)
 			}
+			// Focus explicitly. Some hosts focus what they launch and some do
+			// not, so without this the raise half of run-or-raise holds only by
+			// accident of the host - the window opens behind on the ones that
+			// do not. A press always leaves the target focused.
+			if err := host.Focus(ctx, ref); err != nil {
+				// The launch ran and the instance exists: its ref and agents
+				// are reported with the failure, so the caller pins it and the
+				// next press raises it instead of opening another.
+				return fmt.Errorf("%s: focus new %s: %w", host.Name(), name, err)
+			}
+			if opener != nil {
+				// After every tab and every agent tab is open, so that neither
+				// leaves another tab current.
+				return c.focusActive(ctx, opener, tabs, ref, active)
+			}
+			return nil
+		}()
+		// Also after a failure above: the instance is open, and the next press
+		// raises it and never places it (decisions.md D24). place returns no
+		// error, so the failure above is the one the press reports. A show
+		// that failed with no window leaves nothing to place: the press that
+		// opens the window places it.
+		if !noWindow {
+			res.placed, res.sought = c.place(ctx, real, ref)
 		}
-		res.placed, res.sought = c.place(ctx, real, ref)
-		return res, nil
+		return res, err
 	}
 
 	// Toggle back: the target is already where focus is, so the second press
 	// returns home instead of doing nothing.
-	if !t.Home && c.focusedOn(ctx, snap, inst) {
+	if !t.Home && !raiseOnly && c.focusedOn(ctx, snap, inst) {
 		if home, ok := p.Home(); ok {
 			return c.goTo(ctx, p, home.Name, bound)
 		}

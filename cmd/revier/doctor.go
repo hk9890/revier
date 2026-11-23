@@ -116,6 +116,11 @@ func cmdDoctor(out io.Writer, args []string) error {
 			_, _ = fmt.Fprintf(out, "  %s (%s)\n", p.File, p.Remote.Host)
 		}
 	}
+	// Not a problem: a file of the assistant's name is the user's own
+	// assistant (decisions.md D135), and alt+a raises it from then on.
+	if i := slices.IndexFunc(projects, func(p core.Project) bool { return p.Name == config.Assistant }); i >= 0 {
+		_, _ = fmt.Fprintf(out, "note: %s replaces the built-in config assistant; delete the file to bring it back\n", projects[i].File)
+	}
 	// A warning, not a problem: the exit status stays what the problems make
 	// it.
 	for _, d := range duplicates(projects) {

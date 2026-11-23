@@ -132,6 +132,9 @@ Each agent takes two lines:
 - The first line: the agent's state, what it does, and how long ago it spoke.
   The state is a glyph and its colour, as the
   [states](concepts.md#agents) table shows. The pane says the state in words.
+  For an agent in state `unknown`, it adds that alt+l shows why if a probe
+  failed. A harness that reports no state, such as opencode, is `unknown`
+  with nothing in the log.
   The project pane's Agents rows are the same rows.
 - The second line: the project, then the worktree the agent works in, if it
   works in one. At the right, for a Claude Code agent: how many tokens its

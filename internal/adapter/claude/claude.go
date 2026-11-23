@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/hk9890/revier/internal/logging"
@@ -66,15 +67,23 @@ type Probe struct {
 	// means $CLAUDE_CONFIG_DIR/sessions, or ~/.claude/sessions without it.
 	SessionsDir string
 
-	mu     sync.Mutex
-	listed map[int]listedSession // by pid
-	err    error
-	at     time.Time
-	stamp  map[string]time.Time // the sessions directory at the last run
+	// mu is held while the command runs. Detail does not take it, so a read of
+	// what the agents said never waits for a listing.
+	mu    sync.Mutex
+	at    time.Time
+	stamp map[string]time.Time // the sessions directory at the last run
+
+	kept atomic.Pointer[keptListing] // the last run that ended, nil before one did
 
 	readsMu sync.Mutex
 	reads   map[string]read  // the last read of a session's transcript, by session
 	found   map[string]sweep // what the look for a transcript not under its cwd came to, by session
+}
+
+// keptListing is what the last run of the command that ended answered.
+type keptListing struct {
+	sessions map[int]listedSession // by pid
+	err      error
 }
 
 // listedSession is one entry of `claude agents --json`. A background session
@@ -174,8 +183,8 @@ func (p *Probe) load(ctx context.Context) (listed map[int]listedSession, ran boo
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	stamp := p.readStamp()
-	if !p.at.IsZero() && p.now().Sub(p.at) < MaxAge && sameStamp(stamp, p.stamp) {
-		return p.listed, false, p.err
+	if k := p.kept.Load(); k != nil && p.now().Sub(p.at) < MaxAge && sameStamp(stamp, p.stamp) {
+		return k.sessions, false, k.err
 	}
 	listed, err = p.list(ctx)
 	if err != nil && ctx.Err() != nil {
@@ -184,12 +193,12 @@ func (p *Probe) load(ctx context.Context) (listed map[int]listedSession, ran boo
 		}
 		return nil, true, err
 	}
-	p.listed, p.err = listed, err
+	p.kept.Store(&keptListing{sessions: listed, err: err})
 	p.at, p.stamp = p.now(), stamp
 	if err == nil {
 		p.forget(listed)
 	}
-	return p.listed, true, p.err
+	return listed, true, err
 }
 
 // readStamp is the modification time of every file in the sessions directory.

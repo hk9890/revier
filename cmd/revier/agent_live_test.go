@@ -15,6 +15,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/hk9890/revier/internal/core"
 )
 
 func TestAgentWaitEndsOnTheStatusOrTimesOut(t *testing.T) {
@@ -51,6 +53,22 @@ func TestAgentPromptReachesTheAgentAndReturnsOnceItWorks(t *testing.T) {
 		t.Errorf("after prompt the agent is %q, want running: prompt returns once it has left idle", out)
 	}
 	capture(t, "agent", "wait", "agents:home", "--until", "idle", "--timeout", "10")
+}
+
+// An agent that takes the text and starts no turn fails the prompt with its
+// own status, so the wait of a `prompt && wait` chain does not run.
+func TestAgentPromptOnHcToAnAgentThatStaysIdleExitsSeven(t *testing.T) {
+	got := agents(t)
+	if err := os.WriteFile(strings.TrimSuffix(got, ".got")+".hold", nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := run(io.Discard, []string{"agent", "prompt", "agents:home", "hello"})
+	if status, say := outcome(err); !errors.Is(err, core.ErrStillIdle) || status != 7 || say {
+		t.Fatalf("err = %v, outcome = %d, %v; want core.ErrStillIdle, 7 and no second message", err, status, say)
+	}
+	if read, err := os.ReadFile(got); err != nil || string(read) != "hello" {
+		t.Errorf("the agent read %q, %v; want the text delivered", read, err)
+	}
 }
 
 func TestAgentPromptRefusals(t *testing.T) {

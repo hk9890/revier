@@ -65,12 +65,13 @@ doctor` says why), `?` its host did not answer.
 | Code | Means |
 |---|---|
 | `0` | Success. |
-| `1` | Failure. `revier doctor` also exits `1` when a file has a problem, and `revier shutdown` when a target is still open or ctrl+c left a step. |
+| `1` | Failure. A `-p` or an address that names no project exits `1`, and a name too on commands that act on an existing project; `revier open` and `revier new` create the project instead. `revier doctor` also exits `1` when a file has a problem, and `revier shutdown` when a target is still open or ctrl+c left a step. |
 | `2` | `revier agent wait` timed out. |
 | `3` | No project found: not from the directory, the focused window or the last project. For `revier agent new` and `revier shell new` without `-p` or `--panel`: the directory is in no project. |
 | `4` | `revier setup install` or `uninstall`: some key or rule is not as asked, or install skipped a part this machine does not have. |
 | `5` | `revier each`: the command failed in at least one project. |
 | `6` | `revier assist`: `claude` is not on `PATH`. |
+| `7` | `revier agent prompt`: the text was delivered, but the agent was still idle when revier stopped watching. Check the panel before you prompt again. |
 | other | `revier run` passes on the action's own exit status. |
 
 ## Environment variables

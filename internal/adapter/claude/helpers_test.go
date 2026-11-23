@@ -8,10 +8,11 @@ import (
 	"testing"
 
 	"github.com/hk9890/revier/internal/adapter/claude"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
-// transcripts is a Claude config directory in a test: a probe whose listing
-// names pid 101 as session "s1", and a place to write that session's
+// transcripts is a Claude config directory in a test: a probe that keeps a
+// listing naming pid 101 as session "s1", and a place to write that session's
 // transcript under a project directory.
 func transcripts(t *testing.T) (*claude.Probe, string) {
 	t.Helper()
@@ -26,6 +27,9 @@ func transcriptsIn(t *testing.T, root, cwd string) (*claude.Probe, string) {
 	p.SetAgents(func(context.Context) ([]byte, error) {
 		return []byte(`[{"pid": 101, "kind": "interactive", "sessionId": "s1", "status": "idle", "cwd": "` + cwd + `"}]`), nil
 	})
+	if _, err := p.Inspect(t.Context(), revier.Panel{PID: 101}); err != nil {
+		t.Fatal(err)
+	}
 	return p, root
 }
 

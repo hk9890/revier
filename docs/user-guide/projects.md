@@ -14,8 +14,11 @@ revier new    # the project is called shop; or: revier new storefront
 ```
 
 A directory can be one project only. `revier new` prints the file it wrote.
+
 `revier open shop`, with a name revier does not know, makes the project for
-the current directory and opens it. In the TUI, alt+n takes a path, a name or
+the current directory and opens it. If the open then fails, the project file
+stays and the error names it: fix the cause and run the command again, or
+delete the file. In the TUI, alt+n takes a path, a name or
 a git URL. In a git checkout, the file records `origin` as `git_url`, and
 `revier open` clones the directory from it when it is missing.
 
@@ -180,7 +183,9 @@ it, and its next start offers to restore the saved session or to start
 fresh; see [After a full shutdown](tui.md#after-a-full-shutdown). Anything
 you open first ends that offer. A full shutdown is not remembered when it
 found nothing left to close, when revier could not write its state, when you
-opened something while it ran, or when you stopped it before its last step.
+opened something while it ran, when you stopped it before its last step or
+while something it closed had not gone, or when a second copy of a closed
+workspace is still open after it.
 One you stopped before it saved the session leaves an earlier full shutdown
 remembered.
 
@@ -190,6 +195,8 @@ on the screen. A shutdown then waits for what it closed to go, and says
 `waiting for 3 to close`. When nothing failed, stayed open or was left by a
 cancel, its last line is `shutdown complete; safe to leave`. Otherwise it
 exits `1`, so `revier shutdown && poweroff` powers off only when it is safe.
+A second copy of a workspace counts as still open: revier names it and
+leaves it running. A window that only matches a target's rule does not count.
 
 To stop a shutdown or a restore, press ctrl+c: the step that runs finishes,
 and the rest is not reached. After the last step, ctrl+c ends the wait for

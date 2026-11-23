@@ -262,8 +262,8 @@ type Titled interface {
 // The answer is display and nothing else: no status, match or resume may
 // depend on it. A harness keeps its conversation in whatever form it likes, so
 // a probe that cannot read it returns an error, and the surface shows nothing:
-// ErrNoDetail where there is nothing to read, any other error where reading it
-// failed.
+// ErrNoDetail where there is nothing to read, ErrDetailPending where the probe
+// cannot tell yet, any other error where reading it failed.
 type Detailed interface {
 	Detail(ctx context.Context, p Panel) (AgentDetail, error)
 }
@@ -273,6 +273,13 @@ type Detailed interface {
 // misbehaving, so the core shows nothing and logs nothing; any other error is
 // a probe that broke, and is logged (docs/CODING.md, "Errors").
 var ErrNoDetail = errors.New("the probe has no detail for this panel")
+
+// ErrDetailPending is Detail's answer while what the probe reads a panel
+// through is not there yet, or its last read failed: the probe cannot say
+// whether the agent spoke. A surface does not take it for an agent with nothing
+// to say, and the core does not log it as a failed read: the probe's own read
+// logs its failure.
+var ErrDetailPending = errors.New("the probe cannot read this panel's detail yet")
 
 // AgentDetail is what an agent said last, and when, with the turn it is in:
 // what the user asked, and the tools the agent called since, and the tokens

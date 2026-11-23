@@ -61,3 +61,25 @@ func TestAShutdownWithAStepThatFailedIsNotComplete(t *testing.T) {
 		t.Errorf("output = %q, want no complete said, and no wait for nothing", out)
 	}
 }
+
+// A second live copy of a shut target fails `revier shutdown`, forced or not:
+// `revier shutdown && poweroff` must not power off a running agent.
+func TestAShutdownThatLeavesASecondInstanceFails(t *testing.T) {
+	for _, args := range [][]string{nil, {"--force"}} {
+		a, rt := demoDesktop(t, &state.State{}, "home")
+		second := rt.Add("home", "")
+
+		var err error
+		out := output(t, a, func() error { err = cmdShutdown(t.Context(), a, args); return nil })
+		if !errors.Is(err, errShutdownIncomplete) {
+			t.Errorf("args %v: err = %v, want the shutdown incomplete", args, err)
+		}
+		if strings.Contains(out, "safe to leave") || !strings.Contains(out, "closed 1, 1 still open") ||
+			!strings.Contains(out, "still open: another instance, "+second.ID) {
+			t.Errorf("args %v: output = %q, want the second instance named and no safe to leave", args, out)
+		}
+		if a.core.Ledger.State().ShutDown != nil {
+			t.Errorf("args %v: the shutdown is on record with an instance still open", args)
+		}
+	}
+}

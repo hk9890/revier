@@ -33,7 +33,10 @@ var errNoMessage = fmt.Errorf("%w: no prompt, message or tool call in the transc
 // with the tokens and the cache of its last answer that counted any,
 // read from the end of its transcript: ~/.claude/projects/<dir>/<session
 // id>.jsonl, the session named for the panel's pid by the listing Inspect
-// keeps.
+// keeps. Detail never runs the listing and never waits for one, so no read can
+// start a listing that its deadline kills or hold the lock a survey's Inspect
+// needs. Until a listing has answered, it returns revier.ErrDetailPending, with
+// the listing's error when the last one failed.
 //
 // The transcript's format is Claude Code's internal one, and it changes
 // between releases. So this is display only, as revier.Detailed says
@@ -45,12 +48,15 @@ var errNoMessage = fmt.Errorf("%w: no prompt, message or tool call in the transc
 //
 // The surface asks every refresh, so a transcript is read again only when its
 // size or modification time changed since the last read.
-func (p *Probe) Detail(ctx context.Context, panel revier.Panel) (revier.AgentDetail, error) {
-	listed, err := p.listing(ctx)
-	if err != nil {
-		return revier.AgentDetail{}, err
+func (p *Probe) Detail(_ context.Context, panel revier.Panel) (revier.AgentDetail, error) {
+	kept := p.kept.Load()
+	switch {
+	case kept == nil:
+		return revier.AgentDetail{}, fmt.Errorf("%w: no listing of the sessions has ended yet", revier.ErrDetailPending)
+	case kept.err != nil:
+		return revier.AgentDetail{}, fmt.Errorf("%w: %w", revier.ErrDetailPending, kept.err)
 	}
-	s, ok := listed[panel.PID]
+	s, ok := kept.sessions[panel.PID]
 	if !ok || panel.PID == 0 || s.SessionID == "" {
 		return revier.AgentDetail{}, fmt.Errorf("%w: pid %d is in no listed session", revier.ErrNoDetail, panel.PID)
 	}

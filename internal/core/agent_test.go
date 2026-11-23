@@ -287,8 +287,8 @@ func TestPromptReportsAnAgentThatStaysIdle(t *testing.T) {
 		t.Fatal(err)
 	}
 	state, err := c.Prompt(context.Background(), a, "hello", time.Millisecond)
-	if err != nil || state.Status != revier.StatusIdle {
-		t.Fatalf("Prompt = %v, %v; want idle and no error", state.Status, err)
+	if !errors.Is(err, core.ErrStillIdle) || state.Status != revier.StatusIdle {
+		t.Fatalf("Prompt = %v, %v; want idle and ErrStillIdle", state.Status, err)
 	}
 }
 
@@ -372,8 +372,8 @@ func TestPromptDoesNotTakeAnUnknownReadForTheTurn(t *testing.T) {
 		t.Fatal(err)
 	}
 	state, err := c.Prompt(context.Background(), a, "hello", time.Millisecond)
-	if err != nil || state.Status != revier.StatusIdle {
-		t.Fatalf("Prompt = %v, %v; want idle: an unknown read is not the turn", state.Status, err)
+	if !errors.Is(err, core.ErrStillIdle) || state.Status != revier.StatusIdle {
+		t.Fatalf("Prompt = %v, %v; want idle and ErrStillIdle: an unknown read is not the turn", state.Status, err)
 	}
 }
 
@@ -501,6 +501,33 @@ func TestAPanelOfATabInsideHomeIsNotAddressedThroughHome(t *testing.T) {
 	}
 }
 
+// A panel of an instance two non-tab targets match answers to both addresses,
+// the survey prints the first, and neither reaches another agent
+// (decisions.md D155).
+func TestAPanelOfTwoNonTabTargetsAnswersToBothAddresses(t *testing.T) {
+	p := prepared(t, revier.Project{Name: "demo", Path: "/srv/demo", Targets: []revier.Target{
+		{Name: "home", Home: true, Runtime: &revier.Realization{Match: revier.Match{Title: "^session:demo$"}}},
+		{Name: "mirror", Runtime: &revier.Realization{Match: revier.Match{Title: "^session:"}}},
+	}})
+	rt := hosttest.NewRuntime("rt")
+	rt.Add("session:demo", "", agentPanel("2", "idle"), agentPanel("3", "busy"))
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "agent"}}}
+
+	for _, addr := range []string{"home", "mirror"} {
+		for _, panel := range []revier.PanelID{"2", "3"} {
+			a, err := c.Agent(t.Context(), p, addr+":"+panel.String())
+			if err != nil || a.Panel.ID != panel {
+				t.Errorf("Agent(%s:%s) = %+v, %v; want panel %s", addr, panel, a, err, panel)
+			}
+		}
+	}
+	for _, a := range agentsOf(t, c, p) {
+		if a.Target != "home" {
+			t.Errorf("survey labels panel %s with %s, want the first target, home", a.Panel, a.Target)
+		}
+	}
+}
+
 // A refused tab target places no panel: the survey labels the agent of its
 // open tab as the home's, and that address names it back.
 func TestTheAgentOfARefusedTabIsAddressedAsTheSurveyLabelsIt(t *testing.T) {
@@ -526,5 +553,31 @@ func TestTheAgentOfARefusedTabIsAddressedAsTheSurveyLabelsIt(t *testing.T) {
 	_, rest, _ := strings.Cut(core.Address(p.Name, agents[0].Target, agents[0].Panel), ":")
 	if a, err := c.Agent(t.Context(), p, rest); err != nil || a.Panel.ID != "2" {
 		t.Errorf("Agent(%s) = %+v, %v; want the agent the survey listed", rest, a, err)
+	}
+}
+
+// goneAfterEnter is a runtime whose agent exits on the Enter of a prompt.
+type goneAfterEnter struct{ *hosttest.FakeRuntime }
+
+func (g goneAfterEnter) SendText(ctx context.Context, ref revier.TargetRef, panel revier.PanelID, text string) error {
+	err := g.FakeRuntime.SendText(ctx, ref, panel, text)
+	if text == "\r" {
+		g.Remove(ref)
+	}
+	return err
+}
+
+// An agent that exits on the prompt is gone, not still idle: the watch ends at
+// once and says so.
+func TestPromptReportsAnAgentThatExits(t *testing.T) {
+	c, rt := agentCore(agentPanel("1", "idle"))
+	a, err := c.Agent(t.Context(), prepared(t, project()), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Runtime = goneAfterEnter{rt}
+
+	if _, err := c.Prompt(t.Context(), a, "hello", time.Millisecond); !errors.Is(err, core.ErrAgentGone) {
+		t.Fatalf("err = %v, want ErrAgentGone", err)
 	}
 }

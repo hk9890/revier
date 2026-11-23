@@ -675,7 +675,8 @@ leaving a running restore, which used the surface while it still opened windows.
 Extends D78. After a full shutdown the next start offered nothing, and the
 restore was three keys deep. The state now records a full shutdown, written
 after the save and before the first close, since the close may end revier's
-own terminal; a cancel takes it back only when it left a step not reached.
+own terminal; a cancel that left a step not reached or unchecked takes it back,
+and so does a close that finds a second workspace of a shut target.
 The surface then quits, the popup too, so the next press is a cold start
 (D86) that opens on a start dialog: restore, pick another session, or start
 fresh. Any open clears the record: the user has started again.
@@ -796,13 +797,13 @@ revier lists the projects; ssh's own failures are told apart by exit 255.
 ### D155 — an agent's one address is its project, its target and its panel
 
 `<project>:<target>:<panel>` names an agent once: the target names the process
-a panel id is unique in, which D75 carried as a ref no one types. The bare
-`<project>:<panel>` failed when two kitty processes held one project; it is
-gone. `<project>` and `<project>:<target>` stay for the default agent (D145).
-The survey labels each agent, an open tab first, so a surface prints what
-`revier agent` resolves; a link's agent goes
-through the target here that shows it (D84). An agent no target holds - a
-link's tab moved away, a terminal attached by hand (D95) - has no address.
+a panel id is unique in (D75). The bare `<project>:<panel>` is gone: two kitty
+processes can hold one project. `<project>` and `<project>:<target>` stay for
+the default agent (D145). The survey labels each agent, an open tab first, so
+a surface prints what `revier agent` resolves; a link's agent goes through the
+target here that shows it (D84). An agent no target holds (D95) has no address.
+A panel of an instance that two non-tab targets match answers to both
+addresses, and the survey prints the first; it never reaches another agent.
 
 ### D157 — the footer names what failed, and the logs screen holds the rest
 
@@ -1144,3 +1145,68 @@ harness keeps the conversation, and marks one it does not keep as unfiled. A
 restore that finds it still not kept starts the agent empty and says so. The id
 stays: a close can stop before it ends the agent, which can then get its first
 prompt. Rejected: dropping the id at a shutdown save, which loses that prompt.
+
+### D195 — a press holds a per-project lock from its listing through its Open and state write
+
+Two processes that pressed a closed project both listed no instance and both
+launched, and revier kept one copy. A press that can launch now holds a flock
+per project, which a crash releases, until what it did is on record. The next
+press waits, lists again and raises, and never toggles back: the focus it finds
+is the first press's work. The wait for a detached window is outside the lock:
+the launch on record holds a press back. A command target holds none, as its
+command can press its own project. Rejected: recording the launch before Open,
+which must be undone when Open fails, and lets a survey bind a classless launch.
+
+### D196 — a prompt the agent was not seen to start on exits 7
+
+D31's refusals come before the text is typed. After it, an agent still idle at
+the end of the prompt's watch kept the exit at 0, so `prompt && wait --until
+stopped` ran the wait on the rest before a turn that never began. It now keeps
+its warning and exits 7. A slow agent gets a false 7. The text is in the panel
+either way, so a script checks the panel before it prompts again. Rejected: a
+longer watch, which still ends in the same choice and holds every script.
+
+### D197 — an open that fails keeps the project it created, and says so
+
+`revier open <unknown>` writes the project file, then opens it. When a later
+step fails, the file stays and the error names it. The usual cause is the
+environment, such as an agent that does not start, and the user then fixes it
+and runs the same command again. A mistyped name leaves a file to delete by
+hand. Rejected: removing the file, which also has to undo the mise trust
+without untrusting a directory the user trusted before.
+
+### D198 — a press on an open tab that lost a declared panel only raises it
+
+Supplements D64. The tab is found while any of its panels is open, and a press
+raises it. The press does not run the lost panel again: a panel the user closed
+on purpose would come back, and a re-run needs a new runtime capability and a
+mark for each panel. Closing the tab and pressing again opens every declared
+panel.
+
+### D199 — a window bound after its launch's wait is not placed, and closing a project leaves its late launches
+
+Extends D24 and D190. A window that a late launch or the survey's claim binds
+is not placed: it may have been on screen for minutes, and the user may have
+moved it. Closing one project does not end its late launches. The record is
+also the class hold that stops another project taking the window and the guard
+that stops a second launch. So a late window can still bind to the closed
+project, and a rename or delete waits, for up to ten minutes. A full shutdown
+ends them.
+
+### D200 — a probe may answer that an agent's detail is not readable yet
+
+Amends D125. A detail read that ran the harness's listing under its own short
+bound killed that listing on a loaded machine and held the survey back. It now
+reads only the listing the survey keeps, and a probe says when it has none yet,
+which is not the same as nothing to read. The pane does not choose among equal
+agents on such an answer, and after three it chooses anyway, so the mirror
+cannot stay hidden. Rejected: a longer bound, which still holds the survey.
+
+### D201 — a window that a late launch awaits can go to a broader rule
+
+Supplements D190. A slot claim or a bind takes a window by its full rule and
+does not ask the kept late launches. So where a broader rule of another project
+also matches, that project can take the window a more specific late launch
+awaits. The case is rare, and a narrower rule ends it. Rejected: holding such a
+window back from both, which makes claim and bind read every late launch's
+rendered rule.

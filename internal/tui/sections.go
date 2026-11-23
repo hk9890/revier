@@ -96,6 +96,7 @@ func (m *Model) query(f focus, q string) {
 // chose. They are about one project's rows, and mean nothing over another's.
 func (m *Model) forgetPane() {
 	m.tcursor = 0
+	m.apartial = 0
 	m.pclick = paneClick{} // a click on the last project's row is not half of a double click on this one's
 	m.query(focusAgents, "")
 }

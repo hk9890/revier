@@ -524,10 +524,13 @@ func (al *agentList) selectKey(key listedKey) bool {
 // chooses; the project list is as it was left.
 //
 // Which row that is is known once every agent's last word is read, and that
-// answer comes after the list is drawn. Until it has come, every reload
-// chooses the row again, unless the user acts on the list first (took).
+// answer comes after the list is drawn. Until a complete answer, or the bound
+// of partial ones, has come, every reload chooses the row again, unless the
+// user acts on the list first (took). An answer from when the list was last
+// open does not count for this opening.
 func (m Model) switchList() (tea.Model, tea.Cmd) {
 	m.err = nil
+	m.apartial = 0
 	m.toList()
 	m.agents.shown = !m.agents.shown
 	if !m.agents.shown {
@@ -535,6 +538,9 @@ func (m Model) switchList() (tea.Model, tea.Cmd) {
 	}
 	m.agents.setFilter("")
 	m.agents.top = true
+	if m.aanswered == everyAgent {
+		m.aanswered, m.aforced = "", false
+	}
 	m.reloadAgents()
 	return m, m.agents.query.Focus()
 }
@@ -710,6 +716,10 @@ func agentFacts(th theme.Theme, it agentItem, now time.Time, w int) string {
 
 	status := it.agent.State.Status
 	line("Status", statusLabel(th, status), statusStyle(th, status))
+	// A link's probe runs on its host, and its log is there.
+	if status == revier.StatusUnknown && it.project.Remote == nil {
+		line("", "if a probe failed, "+logsKey+" shows why in the log", th.Meta)
+	}
 	line("Project", it.project.Label(), th.ProjectName)
 	if it.project.Remote != nil {
 		line("Host", it.project.Remote.Host, th.Path)

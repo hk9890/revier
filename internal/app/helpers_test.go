@@ -41,6 +41,10 @@ func (l *ledger) Note(n record.Line) {
 	l.notes = append(l.notes, n)
 }
 
+func (l *ledger) HoldPress(context.Context, revier.ProjectName) (func(), bool, error) {
+	return func() {}, false, nil
+}
+
 func (l *ledger) MarkPopupHidden() error { return nil }
 
 func (l *ledger) TakePopupHidden() bool { return false }

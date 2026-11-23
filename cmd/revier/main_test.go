@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/testenv"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -111,6 +113,114 @@ func TestListSumsAProjectUpByTheSameAgentAsTheTUI(t *testing.T) {
 	} {
 		if got := agentSummary(revier.ProjectView{Agents: tc.agents}); got != tc.want {
 			t.Errorf("agentSummary = %q, want %q", got, tc.want)
+		}
+	}
+}
+
+// A -p that names nothing fails at the parse, naming the flag: read as no
+// flag, a script's empty variable would act on another project.
+func TestAProjectFlagThatNamesNothingFailsAtTheParse(t *testing.T) {
+	for _, c := range []struct {
+		args []string
+		flag string
+	}{
+		{[]string{"-p", ""}, "flag -p"},
+		{[]string{"--project="}, "flag -project"},
+		{[]string{"--project", ""}, "flag -project"},
+		{[]string{"-p", ":"}, "flag -p"},
+		{[]string{"-p=:"}, "flag -p"},
+	} {
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		projectFlag(fs)
+		if _, err := parseArgs(fs, c.args); err == nil || !strings.Contains(err.Error(), c.flag) {
+			t.Errorf("%q: err = %v, want a refusal naming %q", c.args, err, c.flag)
+		}
+	}
+}
+
+// A command refuses the empty -p before it reaches a host.
+func TestACommandWithAnEmptyProjectFlagActsOnNothing(t *testing.T) {
+	testenv.NoTools(t)
+	configRoot(t, "", nil)
+	err := run(io.Discard, []string{"agent", "new", "-p", ""})
+	if err == nil || !strings.Contains(err.Error(), "flag -p") {
+		t.Fatalf("err = %v, want a refusal naming the flag", err)
+	}
+	if status, say := outcome(err); status != 1 || !say {
+		t.Errorf("outcome = %d, %v, want 1 and the message", status, say)
+	}
+}
+
+// ":target" still names a target of the directory's project, and no -p
+// still leaves the project to the resolution.
+func TestAProjectFlagWithATargetAloneAndNoFlagStillParse(t *testing.T) {
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"-p", ":web"}, ":web"},
+		{[]string{"-p", "demo:web"}, "demo:web"},
+		{nil, ""},
+	} {
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		project := projectFlag(fs)
+		if _, err := parseArgs(fs, c.args); err != nil || *project != c.want {
+			t.Errorf("%q: project = %q, err = %v, want %q", c.args, *project, err, c.want)
+		}
+	}
+	req, err := tabRequest(revier.PanelAgent, ":web", "", "")
+	if err != nil || req.Project != "" || req.Target != "web" || req.Cwd == "" {
+		t.Errorf("tabRequest(:web) = %+v, %v, want the target web of the working directory's project", req, err)
+	}
+}
+
+// An empty name from a script is no name it meant to leave out, so no file
+// is written under the directory's name.
+func TestNewRefusesAnEmptyName(t *testing.T) {
+	testenv.NoTools(t)
+	root := configRoot(t, "", nil)
+	t.Chdir(t.TempDir())
+
+	err := cmdNew(io.Discard, []string{""})
+	if err == nil || !strings.Contains(err.Error(), "name is empty") {
+		t.Fatalf("err = %v, want the empty name refused", err)
+	}
+	if files, _ := os.ReadDir(config.ProjectsDir(root)); len(files) != 0 {
+		t.Errorf("wrote %v, want no file", files)
+	}
+}
+
+// A name that starts with a dash is valid, and reads as a flag unless `--`
+// comes first, as the configuration reference says.
+func TestANameStartingWithADashNeedsTheSeparator(t *testing.T) {
+	testenv.NoTools(t)
+	root := configRoot(t, "", nil)
+	t.Chdir(t.TempDir())
+
+	if err := cmdNew(io.Discard, []string{"-x"}); err == nil || !strings.Contains(err.Error(), "-x") {
+		t.Fatalf("err = %v, want -x read as an undefined flag", err)
+	}
+	if err := cmdNew(io.Discard, []string{"--", "-x"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(config.ProjectFile(root, "-x")); err != nil {
+		t.Errorf("no file for -x: %v", err)
+	}
+}
+
+// A --panel that names nothing fails at the parse, naming the flag: read as no
+// flag, a script's empty variable would act on the directory's project.
+func TestAnEmptyPanelFlagFailsAtTheParse(t *testing.T) {
+	testenv.NoTools(t)
+	configRoot(t, "", nil)
+	for _, args := range [][]string{
+		{"agent", "new", "--panel", ""},
+		{"agent", "new", "--panel="},
+		{"shell", "new", "--panel", ""},
+	} {
+		err := run(io.Discard, args)
+		if err == nil || !strings.Contains(err.Error(), "flag -panel") {
+			t.Errorf("%q: err = %v, want a refusal naming the flag", args, err)
 		}
 	}
 }

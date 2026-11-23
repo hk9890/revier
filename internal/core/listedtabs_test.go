@@ -943,3 +943,29 @@ func TestARestoreLaysTheAgentsOverTheListedTabsInTheirOrder(t *testing.T) {
 		t.Errorf("second tab runs %v, want %v", got, want)
 	}
 }
+
+// A press on a tab that waited for another press's lock stays on the tab that
+// press focused.
+func TestAPressOnATabThatWaitedForTheLockDoesNotGoHome(t *testing.T) {
+	rt := hosttest.NewRuntime("kitty")
+	c := &core.Core{Runtime: rt, View: rt}
+	p := prepared(t, listedTabsProject("tickets"))
+	res, err := press(t.Context(), c, p, "home")
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	opened, _ := markedPanels(t, rt, "agent")
+	if err := rt.FocusPanel(t.Context(), res.Ref, opened[0]); err != nil {
+		t.Fatalf("FocusPanel: %v", err)
+	}
+	rt.SetFocus(res.Ref)
+	c.Ledger = &ledger{waited: true}
+
+	got, err := press(t.Context(), c, p, "agent")
+	if err != nil {
+		t.Fatalf("Go agent: %v", err)
+	}
+	if got.Tab != "agent" {
+		t.Errorf("result = %+v, want the press to stay on the agent tab", got)
+	}
+}

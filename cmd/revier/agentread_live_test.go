@@ -8,6 +8,7 @@ package main
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -66,6 +67,28 @@ func TestAgentReadOfAnAgentWithNoConversationNamesTheScreen(t *testing.T) {
 	err := run(io.Discard, []string{"agent", "read", "agents:home"})
 	if err == nil || !strings.Contains(err.Error(), "--screen") {
 		t.Errorf("err = %v, want the refusal to name --screen", err)
+	}
+}
+
+// `agent read` is a process of its own, with no survey before it: the lookup
+// of the agent reads the listing that Detail then takes the session from.
+func TestAgentReadPrintsWhatTheAgentSaid(t *testing.T) {
+	agents(t)
+	pid := agentPids(t, "agents", "claude")[0]
+	dir := filepath.Join(os.Getenv("CLAUDE_CONFIG_DIR"), "projects", "-filed")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	line := `{"type":"assistant","message":{"role":"assistant","content":"the tests pass"}}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "s-read.jsonl"), []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	session := `{"pid": ` + pid + `, "kind": "interactive", "sessionId": "s-read", "status": "idle"}`
+	if err := os.WriteFile(filepath.Join(sessionsDir, pid+".json"), []byte(session), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out := capture(t, "agent", "read", "agents:home"); !strings.Contains(out, "the tests pass") {
+		t.Errorf("agent read printed %q, want what the agent said", out)
 	}
 }
 

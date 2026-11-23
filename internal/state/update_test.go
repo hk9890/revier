@@ -84,6 +84,21 @@ func TestPendingIsTheTargetsLaunchInsideItsWindow(t *testing.T) {
 	}
 }
 
+// A launch moved to Late is pending inside its own window, and no longer.
+func TestALateLaunchIsPendingOnlyInsideItsWindow(t *testing.T) {
+	now := time.Now()
+	s := &state.State{Late: []state.Launch{{Project: "demo", Target: "editor", At: now}}}
+	if !s.Pending("demo", "editor", now.Add(time.Second)) {
+		t.Error("a late launch inside the bind window holds a press back")
+	}
+	if s.Pending("demo", "home", now) || s.Pending("other", "editor", now) {
+		t.Error("a late launch of another target is not this target's")
+	}
+	if s.Pending("demo", "editor", now.Add(state.BindWindow+time.Second)) {
+		t.Error("a late launch past the bind window holds nothing back")
+	}
+}
+
 // A target that lands consumes its own launch, and only its own.
 func TestLandedConsumesOnlyItsOwnLaunch(t *testing.T) {
 	ref := revier.TargetRef{Host: "wm", ID: "7"}

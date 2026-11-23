@@ -6,6 +6,45 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## Unreleased
+
+- **Action required: a script that passes an empty `-p` now fails.** `-p ""`,
+  `--project=` and `-p ":"` exit `1` and name the flag. Before, they acted on
+  the project of the current directory, which may be the wrong one. Leave `-p`
+  out to use that project. `-p :target` still works. `revier new ""` also
+  exits `1` and writes no file.
+- **`revier new` says when the project name differs from the directory name.**
+  In a directory called `sp ace`, it prints both `sp ace` and `sp_ace`.
+- **When `revier open <new name>` fails after it created the project, the error
+  names the project file and says that it stays.** Fix the cause and run the
+  command again, or delete the file.
+- **`revier list --agents` prints its header when there is no agent.** Before,
+  it printed nothing.
+- **`revier doctor` notes a project file named `revier-config-assistant`.** That
+  file replaces the built-in config assistant. Delete it to bring the built-in
+  back.
+- **Pressing a closed project several times at once opens one workspace.**
+  Before, each press opened its own copy, and revier kept track of only one,
+  so the agents in the others were invisible. Now the later presses wait and
+  raise the workspace the first one opened.
+- **A window that opens but cannot take the focus or finish its tabs still
+  goes to its configured place.** Before, it stayed where it opened, and later
+  presses did not move it.
+- **A shutdown no longer says `safe to leave` while a second copy of a
+  workspace still runs.** `revier shutdown` names that copy as still open and
+  exits `1`, and the next start does not offer a restore. A window that only
+  matches a target's rule, such as a personal browser window, does not count.
+- **Action required: `revier agent prompt` exits `7` when the agent does not
+  start on the prompt.** A script that relied on exit `0` must handle it. The
+  text is in the panel, so check it before you prompt again. Before, the
+  command warned and exited `0`, so `revier agent prompt ... && revier agent
+  wait ...` went on as if a turn had run.
+- **On a loaded machine, the project pane mirrors the agent that spoke last.**
+  Before, the pane could stay on the first agent, and the refresh could slow
+  down.
+- **The pane of an agent in state `unknown` says where the reason is.** It
+  names alt+l, the logs screen, which holds the error of a probe that failed.
+
 ## v0.30.0
 
 - **A full shutdown or a restore that you start in the popup runs under a

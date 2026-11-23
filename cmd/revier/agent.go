@@ -95,7 +95,9 @@ the one agent new --no-focus prints before its harness has started, wait
 waits for the harness to start, within --timeout. prompt types one line and
 submits it, and returns once an idle agent has started on it, so
   revier agent prompt demo "..." && revier agent wait demo --until stopped
-waits for that turn. It refuses a panel that is not an agent's, an agent
+waits for that turn. An agent still idle after the text was delivered gets a
+warning and exit status 7: the text is in the panel, so check the panel
+before you prompt again. It refuses a panel that is not an agent's, an agent
 waiting for an answer, where the Enter would pick an option in its dialog,
 and an agent whose state is unknown, as an opencode agent's is,
 since it may be showing such a dialog: send-keys reaches an agent in either
@@ -235,6 +237,13 @@ func waitFor(ctx context.Context, out io.Writer, open func(context.Context, io.W
 }
 
 func cmdAgentPrompt(out io.Writer, args []string) error {
+	return agentPrompt(out, args, newApp)
+}
+
+// agentPrompt is cmdAgentPrompt on the app that open makes: a test makes it on
+// a fake host. An agent still idle after the delivery gets the warning here,
+// and exits exitPromptIdle (decisions.md D196).
+func agentPrompt(out io.Writer, args []string, open func(context.Context, io.Writer) (*app, error)) error {
 	fs := flag.NewFlagSet("agent prompt", flag.ContinueOnError)
 	pos, err := parseArgs(fs, args)
 	if err != nil {
@@ -245,7 +254,7 @@ func cmdAgentPrompt(out io.Writer, args []string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), promptWait)
 	defer cancel()
-	a, err := newApp(ctx, out)
+	a, err := open(ctx, out)
 	if err != nil {
 		return err
 	}
@@ -253,12 +262,12 @@ func cmdAgentPrompt(out io.Writer, args []string) error {
 	if err != nil {
 		return err
 	}
-	state, err := a.core.Prompt(ctx, ag, pos[1], a.core.PollOf(ag))
+	_, err = a.core.Prompt(ctx, ag, pos[1], a.core.PollOf(ag))
+	if errors.Is(err, core.ErrStillIdle) {
+		fmt.Fprintf(os.Stderr, "revier: warning: %s was still idle after the prompt was delivered; check the panel before waiting on it\n", pos[0])
+	}
 	if err != nil {
 		return fmt.Errorf("%s: %w", pos[0], err)
-	}
-	if state.Status == revier.StatusIdle {
-		fmt.Fprintf(os.Stderr, "revier: warning: %s was still idle after the prompt was delivered; check the panel before waiting on it\n", pos[0])
 	}
 	return nil
 }
@@ -470,7 +479,7 @@ func busyAgent(address string, busy []core.CloseStep) error {
 func cmdAgentNew(out io.Writer, args []string) error {
 	fs := flag.NewFlagSet("agent new", flag.ContinueOnError)
 	project := projectFlag(fs)
-	panel := fs.String("panel", "", "the open workspace holding this panel")
+	panel := panelFlag(fs)
 	resume := fs.String("resume", "", "the conversation to start the agent on")
 	dir := fs.String("dir", "", "the directory the agent starts in")
 	noFocus := fs.Bool("no-focus", false, "leave the focus where it is, and print the agent's address")

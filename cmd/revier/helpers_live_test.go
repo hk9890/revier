@@ -488,6 +488,7 @@ const fakeAgent = `status() {
 status idle
 while IFS= read -r line; do
   printf '%s' "$line" > "$0.got"
+  [ -e "$0.hold" ] && continue
   sleep 0.3
   status busy
   sleep 1

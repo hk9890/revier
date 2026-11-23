@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -76,7 +77,10 @@ type CloseResult struct {
 // neither does one cancelled before the record is written: the cancel stops
 // it before its first step. A record whose write did not reach the state does
 // not stop the close; the shutdown is then not on record. A close cancelled
-// on its walk takes the record back as ShutdownRecord says.
+// on its walk takes the record back as ShutdownRecord says. So does a close
+// that found a second workspace its plan did not name, could not check for
+// one, or was cancelled with a step still listed, which skips that check:
+// the next surface must not offer a restore over what still runs.
 func Close(ctx context.Context, req CloseRequest) (CloseResult, error) {
 	c := req.Core
 	var res CloseResult
@@ -100,6 +104,9 @@ func Close(ctx context.Context, req CloseRequest) (CloseResult, error) {
 		opts.Progress = func(p core.Progress) {
 			if p.Phase == core.PhaseClose && !p.Done {
 				record.reach()
+			}
+			if p.Phase == core.PhaseWait {
+				record.awaitCheck(true)
 			}
 			if req.Progress != nil {
 				req.Progress(p)
@@ -130,8 +137,17 @@ func Close(ctx context.Context, req CloseRequest) (CloseResult, error) {
 		}
 	}
 	closed, err := c.Shutdown(ctx, req.Plan, req.Wait, opts)
-	if record != nil && errors.Is(ctx.Err(), context.Canceled) {
-		record.takeBack()
+	if record != nil {
+		record.awaitCheck(false)
+		cancelled := errors.Is(ctx.Err(), context.Canceled)
+		if cancelled {
+			record.takeBack()
+		}
+		if slices.ContainsFunc(closed, func(r core.CloseResult) bool {
+			return r.Action == core.CloseUnplanned || cancelled && r.Open
+		}) {
+			record.withdraw()
+		}
 	}
 	res.Closed = closed
 	var refused *core.BusyRefusal
@@ -150,11 +166,13 @@ func Close(ctx context.Context, req CloseRequest) (CloseResult, error) {
 // A cancel takes the record back only when this shutdown wrote it and the
 // walk left a step not reached: what it did not reach is still open. A cancel
 // that came before the record was written takes nothing back, so an earlier
-// shutdown's record stays. One that came once the last step was reached left
-// nothing, and the record stays, also when the second ctrl+c ends that step
-// as it hangs. A step is reached as the core starts it, not as it ends: the
-// count is the core's, read as it reports each step, not a surface's reading
-// of those reports, which lags the walk.
+// shutdown's record stays. One that came during the last step keeps the
+// record when every step then went, and when the second ctrl+c ends that step
+// as it hangs. A surface that quits from the wait on, before the check for a
+// second workspace ended, withdraws the record: nothing checked. A step is
+// reached as the core starts it, not as it ends: the count is the core's, read
+// as it reports each step, not a surface's reading of those reports, which
+// lags the walk.
 type ShutdownRecord struct {
 	c       *core.Core
 	root    string // the state root, whose record of what was last seen the shutdown ends
@@ -163,6 +181,9 @@ type ShutdownRecord struct {
 	started bool      // Close runs a full shutdown on this record
 	steps   int
 	reached int
+	// checking is the time from the wait through the check for a second
+	// workspace, which a surface that quits then leaves unmade.
+	checking bool
 }
 
 // NewShutdownRecord is the record of a full shutdown about to run, under the
@@ -173,8 +194,9 @@ func NewShutdownRecord(c *core.Core, stateRoot string) *ShutdownRecord {
 
 // Abandon is the end of a cancelled shutdown whose surface quits before the
 // walk returns, on the second ctrl+c: the record is taken back as the walk
-// would have taken it back on its cancel. The first ctrl+c cancelled the
-// walk, so the walk writes no record after this.
+// would have taken it back on its cancel, and withdrawn when the check for a
+// second workspace has not ended. The first ctrl+c cancelled the walk, so the
+// walk writes no record after this.
 //
 // A surface holds a record for every close it runs, and Close starts only a
 // full shutdown's. A record no shutdown started returns at once, without the
@@ -183,9 +205,12 @@ func NewShutdownRecord(c *core.Core, stateRoot string) *ShutdownRecord {
 // waits for the lock.
 func (r *ShutdownRecord) Abandon() {
 	r.mu.Lock()
-	started := r.started
+	started, checking := r.started, r.checking
 	r.mu.Unlock()
-	if started {
+	switch {
+	case checking:
+		r.withdraw()
+	case started:
 		r.takeBack()
 	}
 }
@@ -210,6 +235,12 @@ func (r *ShutdownRecord) start(steps int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.started, r.steps = true, steps
+}
+
+func (r *ShutdownRecord) awaitCheck(checking bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.checking = checking
 }
 
 func (r *ShutdownRecord) reach() {
@@ -248,12 +279,25 @@ func (r *ShutdownRecord) write(ctx context.Context, sessionID string) {
 }
 
 // takeBack ends the record this shutdown wrote when its walk left a step not
-// reached. A record written since by another shutdown is not this one's.
+// reached.
 func (r *ShutdownRecord) takeBack() {
+	r.end(func() bool { return r.reached < r.steps })
+}
+
+// withdraw ends the record this shutdown wrote, however far its walk came: a
+// second workspace is still open that no step named, or no check ruled one
+// out.
+func (r *ShutdownRecord) withdraw() {
+	r.end(func() bool { return true })
+}
+
+// end clears this shutdown's record when applies, read under the record's
+// lock, says so. A record written since by another shutdown is not this one's.
+func (r *ShutdownRecord) end(applies func() bool) {
 	r.c.Ledger.Update(func(st *state.State) bool {
 		r.mu.Lock()
 		defer r.mu.Unlock()
-		if r.at.IsZero() || r.reached >= r.steps || st.ShutDown == nil || !st.ShutDown.At.Equal(r.at) {
+		if r.at.IsZero() || !applies() || st.ShutDown == nil || !st.ShutDown.At.Equal(r.at) {
 			return false
 		}
 		r.at = time.Time{}

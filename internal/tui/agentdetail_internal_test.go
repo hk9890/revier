@@ -1,9 +1,14 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/hk9890/revier/internal/config"
+	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/ledger"
+	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -55,6 +60,21 @@ func TestTheNewestAnswerForTheProjectShownIsTaken(t *testing.T) {
 	}
 }
 
+// The log of a link's agent is on its host, so its pane names no key here.
+func TestALinksUnknownAgentNamesNoLogsKey(t *testing.T) {
+	it := agentItem{
+		agent:   revier.AgentView{State: revier.AgentState{Status: revier.StatusUnknown}},
+		project: revier.Project{Name: "far", Remote: &revier.Link{Host: "box", Project: "far"}},
+	}
+	if got := agentFacts(theme.Default(), it, time.Now(), 80); strings.Contains(got, logsKey) {
+		t.Errorf("facts = %q, want no logs key for a link's agent", got)
+	}
+	it.project.Remote = nil
+	if got := agentFacts(theme.Default(), it, time.Now(), 80); !strings.Contains(got, logsKey) {
+		t.Errorf("facts = %q, want the logs key", got)
+	}
+}
+
 func TestAgoSaysTheLargestWholeUnit(t *testing.T) {
 	now := time.Date(2026, 9, 24, 12, 0, 0, 0, time.UTC)
 	for _, tc := range []struct {
@@ -71,5 +91,48 @@ func TestAgoSaysTheLargestWholeUnit(t *testing.T) {
 		if got := ago(now, now.Add(-tc.before)); got != tc.want {
 			t.Errorf("ago(%v before) = %q, want %q", tc.before, got, tc.want)
 		}
+	}
+}
+
+// A partial answer replaces the details the pane holds, so they are no longer
+// the last project's: a return to it waits for its answer again.
+func TestAPartialAnswerEndsThePreviousProjectsAnswer(t *testing.T) {
+	m := bare(Model{aasked: "first"})
+	m.took(detailsMsg{project: "first", seq: 1})
+	m.aasked = "second"
+	m.took(detailsMsg{project: "second", seq: 2, partial: true})
+	if m.aanswered == "first" {
+		t.Error("the pane still counts the first project as answered, with the second's details")
+	}
+}
+
+// A partial answer leaves the agent list's opening choice standing, up to the
+// bound the pane waits through: its order does not yet know when each spoke.
+func TestAPartialAnswerKeepsTheAgentListsOpeningChoice(t *testing.T) {
+	m := bare(Model{aasked: everyAgent})
+	m.agents.top = true
+	for seq := 1; seq < partialAnswers; seq++ {
+		m.took(detailsMsg{project: everyAgent, seq: seq, partial: true})
+		if !m.agents.top {
+			t.Fatalf("partial answer %d ended the opening choice", seq)
+		}
+	}
+	m.took(detailsMsg{project: everyAgent, seq: partialAnswers, partial: true})
+	if m.agents.top {
+		t.Error("the bound of partial answers did not end the opening choice")
+	}
+}
+
+// An answer from when the agent list was last open does not end the opening
+// choice of the next opening on a partial answer.
+func TestAReopenedAgentListWaitsThroughAPartialAnswer(t *testing.T) {
+	root := t.TempDir()
+	m := New(&core.Core{Ledger: ledger.File{Root: root}}, nil, root, &config.Config{}, time.Second, theme.Default(), "")
+	m.aasked, m.aanswered = everyAgent, everyAgent
+	next, _ := m.switchList()
+	reopened := next.(Model)
+	reopened.took(detailsMsg{project: everyAgent, seq: 1, partial: true})
+	if !reopened.agents.top {
+		t.Error("a partial answer ended the opening choice of a reopened list")
 	}
 }

@@ -1,16 +1,20 @@
-// Package ledger is the state file, the event file and the state record as
-// the core reads and writes them: the one implementation of core.Ledger
-// outside a test (decisions.md D120).
+// Package ledger is the state file, the event file, the state record and the
+// per-project press lock as the core uses them: the one implementation of
+// core.Ledger outside a test (decisions.md D120).
 package ledger
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"sync"
+	"syscall"
+	"time"
 
 	"github.com/hk9890/revier/internal/events"
 	"github.com/hk9890/revier/internal/logging"
@@ -94,6 +98,61 @@ func (f File) State() *state.State {
 	}
 	f.keep(st)
 	return st
+}
+
+// pressLockPoll is how often HoldPress tries a lock another press holds.
+const pressLockPoll = 20 * time.Millisecond
+
+// HoldPress takes the project's press lock, a flock on one file per project
+// under the root, so a crash releases it. It waits for another press to
+// release it, reports whether it had to, and returns an error only when ctx
+// ends first.
+//
+// A lock file that cannot be opened or locked must not cost the press, so
+// the press runs unguarded. That writes "press lock" with root, project and
+// err through logging.Repeat, once per project. The first lock taken for that
+// project after it writes "press lock: recovered" with root and project.
+func (f File) HoldPress(ctx context.Context, p revier.ProjectName) (release func(), waited bool, err error) {
+	key := "press lock:" + string(p)
+	lock, err := openPressLock(f.Root, p)
+	if err != nil {
+		logging.Repeat(key, "press lock", err, "root", f.Root, "project", p)
+		return func() {}, false, nil
+	}
+	for {
+		err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		if err == nil {
+			logging.Repeat(key, "press lock", nil, "root", f.Root, "project", p)
+			return func() {
+				_ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+				_ = lock.Close()
+			}, waited, nil
+		}
+		if !errors.Is(err, syscall.EWOULDBLOCK) {
+			_ = lock.Close()
+			logging.Repeat(key, "press lock", err, "root", f.Root, "project", p)
+			return func() {}, waited, nil
+		}
+		waited = true
+		select {
+		case <-ctx.Done():
+			_ = lock.Close()
+			err := fmt.Errorf("%s: another press holds its lock: %w", p, ctx.Err())
+			// Written when a press gave up waiting for the lock, so it ran
+			// nothing and wrote no "go" line. It carries project and err.
+			slog.Error("press lock: gave up waiting", "project", p, "err", err)
+			return nil, waited, err
+		case <-time.After(pressLockPoll):
+		}
+	}
+}
+
+func openPressLock(root string, p revier.ProjectName) (*os.File, error) {
+	dir := filepath.Join(root, "press-locks")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	return os.OpenFile(filepath.Join(dir, string(p)+".lock"), os.O_CREATE|os.O_RDWR, 0o644)
 }
 
 // Update applies a change to the state on disk and returns the state after

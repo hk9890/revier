@@ -117,6 +117,55 @@ func TestOpenAnUnknownNameCreatesTheProjectAndOpensIt(t *testing.T) {
 	}
 }
 
+// With no name, a directory name that cannot be a project name is changed,
+// and revier new says so. A name that needs no change prints the file alone.
+func TestNewSaysWhenTheProjectNameDiffersFromTheDirectory(t *testing.T) {
+	root, _ := fileScratch(t)
+
+	dir := filepath.Join(t.TempDir(), "sp ace")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	chdir(t, dir)
+	out := capture(t, "new")
+	file := filepath.Join(root, "projects", "sp_ace.toml")
+	if !strings.Contains(out, `"sp ace"`) || !strings.Contains(out, "project name sp_ace") || !strings.Contains(out, "created "+file) {
+		t.Errorf("new printed %q, want both names and the file", out)
+	}
+
+	dir = filepath.Join(t.TempDir(), "shop")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	chdir(t, dir)
+	out = capture(t, "new")
+	if want := "created " + filepath.Join(root, "projects", "shop.toml") + "\n"; out != want {
+		t.Errorf("new printed %q, want only %q", out, want)
+	}
+}
+
+// An open that fails after it created the project keeps the file, and the
+// error names it, so the user fixes the cause and runs the command again. A
+// real core can list the panel before its command ends, and the open then
+// succeeds: TestAFailedOpenNamesTheFileOnlyWhenItCreatedIt pins the failure.
+func TestAFailedOpenKeepsTheProjectItCreatedAndSaysSo(t *testing.T) {
+	root, _ := fileScratch(t)
+	onPath(t, "claude", "exit 1")
+	chdir(t, t.TempDir())
+
+	err := run(io.Discard, []string{"open", "typo-name"})
+	file := filepath.Join(root, "projects", "typo-name.toml")
+	if err == nil {
+		t.Skip("the core listed the panel before its command ended, so the open succeeded")
+	}
+	if !strings.Contains(err.Error(), file) || !strings.Contains(err.Error(), "stays") {
+		t.Fatalf("err = %v, want it to name %s and say it stays", err, file)
+	}
+	if _, err := os.Stat(file); err != nil {
+		t.Errorf("the project file is gone: %v", err)
+	}
+}
+
 // A project whose directory is not on this machine is cloned from its
 // git_url, and then opened.
 func TestOpenClonesAMissingDirectory(t *testing.T) {
