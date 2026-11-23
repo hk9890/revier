@@ -6,7 +6,7 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
-## Unreleased
+## v0.31.0
 
 - **Action required: a script that passes an empty `-p` now fails.** `-p ""`,
   `--project=` and `-p ":"` exit `1` and name the flag. Before, they acted on
