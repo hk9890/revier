@@ -12,7 +12,42 @@ Each section is also the text of its release on the
   `--project=` and `-p ":"` exit `1` and name the flag. Before, they acted on
   the project of the current directory, which may be the wrong one. Leave `-p`
   out to use that project. `-p :target` still works. `revier new ""` also
-  exits `1` and writes no file.
+  exits `1` and writes no file. An empty `--panel` exits `1` too.
+- **Action required: `revier open ""` now fails with `the project name is
+  empty`.** Before, a script whose variable was empty opened the last project
+  and exited `0`. Leave the argument out to use the usual project.
+- **Action required: `revier list --conversations` needs `--json` and no
+  `--agents`.** Any other form now ends with a usage error. Before, it ignored
+  the flag.
+- **Action required: `revier agent prompt` refuses an empty or blank prompt.**
+  Before, it sent an Enter that started no turn and exited `0`. Use `revier
+  agent send-keys` to send an Enter.
+- **Action required: a panel in a tab has one address, the one with the tab's
+  target.** `shop:home:8` for a panel in the tab `agent` now fails, and the
+  error gives the address to use, `shop:agent:8`.
+- **Action required: a release archive now holds `LICENSE` and
+  `third_party_licenses/` beside the binary.** If you install with `tar`, add
+  `revier` to the command, as in `tar -xzf <file> -C ~/.local/bin revier`, or
+  these files land in that directory too. When root extracts an archive, root
+  now owns the files. Before, they kept the user id of the release build.
+- **An agent's cache minutes turn yellow at 20 and red at 5.** Before, they
+  turned yellow only in the last 5, too late to reach the agent in time.
+- **A rename or delete waits for a late launch of the project.** It is refused
+  and names the target until the window appears or the launch expires. Before,
+  the rename went through and revier then lost track of that window.
+- **An action that you start just after its project opened no longer takes the
+  project's new window for its own.**
+- **`revier go` names the tab it reached**, as in `demo: agent in home (...)`.
+  Before, it named only the home.
+- **`revier doctor` gives the rename that fixes a refused project name.** The
+  name is quoted, so you can paste the line into a shell.
+- **The TUI footer offers no row keys when the filter matches no project.**
+  Before, it offered keys that did nothing.
+- **`revier agent` refusals say what is wrong.** A negative `--lines` names the
+  flag. A shell panel is refused as a shell, not an agent, without the false
+  claim that the text would run as a command.
+- **A status of Claude Code that revier does not know now writes a warning to
+  the logs.** Before, the agent showed `unknown` with no line to explain it.
 - **`revier new` says when the project name differs from the directory name.**
   In a directory called `sp ace`, it prints both `sp ace` and `sp_ace`.
 - **When `revier open <new name>` fails after it created the project, the error
