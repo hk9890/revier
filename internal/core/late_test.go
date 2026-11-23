@@ -149,6 +149,26 @@ func TestALateLaunchTakesNoWindowAnotherRuleMatches(t *testing.T) {
 	}
 }
 
+// A slot claim takes a window by its full rule and does not ask the late
+// launches, so the broader rule of "foo" takes the window that the late launch
+// of "foo bar" awaits (decisions.md D201).
+func TestASlotClaimTakesAWindowALateLaunchAwaits(t *testing.T) {
+	now := time.Now()
+	wm := hosttest.New("wm")
+	l := &ledger{}
+	l.st.SetAside(state.Launch{Project: "foo bar", Target: "editor", Class: "^" + ideaClass, At: now.Add(-time.Second)})
+	l.st.Launch = &state.Launch{Project: "foo", Target: "editor", Class: "^" + ideaClass, At: now}
+	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm, Ledger: l}
+	projects := []core.Project{ideaProject(t, "foo"), ideaProject(t, "foo bar")}
+	settleAt(t, c, projects, now)
+
+	w := wm.Add("foo bar - Main.java", ideaClass)
+	st := settleAt(t, c, projects, now.Add(time.Second))
+	if st.Bound["foo"]["editor"] != w || len(st.Bound["foo bar"]) != 0 {
+		t.Errorf("bound %v, want the window on foo's broader rule", st.Bound)
+	}
+}
+
 // A window bound after its launch's wait, by a late launch or by the survey's
 // claim, stays where it is: the user may have moved it (decisions.md D199).
 func TestAWindowBoundAfterItsLaunchsWaitIsNotPlaced(t *testing.T) {

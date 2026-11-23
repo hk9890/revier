@@ -1192,3 +1192,21 @@ also the class hold that stops another project taking the window and the guard
 that stops a second launch. So a late window can still bind to the closed
 project, and a rename or delete waits, for up to ten minutes. A full shutdown
 ends them.
+
+### D200 — a probe may answer that an agent's detail is not readable yet
+
+Amends D125. A detail read that ran the harness's listing under its own short
+bound killed that listing on a loaded machine and held the survey back. It now
+reads only the listing the survey keeps, and a probe says when it has none yet,
+which is not the same as nothing to read. The pane does not choose among equal
+agents on such an answer, and after three it chooses anyway, so the mirror
+cannot stay hidden. Rejected: a longer bound, which still holds the survey.
+
+### D201 — a window that a late launch awaits can go to a broader rule
+
+Supplements D190. A slot claim or a bind takes a window by its full rule and
+does not ask the kept late launches. So where a broader rule of another project
+also matches, that project can take the window a more specific late launch
+awaits. The case is rare, and a narrower rule ends it. Rejected: holding such a
+window back from both, which makes claim and bind read every late launch's
+rendered rule.

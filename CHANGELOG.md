@@ -34,11 +34,11 @@ Each section is also the text of its release on the
   workspace still runs.** `revier shutdown` names that copy as still open and
   exits `1`, and the next start does not offer a restore. A window that only
   matches a target's rule, such as a personal browser window, does not count.
-- **`revier agent prompt` exits `7` when the agent does not start on the
-  prompt.** Before, it warned and exited `0`, so `revier agent prompt ... &&
-  revier agent wait ...` went on as if a turn had run. A script that relied on
-  exit `0` now sees the failure. The text is in the panel, so check it before
-  you prompt again.
+- **Action required: `revier agent prompt` exits `7` when the agent does not
+  start on the prompt.** A script that relied on exit `0` must handle it. The
+  text is in the panel, so check it before you prompt again. Before, the
+  command warned and exited `0`, so `revier agent prompt ... && revier agent
+  wait ...` went on as if a turn had run.
 - **On a loaded machine, the project pane mirrors the agent that spoke last.**
   Before, the pane could stay on the first agent, and the refresh could slow
   down.

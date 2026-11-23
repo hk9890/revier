@@ -14,9 +14,6 @@ revier new    # the project is called shop; or: revier new storefront
 ```
 
 A directory can be one project only. `revier new` prints the file it wrote.
-With no name, each `:` and whitespace character in the directory name becomes
-`_`, and `revier new` prints both names: the directory `sp ace` makes the
-project `sp_ace`.
 
 `revier open shop`, with a name revier does not know, makes the project for
 the current directory and opens it. If the open then fails, the project file
