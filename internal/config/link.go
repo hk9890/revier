@@ -47,6 +47,7 @@ func (m Machine) Is(host string) bool {
 
 // RefuseLink refuses a link to host where host is this machine, since revier
 // leaves such a link out (decisions.md D131), and is nil for any other host.
+// An answer from the local survey is no substitute: it shows each agent twice.
 func (m Machine) RefuseLink(host string) error {
 	if !m.Is(host) {
 		return nil

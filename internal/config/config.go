@@ -814,10 +814,12 @@ func nothingToStart(p revier.Project, t revier.Target, kind revier.HostKind) err
 }
 
 // panelsOffATab refuses panels on a runtime realization of t that is no tab,
-// with the move that repairs it. On a link the move is another one: the home
-// lists the tab named agent alone, and no other target lists tabs. A home
-// that also has a window opens no tab, and a home named agent cannot hold the
-// tab of that name, so neither is told to move panels into one.
+// with the move that repairs it. A second form of a workspace would give each
+// reader of the agent and shell panels a branch for it. On a link the move is
+// another one: the home lists the tab named agent alone, and no other target
+// lists tabs. A home that also has a window opens no tab, and a home named
+// agent cannot hold the tab of that name, so neither is told to move panels
+// into one.
 func panelsOffATab(p revier.Project, t revier.Target) error {
 	const what = "target %q runtime realization declares panels; only a tab has them, "
 	if p.Remote == nil {
@@ -887,7 +889,8 @@ func validateTab(p revier.Project, t revier.Target) []error {
 // validateTabs checks the tabs and the active tab a realization of t
 // declares (decisions.md D126). Each rule is a list the open path could not
 // follow: an entry that is no tab of this target, or a list on a realization
-// that opens something else.
+// that opens something else. A position flag would take one flag per position.
+// The file's order would put shared targets first and not say which tabs open.
 func validateTabs(p revier.Project, t revier.Target, kind revier.HostKind, r *revier.Realization) []error {
 	if len(r.Tabs) == 0 {
 		if r.Active != "" {

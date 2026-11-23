@@ -1089,7 +1089,9 @@ const placePoll = 250 * time.Millisecond
 
 // place positions a window a launch has just produced. It applies to a launch
 // and never to a raise: moving a window the user has already put somewhere is
-// not revier's business (decisions.md D24).
+// not revier's business (decisions.md D24). revier places what it starts, since
+// a compositor rule cannot name the window a launch just produced. The
+// compositor places what the user's script starts.
 //
 // A failure is not returned. The window is open and focused either way, and
 // the alternative - failing the keypress because a geometry was refused -
@@ -1465,7 +1467,9 @@ func surveyLine(projects int, r Report, answers RemoteAnswers, local time.Durati
 // D115). A close of one project asks that project's host. A close of every
 // project asks the hosts of the links with something open here: a link with
 // nothing open has nothing a close could end, so its host is not waited for,
-// and a host that is gone costs a close of something else nothing.
+// and a host that is gone costs a close of something else nothing. Shorter
+// phase budgets are no answer: they cut a slow desktop short and still wait
+// once a phase.
 //
 // An agent of a link in a panel of an instance the link no longer holds - its
 // tab moved to another window - is therefore missing from a plan of every
@@ -1926,7 +1930,9 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 	// read from the window's own side: runtimeOf refuses as soon as two
 	// terminals answer to one window, and the terminal it names has to be
 	// attached too. A window whose terminal cannot be named beyond doubt
-	// keeps its row rather than being folded away against a guess.
+	// keeps its row rather than being folded away against a guess. The
+	// terminal's side cannot decide it, because a shared title names two
+	// windows.
 	held := map[string]bool{}
 	for _, ref := range attached {
 		held[key(ref)] = true

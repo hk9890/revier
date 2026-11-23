@@ -58,6 +58,8 @@ type PlacedTab struct {
 // no Dir, a shell tab's directory is the panel's own (decisions.md D153), and
 // an agent tab's is the project's (D158). Outside a workspace, with outside =
 // "agent", an agent tab starts in the panel's directory (D164).
+// A workspace's agent tab skips the panel's directory: Claude Code takes the
+// directory it starts in as its project, and then enters no other worktree.
 func (c *Core) PlaceTab(ctx context.Context, projects []Project, req TabRequest) (PlacedTab, error) {
 	if req.Panel == "" {
 		w, err := c.tabWorkspace(ctx, projects, req)
@@ -185,7 +187,9 @@ func (c *Core) openPlaced(ctx context.Context, projects []Project, w Workspace, 
 // also one that shows an instance, as a terminal started by hand, a tab of the
 // agent an agent key asks for, or nothing. Every other failure is returned,
 // so the key's own fallback runs (decisions.md D148, D164, D183); so is an
-// agent that cannot run there, as OutsideKey's agent says.
+// agent that cannot run there, as OutsideKey's agent says. The key sits on the
+// terminal's new-tab chord and most windows are no project's, so a refusal
+// would take the new-tab key from the user's terminal.
 //
 // Before anything opens, it logs "tab outside a workspace" at Info in place
 // of the "shell new" or "agent new" line, with panel, ref (empty for a

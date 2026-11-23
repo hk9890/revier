@@ -4,6 +4,8 @@
 // The state is Claude Code's own word, read from `claude agents --json`: every
 // live session with the pid of its process and its status. A panel is matched
 // to its session by pid and nothing else (decisions.md D55, D57).
+// No SessionStart hook supplies the id: the listing needs no install, names
+// agents already running, and tells two agents in one repository apart.
 //
 // The listing costs a process, and a survey runs every second. So the probe
 // keeps the last answer and runs the command again only when an answer may
@@ -15,7 +17,8 @@
 // of delay and nothing else.
 //
 // The pane title supplies the activity line only: the listing names a session
-// but carries no summary of the turn.
+// but carries no summary of the turn. The title is no state signal: it does
+// not always reach revier, and an agent at a permission prompt then shows idle.
 package claude
 
 import (

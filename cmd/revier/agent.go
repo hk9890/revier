@@ -275,7 +275,8 @@ func agentPrompt(out io.Writer, args []string, open func(context.Context, io.Wri
 // cmdAgentRead prints what an agent said last, or with --screen what its
 // panel shows (decisions.md D116). Either is printed as text: what an agent
 // wrote and what a tool printed are not instructions to the terminal that
-// reads this (D108).
+// reads this (D108). The screen is not the default, because it hands the
+// caller a harness's chrome to parse.
 func cmdAgentRead(out io.Writer, args []string) error {
 	fs := flag.NewFlagSet("agent read", flag.ContinueOnError)
 	screen := fs.Bool("screen", false, "what the agent's panel shows")

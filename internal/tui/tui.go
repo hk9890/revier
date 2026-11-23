@@ -442,7 +442,8 @@ type tickMsg struct{ chain int }
 
 // blurredRefresh is how often a surface whose window has no focus refreshes:
 // nobody reads it closely, and each refresh costs every linked host a survey
-// of its own (decisions.md D129).
+// of its own (decisions.md D129). It slows and does not stop: a full stop
+// leaves rows of any age on a second screen.
 const blurredRefresh = 10 * time.Second
 
 // spinMsg advances the working spinner. It runs on its own timer, because
@@ -595,7 +596,8 @@ const localHostWait = 10 * time.Second
 // listing per host here, matched locally. The linked hosts are AskRemotes's,
 // so a host that is slow or gone holds no row here up (decisions.md D114). It
 // is a command so the terminal stays responsive while hosts answer, and it
-// schedules nothing itself, so two surveys never run at once.
+// schedules nothing itself, so two surveys never run at once. A close painted
+// from its own result is no substitute: every other row still waits.
 func (m Model) Survey() tea.Cmd {
 	c, projects, look := m.core, m.projects, m.look
 	return func() tea.Msg {

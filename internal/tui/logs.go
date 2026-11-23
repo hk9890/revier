@@ -169,7 +169,8 @@ func (m Model) logsKey(msg keyPress) (tea.Model, tea.Cmd) {
 // this process wrote at or before at, when at is a time: the line of the
 // error the footer showed. Nothing ties an error to its line but the time
 // it was set, so a warning this process wrote between the operation's line
-// and the footer would take the cursor (decisions.md D157).
+// and the footer would take the cursor (decisions.md D157). Finding the line
+// by its text is no fix, because a reworded error no longer matches.
 func (sc *logsScreen) open(sf surface, now, at time.Time) error {
 	sc.reading = false
 	lines, skipped, err := logging.Read(sf.stateRoot, now)

@@ -78,7 +78,8 @@ var socketFile = regexp.MustCompile(`^(?:revier-)?kitty-(\d+)$`)
 // workspaceSocket is the socket of the workspace kitty: the one kitty process
 // this host starts, and opens every new OS window in. A kitty option is its
 // whole process's, so no OS window opens in a kitty the user or the popup
-// started: that kitty's options would reach it (decisions.md D165).
+// started: that kitty's options would reach it (decisions.md D165). One kitty
+// serves every workspace: a kitty per workspace costs its memory for each.
 var workspaceSocket = regexp.MustCompile(`/revier-kitty-\d+$`)
 
 // workspaceName is the workspace kitty's own name for an OS window: the one
@@ -99,7 +100,9 @@ const openVar = "REVIER_KITTY_OPEN"
 // 0.50 (read from kitty 0.50.0's protocol docs; not run against a live
 // kitty). The records name a program, not an agent, so the host passes them
 // on unread and a probe says what they mean. A user var of the same name is
-// dropped, so the var holds only what kitty reports (decisions.md D188).
+// dropped, so the var holds only what kitty reports (decisions.md D188). A
+// probe gets no socket, which would hand it all of kitty's remote control, and
+// the host has no built-in mapping until a second agent sends the records.
 const programStatusVar = "kitty_program_status"
 
 // runtimeDir is the directory that is the user's alone, and "" when the

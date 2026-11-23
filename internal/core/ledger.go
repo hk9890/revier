@@ -15,7 +15,8 @@ import (
 // the one way state reaches the core, and the one way out (decisions.md
 // D120). It is storage. The rules - what a launch records, what a landing
 // consumes, what a survey settles - are the core's and internal/state's, so
-// a second ledger cannot hold a second form of one.
+// a second ledger cannot hold a second form of one. A method for each rule
+// would make every fake write the rule again.
 type Ledger interface {
 	// State is the state as it is now, and never nil; a store that cannot be
 	// read is the state it held last, or an empty one. It is a copy of the
@@ -233,7 +234,9 @@ func (c *Core) settle(st *state.State, r Report, prev []revier.Instance, surveye
 // target's rule, and a launch ends the late one of its own target. It needs
 // no previous listing: a late launch's window may have been listed for
 // minutes, under a title its rule came to match only now. `revier list`
-// logs only WARN and ERROR, so its expiries and binds write no line.
+// logs only WARN and ERROR, so its expiries and binds write no line. A broader
+// rule of another project can take the window first: holding it back would
+// make claim and bind read every late launch's rendered rule.
 func (c *Core) claimLate(st *state.State, r Report, projects []Project, now time.Time, say func(msg string, args ...any)) bool {
 	n := len(st.Late)
 	st.Late = slices.DeleteFunc(st.Late, func(l state.Launch) bool {

@@ -88,7 +88,8 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 		// open popup.
 		slog.Info("popup: raise", "ref", w.Ref, "minimized", w.Minimized)
 		// The surface reads it at the focus the raise gives it, so it is on
-		// record first (decisions.md D169).
+		// record first (decisions.md D169). A key typed in at the raise costs
+		// two kitty round trips, and a look after the blur leaves a gap.
 		marked := c.Ledger != nil && w.Minimized
 		if marked {
 			if err := c.Ledger.MarkPopupHidden(); err != nil {

@@ -122,8 +122,9 @@ is too slow for the one keystroke the product promises. A full shutdown is the
 exception: it quits the popup, because nothing is left to raise it over, and
 the next press is a cold start that offers the restore (D141).
 
-A shutdown saves the session first, and refuses while an agent works or waits
-for an answer (D78). The guard sits in the close path, so every way to close
+A shutdown is the moment before a restart, so it saves the session first. It
+refuses while an agent works or waits for an answer, because that agent would
+lose its turn (D78). The guard sits in the close path, so every way to close
 passes it (D99). Nothing is killed, except under hc (D173); a window an
 application keeps open stays open.
 
@@ -136,6 +137,9 @@ A surface without the focus refreshes slowly, since nobody reads it (D129). A
 linked host is asked at a bounded rate, and less often while it does not
 answer, because each round is a whole survey on that host (D130). This
 machine's rows never wait for a linked host (D114).
+
+A command run in every project is revier's and not a separate tool's, because
+the list of projects is revier's.
 
 ## Scope
 

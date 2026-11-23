@@ -44,7 +44,9 @@ var errNoMessage = fmt.Errorf("%w: no prompt, message or tool call in the transc
 // transcript with no line that does is an error. A panel the listing does not
 // hold, a session with no transcript yet, and a tail with no turn in it are
 // ordinary and answer revier.ErrNoDetail; only a read that failed is a
-// failure. core.Details says what each one logs.
+// failure. core.Details says what each one logs. Other sources fail: the agent
+// view's summary covers background sessions alone, `claude -p --resume` is a
+// model request per agent, and a hook is an install for every user.
 //
 // The surface asks every refresh, so a transcript is read again only when its
 // size or modification time changed since the last read.
@@ -249,7 +251,9 @@ type entry struct {
 }
 
 // usage is the tokens one answer counted, and how long the cache it wrote
-// lives: the tokens written for five minutes and for an hour.
+// lives: the tokens written for five minutes and for an hour. It holds no
+// session cost, whose one source is a copy of the status line's input that
+// every user would write, and no context share, whose size no transcript has.
 type usage struct {
 	Input         int `json:"input_tokens"`
 	CacheRead     int `json:"cache_read_input_tokens"`

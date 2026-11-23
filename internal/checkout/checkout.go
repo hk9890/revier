@@ -1,7 +1,8 @@
 // Package checkout is what revier does to a project's directory rather than to
 // its windows: it reads the origin a new project records, clones the
 // repository of a project whose directory is missing, and trusts the mise
-// configuration of a checkout it created or adopted.
+// configuration of a checkout it created or adopted. revier clones because a
+// project file travels between machines and its checkout does not.
 //
 // Cloning is the only write revier makes outside its own configuration and
 // state. It runs in the foreground with git's output on the terminal, and only

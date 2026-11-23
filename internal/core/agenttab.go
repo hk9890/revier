@@ -489,6 +489,8 @@ type OutsideKey struct {
 // run, and the key opens the plain tab. A name config.toml does not declare is
 // refused. A command that reads a project template is refused: outside a
 // workspace there is no project to render it against (decisions.md D164).
+// The panel's directory is no substitute: it would hand a program a path it
+// never asked for.
 func (o OutsideKey) agent() (NamedAgent, bool, error) {
 	if o.Agent == "" && len(o.Agents) == 0 {
 		return NamedAgent{}, false, nil

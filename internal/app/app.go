@@ -3,6 +3,8 @@
 // saved sessions and the events (decisions.md D121). The command line and the
 // TUI call it and keep only what is theirs: taking the input and showing the
 // result. A decision about a target or a host is not here; it is the core's.
+// The sequences are outside the core so that it stays free of files, and are
+// written once because a copy in each surface drifts from the other.
 package app
 
 import (

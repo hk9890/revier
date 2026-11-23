@@ -288,7 +288,8 @@ func (o RestoreOpts) report(p Progress) {
 // answers costs the restore one step and not the rest of the walk. raise is
 // whether a window it binds or a terminal window it opens is raised: only the
 // return home raises, so the desktop does not flip through every window a
-// restore opens (decisions.md D15).
+// restore opens (decisions.md D15). A terminal a step opens is still focused,
+// because that focus picks its current tab.
 func (c *Core) restoreLaunch(ctx context.Context, p Project, step RestoreStep, raise bool) RestoreResult {
 	ctx, cancel := context.WithTimeout(ctx, 2*BindWait)
 	defer cancel()

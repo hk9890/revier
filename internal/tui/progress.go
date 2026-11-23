@@ -16,6 +16,8 @@ import (
 // done, or ends a shutdown's wait after its last step, and leaves the surface
 // up to say what it did; a second quits, for a step that hangs (decisions.md
 // D140).
+// A press that leaves the screen or starts a second close acts on a desktop
+// half changed, so Esc here does not leave a restore that still opens windows.
 
 // walk is what a running shutdown or restore has reported so far, and how to
 // stop it.

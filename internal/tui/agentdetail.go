@@ -14,7 +14,8 @@ import (
 // detailWait bounds one read of what a project's agents said, and one read of
 // the mirror's screen. A detail read asks no host and runs no listing: it is
 // the end of a file per agent, which answers in milliseconds, through the
-// listing the survey keeps.
+// listing the survey keeps. A longer bound on a listing of its own is no fix:
+// it still holds the survey back.
 const detailWait = 2 * time.Second
 
 // partialAnswers is how many answers in a row that left an agent unread the

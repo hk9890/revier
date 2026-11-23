@@ -144,7 +144,8 @@ type Target struct {
 // and in a file written before the field existed (decisions.md D146). A
 // restore gives an agent with no name the agent that runs its harness
 // (D193). Unfiled says that its harness kept no conversation under Session
-// when the save ran, as for a Claude Code agent never prompted (D194).
+// when the save ran, as for a Claude Code agent never prompted (D194). Dir is
+// recorded because an agent resumed from the repository root edits main.
 type Agent struct {
 	Harness string           `toml:"harness" json:"harness"`
 	Session revier.SessionID `toml:"session,omitempty" json:"session,omitempty"`

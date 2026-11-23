@@ -13,7 +13,8 @@ import (
 // What the surface last saw: while it runs, it keeps what its surveys find
 // open as one session file outside the saved ones, so an end with no
 // shutdown - a killed terminal, a power loss - still leaves a restore point
-// (decisions.md D150).
+// (decisions.md D150). Neither a save on SIGHUP, which a SIGKILL never sends,
+// nor a replay of the state record takes the place of this file.
 
 // recoveredMsg is the check for an end with no shutdown, answered: the
 // session to offer when ok.

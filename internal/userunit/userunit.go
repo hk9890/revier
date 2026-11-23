@@ -2,7 +2,8 @@
 // service manager, so it has the session's login environment whichever
 // process asks first: a program started from a shell keeps that shell's
 // environment, a venv's or a credential's, and hands it to everything it
-// starts for its whole life (decisions.md D167).
+// starts for its whole life (decisions.md D167). A fixed list of variables is
+// no answer: it drops each desktop variable revier does not know.
 package userunit
 
 import (

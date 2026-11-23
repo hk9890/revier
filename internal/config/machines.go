@@ -8,7 +8,8 @@ import (
 
 // RemoteMachine is one [[machine]] table of config.toml: a machine the
 // remote screen and `revier link` list (decisions.md D154). Host is the ssh
-// destination, as a link's host is.
+// destination, as a link's host is. The list is declared and not read from the
+// ssh config, which also names forges and routers that run no revier.
 type RemoteMachine struct {
 	Host string `toml:"host"`
 }

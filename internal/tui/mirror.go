@@ -25,15 +25,16 @@ import (
 // agent under the cursor shows, read from its terminal once a second, so the
 // user watches the agent work without going to it (decisions.md D111). The
 // agent list's pane and the project list's pane draw it alike, each for the
-// agent under its own cursor (D125).
+// agent under its own cursor (D125). No line above it names the turn the
+// agent is in: the screen shows that already.
 //
 // It is the terminal's own drawing, laid out for the agent's window, and that
 // window is wider than the pane: a line that does not fit continues on the
 // next at a word, under its own first word, and a rule is shortened to fit
-// instead. The screen is shown whole (D137). The colours are kept, and
-// nothing else the terminal was told: only an SGR sequence is passed on, and
-// every line is closed, so what an agent's screen holds cannot repaint the
-// surface that shows it.
+// instead. A cut line would lose the end of every sentence. The screen is
+// shown whole (D137). The colours are kept, and nothing else the terminal was
+// told: only an SGR sequence is passed on, and every line is closed, so what
+// an agent's screen holds cannot repaint the surface that shows it.
 
 // mirrorInterval is how often the mirror reads the panel. It has its own
 // timer: a survey lists every host here, and the mirror must not wait for
@@ -189,7 +190,8 @@ func (mi *mirror) take(msg mirroredMsg) {
 		// its project reads it last as it ends. take logs "mirror: panel gone"
 		// at INFO in its place, with panel and err, once while the cursor stays
 		// on that panel: that line still shows a panel that stays unmatched
-		// (decisions.md D172).
+		// (decisions.md D172). A TUI that dropped only the reads its own close
+		// ended would miss a panel closed by hand.
 		if !mi.gone[panel] {
 			if mi.gone == nil {
 				mi.gone = map[string]bool{}

@@ -158,7 +158,10 @@ type RestoreStep struct {
 // Code agent that never got a prompt, keeps the id and is marked unfiled. A
 // restore resumes it when the agent got its first prompt after the save, and
 // otherwise starts it empty and does not say its conversation is gone
-// (decisions.md D139, D194).
+// (decisions.md D139, D194). Every save keeps the id, a shutdown's too: a
+// first prompt can still come, as a close can stop before it ends the agent.
+// A restore asks the probe and does not watch the panel after the launch,
+// which sees a failure only once its window is open.
 func (c *Core) Session(ctx context.Context, r Report) (session.Session, SessionGaps) {
 	current := c.state().Current
 	// The hosts have HostWait and not the whole of the save's bound: the

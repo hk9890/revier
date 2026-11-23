@@ -6,6 +6,10 @@ Ports and adapters. The core holds the domain and the orchestration and knows
 nothing about kitty, hc, GNOME, or Claude. Every tool-specific fact lives
 behind one of the ports below.
 
+revier is one static Go binary with a fast start. A keypress is a process of
+its own, so a start cost is paid on every keystroke, and an interpreted
+implementation pays its bootstrap there.
+
 ```
                         ┌──────────────┐
                         │     TUI      │
@@ -77,6 +81,9 @@ A runtime is shown by the view that follows it, and three setups work (D178):
 | hc | kitty | An agent outlives the window that shows it; tabs, focus and the terminal keys are kitty's |
 | hc | none | Over ssh or with no display: every panel runs and is listed, read and typed into, and a terminal reaches one by attaching to it; no tab is drawn and nothing is focused |
 
+A kitty runtime in another view is not a setup, because kitty runs programs
+in its own windows.
+
 Under hc, the kitty view opens one kitty OS window per instance, one kitty tab
 per tab, and one kitty window per panel of a tab, each running hc's attach for
 its terminal (D180). Each kitty window carries the hc address it attaches, so
@@ -92,7 +99,8 @@ What a setup without the kitty runtime does not read:
   view, so a terminal attached by hand there is its window alone (D95, D178).
 - **A plain tab.** Outside a workspace a terminal key opens kitty's own shell,
   since an hc terminal no instance holds would list as an instance of its own
-  (D183).
+  (D183). Under a mark the survey skips, it would keep a program running that
+  nothing shows or reaches.
 
 ## The other ports
 
@@ -100,7 +108,10 @@ What a setup without the kitty runtime does not read:
 whole panel rather than one signal, because which signal is trustworthy
 differs per harness and changes: the Claude probe moved from the title to
 Claude Code's own agent listing and the port did not change (D57). Only a probe says
-whether a program is an agent; a runtime says shell or tool (D119).
+whether a program is an agent; a runtime says shell or tool (D119). What a
+panel reports comes from programs that run as the user, and revier takes it
+as it is: such a program can already do worse than show an agent that is not
+there.
 
 **Remote** is a revier on another machine, not a runtime: it answers with the
 survey the core produces, and lists, opens and focuses nothing here (D40). The
@@ -121,7 +132,7 @@ control, this is its configuration file.
 revier owns one file whole, the popup's (D191). It is not the window **Host**:
 the host acts on a window that exists, a rule on a window before it is drawn.
 
-Three things that look like ports and are not:
+Four things that look like ports and are not:
 
 - **The store.** Projects are TOML files on disk. There is no second storage
   backend planned, so it is a package, not an interface.
@@ -130,6 +141,7 @@ Three things that look like ports and are not:
 - **Matching.** The core matches instances against realizations. Putting it
   behind the port would duplicate it in every adapter and let two adapters
   disagree about what a match means.
+- **Logging.** It names no tool, so the core logs directly.
 
 ## Where the work happens
 
@@ -182,7 +194,9 @@ can work is chosen. A prototype adapter stays out of that list, so it runs
 only where the config names it (D174). The view is selected after the
 runtime, by a list of its own; left out, it is the runtime's own view, as
 under kitty, then kitty where it can show the runtime, else none, as under
-hc (D178, D185). With no window host the core runs without one, and
+hc (D178, D185). The list is the view's own because a default alone could
+not keep hc unshown on a machine where kitty works, nor say which view a
+headless test runs over. With no window host the core runs without one, and
 window-only targets report as unavailable rather than failing at the
 keystroke.
 

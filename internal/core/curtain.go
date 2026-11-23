@@ -60,7 +60,9 @@ func (c *Core) curtainHost() (revier.Coverer, revier.Hider, error) {
 // primary one first; the primary one is focused last, so that its keys reach
 // it. It returns the refs, primary first. A failure returns the error and the
 // refs of the curtains found so far: the caller ends every curtain by closing
-// the socket they read. The wait is ctx's to bound.
+// the socket they read. The wait is ctx's to bound. Each monitor has a window:
+// fullscreen covers one monitor, a maximized window goes under fullscreen
+// windows, and the popup's own overlay rule minimizes it when the focus moves.
 func (c *Core) OpenCurtains(ctx context.Context, argv func(revier.Monitor) []string) ([]revier.TargetRef, error) {
 	start := time.Now()
 	refs, err := c.openCurtains(ctx, argv)

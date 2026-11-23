@@ -15,7 +15,9 @@ import (
 // of its name on the host; a part of an agent's activity, or the whole of the
 // name an agent's harness gives it (decisions.md D161). Case does not count,
 // and an empty word finds nothing. It is how a word a user gives, such as a
-// tool's name, finds the project it lives in.
+// tool's name, finds the project it lives in. The name counts whole because a
+// part, such as a shared prefix, finds unrelated agents; no address is made of
+// it, since that would reach Claude agents alone.
 func Matches(v revier.ProjectView, word string) bool {
 	if word == "" {
 		return false
