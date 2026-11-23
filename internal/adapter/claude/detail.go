@@ -39,14 +39,14 @@ var errNoMessage = fmt.Errorf("%w: no prompt, message or tool call in the transc
 // the listing's error when the last one failed.
 //
 // The transcript's format is Claude Code's internal one, and it changes
-// between releases. So this is display only, as revier.Detailed says
-// (decisions.md D106): a line that does not parse is passed over, and a
-// transcript with no line that does is an error. A panel the listing does not
-// hold, a session with no transcript yet, and a tail with no turn in it are
-// ordinary and answer revier.ErrNoDetail; only a read that failed is a
-// failure. core.Details says what each one logs. Other sources fail: the agent
-// view's summary covers background sessions alone, `claude -p --resume` is a
-// model request per agent, and a hook is an install for every user.
+// between releases. So this is display only, as revier.Detailed says: a line
+// that does not parse is passed over, and a transcript with no line that does
+// is an error. A panel the listing does not hold, a session with no transcript
+// yet, and a tail with no turn in it are ordinary and answer
+// revier.ErrNoDetail; only a read that failed is a failure. core.Details says
+// what each one logs. Other sources fail: the agent view's summary covers
+// background sessions alone, `claude -p --resume` is a model request per agent,
+// and a hook is an install for every user.
 //
 // The surface asks every refresh, so a transcript is read again only when its
 // size or modification time changed since the last read.
@@ -282,7 +282,7 @@ func (u usage) context() int { return u.Input + u.CacheRead + u.CacheCreate }
 // ttl is how long the cache stays warm after the answer: five minutes where
 // the answer wrote any of it for five minutes, as the API puts the shorter
 // life last, on the conversation's end, and an hour otherwise, which is what
-// Claude Code writes where the answer does not say (decisions.md D170).
+// Claude Code writes where the answer does not say.
 func (u usage) ttl() time.Duration {
 	if u.CacheCreation.FiveMinutes > 0 {
 		return 5 * time.Minute
@@ -327,9 +327,9 @@ const briefRunes = 300
 //
 // A tail that gives no detail is errFormat, not errNoMessage, where no line of
 // it parses, or where it holds lines of the conversation and none of them
-// parses: the format changes between Claude Code releases (decisions.md
-// D106), and this is one this read does not know. The core logs it. The last
-// line is not counted while Claude Code is still writing it.
+// parses: the format changes between Claude Code releases, and this is one this
+// read does not know. The core logs it. The last line is not counted while
+// Claude Code is still writing it.
 func lastSaid(tail []byte) (revier.AgentDetail, error) {
 	var d revier.AgentDetail
 	failed := map[string]bool{}

@@ -25,8 +25,7 @@ type Project struct {
 	// Invalid is why nothing in this project can run: its file did not
 	// parse, or a rule about the project as a whole refused it. The project
 	// is kept and listed anyway - a file that vanishes from the surface
-	// takes with it the one place its reason could be read (decisions.md
-	// D85).
+	// takes with it the one place its reason could be read (decisions/0085).
 	Invalid error
 
 	// Status is the [[status]] tables the project file writes itself, as
@@ -152,7 +151,7 @@ func Prepare(projects []revier.Project) []Project {
 // recorded against that target, which then reports itself unavailable with
 // the reason; the project's other targets are prepared and work. Refusing the
 // whole project - or, as it once did, the whole configuration - costs the user
-// every target that was written correctly (decisions.md D85).
+// every target that was written correctly (decisions/0085).
 func PrepareProject(p revier.Project) Project {
 	rendered, errs := Render(p)
 	compiled := make([]compiledTarget, len(rendered.Targets))

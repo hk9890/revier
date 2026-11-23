@@ -110,7 +110,7 @@ func TestAgentCloseClosesTheTabAgentNewOpened(t *testing.T) {
 }
 
 // An agent in the workspace's own tab closes as its panel alone: the shell
-// the tab holds beside it stays (decisions.md D94), and the command says so.
+// the tab holds beside it stays, and the command says so.
 func TestAgentCloseInTheWorkspacesOwnTabClosesTheAgentPanelAlone(t *testing.T) {
 	a, rt := agentDesktop(t, revier.StatusIdle)
 

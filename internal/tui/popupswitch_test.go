@@ -13,7 +13,7 @@ import (
 // The popup takes the second press of the desktop's key over its socket, a
 // real one here: the press switches the list as the switch key pressed in
 // the popup does, and the popup waits on for the next press, which switches
-// the list again (decisions.md D182).
+// the list again.
 func TestThePopupSwitchesItsListOnAPressOverItsSocket(t *testing.T) {
 	_, _, c, projects := world(t, 3)
 	path := filepath.Join(t.TempDir(), "popup.sock")

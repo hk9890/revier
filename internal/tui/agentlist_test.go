@@ -53,7 +53,7 @@ func TestTheSwitchKeyOverAScreenTypesNothing(t *testing.T) {
 }
 
 // Every state is its glyph alone in one column, so what each agent does
-// starts at the same cell, whichever state leads it (decisions.md D171).
+// starts at the same cell, whichever state leads it.
 func TestEveryAgentStateIsItsGlyphInOneColumn(t *testing.T) {
 	g := theme.Default().Glyphs
 	states := []struct {

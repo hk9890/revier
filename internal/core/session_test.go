@@ -916,7 +916,7 @@ func TestRestoreKeepsAWrapperDefaultForAHarnessAnotherAgentRuns(t *testing.T) {
 // unfiled. Its restore starts it empty and does not say that its
 // conversation is gone. When the agent ran on after the save, as after a
 // close that stopped before it, and got its first prompt, the restore
-// resumes it (decisions.md D194).
+// resumes it.
 func TestASaveMarksAnAgentNeverPromptedUnfiled(t *testing.T) {
 	dir := t.TempDir()
 	rt := hosttest.NewRuntime("rt")
@@ -1002,7 +1002,7 @@ func TestRestoreKeepsTheDefaultForAHarnessItsProbeReportedUnderAnotherName(t *te
 // A default agent whose probe cannot resume does not take an agent another
 // probe claimed: an unnamed aider agent past the layout, whose exec probe
 // reports another harness name, comes back as the named aider agent and not
-// as the default opencode (decisions.md D193).
+// as the default opencode.
 func TestAnUnnamedAgentOfAProbeThatReportsAnotherNameComesBackAsItsNamedAgent(t *testing.T) {
 	proj := agentProject()
 	proj.Targets[3].Runtime.Panels[1] = revier.PanelSpec{Kind: revier.PanelAgent, Title: "opencode", Command: []string{"opencode"}}

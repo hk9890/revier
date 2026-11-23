@@ -1,13 +1,12 @@
 // Package record writes and reads revier's state record: what revier did and
 // what a surface saw, one JSON line each, appended to a file per day under
-// $STATE/record and never pruned (decisions.md D151). `revier state` replays
+// $STATE/record and never pruned (decisions/0151). `revier state` replays
 // it to say what was open at a moment.
 //
-// It is kept apart from the event file (D151): a reader counts
+// It is kept apart from the event file (decisions/0151): a reader counts
 // those lines as uses, and a failure or a closed window is no use of a
 // project. An operation records what it did, failed or not; only a surface
-// records what it saw, as the difference between two of its own surveys
-// (D121).
+// records what it saw, as the difference between two of its own surveys.
 //
 // Like the log it is process-wide, and a process that never called Setup
 // records nothing.
@@ -143,7 +142,7 @@ type Outcome struct {
 // a linked host the links to it. Hosts is the hosts that listed; Unlisted
 // says why each other one did not, Unreachable why the linked host gave no
 // answer, and Unknown why it gave none for a link. What they hold is not in
-// the survey, and is not gone (decisions.md D89).
+// the survey, and is not gone.
 type Seen struct {
 	Machine string `json:"machine,omitempty"`
 	// Current is the project selected here, so a replay that starts at a

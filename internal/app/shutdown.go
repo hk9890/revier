@@ -26,7 +26,7 @@ type CloseRequest struct {
 	// project.
 	Project revier.ProjectName
 	Scope   core.ShutdownScope
-	// Force closes a step whose agent is busy (decisions.md D78).
+	// Force closes a step whose agent is busy.
 	Force bool
 	// Save saves the session the close ends, when it changed.
 	Save bool
@@ -66,12 +66,12 @@ type CloseResult struct {
 // Close closes the plan as core.Shutdown does, for both surfaces. A close of
 // every project saves as a shutdown, and one of a single project as that
 // project's close. The save runs after the busy guard, so a close the guard
-// refuses saves nothing either (decisions.md D78). A refusal is returned as
+// refuses saves nothing either. A refusal is returned as
 // core.ErrAgentBusy, with the rechecked plan in Refused.
 //
 // A full shutdown, of every project, all of each, is recorded in the state
 // with the session it saved, so the next surface offers to restore what it
-// closed (D141). The record is written once the save is made and before the
+// closed. The record is written once the save is made and before the
 // first close, because the close may end the caller's own terminal last. A
 // close the busy guard refuses, or whose save fails, records nothing, and
 // neither does one cancelled before the record is written: the cancel stops
@@ -217,7 +217,7 @@ func (r *ShutdownRecord) Abandon() {
 
 // Recorded reports whether the shutdown is on record: written by it, not
 // taken back, and held by the state now. The ledger does not report a write
-// that failed, and an open since ends the record (decisions.md D141), so the
+// that failed, and an open since ends the record, so the
 // state is read: the surface that quits on a recorded shutdown stays when the
 // state does not hold it, since its next start would not offer this one.
 func (r *ShutdownRecord) Recorded() bool {
@@ -253,11 +253,11 @@ func (r *ShutdownRecord) reach() {
 // under the state's lock, so a surface that takes the record back after its
 // cancel is never followed by this write. A recorded shutdown removes what a
 // surface last saw: the end is a clean one, and a file left from before it
-// would read as an end with no shutdown once the record ends (decisions.md
-// D150). A record that did not reach the state leaves that file: the next
-// start finds no shutdown on record and offers it. A file that is there and
-// could not be removed logs a WARN "session seen" with err and path, the same
-// msg that tui/seen.go logs for a write that failed.
+// would read as an end with no shutdown once the record ends. A record that did
+// not reach the state leaves that file: the next start finds no shutdown on
+// record and offers it. A file that is there and could not be removed logs a
+// WARN "session seen" with err and path, the same msg that tui/seen.go logs for
+// a write that failed.
 func (r *ShutdownRecord) write(ctx context.Context, sessionID string) {
 	at := time.Now().Round(0)
 	r.c.Ledger.Update(func(st *state.State) bool {
@@ -306,7 +306,7 @@ func (r *ShutdownRecord) end(applies func() bool) {
 }
 
 // ClearShutDown ends the full shutdown on record: a restore started, or the
-// start dialog started fresh (decisions.md D141).
+// start dialog started fresh.
 func ClearShutDown(c *core.Core) {
 	c.Ledger.Update(func(st *state.State) bool { return st.ClearShutDown() })
 }

@@ -120,7 +120,7 @@ func TestAnOverrideDoesNotReachAnotherProject(t *testing.T) {
 }
 
 // A shared target with no remote part is local-only, so a link is left with
-// the derived home and its tab onto the host alone (decisions.md D82). The
+// the derived home and its tab onto the host alone (decisions/0082). The
 // one it lacks is recorded, for a press on it to say why.
 func TestALinkDoesNotGetALocalOnlySharedTarget(t *testing.T) {
 	p := sharedRoot(t, map[string]string{"far": "[remote]\nhost = \"buildbox\"\n"})[0]
@@ -136,7 +136,7 @@ func TestALinkDoesNotGetALocalOnlySharedTarget(t *testing.T) {
 }
 
 // A shared target no project could use is refused in config.toml, once, and
-// costs itself alone (decisions.md D85): it reaches no project, the sound
+// costs itself alone (decisions/0085): it reaches no project, the sound
 // targets beside it reach every one, and the file stays listed whole for the
 // config screen to repair.
 func TestLoadRefusesABrokenSharedTarget(t *testing.T) {

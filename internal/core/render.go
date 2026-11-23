@@ -20,7 +20,7 @@ import (
 // A target whose templates do not render is returned as it was written, and
 // its error sits at the same index of the returned slice. The other targets
 // are rendered and usable: one launch argv that cannot be built is that
-// target's problem and no other's (decisions.md D85).
+// target's problem and no other's (decisions/0085).
 func Render(p revier.Project) (revier.Project, []error) {
 	out := p
 	out.Targets = make([]revier.Target, len(p.Targets))
@@ -128,7 +128,7 @@ func expand(p revier.Project, s string) (string, error) {
 }
 
 // expandArgv renders an argv list, and refuses an argument that renders to
-// nothing (decisions.md D83). A template over a value the project leaves
+// nothing. A template over a value the project leaves
 // empty - a link with no path recorded, a var written blank - hands the
 // program an empty argument, which it reads as the current directory, an
 // empty pattern or a missing operand, and nothing says why. The error names

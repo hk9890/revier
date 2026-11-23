@@ -11,7 +11,7 @@ import (
 
 // Serving a panel to a terminal on another machine: a link's panel there is an
 // ssh that runs `revier agent exec` or `revier shell exec` here, and that
-// process becomes the panel's program (decisions.md D84). What the program is
+// process becomes the panel's program (decisions/0084). What the program is
 // and where it starts is this machine's project file's to say, as it is for a
 // panel a runtime here opens.
 
@@ -24,7 +24,7 @@ type Served struct {
 	// Agent is the named agent the process runs, and empty for the default
 	// agent and a shell: the served-processes host marks the panel with it,
 	// as an agent tab is marked, so the project's address still means the
-	// default agent there (decisions.md D145).
+	// default agent there.
 	Agent string
 	Dir   string
 	Argv  []string
@@ -38,7 +38,7 @@ type Served struct {
 // resolved: a machine reached over ssh alone has no runtime, and serves its
 // panels all the same. A refused target is passed over, as
 // resolveAt passes over it: its realization is as written, not as rendered,
-// and nothing may run from an argv that did not render (decisions.md D85).
+// and nothing may run from an argv that did not render (decisions/0085).
 // The panels are the listed tabs' as the file declares them, with no argv of a
 // link filled in: the machine that serves a panel is the one the project is on.
 func workspace(p Project, kind revier.PanelKind) (revier.Realization, revier.PanelSpec, error) {
@@ -91,7 +91,7 @@ func article(kind revier.PanelKind) string {
 // conversation of one harness is never resumed into a panel that runs another.
 // A named agent is that panel running the named agent's command, as in an
 // agent tab: this machine's configuration declares it for the link, and a
-// name it does not declare starts nothing (decisions.md D146).
+// name it does not declare starts nothing.
 func (c *Core) ServeAgent(p Project, r Resume) (Served, error) {
 	named, ok := p.namedAgent(r.Agent)
 	if r.Agent != "" && !ok {

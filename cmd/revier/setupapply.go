@@ -177,7 +177,7 @@ func (r setupRun) applyRules(ctx context.Context) (core.PopupRulePlan, error) {
 	// A run that changed something logs "setup install: rules" or
 	// "setup uninstall: rules" with action; file, revier's own rules file; and
 	// moved, the number of an older revier's rules taken out of the user's
-	// file (decisions.md D191). A run that failed logs it at Error with err
+	// file. A run that failed logs it at Error with err
 	// as well.
 	plan = a.core.ApplyPopupRules(ctx, plan)
 	switch {

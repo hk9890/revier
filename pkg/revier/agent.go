@@ -27,7 +27,7 @@ type PanelSpec struct {
 	// it with the realization's Dir when it renders the project, so a host
 	// starts a panel in its Dir and decides nothing. A restore sets another,
 	// for an agent that worked in a worktree of the project rather than in the
-	// project itself (decisions.md D146), and so does `revier agent new`.
+	// project itself, and so does `revier agent new`.
 	Dir string `toml:"-" json:"dir,omitempty"`
 }
 
@@ -43,7 +43,7 @@ const (
 // its program. A login shell carries a leading dash in argv[0]. Every runtime
 // asks here, so a panel has the same kind whichever host reports it. A host
 // never reports PanelAgent for a live panel: whether a program is an agent is
-// the probes' to say (decisions.md D119).
+// the probes' to say (decisions/0119).
 func IsShell(program string) bool {
 	switch strings.TrimPrefix(baseName(program), "-") {
 	case "sh", "bash", "zsh", "fish", "dash", "ksh", "ash", "mksh", "tcsh", "csh", "nu", "elvish", "xonsh", "pwsh":
@@ -76,7 +76,7 @@ type Panel struct {
 // PanelAgentVar is the panel variable that names the named agent an agent tab
 // runs. Every panel of the tab carries it, as OpenTab sets a tab's vars on
 // each; a tab holds one agent, so the tab's mark is its agent's. The default
-// agent's tab carries none (decisions.md D145). A host that reports a panel
+// agent's tab carries none. A host that reports a panel
 // it did not open, such as one served to a link, sets it from the name the
 // panel's process was started with.
 const PanelAgentVar = "revier_agent"
@@ -136,7 +136,7 @@ type AgentProbe interface {
 // AgentState is what a probe reports about one panel. It says what the agent
 // is doing now and not since when: a field a probe author fills for nothing
 // is a field to leave out of the contract, and the one surface that shows an
-// age reads it from Detailed (decisions.md D102).
+// age reads it from Detailed.
 type AgentState struct {
 	Harness  string `json:"harness"`
 	Status   Status `json:"status"`
@@ -156,7 +156,7 @@ type AgentState struct {
 	// Session is the conversation the agent holds, empty when the harness
 	// does not say or the probe would pay a process to learn it: a survey
 	// reads it every refresh. It is what the event file records an agent by
-	// (decisions.md D112). A save on this machine asks Resumable instead,
+	// (decisions/0112). A save on this machine asks Resumable instead,
 	// which answers for that moment. A save on another machine records it,
 	// with Dir, as the survey that answered the save read them, and asks
 	// Resumable about an agent whose read named no Session or no Dir.
@@ -166,7 +166,7 @@ type AgentState struct {
 	// Claude Code's session name, the one its peer messages address. A
 	// surface shows it beside revier's address and decides nothing by it,
 	// since a harness need not keep it unique or stable; a search finds the
-	// agent's project by it (decisions.md D161).
+	// agent's project by it.
 	Name string `json:"name,omitempty"`
 }
 
@@ -251,9 +251,9 @@ type Titled interface {
 // Detailed is an optional capability of an AgentProbe, detected by type
 // assertion. Detail is the last thing the agent in a panel said, for the
 // surface, which orders its agents by when each spoke, and for `revier agent
-// read`, which prints it (decisions.md D116), with the turn the agent is in,
-// which nothing in revier draws (D125), and the tokens and the cache of the
-// conversation, which every agent's row draws (D170). It
+// read`, which prints it, with the turn the agent is in,
+// which nothing in revier draws, and the tokens and the cache of the
+// conversation, which every agent's row draws. It
 // is asked for every agent the surface shows - one project's beside the
 // project list, every project's on the agent list - each time the surface
 // refreshes, and never in a survey: keep it cheap, and read again only what

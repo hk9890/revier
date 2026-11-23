@@ -10,7 +10,7 @@ import (
 )
 
 // kitty runs its programs and draws them, so one host is the runtime and the
-// view over the same kitty processes (decisions.md D176), and each optional
+// view over the same kitty processes, and each optional
 // capability is on the half the core asks it of.
 func TestKittyIsTheRuntimeAndTheViewWithTheirCapabilities(t *testing.T) {
 	var rt revier.Runtime = &kitty.Host{}
@@ -39,7 +39,7 @@ func TestKittyIsTheRuntimeAndTheViewWithTheirCapabilities(t *testing.T) {
 
 // Over hc, kitty is a view alone: it draws hc's terminals in windows of its
 // own, maps a key's window to a terminal, and opens kitty's own tab outside a
-// workspace, and runs no program of the runtime's (decisions.md D180, D183).
+// workspace, and runs no program of the runtime's.
 func TestTheKittyViewOverAnotherRuntimeIsAViewAlone(t *testing.T) {
 	var view revier.View = &kitty.View{}
 	for name, ok := range map[string]bool{
@@ -61,7 +61,7 @@ func TestTheKittyViewOverAnotherRuntimeIsAViewAlone(t *testing.T) {
 }
 
 // With no display there is nothing to show a window on, so the view is not
-// usable, and hc runs unshown, as over ssh (decisions.md D178).
+// usable, and hc runs unshown, as over ssh.
 func TestTheKittyViewNeedsADisplay(t *testing.T) {
 	bin := t.TempDir()
 	for _, name := range []string{"kitty", "kitten"} {

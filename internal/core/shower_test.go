@@ -27,7 +27,7 @@ func viewedProject() revier.Project {
 }
 
 // viewed is a runtime that draws nothing, as hc, and a view that draws it in
-// windows of its own, as kitty over hc (decisions.md D180).
+// windows of its own, as kitty over hc.
 func viewed() (*core.Core, *hosttest.FakeRuntime, *hosttest.FakeView) {
 	rt := hosttest.NewRuntime("hc")
 	view := hosttest.NewView("kitty")
@@ -107,9 +107,8 @@ func TestAnAgentPastTheLayoutOpensBeforeTheViewDrawsTheWorkspace(t *testing.T) {
 }
 
 // A view closed by hand ends no program: the next press finds the instance
-// running, opens a window over its tabs, and starts nothing (decisions.md
-// D181). The window ends with the active tab current, as a launch's does,
-// not the last tab it drew.
+// running, opens a window over its tabs, and starts nothing. The window ends
+// with the active tab current, as a launch's does, not the last tab it drew.
 func TestAPressOnAnInstanceNoViewShowsOpensAViewAndStartsNothing(t *testing.T) {
 	c, rt, view := viewed()
 	p := prepared(t, viewedProject())
@@ -227,7 +226,7 @@ func TestASecondPressOnAViewedTabGoesHome(t *testing.T) {
 
 // A tab a key opens in a workspace the view shows is drawn in its window and
 // made current; one a script opens with no view window opens no window,
-// since a script's tab is gone to by nobody (decisions.md D118).
+// since a script's tab is gone to by nobody.
 func TestAnAgentTabIsDrawnWhereTheViewShowsTheWorkspaceAlone(t *testing.T) {
 	c, rt, view := viewed()
 	p := prepared(t, viewedProject())
@@ -269,8 +268,7 @@ func TestAnAgentTabIsDrawnWhereTheViewShowsTheWorkspaceAlone(t *testing.T) {
 // A key passes the view's window id, which the view maps to the runtime's
 // panel behind it: the tab opens in that panel's workspace, in the panel's
 // directory for a shell. A window of the view's that shows no panel gets a
-// plain tab of the view's own beside it, which no instance holds
-// (decisions.md D183).
+// plain tab of the view's own beside it, which no instance holds.
 func TestAKeyInAViewWindowReachesTheRuntimePanelBehindIt(t *testing.T) {
 	c, rt, view := viewed()
 	dir := t.TempDir()
@@ -327,7 +325,7 @@ func TestARuntimePanelIDReachesItsWorkspaceUnderAView(t *testing.T) {
 // A view window that shows a runtime instance no project holds, as a
 // terminal started by hand and shown through the picker, gets the view's
 // own tab beside it, as a window that shows nothing does: the runtime opens
-// no tab in a terminal it did not start (decisions.md D183).
+// no tab in a terminal it did not start.
 func TestAKeyInAViewWindowOfNoWorkspaceOpensTheViewsTab(t *testing.T) {
 	c, rt, view := viewed()
 	byHand := rt.AddInstance(revier.Instance{Title: "scratch", Panels: []revier.Panel{{ID: "t9"}}})
@@ -373,8 +371,7 @@ func (v *osWindowView) closeWindow(ref revier.TargetRef) {
 
 // A view window that opens again over a live workspace is a window revier
 // starts, so it goes where the home target places a launch's, whether a
-// press on home, a press on a tab or a restore opened it (decisions.md D24,
-// D186).
+// press on home, a press on a tab or a restore opened it.
 func TestAViewWindowOpenedAgainGoesWhereALaunchGoes(t *testing.T) {
 	proj := viewedProject()
 	proj.Targets[0].Runtime.Place = "right top 75% 100%"

@@ -11,8 +11,7 @@ import (
 )
 
 // The popup's surface listens where the press of the core revier builds
-// sends the switch, and the socket's file goes with the surface
-// (decisions.md D182).
+// sends the switch, and the socket's file goes with the surface.
 func TestThePopupListensWhereThePressSendsTheSwitch(t *testing.T) {
 	run := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", run)

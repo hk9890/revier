@@ -79,7 +79,7 @@ func TestEnterOnAHostsProjectWritesTheLinkUnderTheOfferedName(t *testing.T) {
 // The row a link gets before the first survey answers counts no agent. The
 // host lists every agent in its project, nothing here holds the link yet, and
 // a row that counts one is a row drawn as closed with an agent Enter cannot
-// reach (decisions.md D104).
+// reach.
 func TestANewLinksRowCountsNoAgentUntilAPanelHereShowsOne(t *testing.T) {
 	m, remote, _ := linkWorld(t, nil, "beta")
 	remote.Views[0].Agents = []revier.AgentView{

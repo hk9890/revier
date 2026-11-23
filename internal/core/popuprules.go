@@ -10,7 +10,7 @@ import (
 )
 
 // The popup's rules are revier's third store of the user's configuration,
-// beside the desktop's keys and the terminal's (decisions.md D191). The
+// beside the desktop's keys and the terminal's. The
 // window host places a window its rules match before the window's first
 // frame, so a popup that a rule places does not jump into place. revier
 // writes them as a file of its own, whole, and writes the user's file only
@@ -145,8 +145,8 @@ type PopupRulePlan struct {
 	Err  string `json:"error,omitempty"`
 	// Removed is each rule the run took out of the user's file that revier
 	// does not write now, as the host stored it: the overlay rule the guide
-	// had users copy. revier prints each rule it takes out (decisions.md
-	// D191) and keeps no copy, so this is the user's one way to put it back.
+	// had users copy. revier prints each rule it takes out and keeps no copy,
+	// so this is the user's one way to put it back.
 	Removed []revier.WindowRule `json:"removed,omitempty"`
 }
 

@@ -36,7 +36,7 @@ func viewByName(v revier.ProjectView) map[revier.TargetName]revier.TargetView {
 // A refused target reports itself unavailable with the reason, and the rest of
 // the project surveys exactly as it did before. The survey is where a user
 // reads why a target is not there, so the reason travels with it
-// (decisions.md D85).
+// (decisions/0085).
 func TestSurveyReportsARefusedTargetWithItsReason(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty")

@@ -89,7 +89,7 @@ func (c *Core) ProjectFor(ctx context.Context, projects []Project, ask Ask) (Pro
 // noProjectAt is a directory in no project, asked for without Away: a tab is
 // opened from a terminal or a script, which has a directory, so one in no
 // project fails, and never opens the tab in the project of the focused window
-// or the last one (decisions.md D160). It is ErrNoProject, so it exits with
+// or the last one. It is ErrNoProject, so it exits with
 // that status, but says which directory and what to give instead.
 type noProjectAt string
 

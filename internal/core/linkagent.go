@@ -17,7 +17,7 @@ import (
 )
 
 // A link's agent is a process on its host, shown by a panel here that runs an
-// ssh (decisions.md D84). The host's revier says what the agent does; every
+// ssh (decisions/0084). The host's revier says what the agent does; every
 // act on it - going to it, typing into it, closing it - is an act on the panel
 // here. The two are one agent by the tag the panel gave the process: this
 // machine's name and the panel's pid.
@@ -122,7 +122,7 @@ func (c *Core) agentsHere(v revier.ProjectView) []revier.AgentView {
 }
 
 // Shown is the views a surface draws: every agent a panel of this machine's
-// runtime shows, and no other (decisions.md D104). A survey reports more than
+// runtime shows, and no other. A survey reports more than
 // that, and has to - the host's answer about a link is the only word this
 // machine has on it, and `revier list --json` is what the revier on the other
 // machine reads to learn about the agents its own links started here. What is

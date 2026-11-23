@@ -384,7 +384,7 @@ func agentColumn(th theme.Theme, counts map[revier.Status]int, room int, style f
 var statusOrder = []revier.Status{revier.StatusAttention, revier.StatusRunning, revier.StatusIdle, revier.StatusUnknown}
 
 // statusGlyph is the state's glyph alone, for a row's counts, which have no
-// room for its words, and for an agent's row (decisions.md D171).
+// room for its words, and for an agent's row.
 func statusGlyph(th theme.Theme, s revier.Status) string {
 	switch s {
 	case revier.StatusAttention:
@@ -505,7 +505,7 @@ func (m *Model) reload() {
 // closedSince reports a project its row drew as open that nothing on this
 // machine holds now, or that left the list. A row no survey had answered for
 // drew nothing as open, and a host that could not list has not said its
-// targets closed (decisions.md D89).
+// targets closed.
 func (m Model) closedSince(was projectItem) bool {
 	if was.unsurveyed || !was.held {
 		return false

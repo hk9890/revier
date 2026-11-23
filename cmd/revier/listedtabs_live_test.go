@@ -1,8 +1,8 @@
 //go:build live
 
 // Layer L4 for a target that lists its tabs against a real hc core, shown in
-// a fake view (decisions.md D126). On hc a tab is the terminals that share a
-// tab's label, and the labels keep the order revier opened them in (D179).
+// a fake view. On hc a tab is the terminals that share a
+// tab's label, and the labels keep the order revier opened them in.
 package main
 
 import (
@@ -123,7 +123,7 @@ func TestTheKeyOfAListedTabOpensTheWorkspaceOnThatTabOnHc(t *testing.T) {
 }
 
 // `revier agent new` finds the agent panel and the shell panel in the tab the
-// workspace lists (decisions.md D128): the new tab is a third tab that holds
+// workspace lists: the new tab is a third tab that holds
 // a copy of both, and the command prints the address of its agent.
 func TestAgentNewOpensATabInAWorkspaceThatListsItsTabsOnHc(t *testing.T) {
 	lead(t)

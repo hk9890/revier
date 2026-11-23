@@ -54,7 +54,7 @@ type State struct {
 	Late []Launch `json:"late,omitempty"`
 
 	// ShutDown is the full shutdown on record, until anything opens again:
-	// the next surface offers to restore what it closed (decisions.md D141).
+	// the next surface offers to restore what it closed.
 	ShutDown *ShutDown `json:"shutdown,omitempty"`
 
 	// LastRun is the last run of a command target that moved focus: the
@@ -89,7 +89,7 @@ func (s *State) MarkShutDown(at time.Time, session string) {
 }
 
 // ClearShutDown ends the shutdown on record and reports whether there was
-// one. Anything opened since ends it (decisions.md D141), so a launch and a
+// one. Anything opened since ends it, so a launch and a
 // landing clear it too.
 func (s *State) ClearShutDown() bool {
 	had := s.ShutDown != nil

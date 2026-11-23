@@ -7,7 +7,7 @@ import (
 )
 
 // RemoteMachine is one [[machine]] table of config.toml: a machine the
-// remote screen and `revier link` list (decisions.md D154). Host is the ssh
+// remote screen and `revier link` list. Host is the ssh
 // destination, as a link's host is. The list is declared and not read from the
 // ssh config, which also names forges and routers that run no revier.
 type RemoteMachine struct {
@@ -39,7 +39,7 @@ func validateMachines(machines []RemoteMachine) []error {
 // MachineHosts is the hosts the remote screen and `revier link` list: every
 // machine config.toml declares and no rule refused, in file order, without
 // this machine. The file can be shared between machines, so each one is on
-// the list and leaves itself off it (decisions.md D131, D154).
+// the list and leaves itself off it.
 func (c *Config) MachineHosts() []string {
 	return slices.DeleteFunc(slices.Clone(c.machines), ThisMachine().Is)
 }

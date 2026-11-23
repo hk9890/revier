@@ -9,7 +9,7 @@ import (
 )
 
 // SeenHere is what a survey saw of this machine, as the state record keeps
-// it (decisions.md D151): every project loaded, the hosts that listed and why
+// it (decisions/0151): every project loaded, the hosts that listed and why
 // each other one did not, every instance listed, each target open on one,
 // each instance attached by hand to a project, and the agents of the projects
 // here. attached is the state's attachments: a survey of a surface lists

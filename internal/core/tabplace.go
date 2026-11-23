@@ -55,9 +55,9 @@ type PlacedTab struct {
 // one Dir is in, or without Dir the one Cwd is in, with req's target or the
 // kind's. A Panel that no project's workspace holds gets what Outside says,
 // with Outside.Agent the named agent an agent tab asks for. With a Panel and
-// no Dir, a shell tab's directory is the panel's own (decisions.md D153), and
-// an agent tab's is the project's (D158). Outside a workspace, with outside =
-// "agent", an agent tab starts in the panel's directory (D164).
+// no Dir, a shell tab's directory is the panel's own, and
+// an agent tab's is the project's. Outside a workspace, with outside =
+// "agent", an agent tab starts in the panel's directory.
 // A workspace's agent tab skips the panel's directory: Claude Code takes the
 // directory it starts in as its project, and then enters no other worktree.
 func (c *Core) PlaceTab(ctx context.Context, projects []Project, req TabRequest) (PlacedTab, error) {
@@ -81,7 +81,7 @@ func (c *Core) PlaceTab(ctx context.Context, projects []Project, req TabRequest)
 // tabWorkspace is the open workspace a tab asked for with no Panel opens in.
 // Its project is never the focused window's or the last one: a tab is asked
 // for from a terminal or a script, which has a directory, so one in no
-// project fails (decisions.md D160).
+// project fails.
 func (c *Core) tabWorkspace(ctx context.Context, projects []Project, req TabRequest) (Workspace, error) {
 	p, err := c.ProjectFor(ctx, projects, Ask{Name: req.Project, Dir: cmp.Or(req.Dir, req.Cwd)})
 	if err != nil {
@@ -102,7 +102,7 @@ func (c *Core) tabWorkspace(ctx context.Context, projects []Project, req TabRequ
 }
 
 // homeTarget is the target `revier shell new -p <project>` opens its tab in.
-// A project without one is loaded and listed all the same (decisions.md D85),
+// A project without one is loaded and listed all the same (decisions/0085),
 // and is refused here with its reason.
 func (p Project) homeTarget() (revier.TargetName, error) {
 	home, ok := p.Home()
@@ -186,7 +186,7 @@ func (c *Core) openPlaced(ctx context.Context, projects []Project, w Workspace, 
 // runtime's own shell beside the panel, or of the view's beside its window,
 // also one that shows an instance, as a terminal started by hand, a tab of the
 // agent an agent key asks for, or nothing. Every other failure is returned,
-// so the key's own fallback runs (decisions.md D148, D164, D183); so is an
+// so the key's own fallback runs; so is an
 // agent that cannot run there, as OutsideKey's agent says. The key sits on the
 // terminal's new-tab chord and most windows are no project's, so a refusal
 // would take the new-tab key from the user's terminal.

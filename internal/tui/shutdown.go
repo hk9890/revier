@@ -22,11 +22,11 @@ import (
 
 // The shutdown wizard: a full shutdown or one project's, for a project what of
 // it, then the plan to confirm. The run saves the session when it changed and
-// closes what the plan names, through app.Close, as `revier shutdown` does
-// (decisions.md D78). It belongs to the sessions screen, whose bar has its
-// button; its key opens it from the surface too. A project's shutdown leaves
-// the surface up to say what came of it. A full one says it briefly and
-// quits, the popup included, so the next start offers the restore (D141).
+// closes what the plan names, through app.Close, as `revier shutdown` does. It
+// belongs to the sessions screen, whose bar has its button; its key opens it
+// from the surface too. A project's shutdown leaves the surface up to say what
+// came of it. A full one says it briefly and quits, the popup included, so the
+// next start offers the restore.
 
 // shutdownBarKey opens the wizard.
 const shutdownBarKey = "alt+q"
@@ -60,7 +60,7 @@ type shutdown struct {
 	step shutStep
 	row  int
 	// whole is a shutdown of every project, all of each: the one the state
-	// records (decisions.md D141). A del never sets it.
+	// records. A del never sets it.
 	whole   bool
 	project revier.ProjectName
 	scope   core.ShutdownScope
@@ -338,10 +338,10 @@ func (m Model) planned(msg plannedMsg) (tea.Model, tea.Cmd) {
 }
 
 // shutRun saves the session when it changed and closes what the plan names.
-// Confirming a plan that already names a busy agent is the TUI's --force
-// (decisions.md D78); every other close is refused by app.Close when one of
-// the plan's agents turned busy since the plan was drawn, and the wizard
-// shows the plan again with the agents that refused it.
+// Confirming a plan that already names a busy agent is the TUI's --force; every
+// other close is refused by app.Close when one of the plan's agents turned busy
+// since the plan was drawn, and the wizard shows the plan again with the agents
+// that refused it.
 //
 // Only the plan the wizard drew goes in. Every close, the forced one too,
 // reads the agents again inside app.Close, and the order and the session
@@ -354,7 +354,7 @@ func (m Model) shutRun(confirmed bool) (tea.Model, tea.Cmd) {
 	// The recheck, the save, a report before and after each step, and the
 	// wait.
 	w, progress, cancelled := startWalk(core.PhaseRecheck, 3+2*len(plan))
-	// Only a full shutdown runs under the curtains (decisions.md D192).
+	// Only a full shutdown runs under the curtains.
 	if s.whole {
 		rows, steps := closeRows(plan)
 		w.curtain = newCurtain(m.curtain, "shutdown", rows, steps)
@@ -465,7 +465,7 @@ func (m Model) shutDown(msg shutdownMsg) (tea.Model, tea.Cmd) {
 	}
 	// A full shutdown leaves nothing to come back to: the surface says what
 	// it did and quits, the popup too, so the next start is a cold one that
-	// offers the restore (decisions.md D141).
+	// offers the restore.
 	var quit tea.Cmd
 	if msg.recorded && !s.walk.cancelled {
 		s.quitting = true
@@ -697,7 +697,7 @@ func (m Model) shutdownDetail() string {
 			op, rest := skipOp(th, "close"), ""
 			// A plan the busy guard handed back carries the steps its survey
 			// could not read, and those close nothing: the row says so rather
-			// than promising a close (decisions.md D99).
+			// than promising a close.
 			switch {
 			case step.Unread != "":
 				op, rest = keepOp(th, "keep"), step.Unread

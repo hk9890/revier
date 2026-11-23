@@ -334,7 +334,7 @@ func TestARunRecordsAFocusThatLandsLate(t *testing.T) {
 	}
 }
 
-// A refused target and a refused project run nothing (decisions.md D85).
+// A refused target and a refused project run nothing (decisions/0085).
 func TestARefusedCommandTargetRunsNothing(t *testing.T) {
 	for name, p := range map[string]core.Project{
 		"target": core.PrepareProject(commandProject("forever")),

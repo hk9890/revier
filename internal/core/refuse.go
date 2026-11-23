@@ -22,7 +22,7 @@ type Settled struct {
 
 // RefuseChange refuses deleting or renaming a project with a target running
 // or a window attached to it, since its windows are found by titles its name
-// is part of (decisions.md D80). The last survey says what runs; a target that
+// is part of. The last survey says what runs; a target that
 // landed since, or a launch whose window is still to appear, is read from
 // state, else the change would leave that window reachable by no name. An
 // attachment or a binding on a host here is alive: every settle prunes the
@@ -49,12 +49,12 @@ func (c *Core) RefuseChange(v revier.ProjectView, s Settled, doing string) error
 }
 
 // RefuseUnsettled refuses the change while what of the project runs is not
-// known: a target whose host could not list may be running (decisions.md
-// D89), and the launch on record, or a late launch while it is kept (D190),
-// may be the project's with its window still to appear: a rename moves the
-// late launch to a name its window's title never carries. A target's launch
-// on record past its pending window is a late launch that no settle has set
-// aside yet. The change waits for either, not for a guess.
+// known: a target whose host could not list may be running, and the launch on
+// record, or a late launch while it is kept (decisions/0190), may be the
+// project's with its window still to appear: a rename moves the late launch to
+// a name its window's title never carries. A target's launch on record past its
+// pending window is a late launch that no settle has set aside yet. The change
+// waits for either, not for a guess.
 func RefuseUnsettled(v revier.ProjectView, s Settled, doing string) error {
 	name := v.Project.Name
 	for _, t := range v.Targets {

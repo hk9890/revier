@@ -11,7 +11,7 @@ import (
 // failed is an operation's error as the footer shows it: what failed, and
 // where. The error a tool gave can quote its output or join several, and the
 // footer is one line, so it names the operation and the logs screen holds the
-// rest (decisions.md D157). The log line keeps the full text: Error is the
+// rest. The log line keeps the full text: Error is the
 // error's own.
 type failed struct {
 	what    string

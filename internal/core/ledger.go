@@ -12,11 +12,11 @@ import (
 )
 
 // Ledger is where the core keeps what it learned at runtime and what it did:
-// the one way state reaches the core, and the one way out (decisions.md
-// D120). It is storage. The rules - what a launch records, what a landing
-// consumes, what a survey settles - are the core's and internal/state's, so
-// a second ledger cannot hold a second form of one. A method for each rule
-// would make every fake write the rule again.
+// the one way state reaches the core, and the one way out. It is storage. The
+// rules - what a launch records, what a landing consumes, what a survey settles
+// - are the core's and internal/state's, so a second ledger cannot hold a
+// second form of one. A method for each rule would make every fake write the
+// rule again.
 type Ledger interface {
 	// State is the state as it is now, and never nil; a store that cannot be
 	// read is the state it held last, or an empty one. It is a copy of the
@@ -28,21 +28,21 @@ type Ledger interface {
 	Update(apply func(*state.State) bool) *state.State
 	// HoldPress waits for the project's press lock and returns its release,
 	// and whether another press held it first. One press that can launch
-	// holds it from its listing through the write of what it did
-	// (decisions.md D195). It fails only when ctx ends first.
+	// holds it from its listing through the write of what it did. It fails only
+	// when ctx ends first.
 	HoldPress(ctx context.Context, p revier.ProjectName) (release func(), waited bool, err error)
 	// Record appends one event.
 	Record(e revier.Event)
 	// Note appends one line to the state record: what an operation did,
 	// failed or not, or what a save saw. A line with no By is one an
-	// operation did (decisions.md D151).
+	// operation did (decisions/0151).
 	Note(l record.Line)
 	PopupMarks
 }
 
 // PopupMarks is the part of a ledger that keeps the mark of a press that raised the
 // popup from minimized, until the popup's surface takes it at the focus the
-// raise gives it (decisions.md D169). The mark is on the raise's path, so it
+// raise gives it. The mark is on the raise's path, so it
 // is kept apart from the state, whose save is made to last.
 type PopupMarks interface {
 	MarkPopupHidden() error
@@ -158,7 +158,7 @@ func (c *Core) settledProjects() []Project {
 // the one launch on record is the only one a window is attached for.
 //
 // The line is "claim: launch set aside" for a target's launch, kept until
-// LateWindow after launched_at (decisions.md D190), and
+// LateWindow after launched_at (decisions/0190), and
 // "claim: launch replaced" for an action's. project, target and launched_at are
 // the replaced launch's, by_project and by_target the new one's, and age_ms is
 // the replaced launch's age at at. A target's launch past BindWindow, still
@@ -200,8 +200,8 @@ func (c *Core) settle(st *state.State, r Report, prev []revier.Instance, surveye
 		// The first settle of a process claims nothing (Settle), so only the TUI
 		// writes this line.
 		say("claim", "project", p.Name, "target", l.Target, "ref", ref)
-		// An attachment records the terminal inside the window as well
-		// (decisions.md D95); a binding is of the window itself.
+		// An attachment records the terminal inside the window as well; a
+		// binding is of the window itself.
 		refs := []revier.TargetRef{ref}
 		if l.Target == "" {
 			refs = c.attachment(r.Instances, ref)
@@ -274,7 +274,7 @@ func (c *Core) claimLate(st *state.State, r Report, projects []Project, now time
 		}
 		// The line carries project, target, ref and age_ms, the time since
 		// the launch: a late launch's window can come minutes after it
-		// (decisions.md D190). Any process that settles can bind one.
+		// (decisions/0190). Any process that settles can bind one.
 		say("claim: late launch bound", "project", l.Project, "target", l.Target, "ref", awaited[0], "age_ms", now.Sub(l.At).Milliseconds())
 		st.ClaimLate(i, awaited[0])
 		changed = true

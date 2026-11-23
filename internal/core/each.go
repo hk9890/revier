@@ -15,7 +15,7 @@ const (
 	SkipDuplicate Skip = "duplicate"
 	// SkipFiltered: the --filter test failed in the project's directory.
 	SkipFiltered Skip = "filtered"
-	// SkipRemote: the project lives on another machine (decisions.md D40),
+	// SkipRemote: the project lives on another machine (decisions/0040),
 	// and its path is in that machine's terms.
 	SkipRemote Skip = "remote"
 )

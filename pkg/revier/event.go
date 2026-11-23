@@ -24,7 +24,7 @@ const (
 
 // Event is one thing revier did in a project, or one conversation it saw an
 // agent hold there: a line of the event file, and of `revier events`. It names
-// what happened and where, never what was said (decisions.md D112).
+// what happened and where, never what was said (decisions/0112).
 type Event struct {
 	// Time is when it was asked for: the press of a go, the start of an
 	// action, and for an EventAgentSession the survey that saw it.

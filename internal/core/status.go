@@ -6,8 +6,7 @@ import (
 	"time"
 )
 
-// StatusPlace is where on the surface a status command's output stands
-// (decisions.md D134).
+// StatusPlace is where on the surface a status command's output stands.
 type StatusPlace string
 
 // The places. The two on the rule belong to the screen and run once; the two
@@ -41,11 +40,10 @@ type Status struct {
 // StatusOf is the pane statuses of a project: each shared one merged with
 // the project's own at the same place, then the project's own at a place no
 // shared one fills. A link takes its own alone: a shared command is written
-// against a checkout here, and a link's checkout is on its host
-// (decisions.md D134). A project with no path, such as one whose file did
-// not load, takes none either: the command would read whatever directory
-// revier runs in as its checkout. The errors are the merged statuses that
-// still run nothing; each is left out.
+// against a checkout here, and a link's checkout is on its host. A project with
+// no path, such as one whose file did not load, takes none either: the command
+// would read whatever directory revier runs in as its checkout. The errors are
+// the merged statuses that still run nothing; each is left out.
 func (p Project) StatusOf(shared []Status) ([]Status, []error) {
 	var merged []Status
 	if p.Remote == nil && p.Path != "" {

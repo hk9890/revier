@@ -60,7 +60,7 @@ func TestSendTextGoesThroughStdinToTheWindow(t *testing.T) {
 }
 
 // A window kitten no longer matches has closed: its read says the panel is
-// gone, and any other failure stays a failure (decisions.md D172).
+// gone, and any other failure stays a failure.
 func TestReadPanelOfAClosedWindowSaysThePanelIsGone(t *testing.T) {
 	h := newHost()
 	h.SetSockets(func() []string { return []string{"unix:@kitty-4000"} })

@@ -5,7 +5,7 @@ import "context"
 // WindowRule is one placement rule of the window host's: the host places a
 // window that matches it as the window appears, before revier finds it.
 // revier writes the rules for the popup's class alone, into a file of its
-// own (decisions.md D191).
+// own.
 type WindowRule struct {
 	// Class is the window class the rule matches. Empty for a rule that
 	// matches by something else.

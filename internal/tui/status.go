@@ -21,10 +21,10 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// A [[status]] is a command whose output stands at one place on the surface
-// (decisions.md D134). The surface runs each one on its own timer, never in
-// the way of a frame, and draws what the last good run printed. The top line,
-// the footer and the project rows have no room for one at normal widths.
+// A [[status]] is a command whose output stands at one place on the surface.
+// The surface runs each one on its own timer, never in the way of a frame, and
+// draws what the last good run printed. The top line, the footer and the
+// project rows have no room for one at normal widths.
 const (
 	// statusBeat is how often the surface looks for a status that is due.
 	// No status runs more often than config.MinStatusEvery, so a beat of

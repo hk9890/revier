@@ -14,7 +14,7 @@ import (
 
 // Under hc, where the user's service manager runs the core and the user does
 // not linger, doctor says that the core ends at the last logout, and how to
-// keep it (decisions.md D167). A user who lingers, and a kitty user, read
+// keep it. A user who lingers, and a kitty user, read
 // nothing of it.
 func TestDoctorSaysTheHcCoreEndsAtTheLastLogout(t *testing.T) {
 	t.Setenv("HC_SOCKET", filepath.Join(t.TempDir(), "s.sock"))

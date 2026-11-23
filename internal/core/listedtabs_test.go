@@ -407,7 +407,7 @@ func markedPanels(t *testing.T, rt *hosttest.FakeRuntime, name revier.TargetName
 
 // The first panel of a tab that holds panels is the agent, and the tab
 // outlives it. The key still finds the tab by the panel that is left, and
-// opens no second one (decisions.md D64).
+// opens no second one.
 func TestATabIsFoundAfterItsFirstPanelHasEnded(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	c := &core.Core{Runtime: rt, View: rt}
@@ -482,7 +482,7 @@ func openListedTabs(t *testing.T) (*core.Core, *hosttest.FakeRuntime, core.Proje
 }
 
 // The agent panel and the shell panel of a workspace that lists its tabs are
-// the ones of its tabs (decisions.md D128). `revier agent new` opens a copy of
+// the ones of its tabs. `revier agent new` opens a copy of
 // them as a tab of the workspace, whether the command names the workspace or
 // the tab that holds the panels, and returns the new agent's panel.
 func TestAgentNewOpensAnAgentTabInAWorkspaceThatListsItsTabs(t *testing.T) {
@@ -823,7 +823,7 @@ func savedWith(t *testing.T, project revier.Project, panels ...revier.Panel) (se
 // A listed tab that runs a launch is no part of the workspace's layout. An
 // agent that runs as its program is not recorded under the workspace, where a
 // restore would lay its conversation over the agent panel of another tab: the
-// save names it as an agent in a tab (decisions.md D68).
+// save names it as an agent in a tab.
 func TestTheAgentOfAListedTabThatRunsALaunchIsNotRecordedUnderTheWorkspace(t *testing.T) {
 	dir := t.TempDir()
 	s, gaps := savedWith(t, listedTabsProject("agent"),
@@ -892,7 +892,7 @@ func twoAgentTabsProject() revier.Project {
 }
 
 // The first panel of a kind is the one of the first listed tab that declares
-// it, in the order of `tabs` and not of the file (decisions.md D128): an agent
+// it, in the order of `tabs` and not of the file: an agent
 // tab and a served agent copy that one.
 func TestTheAgentPanelOfAWorkspaceIsTheOneOfItsFirstListedTab(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")

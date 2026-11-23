@@ -111,8 +111,8 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 	// After an end with no shutdown, what a surface last saw is saved first,
-	// so a plain restore opens it when it is the newest save (decisions.md
-	// D150). A dry run saves nothing and previews the snapshot itself.
+	// so a plain restore opens it when it is the newest save. A dry run saves
+	// nothing and previews the snapshot itself.
 	unclean := false
 	switch {
 	case ref == "" && *dry:
@@ -159,7 +159,7 @@ func cmdSessionRestore(ctx context.Context, a *app, args []string) error {
 	defer stop()
 	// A restore is an open, so the shutdown on record ends as it starts, as
 	// in the surface: a restore that opens nothing does not leave the start
-	// dialog to offer it again (decisions.md D141).
+	// dialog to offer it again.
 	usecase.ClearShutDown(a.core)
 	// Each target is named before it opens, so a launch that hangs is the
 	// line left on the screen, and what came of it follows on that line.
@@ -233,7 +233,7 @@ func cmdSessionList(a *app, args []string) error {
 		return err
 	}
 	// The newest row is not always what a plain restore opens: a project
-	// closed saves too (decisions.md D149).
+	// closed saves too.
 	if s, ok := session.Newest(all); ok {
 		_, _ = fmt.Fprintf(a.out, "revier session restore opens %s\n", s.ID)
 	}

@@ -10,7 +10,7 @@ import (
 )
 
 // cmdHcAttach is what a kitty window over hc runs: hc's attach of one
-// terminal, held once its program ends (decisions.md D187). The window sets
+// terminal, held once its program ends. The window sets
 // the core's socket as HC_SOCKET and names hc by its path. It has no
 // deadline: the attach lasts as long as the window.
 func cmdHcAttach(args []string) error {

@@ -35,7 +35,7 @@ func SaveSession(ctx context.Context, c *core.Core, stateRoot string, r core.Rep
 }
 
 // SaveChanged saves the session a close ends, for the given reason, unless
-// the save a plain restore opens (decisions.md D149) already holds the same,
+// the save a plain restore opens already holds the same,
 // with the same unfiled marks, or nothing is open. saved is false when it wrote nothing.
 //
 // A caller that cancels saves nothing, and the cancel is the error: the
@@ -68,7 +68,7 @@ func SaveChanged(ctx context.Context, c *core.Core, stateRoot string, r core.Rep
 // store writes s and logs what it holds and what it lacks, and by its reason
 // which save wrote the file. The state record has the save, failed or not,
 // and what the survey r it was made from saw, so a replay at the save can say
-// what it left out and why (decisions.md D151).
+// what it left out and why (decisions/0151).
 func store(c *core.Core, stateRoot string, r core.Report, s session.Session, gaps core.SessionGaps) (session.Session, string, error) {
 	stored, path, err := session.Save(stateRoot, s)
 	if err != nil {
@@ -118,7 +118,7 @@ func logSaved(stored session.Session, path string, gaps core.SessionGaps) {
 	}
 }
 
-// SaveSeen keeps s as what the surface last saw (decisions.md D150).
+// SaveSeen keeps s as what the surface last saw.
 func SaveSeen(stateRoot string, s session.Session) error {
 	return session.SaveSeen(stateRoot, s)
 }
@@ -126,10 +126,10 @@ func SaveSeen(stateRoot string, s session.Session) error {
 // Unclean reports whether revier ended without a shutdown and lost
 // something, and returns what a surface last saw when it did. It writes
 // nothing, so a dry run asks it. r is a survey in which every host here
-// listed. The end was clean when a full shutdown is on record (decisions.md
-// D141), when no surface kept what it saw, when any session was saved after
-// the surface last wrote it, since that save is newer word on what was open,
-// or when every target it holds is open now (D150).
+// listed. The end was clean when a full shutdown is on record, when no surface
+// kept what it saw, when any session was saved after the surface last wrote it,
+// since that save is newer word on what was open, or when every target it holds
+// is open now.
 func Unclean(c *core.Core, stateRoot string, r core.Report) (session.Session, bool, error) {
 	if c.Ledger.State().ShutDown != nil {
 		return session.Session{}, false, nil

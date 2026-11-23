@@ -33,7 +33,7 @@ func tabsOf(t *testing.T, h *hc.Host, ref revier.TargetRef) []revier.Panel {
 // A tab is the terminals that share the instance's labels and a token of
 // their own, after every tab the instance holds. Two tabs of the same vars,
 // as two agent tabs, are two tabs, and the listing keeps their order and the
-// panels' order within each (decisions.md D179).
+// panels' order within each.
 func TestOpenTabStartsALastTabOfItsOwnToken(t *testing.T) {
 	c, sock := newCore(t)
 	h := &hc.Host{Socket: sock}

@@ -156,7 +156,7 @@ func TestAPanelThatCannotBeReadLeavesANote(t *testing.T) {
 
 // A read that crosses its panel's close is no failure: the mirror logs no
 // WARN for it, and one INFO line however often it is read, which still
-// shows a panel that stays unmatched (decisions.md D172).
+// shows a panel that stays unmatched.
 func TestAReadOfAPanelThatClosedIsLoggedOnceAsInfo(t *testing.T) {
 	m, rt, _ := listedWorld(t, 160, 30,
 		listed{project: "alpha", status: revier.StatusIdle, on: "one", screen: "never shown"})

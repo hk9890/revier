@@ -15,11 +15,10 @@ import (
 )
 
 // The start dialog: the first screen after a full shutdown, while the state
-// records one (decisions.md D141). It offers the session the shutdown saved,
+// records one. It offers the session the shutdown saved,
 // the sessions screen, or the surface as it is. It is a screen like the
 // others, not a second surface. It is also the first screen after an end with
-// no shutdown that lost something, offering what the surface last saw
-// (D150).
+// no shutdown that lost something, offering what the surface last saw.
 
 // resumeScreen is the start dialog: when revier was shut down, and the
 // session to offer, which is zero when none is saved. unclean is the dialog
@@ -59,7 +58,7 @@ type resumeRow struct {
 // openResume puts the dialog up over the surface for the shutdown on record.
 // The session it names comes first, whatever its reason: it is what that
 // shutdown closed. One deleted since gives way to the newest save of the
-// whole set (decisions.md D149). A shutdown that saved none offers none.
+// whole set. A shutdown that saved none offers none.
 func (m *Model) openResume(sd state.ShutDown) {
 	var s session.Session
 	if sd.Session != "" {

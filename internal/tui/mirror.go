@@ -23,16 +23,16 @@ import (
 
 // The mirror is the part of a pane that shows an agent: what the panel of the
 // agent under the cursor shows, read from its terminal once a second, so the
-// user watches the agent work without going to it (decisions.md D111). The
+// user watches the agent work without going to it. The
 // agent list's pane and the project list's pane draw it alike, each for the
-// agent under its own cursor (D125). No line above it names the turn the
+// agent under its own cursor. No line above it names the turn the
 // agent is in: the screen shows that already.
 //
 // It is the terminal's own drawing, laid out for the agent's window, and that
 // window is wider than the pane: a line that does not fit continues on the
 // next at a word, under its own first word, and a rule is shortened to fit
 // instead. A cut line would lose the end of every sentence. The screen is
-// shown whole (D137). The colours are kept, and nothing else the terminal was
+// shown whole. The colours are kept, and nothing else the terminal was
 // told: only an SGR sequence is passed on, and every line is closed, so what
 // an agent's screen holds cannot repaint the surface that shows it.
 
@@ -189,9 +189,9 @@ func (mi *mirror) take(msg mirroredMsg) {
 		// A panel that closed while it was read is no failure, as a close of
 		// its project reads it last as it ends. take logs "mirror: panel gone"
 		// at INFO in its place, with panel and err, once while the cursor stays
-		// on that panel: that line still shows a panel that stays unmatched
-		// (decisions.md D172). A TUI that dropped only the reads its own close
-		// ended would miss a panel closed by hand.
+		// on that panel: that line still shows a panel that stays unmatched. A
+		// TUI that dropped only the reads its own close ended would miss a
+		// panel closed by hand.
 		if !mi.gone[panel] {
 			if mi.gone == nil {
 				mi.gone = map[string]bool{}
@@ -316,7 +316,7 @@ const sgrReset = "\x1b[m"
 // what the terminal was told only the SGR sequences are kept - colour, and
 // bold and its kin - and every other escape and control character is
 // dropped, so a line is as wide measured as it is drawn and can do nothing
-// but be read (decisions.md D111). The blank lines a screen ends in are
+// but be read. The blank lines a screen ends in are
 // dropped, so the mirror ends on the last thing the agent's terminal shows.
 func screenLines(text string, w int) []string {
 	if w < 1 || text == "" {

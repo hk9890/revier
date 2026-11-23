@@ -21,7 +21,7 @@ func named(projects []core.Project, name string) (core.Project, bool) {
 // Rule one. One project file that cannot be read costs that project and
 // nothing else: every other file loads, and every command that needs them
 // still runs. The whole set used to be refused, which took the surface, the
-// keybindings and `revier popup` down with one bad file (decisions.md D85).
+// keybindings and `revier popup` down with one bad file (decisions/0085).
 func TestOneBadFileDoesNotCostTheOthers(t *testing.T) {
 	root := projectsRoot(t, "", map[string]string{
 		"good.toml":   valid,

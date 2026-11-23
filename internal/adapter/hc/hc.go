@@ -5,8 +5,8 @@
 //
 // hc has no object that groups terminals. An instance is the set of live
 // terminals that carry the same revier.instance label, which Open gives every
-// terminal it starts (decisions.md D173), and a tab is the terminals of the
-// instance that carry the same revier.tab label (D179). The host speaks hc's
+// terminal it starts, and a tab is the terminals of the
+// instance that carry the same revier.tab label. The host speaks hc's
 // JSON-RPC on the core's Unix socket.
 package hc
 
@@ -29,8 +29,7 @@ import (
 // instance's id, the realization's name, the tab's token, the tab's place
 // among the tabs, and the terminal's place among the panels of its tab. The
 // token is the tab's own, so two tabs of the same vars, as two agent tabs,
-// stay two; the places keep the order a view draws them in (decisions.md
-// D179).
+// stay two; the places keep the order a view draws them in.
 const (
 	instanceLabel = "revier.instance"
 	nameLabel     = "revier.name"
@@ -44,13 +43,13 @@ var ownLabels = []string{instanceLabel, nameLabel, tabLabel, tabPlaceLabel, pane
 
 // Host is an hc Runtime, and no View: hc keeps no focus and draws nothing,
 // so a terminal is put on an instance by attaching it, by hand or in a
-// view's window (decisions.md D176, D180).
+// view's window.
 // Socket selects the core's socket; an empty Socket uses the one hc's own CLI
 // would use from this environment.
 type Host struct {
 	Socket string
 	// Revier is the revier binary a view's window runs to attach a terminal
-	// and hold it once its program ends (decisions.md D187). With none, the
+	// and hold it once its program ends. With none, the
 	// window runs hc's attach alone, and ends with its program.
 	Revier string
 
@@ -105,7 +104,7 @@ func Program() (string, error) {
 }
 
 // Instances lists every live terminal of this machine's core, and each
-// finished one a window holds (decisions.md D187), grouped into
+// finished one a window holds, grouped into
 // instances by revier's instance label. A terminal without one that is an
 // instance id, as one a user started by hand, is an instance of its own,
 // named by its address, so it is seen too. A terminal

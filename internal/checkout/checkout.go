@@ -83,7 +83,7 @@ func Origin(dir string) string {
 // Every clone logs "clone" with project, git_url, path and duration_ms.
 // Every failure logs it at Error with err, also a refusal before git runs. A
 // directory that is there logs nothing. The TUI's footer names a
-// failed clone alone and leaves why to the log (decisions.md D157); its
+// failed clone alone and leaves why to the log; its
 // detail pane says why.
 func Ensure(p revier.Project, out io.Writer) (bool, error) {
 	start := time.Now()
@@ -101,7 +101,7 @@ func Ensure(p revier.Project, out io.Writer) (bool, error) {
 func ensure(p revier.Project, out io.Writer) (bool, error) {
 	if p.Remote != nil {
 		// A link records the host's path and repository for its targets to
-		// render (decisions.md D83). Cloning either here would put a second
+		// render. Cloning either here would put a second
 		// checkout under a path that names a directory on another machine.
 		return false, fmt.Errorf("project %q is a link: %s holds its checkout", p.Name, p.Remote.Host)
 	}

@@ -12,7 +12,7 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// cmdLink is the remote screen as a command (decisions.md D154): with
+// cmdLink is the remote screen as a command: with
 // nothing, the machines config.toml declares; with a host, the projects the
 // revier there has; with a host and a project, a link to it written here. A
 // host need not be declared to be linked.

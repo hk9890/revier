@@ -161,7 +161,7 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 		out = append(out, res)
 		opts.report(Progress{Phase: PhaseLaunch, N: i + 1, Of: len(plan), Label: string(step.Target), Done: true, Restored: res})
 	}
-	// A cancel by ctrl+c in the TUI (decisions.md D140) or on revier session
+	// A cancel by ctrl+c in the TUI or on revier session
 	// restore logs "session restore cancelled" with id, walked and steps.
 	// walked is equal to steps when the cancel came during the last step. The
 	// "session restored" line still follows, with its counts.
@@ -201,7 +201,7 @@ func (c *Core) Restore(ctx context.Context, s session.Session, r Report, project
 // target the restore found running, as a press would: a view closed since
 // the save comes back over the live terminals with its own tab current, and
 // starts nothing. The window host does not raise it, as no step of a restore
-// is raised (decisions.md D15, D181). A tab's instance is the one it is
+// is raised. A tab's instance is the one it is
 // inside. What fails is a WARN "restore: show a running target" with
 // project, target and err: the runtime did not list, or the view's window
 // did not open over it again, or its own tab did not become current. For a
@@ -242,7 +242,7 @@ func (c *Core) showRunning(ctx context.Context, p Project, name revier.TargetNam
 	opened, err := shower.Show(ctx, inst, true)
 	if err == nil && opened {
 		// The window opens again as a press opens it: its own tab current,
-		// and where a launch's goes (decisions.md D186).
+		// and where a launch's goes.
 		_, err = c.shownAgain(ctx, inst, name, real.Place)
 	}
 	if err != nil {
@@ -288,7 +288,7 @@ func (o RestoreOpts) report(p Progress) {
 // answers costs the restore one step and not the rest of the walk. raise is
 // whether a window it binds or a terminal window it opens is raised: only the
 // return home raises, so the desktop does not flip through every window a
-// restore opens (decisions.md D15). A terminal a step opens is still focused,
+// restore opens. A terminal a step opens is still focused,
 // because that focus picks its current tab.
 func (c *Core) restoreLaunch(ctx context.Context, p Project, step RestoreStep, raise bool) RestoreResult {
 	ctx, cancel := context.WithTimeout(ctx, 2*BindWait)
@@ -325,7 +325,7 @@ func (c *Core) ActivateWaiting(ctx context.Context, p Project, name revier.Targe
 		c.record(revier.Event{Time: pressed, Kind: revier.EventGo, Project: p.Name, Target: landed, Launched: res.Launched})
 	}
 	// The state record has the press failed or not, of the target it named
-	// when it failed before it found one (decisions.md D151).
+	// when it failed before it found one (decisions/0151).
 	if landed == "" {
 		landed = name
 	}

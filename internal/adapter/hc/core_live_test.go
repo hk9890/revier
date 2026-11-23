@@ -4,7 +4,7 @@
 // proves the core against a fake; this proves it against the host. hc keeps
 // no focus, so with no view a second press raises what the first opened
 // rather than returning home; beside the fake view, which reports the focus
-// a view keeps, it returns home (decisions.md D184).
+// a view keeps, it returns home.
 package hc_test
 
 import (

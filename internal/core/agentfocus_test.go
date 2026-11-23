@@ -58,7 +58,7 @@ func TestActivateAgentWaitingRaisesTheWindowOfItsOwnProcess(t *testing.T) {
 
 // Two instances of one project, as two kitty processes, can each hold a panel
 // 1. The survey reports each agent with its instance, and going to one focuses
-// that one, where a lookup by panel id alone was ambiguous (decisions.md D75).
+// that one, where a lookup by panel id alone was ambiguous.
 func TestActivateAgentWaitingReachesOneOfTwoAgentsThatShareAPanelID(t *testing.T) {
 	c, rt := agentCore(agentPanel("1", "idle"))
 	diff := rt.Add("diff:revier", "kitty", agentPanel("1", "busy"))

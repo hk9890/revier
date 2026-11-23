@@ -3,7 +3,7 @@
 //
 // The state is Claude Code's own word, read from `claude agents --json`: every
 // live session with the pid of its process and its status. A panel is matched
-// to its session by pid and nothing else (decisions.md D55, D57).
+// to its session by pid and nothing else.
 // No SessionStart hook supplies the id: the listing needs no install, names
 // agents already running, and tells two agents in one repository apart.
 //
@@ -306,7 +306,7 @@ func (p *Probe) list(ctx context.Context) (map[int]listedSession, error) {
 // transcript only at the first prompt: it may be prompted after the save, and
 // the restore asks Holds whether there is a conversation to resume.
 //
-// The listing is run again by the rule Inspect keeps (decisions.md D57):
+// The listing is run again by the rule Inspect keeps:
 // when a session file changed, or the last run is MaxAge old. The session
 // file holds the sessionId and the cwd the listing gives, so a save records
 // what holds now, or what held MaxAge ago where Claude Code did not rewrite

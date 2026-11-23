@@ -16,7 +16,7 @@ import (
 )
 
 // The curtain covers one monitor while a full shutdown or a restore from the
-// popup runs, and shows the walk's progress alone (decisions.md D192). The
+// popup runs, and shows the walk's progress alone. The
 // surface that runs the walk sends its state over the curtain's socket; the
 // curtain draws the latest one and sends back what the user pressed. The
 // main monitor's curtain lists every step; another monitor's shows the

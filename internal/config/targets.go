@@ -49,7 +49,7 @@ type TargetsWritten struct {
 
 // targetsFor is the shared targets a project of one kind has, as typed
 // targets: the realization of its kind taken from the part that holds it,
-// and a target with no part of that kind left out (decisions.md D82). A
+// and a target with no part of that kind left out (decisions/0082). A
 // link's have no list of tabs, as its own targets have none.
 func targetsFor(shared []map[string]any, isLink bool) ([]revier.Target, error) {
 	targets, err := DecodeTargets(partsFor(shared, nil, isLink))
@@ -72,7 +72,7 @@ func DecodeTargets(shared []map[string]any) ([]revier.Target, error) {
 
 // ListTargets is every [[target]] config.toml writes, typed, in file order,
 // for the config screen. One validateShared refuses for its values is its name
-// alone, so the screen still lists it and can delete it (decisions.md D85).
+// alone, so the screen still lists it and can delete it (decisions/0085).
 func ListTargets(shared []map[string]any) []revier.Target {
 	out := make([]revier.Target, len(shared))
 	for i, t := range shared {
@@ -162,7 +162,7 @@ func editTargets(root string, was []map[string]any, change func(lines []string, 
 	// loads read the same files, so before is taken first: a file changed
 	// between them must read as the change this write did not make, not as a
 	// breakage it did. The projects are the ones Load gives, without the
-	// links to this machine (decisions.md D131).
+	// links to this machine.
 	dir := ProjectsDir(root)
 	before, err := LoadProjects(dir, cfg.Inherited())
 	if err != nil {
@@ -219,7 +219,7 @@ func sameTargets(a, b []revier.Target) bool {
 // applyTarget writes into entry i every value of e.Target that differs from
 // old. raw is the entry as TOML decoded it, for the keys of a match the
 // screen does not show; base is the table its realizations sit under,
-// "target" or, for a link, "target.remote" (decisions.md D82).
+// "target" or, for a link, "target.remote" (decisions/0082).
 func applyTarget(lines []string, i int, old revier.Target, raw map[string]any, base string, e TargetEdit) ([]string, error) {
 	t := e.Target
 	var err error

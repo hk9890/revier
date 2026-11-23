@@ -155,7 +155,7 @@ func TestSaveChangedOfACloseWritesNothingWhenTheWholeSaveHoldsIt(t *testing.T) {
 // A shutdown that marks an agent never prompted unfiled is saved, though the
 // save a plain restore opens holds the same agent: that save is what a surface
 // last saw, promoted after an unclean end, and carries no mark. Without the
-// new save, the restore says the conversation is gone (decisions.md D194).
+// new save, the restore says the conversation is gone.
 func TestSaveChangedWritesTheUnfiledMarkThatTheNewestSaveLacks(t *testing.T) {
 	c, _, report, _ := desktop(t)
 	c.Probes[0].(*hosttest.FakeResumableProbe).Gone = []revier.SessionID{"abc-123"}

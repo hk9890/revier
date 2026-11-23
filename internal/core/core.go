@@ -40,7 +40,7 @@ var (
 // Core orchestrates hosts and probes. Runtime may be nil on a machine with no
 // usable terminal, and Window may be nil on one with no window control;
 // targets degrade individually rather than the product failing as a whole.
-// View shows the runtime's instances (decisions.md D176), and is nil where
+// View shows the runtime's instances, and is nil where
 // nothing shows them: a press then starts what is missing and focuses
 // nothing, and nothing reports the runtime's focus.
 type Core struct {
@@ -51,7 +51,7 @@ type Core struct {
 
 	// Served lists what `revier agent exec` started here for a terminal on
 	// another machine, where no runtime of this machine holds it
-	// (decisions.md D84). Its instances are matched by a target's runtime
+	// (decisions/0084). Its instances are matched by a target's runtime
 	// realization and probed beside the instance the runtime holds. It opens
 	// and focuses nothing, and no target resolves to it. Nil without one.
 	Served revier.Host
@@ -72,7 +72,7 @@ type Core struct {
 	Run func(ctx context.Context, argv []string, dir string) error
 
 	// SwitchPopup tells the popup's surface to switch its list, over the
-	// socket that surface listens on (decisions.md D182), and fails when no
+	// socket that surface listens on, and fails when no
 	// surface listens. The socket is a fact about this machine, so the wiring
 	// supplies it; nil leaves the second press the raise of the popup.
 	SwitchPopup func(ctx context.Context) error
@@ -83,7 +83,7 @@ type Core struct {
 	Machine string
 
 	// Remotes are the revier installations on other machines, by host
-	// (decisions.md D40). NewRemote makes one for a host not yet here - a
+	// (decisions/0040). NewRemote makes one for a host not yet here - a
 	// link written while the surface runs, or a host the remote screen asks
 	// about - and the result is kept. With no NewRemote, a host with no
 	// entry is reported unreachable, not refused.
@@ -106,8 +106,8 @@ type Core struct {
 	settled []Project
 
 	// Ledger is the state and the events of this installation: where every
-	// operation reads what was learned at runtime, and where it writes
-	// (decisions.md D120). Nil remembers nothing.
+	// operation reads what was learned at runtime, and where it writes. Nil
+	// remembers nothing.
 	Ledger Ledger
 
 	// KeyBinder reads the desktop's keyboard shortcuts. It is not a Host: it
@@ -116,12 +116,12 @@ type Core struct {
 	KeyBinder revier.KeyBinder
 
 	// TermKeys reads the keys the terminal holds for revier: the second key
-	// store, beside the desktop's (decisions.md D147). Nil leaves `revier
+	// store, beside the desktop's. Nil leaves `revier
 	// setup` with no terminal.
 	TermKeys revier.TermKeys
 
 	// WindowRules reads the window host's placement rules, the popup's among
-	// them (decisions.md D191). Nil leaves `revier setup` with no rules.
+	// them. Nil leaves `revier setup` with no rules.
 	WindowRules revier.WindowRules
 
 	// Poll is how often an agent of this machine is read again: the
@@ -293,7 +293,7 @@ func (c *Core) resolveAt(p Project, i int) (revier.Host, revier.Realization, rev
 	// configuration refused, resolve to nothing, here, where every lookup
 	// that walks a project's targets passes. The keypress then fails loudly
 	// with the reason instead of running something built from a launch argv
-	// that did not render, or in a project with no path (decisions.md D85).
+	// that did not render, or in a project with no path (decisions/0085).
 	if p.Invalid != nil {
 		return nil, revier.Realization{}, revier.CompiledMatch{}, p.Invalid
 	}
@@ -354,7 +354,7 @@ func (c *Core) linkPanels(p Project, real revier.Realization) (revier.Realizatio
 type snapshot map[string][]revier.Instance
 
 // answered is a listing the named hosts answered. Another host's failure
-// costs only what that host lists (decisions.md D89), so an operation names
+// costs only what that host lists, so an operation names
 // the hosts whose instances it reads, and no others. An empty name is no host.
 func (c *Core) answered(ctx context.Context, hosts ...string) (snapshot, error) {
 	snap, failed := c.listing(ctx)
@@ -393,7 +393,7 @@ func (e hostErrs) err() error {
 
 // listing is one bulk listing per host, with the hosts that could not list left
 // out and their failures returned beside it. A host that cannot answer costs
-// its own targets and no other's (decisions.md D89): a survey over the other
+// its own targets and no other's: a survey over the other
 // hosts still stands, its targets show unknown, and a press on a target of the
 // failed host is refused with its reason. The failure is logged here as
 // "instances" at Warn with host and err, once per host and cause, and the first
@@ -429,7 +429,7 @@ func (c *Core) listing(ctx context.Context) (snapshot, hostErrs) {
 }
 
 // identify gives a runtime instance with no identity of its own the title the
-// window host reports for the same process (decisions.md D22).
+// window host reports for the same process.
 //
 // It is policy, not an adapter's business: neither host can do it alone. The
 // runtime knows the window has no name; only the window host knows what the
@@ -441,9 +441,9 @@ func (c *Core) listing(ctx context.Context) (snapshot, hostErrs) {
 // every named runtime window of the process is found there by its title, one
 // window per named window, so two named windows of one title need two. The
 // process id was rejected for pairing a pane to a window, because every OS
-// window of one kitty process shares its pid (D177); that objection is exactly
+// window of one kitty process shares its pid; that objection is exactly
 // this refusal, so an ambiguous process is left as it was rather than guessed
-// at (D63). A named window the window host does not list could
+// at. A named window the window host does not list could
 // be the one left over, and its title would then be lent to the wrong window.
 func (c *Core) identify(s snapshot) {
 	if c.Runtime == nil || c.Window == nil || !c.osWindows() {
@@ -597,7 +597,7 @@ func (c *Core) locate(snap snapshot, p Project, i int, host revier.Host, m revie
 // be noticed.
 //
 // Only the class is re-checked, never the title. The whole point of a binding
-// is to survive a title the rule no longer matches (decisions.md D190): an
+// is to survive a title the rule no longer matches (decisions/0190): an
 // editor window is bound while its title still says the file it opened with.
 // A target that declares no class is trusted as before, and so is a runtime
 // binding: a runtime id is never handed back out, because the kitty and hc
@@ -625,20 +625,20 @@ type Result struct {
 	// user pressed and reached, and Launched then says the tab was opened.
 	Tab revier.TargetName
 	// Tabs is the tab targets a launch of Target opened with the new
-	// instance, in order (decisions.md D126). It is set also when the launch
+	// instance, in order. It is set also when the launch
 	// then failed: the instance is open, and those tabs are in it.
 	Tabs     []revier.TargetName
 	Ref      revier.TargetRef
 	Launched bool
 	// Opened reports that the press launched the instance Ref names, which
-	// the activation raises (decisions.md D165). A tab opened in an instance
+	// the activation raises. A tab opened in an instance
 	// that was open is not one: the press raised that instance already.
 	Opened   bool
 	ComingUp bool
 	Before   []revier.Instance
 	Agents   []AgentOutcome
 	// As is, parallel to Agents, the named agent each agent recorded with no
-	// name came back as (decisions.md D193): empty for every other agent.
+	// name came back as: empty for every other agent.
 	As []string
 	// AgentErr is why an agent tab failed to open in a workspace that did
 	// open: the launch succeeded, and the agents it names are AgentNotAdded.
@@ -669,8 +669,7 @@ func (c *Core) goTo(ctx context.Context, p Project, name revier.TargetName, boun
 // toggle-back included, and resumes apply only to the run half: a target
 // already up is raised as it stands, because the agent in it is already the
 // one the recording named. raiseOnly is a press that waited for another
-// press's lock: it raises what it finds and never toggles back (decisions.md
-// D195).
+// press's lock: it raises what it finds and never toggles back.
 //
 // Every call is one "go" line of the log when run-or-raise ends: at Info, or
 // at Error with err when the press failed. It carries project, target,
@@ -734,7 +733,7 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 		if opener != nil {
 			// A target that lists its tabs opens as the first of them, under
 			// that tab's mark, and the others open after it: the order of the
-			// tabs is the order they are opened in (decisions.md D126).
+			// tabs is the order they are opened in.
 			if tabs, err = c.opening(p, name, real); err != nil {
 				return Result{}, err
 			}
@@ -742,10 +741,10 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 			launch = tabs.first(real)
 		} else {
 			// A target that lists no tab has no agent panel to lay a recorded
-			// agent over (decisions.md D128). The panel its launch runs in is
+			// agent over. The panel its launch runs in is
 			// marked with the target it was opened for, so a return home from
 			// a tab lands in it rather than in the first panel that happens to
-			// carry no tab mark (D100).
+			// carry no tab mark.
 			launch, extra = real, resumes
 			launch.Vars = map[string]string{PanelHomeVar: string(name)}
 		}
@@ -787,7 +786,7 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 			res.Agents, res.AgentErr = append(agents, added...), err
 			res.As = append(make([]string, len(agents)), as...)
 			// A view that opens its own windows draws the instance once every
-			// tab of it runs (decisions.md D180).
+			// tab of it runs.
 			if opened, err := c.show(ctx, ref, true); err != nil {
 				noWindow = !opened
 				return fmt.Errorf("%s: show new %s: %w", c.View.Name(), name, err)
@@ -810,7 +809,7 @@ func (c *Core) goResuming(ctx context.Context, p Project, name revier.TargetName
 			return nil
 		}()
 		// Also after a failure above: the instance is open, and the next press
-		// raises it and never places it (decisions.md D24). place returns no
+		// raises it and never places it. place returns no
 		// error, so the failure above is the one the press reports. A show
 		// that failed with no window leaves nothing to place: the press that
 		// opens the window places it.
@@ -852,12 +851,11 @@ var ErrUnraisable = errors.New("cannot raise: the window host lists no window fo
 // cannot - so the window host raises it. Focusing inside the terminal without
 // that raise is refused rather than done: GNOME answers such a request with a
 // "is ready" notification instead of the window, which reads as a raise that
-// half worked. The error names the target, and nothing moves (decisions.md
-// D63).
+// half worked. The error names the target, and nothing moves.
 //
 // A window host that did not answer lists no window for anything, so that
 // refusal would tell the user the window is gone. What went wrong is named
-// instead, as every refusal a host's silence causes is (D89).
+// instead, as every refusal a host's silence causes is.
 func (c *Core) raisable(snap snapshot, failed hostErrs, inst revier.Instance, name revier.TargetName) (revier.TargetRef, error) {
 	if !c.bridged(inst) {
 		return revier.TargetRef{}, nil
@@ -933,10 +931,10 @@ const BindPoll = 50 * time.Millisecond
 // while this one waited. Nor is one of a class another target's pending launch
 // awaits. Nor is one of a class another target's late launch awaits: a cold
 // application opens the windows of earlier launches late and in any order
-// (decisions.md D190). It gives up after wait and reports false. A window it
+// (decisions/0190). It gives up after wait and reports false. A window it
 // found and could not raise is placed and reported with the failure, as goTo
 // reports an instance it launched and could not focus, so the activation pins
-// it: the window is a launch's either way (D24).
+// it: the window is a launch's either way.
 func (c *Core) bindWindow(ctx context.Context, p Project, name revier.TargetName, before []revier.Instance, wait time.Duration, raise bool) (inst revier.Instance, ok bool, err error) {
 	start := time.Now()
 	// Each call writes one "bind" line when it returns: at Info with
@@ -1046,9 +1044,9 @@ func (c *Core) awaitNew(ctx context.Context, before []revier.Instance, wait, pol
 // raiseNew raises the OS window of a runtime instance a launch has just
 // opened. A terminal's own focus does not raise its OS window where the
 // compositor refuses it, kitty's on GNOME Wayland, and the workspace kitty
-// never holds the window the key was pressed in (decisions.md D165). So the
-// window host raises it, as it raises one already open (D177). A failure is
-// not returned, unlike a raise of an open window (D63): the launch ran, and
+// never holds the window the key was pressed in. So the
+// window host raises it, as it raises one already open. A failure is
+// not returned, unlike a raise of an open window: the launch ran, and
 // the press is one, with only the raise missing, as place says of a placement.
 // The OS window is the one place waited for, if it did; one place waited for
 // in vain is not looked for again, and place has said so in the log.
@@ -1089,7 +1087,7 @@ const placePoll = 250 * time.Millisecond
 
 // place positions a window a launch has just produced. It applies to a launch
 // and never to a raise: moving a window the user has already put somewhere is
-// not revier's business (decisions.md D24). revier places what it starts, since
+// not revier's business. revier places what it starts, since
 // a compositor rule cannot name the window a launch just produced. The
 // compositor places what the user's script starts.
 //
@@ -1136,7 +1134,7 @@ func (c *Core) placeOn(ctx context.Context, placer revier.WindowPlacer, w revier
 // instance that has just been opened. A terminal reports its window before the
 // compositor has mapped it, so the first look often finds nothing. It reads
 // the runtime and the window host alone, so another host that cannot list
-// does not cost the placement (decisions.md D89).
+// does not cost the placement.
 //
 // When the last listing failed at PlaceWait, it logs a Warn
 // "place: listing the hosts" with err before it gives up; a cancel logs
@@ -1229,7 +1227,7 @@ func (c *Core) runtimeOf(instances []revier.Instance, w revier.Instance) (revier
 
 // Attachment is what attaching an instance records: the ref the user pointed
 // at, and the terminal inside it when that window is one this machine's
-// runtime holds and the two listings pair beyond doubt (decisions.md D95). It
+// runtime holds and the two listings pair beyond doubt. It
 // takes its own listing; a host that could not answer costs the pairing and
 // not the attachment, so the window alone is recorded.
 func (c *Core) Attachment(ctx context.Context, ref revier.TargetRef) []revier.TargetRef {
@@ -1263,10 +1261,9 @@ func (c *Core) bridged(inst revier.Instance) bool {
 // Focus activates a ref on the host that produced it and raises the OS window
 // a terminal of it lives in. The picker uses it for an attached instance,
 // which has no target to resolve: the ref is all revier knows about it, and
-// since an attachment is the terminal as well as its window (decisions.md
-// D95) that ref can be a terminal that cannot raise itself. A terminal whose
-// window the window host does not list is not focused at all, as an
-// activation of one is not (D63).
+// since an attachment is the terminal as well as its window that ref can be a
+// terminal that cannot raise itself. A terminal whose window the window host
+// does not list is not focused at all, as an activation of one is not.
 func (c *Core) Focus(ctx context.Context, ref revier.TargetRef) error {
 	snap, failed := c.listing(ctx)
 	inst, ok := byRef(snap, ref)
@@ -1371,18 +1368,17 @@ type Report struct {
 	// so nothing bound to it is taken as gone, and its failure is in Failed.
 	Hosts []string
 	// Failed is why each host that could not list is missing, by host name.
-	// Its targets are in the views marked Unknown (decisions.md D89).
+	// Its targets are in the views marked Unknown.
 	Failed map[string]error
 	// tags is where the runtime here shows each panel a linked host can name:
 	// what places a host's agents, whenever its answer is laid over.
 	tags map[revier.PanelID]shown
 	// places is the target each link's panels here are addressed through:
-	// what labels a host's agents once localise placed them (decisions.md
-	// D155).
+	// what labels a host's agents once localise placed them.
 	places map[revier.ProjectName]places
 	// asked is each linked host an answer laid over the report came from,
 	// with why it gave no answer, or "" when it answered: what a record of
-	// the survey says of each host (decisions.md D151).
+	// the survey says of each host (decisions/0151).
 	asked map[string]string
 	// before is the state the survey started from: what Settle may judge. A
 	// ref written since is to a window the listing may have missed.
@@ -1412,7 +1408,7 @@ func (r Report) HostErr() error { return hostErrs(r.Failed).err() }
 //
 // It answers when the slowest linked host has. A surface that refreshes takes
 // the two parts apart instead, SurveyLocal and AskRemotes, and lays one over
-// the other with Lay (decisions.md D114).
+// the other with Lay.
 //
 // Its line, "survey", is written only when the survey was slow
 // (slowSurvey), at most once a minute, with slow true. A fast survey writes
@@ -1463,13 +1459,12 @@ func surveyLine(projects int, r Report, answers RemoteAnswers, local time.Durati
 }
 
 // SurveyToClose is the survey a close draws its plan from: this machine
-// listed, then only the linked hosts the close is about asked (decisions.md
-// D115). A close of one project asks that project's host. A close of every
-// project asks the hosts of the links with something open here: a link with
-// nothing open has nothing a close could end, so its host is not waited for,
-// and a host that is gone costs a close of something else nothing. Shorter
-// phase budgets are no answer: they cut a slow desktop short and still wait
-// once a phase.
+// listed, then only the linked hosts the close is about asked. A close of one
+// project asks that project's host. A close of every project asks the hosts of
+// the links with something open here: a link with nothing open has nothing a
+// close could end, so its host is not waited for, and a host that is gone costs
+// a close of something else nothing. Shorter phase budgets are no answer: they
+// cut a slow desktop short and still wait once a phase.
 //
 // An agent of a link in a panel of an instance the link no longer holds - its
 // tab moved to another window - is therefore missing from a plan of every
@@ -1512,7 +1507,7 @@ func (c *Core) surveyAsking(ctx context.Context, projects []Project, ask func(re
 // hosts here listed, every project matched, the agents here probed. A linked
 // project's view is the one of the window that reaches it, with nothing of
 // its host's yet. No linked host is asked, so it costs what the hosts here
-// cost however a host elsewhere answers (decisions.md D114).
+// cost however a host elsewhere answers.
 //
 // It lists no attachment either: a surface lists them from the state Settle
 // returns, which a claim changes between surveys, so a claimed window shows
@@ -1658,7 +1653,7 @@ func (c *Core) claim(before, after []revier.Instance, p Project, st *state.State
 
 // candidate reports whether inst may be the window of p's launch of target,
 // or of p's action when target is empty. A target's launch takes by class no
-// window of a class another target's late launch awaits (decisions.md D190).
+// window of a class another target's late launch awaits (decisions/0190).
 // An action's launch takes no window of such a class at all. A target's
 // launch takes by class no window that any binding or attachment holds: a
 // late launch's claim may have bound it to another target of p. An action's
@@ -1892,7 +1887,7 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 		// A target no host here can realize is the expected headless result,
 		// and Available already says it. A Reason is set only for the other
 		// kind: a target its own configuration refused, which is a mistake in
-		// a file and needs saying (decisions.md D85).
+		// a file and needs saying (decisions/0085).
 		if err != nil && !errors.Is(err, ErrNoHost) {
 			tv.Reason = err.Error()
 		}
@@ -1919,10 +1914,10 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 	// A gone attachment is left out rather than shown dead: the caller prunes
 	// it from state against this same listing. A live one is probed like a
 	// target, so a shutdown sees the agent in an attached terminal and keeps
-	// it from ending unasked (decisions.md D95).
+	// it from ending unasked.
 	//
 	// A terminal attached by hand is recorded as the window and the terminal
-	// inside it (D95), and is one row here: the terminal's, the
+	// inside it, and is one row here: the terminal's, the
 	// side that holds the panels, so the agents of the row and the close that
 	// ends them are the same instance's.
 	//
@@ -1951,7 +1946,7 @@ func (c *Core) view(ctx context.Context, snap snapshot, failed hostErrs, p Proje
 			window[key(ref)] = true
 		}
 	}
-	// An attachment is probed for a link too (decisions.md D101): it is a
+	// An attachment is probed for a link too: it is a
 	// terminal of this machine, and taking the host's word as the project's
 	// whole answer ended an agent in it unasked. An agent both sides report
 	// is dropped to one by dropDoubles, on the panel it landed on.
@@ -1972,7 +1967,7 @@ func key(ref revier.TargetRef) string { return ref.Host + "\x00" + ref.ID }
 
 // inspect runs the first matching probe over every panel of an instance. A
 // probe's Match decides what an agent panel is, not the host's PanelKind: a
-// host says shell or tool and names no harness (decisions.md D119). A shell
+// host says shell or tool and names no harness (decisions/0119). A shell
 // in the foreground is the one thing that overrules a probe, as it does for
 // `revier agent`: the marker a harness leaves outlives it in a --hold window.
 func (c *Core) inspect(ctx context.Context, inst revier.Instance) []revier.AgentView {

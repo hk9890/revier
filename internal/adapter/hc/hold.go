@@ -22,7 +22,7 @@ const AttachCmd = "_hc-attach"
 
 // heldLabel marks a finished terminal a window holds. Instances lists it, so
 // the workspace stays the one instance a press raises, as a held kitty
-// window does (decisions.md D187).
+// window does.
 const heldLabel = "revier.held"
 
 // heldLines is how much of a finished terminal's history a held window
@@ -39,7 +39,7 @@ const heldPoll = 500 * time.Millisecond
 
 // Attach runs hc's attach of panel on the terminal in and out are, then
 // holds the window when the terminal is revier's and its program ended on
-// its own (decisions.md D187): see hold. Input typed before the hold is
+// its own: see hold. Input typed before the hold is
 // dropped, so a key meant for the program does not close the window. Past
 // the attach it never starts a core: it dials the socket alone.
 func (h *Host) Attach(ctx context.Context, bin string, panel revier.PanelID, in, out *os.File) error {
@@ -187,7 +187,7 @@ const sweepAfter = time.Minute
 
 // sweep removes every finished terminal of revier's on this machine that
 // ended over sweepAfter before now and that no window holds: one no window
-// showed, as with no view or with kitty closed (decisions.md D187). A
+// showed, as with no view or with kitty closed. A
 // terminal on a machine hc added is that machine's revier's. It is one
 // listing and one removal each, and a failure is left for the next sweep, as
 // nothing waits on it.

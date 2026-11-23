@@ -392,11 +392,11 @@ func TestDetailWithoutUsageSaysNoTokens(t *testing.T) {
 	}
 }
 
-// The transcript's format changes between Claude Code releases (decisions.md
-// D106). A tail in a format the read does not know - no line parses, or no
-// line of the conversation does - is an error the core logs, not nothing to
-// show. Lines that parse and hold no turn are still
-// nothing to show, and so is a last line Claude Code is still writing.
+// The transcript's format changes between Claude Code releases. A tail in a
+// format the read does not know - no line parses, or no line of the
+// conversation does - is an error the core logs, not nothing to show. Lines
+// that parse and hold no turn are still nothing to show, and so is a last line
+// Claude Code is still writing.
 func TestDetailOfATailWithNoLineThatParsesIsAnError(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

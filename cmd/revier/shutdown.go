@@ -40,9 +40,9 @@ var closeWait = core.CloseWait
 // cmdShutdown closes what is open: every project's targets, or one project's,
 // or only their agents or only what holds no agent. It saves the session
 // first when it changed, so a restore brings back what the shutdown closed,
-// and it refuses while an agent is busy unless forced (decisions.md D78). A
+// and it refuses while an agent is busy unless forced. A
 // shutdown of every project, all of each, is recorded in the state, so the
-// next surface offers the restore (D141). ctrl+c stops it between two steps,
+// next surface offers the restore. ctrl+c stops it between two steps,
 // and ends its wait for what it closed.
 func cmdShutdown(ctx context.Context, a *app, args []string) error {
 	fs := flag.NewFlagSet("shutdown", flag.ContinueOnError)

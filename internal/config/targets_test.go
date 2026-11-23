@@ -186,7 +186,7 @@ name = "web"
 `
 
 // A shared target Load refuses is listed by its name, so the config screen
-// shows it and can delete it (decisions.md D85).
+// shows it and can delete it (decisions/0085).
 func TestARefusedSharedTargetCanBeRemoved(t *testing.T) {
 	root, shared := targetsRoot(t, refusedConfig)
 	listed := config.ListTargets(shared)

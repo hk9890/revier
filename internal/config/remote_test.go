@@ -228,7 +228,7 @@ home = true
 }
 
 // A shared target reaches a link through its remote part alone. One with no
-// remote part is a local target, and no link has it (decisions.md D82).
+// remote part is a local target, and no link has it (decisions/0082).
 func TestSharedTargetsReachALinkThroughTheirRemotePart(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "config.toml", `
@@ -322,7 +322,7 @@ name = "pages"
 		t.Errorf("err = %v, want [target.remote] refused on a local project", err)
 	}
 	// The mistake is one target's, and costs that target: the project loads
-	// with its home, as any refused target leaves it (decisions.md D85).
+	// with its home, as any refused target leaves it (decisions/0085).
 	if p.Invalid != nil || refusalOf(p, "home") != nil {
 		t.Errorf("Invalid = %v, home refused = %v; want the project and its home whole", p.Invalid, refusalOf(p, "home"))
 	}
@@ -414,9 +414,9 @@ home = true
 	}
 }
 
-// Panels are on a tab alone, on a link as on a local project (decisions.md
-// D128): a link's home that declares them is refused with the fix, and the
-// tab is not derived beside them.
+// Panels are on a tab alone, on a link as on a local project: a link's home
+// that declares them is refused with the fix, and the tab is not derived beside
+// them.
 func TestALinkHomeThatDeclaresPanelsIsRefused(t *testing.T) {
 	body := link + `
 [[target]]
@@ -759,7 +759,7 @@ name = "logs"
 }
 
 // A link has no list of tabs of its own: the one its home declares is
-// dropped, and the home lists the derived tab alone (decisions.md D128).
+// dropped, and the home lists the derived tab alone.
 func TestALinkHomeDropsItsTabs(t *testing.T) {
 	body := link + `
 [[target]]
@@ -821,7 +821,7 @@ name = "tickets"
 
 // A link holds the repository the host records, for a target here that
 // renders it. The checkout it names is still the host's, which
-// internal/checkout refuses to clone here (decisions.md D83).
+// internal/checkout refuses to clone here.
 func TestALinkKeepsTheHostsGitURL(t *testing.T) {
 	body := "path = \"/srv/far\"\ngit_url = \"git@github.com:example/far.git\"\n" + link
 	p := config.LoadProject(write(t, t.TempDir(), "far.toml", body), config.Inherited{})
@@ -879,7 +879,7 @@ func TestHostIsValidatedAtLoad(t *testing.T) {
 
 // loadErr is every reason a file did not load whole, joined: what LoadProject
 // returned as its error before a project file's mistake stopped costing the
-// project, or the set, more than the part that is wrong (decisions.md D85).
+// project, or the set, more than the part that is wrong (decisions/0085).
 func loadErr(path string, shared []map[string]any) error {
 	return errors.Join(config.Problems(config.LoadProject(path, config.Inherited{Targets: shared}))...)
 }

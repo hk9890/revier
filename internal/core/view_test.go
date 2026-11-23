@@ -22,7 +22,7 @@ func splitProject() revier.Project {
 
 // The view focuses and reports the focus, and the runtime starts and lists:
 // a press reaches the view with the runtime's ref, and asks the runtime to
-// focus nothing (decisions.md D176).
+// focus nothing.
 func TestAPressFocusesThroughTheViewWithTheRuntimesRef(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	diff := rt.Add("diff:revier", "kitty")
@@ -62,7 +62,7 @@ func TestToggleBackReadsTheViewsFocus(t *testing.T) {
 
 // With no view the runtime's instance is reached and nothing is focused, and
 // a second press does not go home: nothing reports where the user is. This
-// is hc's setup with no display (decisions.md D178).
+// is hc's setup with no display.
 func TestWithNoViewAPressFocusesNothingAndDoesNotToggle(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty")

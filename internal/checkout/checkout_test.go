@@ -15,8 +15,8 @@ import (
 )
 
 // A link records the host's path and repository for its targets to render, so
-// both name a directory on another machine and neither is cloned here
-// (decisions.md D83). The refusal names the host that holds the checkout.
+// both name a directory on another machine and neither is cloned here. The
+// refusal names the host that holds the checkout.
 func TestEnsureRefusesToCloneALink(t *testing.T) {
 	p := revier.Project{
 		Name:   "far",

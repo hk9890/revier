@@ -53,7 +53,7 @@ func TestAnEndWithNoShutdownPromotesWhatWasLastSeen(t *testing.T) {
 	}
 }
 
-// After a full shutdown its own dialog offers its save (decisions.md D141),
+// After a full shutdown its own dialog offers its save,
 // and what was last seen is left where it is.
 func TestAShutdownOnRecordPromotesNothing(t *testing.T) {
 	root := t.TempDir()
@@ -115,7 +115,7 @@ func TestASaveThatHoldsTheSameIsOfferedAndTheSnapshotDropped(t *testing.T) {
 
 // A save marks an agent never prompted unfiled, and what a surface last saw
 // does not. That save still holds the same, so it is offered with its mark,
-// and no copy without the mark is written (decisions.md D194).
+// and no copy without the mark is written.
 func TestASaveThatMarksAnAgentUnfiledHoldsTheSameAsTheSnapshot(t *testing.T) {
 	root := t.TempDir()
 	saved := lastSeen(t, root)

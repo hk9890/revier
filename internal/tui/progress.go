@@ -14,8 +14,7 @@ import (
 // draws the walk as it goes. While one runs, the surface takes no key and no
 // click but ctrl+c: the first cancels the walk once the step that runs is
 // done, or ends a shutdown's wait after its last step, and leaves the surface
-// up to say what it did; a second quits, for a step that hangs (decisions.md
-// D140).
+// up to say what it did; a second quits, for a step that hangs.
 // A press that leaves the screen or starts a second close acts on a desktop
 // half changed, so Esc here does not leave a restore that still opens windows.
 
@@ -28,7 +27,7 @@ type walk struct {
 	last      core.Progress // the latest report
 	closed    core.Closed   // the close steps done
 	restored  core.Restored // the restore steps done
-	curtain   *curtainRun   // the curtains the walk runs under, nil for none (decisions.md D192)
+	curtain   *curtainRun   // the curtains the walk runs under, nil for none
 }
 
 // startWalk is a walk with its channel and its cancel, in its first phase
@@ -174,7 +173,7 @@ func (m *Model) cancelWalk() {
 //
 // The surface quits before the walk returns, so the hung step's command is
 // ended here, and the close's record is abandoned here, and the record
-// decides whether it is taken back (decisions.md D141). The record of a close
+// decides whether it is taken back. The record of a close
 // that is not full returns at once. The command is ended first: the abandon
 // of a full shutdown's record can wait on the state's lock.
 func (m Model) quitWalk() (tea.Model, tea.Cmd) {

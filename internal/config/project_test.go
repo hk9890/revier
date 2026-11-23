@@ -283,7 +283,7 @@ func TestSetProjectValue(t *testing.T) {
 
 // A link's project screen shows the shared targets it has through their
 // remote part, and an edit of one is written under [target.remote]
-// (decisions.md D82).
+// (decisions/0082).
 func TestProjectScreenWritesALinksOverrideUnderRemote(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "config.toml", sharedConfig+`

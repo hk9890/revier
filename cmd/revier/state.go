@@ -67,7 +67,7 @@ type comparedTo struct {
 }
 
 // cmdState replays this machine's state record at a moment. It needs no host
-// and no project file: the record is all it reads (decisions.md D151).
+// and no project file: the record is all it reads (decisions/0151).
 func cmdState(out io.Writer, args []string) error {
 	fs := flag.NewFlagSet("state", flag.ContinueOnError)
 	at := fs.String("at", "", "the moment")

@@ -101,8 +101,7 @@ const (
 	AgentConversationGone
 	// AgentUnknown is not restored: it ran a named agent its project no
 	// longer declares, or it has no name and no agent of its project runs its
-	// harness. Another program in its place is not that agent
-	// (decisions.md D146, D193).
+	// harness. Another program in its place is not that agent.
 	AgentUnknown
 )
 
@@ -136,10 +135,10 @@ type RestoreStep struct {
 // Session records what a survey found open, as the set that restoring opens
 // again. It records names: which project, which target, and for each agent the
 // conversation and directory its probe can name, and the named agent its
-// panel's mark says it runs (decisions.md D146). Everything else - the host
+// panel's mark says it runs. Everything else - the host
 // that won, the instance, the argv - is derived again at restore, because a
 // project file edited in between must win over this file. The current
-// project is the ledger's (D120).
+// project is the ledger's.
 //
 // Every agent a probe claims is recorded, in the order its runtime lists it,
 // with or without a conversation: the order is what a restore lays the agents
@@ -157,16 +156,15 @@ type RestoreStep struct {
 // An agent whose harness keeps no conversation under its id, as a Claude
 // Code agent that never got a prompt, keeps the id and is marked unfiled. A
 // restore resumes it when the agent got its first prompt after the save, and
-// otherwise starts it empty and does not say its conversation is gone
-// (decisions.md D139, D194). Every save keeps the id, a shutdown's too: a
-// first prompt can still come, as a close can stop before it ends the agent.
-// A restore asks the probe and does not watch the panel after the launch,
-// which sees a failure only once its window is open.
+// otherwise starts it empty and does not say its conversation is gone. Every
+// save keeps the id, a shutdown's too: a first prompt can still come, as a
+// close can stop before it ends the agent. A restore asks the probe and does
+// not watch the panel after the launch, which sees a failure only once its
+// window is open.
 func (c *Core) Session(ctx context.Context, r Report) (session.Session, SessionGaps) {
 	current := c.state().Current
 	// The hosts have HostWait and not the whole of the save's bound: the
-	// agents on this machine are asked after them, on what is left of it
-	// (decisions.md D115).
+	// agents on this machine are asked after them, on what is left of it.
 	asking, stop := context.WithTimeout(ctx, HostWait)
 	there, failed := c.conversationsThere(asking, r.Views)
 	stop()
@@ -186,10 +184,10 @@ func (c *Core) Session(ctx context.Context, r Report) (session.Session, SessionG
 // left it out for being the project's own, as a save names it.
 //
 // It records nothing while a host here could not list, since what that host
-// holds would be missing (decisions.md D89). A held link whose host gave no
+// holds would be missing. A held link whose host gave no
 // answer keeps its entry of prev, what was last seen of it; with none it is
 // recorded as a save records it while its host does not answer, so a host
-// down for a whole run costs only its own agents (D150).
+// down for a whole run costs only its own agents.
 func (c *Core) Seen(local Report, answers RemoteAnswers, prev session.Session) (session.Session, bool) {
 	if len(local.Failed) > 0 {
 		return session.Session{}, false
@@ -260,7 +258,7 @@ func (c *Core) Seen(local Report, answers RemoteAnswers, prev session.Session) (
 // records nothing, nothing is open, or nothing changed. A survey that holds
 // less than last is kept only when the next survey of this machine agrees: a
 // terminal killed before the surface lists as closed, not as failed, for the
-// moment before the surface goes too (decisions.md D150). surveyed is false
+// moment before the surface goes too. surveyed is false
 // for the answers of a linked host, which are laid over the same listing and
 // so are no second look at it. hold is the survey to keep back for the next.
 func (c *Core) KeepSeen(local Report, answers RemoteAnswers, last, held session.Session, surveyed bool) (keep session.Session, ok bool, hold session.Session) {
@@ -355,11 +353,11 @@ func (c *Core) sessionOf(r Report, there map[revier.ProjectName]map[revier.Panel
 			// recorded under the tab, and the tab after the other targets: a
 			// restore that reached the tab first would open the instance for
 			// it with none of its agents resumed. Its agent is recorded by
-			// harness alone: a restore never resumes it (decisions.md D68), so
+			// harness alone: a restore never resumes it, so
 			// its conversation is neither asked for nor counted as recorded.
 			if t, ok := v.Project.Target(tv.Name); ok && tabTarget(t) {
 				// A listed tab that holds panels is a part of the workspace's
-				// layout (decisions.md D128): its agents are recorded below,
+				// layout: its agents are recorded below,
 				// under the instance, with their conversations.
 				if panelTab(v.Project, t) {
 					continue
@@ -377,7 +375,7 @@ func (c *Core) sessionOf(r Report, there map[revier.ProjectName]map[revier.Panel
 				}
 				// A tab its target lists comes back with the instance, so it
 				// is no step of a restore: a step would leave it the current
-				// tab (decisions.md D126).
+				// tab.
 				if !listedTab(v.Project, t) {
 					tabs = append(tabs, tab)
 				}
@@ -443,7 +441,7 @@ func (c *Core) sessionOf(r Report, there map[revier.ProjectName]map[revier.Panel
 // view records as its own. A panel that names a target no longer a tab, or a
 // tab open in another instance, stays with its instance, so its agent is not
 // left out of the save. So does every panel of a listed tab that holds panels:
-// a restore resumes its agents with the instance (decisions.md D128).
+// a restore resumes its agents with the instance.
 func recordedAsTab(v revier.ProjectView, inst revier.Instance, panel revier.Panel) bool {
 	name := revier.TargetName(panel.Vars[PanelTargetVar])
 	if t, ok := v.Project.Target(name); !ok || !tabTarget(t) || panelTab(v.Project, t) {
@@ -532,7 +530,7 @@ func unfiled(probe revier.AgentProbe, named revier.Conversation) bool {
 // every RestoreLaunch, in order.
 //
 // Order is the file's, and the caller keeps it: a launch is bound to the
-// window that appears after it (decisions.md D190), so two launches at once are
+// window that appears after it (decisions/0190), so two launches at once are
 // two windows neither can be attributed to.
 func (c *Core) RestorePlan(s session.Session, r Report) []RestoreStep {
 	views := make(map[revier.ProjectName]revier.ProjectView, len(r.Views))
@@ -546,8 +544,7 @@ func (c *Core) RestorePlan(s session.Session, r Report) []RestoreStep {
 		for _, t := range p.Targets {
 			// A file saved before the target listed its tabs holds a step for
 			// one of them. The tab opens with its instance now, and a step
-			// for it would leave it the current tab, not the active one
-			// (decisions.md D126).
+			// for it would leave it the current tab, not the active one.
 			if tab, ok := v.Project.Target(t.Name); ok && tabTarget(tab) && listedTab(v.Project, tab) {
 				continue
 			}
@@ -645,7 +642,7 @@ func (c *Core) wouldResume(p Project, name revier.TargetName, resumes []Resume) 
 }
 
 // layAgents lays recorded agents over a layout, in order, and says what each
-// comes to (decisions.md D146).
+// comes to.
 //
 // The first recorded agent goes to the first panel declared as an agent, the
 // second to the second, and so on. The agents past the declared ones are
@@ -675,13 +672,13 @@ func (c *Core) layAgents(layout []revier.PanelSpec, resumes []Resume, link bool)
 // resumed there would carry on in the wrong checkout, and its edits would
 // land there. Every other way a resume can fail starts the agent empty. A
 // conversation its harness does not keep is gone, unless the save found it
-// unfiled too: that agent never got a prompt, and is empty (decisions.md D194).
+// unfiled too: that agent never got a prompt, and is empty.
 //
 // The conversation is resumed only into a panel that runs its harness: a
 // claude conversation laid over an opencode panel would start `opencode
 // --resume <claude id>`. A panel no probe claims - a wrapper - is trusted.
 //
-// A link's agent panel is an ssh onto the host (decisions.md D84), and the
+// A link's agent panel is an ssh onto the host (decisions/0084), and the
 // host resumes.
 func (c *Core) startAgent(spec *revier.PanelSpec, r Resume, link bool) AgentOutcome {
 	if link {

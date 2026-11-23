@@ -60,7 +60,7 @@ func (a CloseAction) Leaves() bool {
 // CloseStep is one thing a shutdown closes. Target is empty for an attached
 // window and for an agent. Panel is set when panels close rather than the
 // instance, and names the step; Panels is every panel that closes with it,
-// which for a whole tab is the tab (decisions.md D94). Agents are the agents
+// which for a whole tab is the tab. Agents are the agents
 // on this machine that end with it.
 type CloseStep struct {
 	Project revier.ProjectName
@@ -73,7 +73,7 @@ type CloseStep struct {
 
 	// Unread is why the recheck could not read this step's agents. A step
 	// that carries one closes nothing and is named in the result; the rest
-	// of the plan closes (decisions.md D99). On a CloseUnplanned result it is
+	// of the plan closes. On a CloseUnplanned result it is
 	// what the shutdown says about that instance.
 	Unread string
 
@@ -125,8 +125,7 @@ func (s CloseStep) Busy() bool { return len(s.BusyAgents()) > 0 }
 // BusyAgents are the step's agents that work or wait for an answer. A step
 // the recheck could not read has none: its Agents are the ones the plan was
 // drawn with, and closing nothing ends nobody's turn. That refusal is the
-// step's alone, so the stale reading must not refuse the whole plan
-// (decisions.md D99).
+// step's alone, so the stale reading must not refuse the whole plan.
 func (s CloseStep) BusyAgents() []revier.AgentView {
 	if s.Unread != "" {
 		return nil
@@ -337,8 +336,7 @@ func (c *Core) ClosePlan(r Report, project revier.ProjectName, row CloseRow) []C
 // holds it, so the shell opened beside the agent by `revier agent new` goes
 // with it, since that tab carries no target mark of its own to be closed by.
 // The workspace's own tab is the exception: a declared [agent, shell] layout
-// keeps its shell, which is what a shutdown of the agents alone promises
-// (decisions.md D94).
+// keeps its shell, which is what a shutdown of the agents alone promises.
 //
 // An instance that names no own panel is read as the exception too. Taking
 // the tab there is a guess, and the guess that is wrong closes the declared
@@ -360,7 +358,7 @@ func addedTab(in revier.Instance, panel revier.PanelID) bool {
 
 // ClosesTab reports an agent's step that closes the whole tab the agent sits
 // in, not the agent's panel alone, as the instances the plan was drawn from
-// list it (decisions.md D94).
+// list it.
 func ClosesTab(instances []revier.Instance, s CloseStep) bool {
 	if s.Panel == "" || s.Target != "" {
 		return false
@@ -569,7 +567,7 @@ const RecheckBudget = 30 * time.Second
 type ShutdownOpts struct {
 	// Force closes a step whose agent works or waits for an answer. It is
 	// what `--force` sets, and what a confirm means in a surface that named
-	// the busy agents before it asked (decisions.md D78). It says not to
+	// the busy agents before it asked. It says not to
 	// refuse and nothing else: the recheck still runs, and what it reads is
 	// still what closes, is saved and is ordered.
 	Force bool
@@ -627,7 +625,7 @@ func (r *BusyRefusal) Unwrap() error { return ErrAgentBusy }
 // Every plan was made from a survey that has aged since - by a confirm the
 // user read, by a session saved before the close - so the agents are read
 // again here, the one place every close goes through, and that happens
-// whether or not the close is forced (decisions.md D99). Forcing says not to
+// whether or not the close is forced. Forcing says not to
 // refuse a busy agent; it does not say to work from an older listing.
 //
 // A busy agent then closes nothing at all unless forced. A step the recheck
@@ -658,8 +656,8 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	r, plan := c.recheck(ctx, plan, opts)
 	if busy := Busy(plan); len(busy) > 0 && !opts.Force {
 		// Logs "shutdown refused" at Info with the plan's steps and busy
-		// counts. The guard refuses the whole plan while one is busy
-		// (decisions.md D99), so nothing closes and nothing is saved.
+		// counts. The guard refuses the whole plan while one is busy, so
+		// nothing closes and nothing is saved.
 		slog.Info("shutdown refused", "steps", len(plan), "busy", len(busy))
 		c.note(record.Line{Kind: record.KindShutdownRefused, Counts: map[string]int{"steps": len(plan), "busy": len(busy)}})
 		return nil, &BusyRefusal{Plan: plan}
@@ -707,7 +705,7 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 			res.Err = closer.Close(closing, s.Ref)
 		case ClosePanel:
 			// A tab closes as its panels: the runtime ends the tab with the
-			// last of them (decisions.md D94).
+			// last of them.
 			closer, _ := c.panelCloser(s.Ref)
 			for _, p := range res.closes() {
 				res.Err = errors.Join(res.Err, closer.ClosePanel(closing, s.Ref, p))
@@ -747,7 +745,7 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 	closed, open, failed := out.Counts()
 	// A cancel stopped something when it left a step unreached, or ended the
 	// wait with a step still listed; one after the last step stopped nothing
-	// else. ctrl+c in the TUI (decisions.md D140) or on revier shutdown
+	// else. ctrl+c in the TUI or on revier shutdown
 	// cancels. A cancel that stopped something logs "shutdown cancelled" with
 	// walked of steps; walked equal to steps is a cancel that ended the wait
 	// after the last step. The "shutdown" line still follows.
@@ -768,10 +766,10 @@ func (c *Core) Shutdown(ctx context.Context, plan []CloseStep, wait time.Duratio
 // the session it saves - is read off the returned report, not off the one the
 // plan was drawn from.
 //
-// Only the linked hosts the plan has a step for are asked (decisions.md
-// D115): a step's agents are its own project's host's word, and no other
-// host's answer changes what closes. The session saved off this survey asks
-// each open link's host for its conversations itself.
+// Only the linked hosts the plan has a step for are asked: a step's agents are
+// its own project's host's word, and no other host's answer changes what
+// closes. The session saved off this survey asks each open link's host for its
+// conversations itself.
 func (c *Core) recheck(ctx context.Context, plan []CloseStep, opts ShutdownOpts) (Report, []CloseStep) {
 	reading, stop := phaseContext(ctx, RecheckBudget)
 	defer stop()
@@ -804,7 +802,7 @@ func (c *Core) recheck(ctx context.Context, plan []CloseStep, opts ShutdownOpts)
 // degraded survey reports no agents, and no agents read is not idle: taking
 // it as idle would close it in the one case the survey knows least about.
 // The refusal is that step's alone, so one dead remote host does not stop the
-// other projects closing (decisions.md D99).
+// other projects closing.
 func (c *Core) rechecked(r Report, plan []CloseStep) []CloseStep {
 	here := make(map[revier.ProjectName][]revier.AgentView, len(r.Views))
 	unreachable := map[revier.ProjectName]string{}
@@ -821,7 +819,7 @@ func (c *Core) rechecked(r Report, plan []CloseStep) []CloseStep {
 		// is the answer, and a plan handed back by a refusal comes in with
 		// the marks and agents that refusal read.
 		step.Unread, step.Agents = "", nil
-		// A link's agents are its host's word (decisions.md D84). A host that
+		// A link's agents are its host's word (decisions/0084). A host that
 		// stopped answering between the plan and the close reports none, and
 		// no agents read is not idle, so the panel here that shows a busy
 		// agent is not closed on a survey that could not ask about it.
@@ -836,9 +834,9 @@ func (c *Core) rechecked(r Report, plan []CloseStep) []CloseStep {
 			// The panels are read again with the agents. A step that closes
 			// a tab means that tab, not the panels it held when the plan was
 			// drawn: a panel added to it since closes with it, and an agent
-			// working in that panel refuses the close like any other
-			// (decisions.md D94). This adds and drops no step: the plan the
-			// user confirmed is the plan that runs.
+			// working in that panel refuses the close like any other. This adds
+			// and drops no step: the plan the user confirmed is the plan that
+			// runs.
 			step.Panels = c.panelsOf(r.Instances, step)
 			step.Agents = agentsIn(local, step.Ref, step.panels())
 		}
@@ -875,7 +873,7 @@ func (c *Core) panelsOf(instances []revier.Instance, s CloseStep) []revier.Panel
 // passed. A step asked to close is open until a listing shows it gone. A host
 // whose listing fails, or that ctx cuts short, says nothing of what went: its
 // steps stay as the listing before left them, and a step whose host answered
-// is judged by that listing, whatever another host did (decisions.md D89). A
+// is judged by that listing, whatever another host did. A
 // close that failed on something the listing no longer holds is closed all
 // the same: whether it is gone is the listing's word, not Close's
 // (revier.Closer).

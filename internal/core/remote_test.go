@@ -302,7 +302,7 @@ func TestSurveyReportsAProjectItsHostDidNotList(t *testing.T) {
 }
 
 // Failed is a host that gave no answer at all, which the surface backs off
-// from (decisions.md D130). A host that answered and did not list the
+// from. A host that answered and did not list the
 // project is reachable, so the next round asks it at the usual gap.
 func TestFailedIsAHostThatGaveNoAnswer(t *testing.T) {
 	down := hosttest.NewRemote("buildbox")
@@ -372,7 +372,7 @@ func TestRemoteProjectLaunchesStartWhereRevierRuns(t *testing.T) {
 // The survey of this machine asks no linked host, so it costs what the hosts
 // here cost. A link's view is the one of the window that reaches it, and the
 // host's answer is laid over it whenever it arrives, the same listing as often
-// as answers do (decisions.md D114).
+// as answers do.
 func TestSurveyLocalAsksNoHostAndLayPutsItsAnswerOver(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.Add("session:demo", "kitty")

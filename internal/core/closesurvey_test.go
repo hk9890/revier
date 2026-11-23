@@ -9,7 +9,7 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// A close waits only for the linked hosts it is about (decisions.md D115). A
+// A close waits only for the linked hosts it is about. A
 // link with nothing open here has nothing a close could end, so neither the
 // survey a plan is drawn from nor the recheck inside the close asks its host:
 // a host that is gone cost every close of a project on this machine a wait
@@ -37,7 +37,7 @@ func TestACloseAsksNoHostOfALinkWithNothingOpenHere(t *testing.T) {
 
 // The host of a link that is open here is still asked, by the plan's survey
 // and by the recheck: its agents are its word, and a busy one refuses the
-// close (decisions.md D84, D99). A close of another project leaves it alone.
+// close (decisions/0084). A close of another project leaves it alone.
 func TestACloseAsksTheHostOfTheLinkItCloses(t *testing.T) {
 	c, rt, remote, pane := linked(t, hostAgent("box.4242", revier.StatusIdle))
 	projects := []core.Project{prepared(t, project()), linkProject(t)}

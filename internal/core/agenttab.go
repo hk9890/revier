@@ -16,7 +16,7 @@ import (
 // the declared agent panel and the declared shell panel, opened as a tab of
 // the instance. `revier agent new` opens one, and a restore opens one for
 // every agent past the declared layout, through the same functions, so an
-// agent opened by hand comes back the way it was opened (decisions.md D145).
+// agent opened by hand comes back the way it was opened.
 
 var (
 	// ErrNotOpen means the target has no instance to open an agent tab in.
@@ -45,7 +45,7 @@ var (
 // as the title; a link's named agent is the host's, which the remote's panel
 // command names to it. A layout with no agent panel has no tab to give, and
 // the agent is dropped. A name the project does not declare has none either:
-// another program in its place is not that agent (decisions.md D146).
+// another program in its place is not that agent.
 func (c *Core) agentTab(p Project, layout []revier.PanelSpec, r Resume) (revier.Realization, AgentOutcome) {
 	agent, ok := declared(layout, revier.PanelAgent)
 	if !ok {
@@ -176,7 +176,7 @@ func (c *Core) agentTabs(host revier.Host, p Project, layout []revier.PanelSpec,
 // agent comes back as the default, not as another agent of its harness. When
 // no agent runs the harness, a default agent that is a wrapper is trusted, as
 // startAgent trusts it; any other default agent runs another program, which
-// is not the agent that ran (decisions.md D193). A link's agents are its
+// is not the agent that ran. A link's agents are its
 // host's to name.
 func (c *Core) agentRunning(p Project, layout []revier.PanelSpec, r Resume) (Resume, bool) {
 	agent, ok := declared(layout, revier.PanelAgent)
@@ -322,7 +322,7 @@ type Workspace struct {
 
 // AddressIn is the address of the panel a tab opened in the workspace w: the
 // one the survey shows it by, whose target is the first of the project's
-// that holds the workspace's instance (decisions.md D155).
+// that holds the workspace's instance.
 func (c *Core) AddressIn(w Workspace, panel revier.PanelID) string {
 	pl := c.places(w.snap, w.Project, c.state().Bound[w.Project.Name])
 	return Address(w.Project.Name, pl.of(w.Ref, panel), panel)
@@ -330,7 +330,7 @@ func (c *Core) AddressIn(w Workspace, panel revier.PanelID) string {
 
 // AgentWorkspace is the open instance of a project's target, for `revier
 // agent new -p`. A listed tab that holds panels names the workspace it is
-// inside: the tab is a part of that workspace's layout (decisions.md D128).
+// inside: the tab is a part of that workspace's layout.
 func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.TargetName) (Workspace, error) {
 	bound := c.state().Bound[p.Name]
 	i, ok := p.index(name)
@@ -377,7 +377,7 @@ func (c *Core) AgentWorkspace(ctx context.Context, p Project, name revier.Target
 // ErrNoWorkspace, and the Workspace that comes with it holds only that
 // instance: where PlaceTab opens a tab outside a workspace. So is a window
 // of a view that opens tabs beside its own windows, which no instance holds,
-// and its Workspace holds no instance (decisions.md D183).
+// and its Workspace holds no instance.
 func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.PanelID) (Workspace, error) {
 	bound := c.state().Bound
 	if c.Runtime == nil {
@@ -393,7 +393,7 @@ func (c *Core) PanelOwner(ctx context.Context, projects []Project, panel revier.
 		return Workspace{}, err
 	}
 	// A window of the view's own beside the runtime's gets a tab of the
-	// view's, whatever instance the window is in (decisions.md D183).
+	// view's, whatever instance the window is in.
 	_, beside := c.View.(revier.BesideOpener)
 	beside = beside && viewed
 	if ref.IsZero() {
@@ -462,7 +462,7 @@ func (c *Core) findPanel(ctx context.Context, instances []revier.Instance, panel
 }
 
 // Outside is what a terminal key does in a panel that no project's open
-// workspace holds (decisions.md D148, D164).
+// workspace holds.
 type Outside string
 
 const (
@@ -488,7 +488,7 @@ type OutsideKey struct {
 // names, else config.toml's first. With none declared there is no agent to
 // run, and the key opens the plain tab. A name config.toml does not declare is
 // refused. A command that reads a project template is refused: outside a
-// workspace there is no project to render it against (decisions.md D164).
+// workspace there is no project to render it against.
 // The panel's directory is no substitute: it would hand a program a path it
 // never asked for.
 func (o OutsideKey) agent() (NamedAgent, bool, error) {
@@ -548,8 +548,8 @@ func holdsPanel(inst revier.Instance, panel revier.PanelID) bool {
 // what the agent in the open tab came to.
 //
 // An OS window the window host does not list is refused before the tab
-// opens, as a press refuses it: a focus with no raise is a GNOME "is ready" notice
-// (decisions.md D63).
+// opens, as a press refuses it: a focus with no raise is a GNOME "is ready"
+// notice.
 func (c *Core) NewAgent(ctx context.Context, w Workspace, r Resume) (AgentOutcome, error) {
 	_, outcome, err := c.newAgent(ctx, w, r, true)
 	return outcome, err
@@ -560,7 +560,7 @@ func (c *Core) NewAgent(ctx context.Context, w Workspace, r Resume) (AgentOutcom
 // focused and nothing is raised, so a workspace whose OS window cannot be
 // raised takes the tab too; which tab that workspace shows afterwards is its
 // view's (PanelFocuser). The panel is the new agent's, which is all the
-// caller has to find it by (decisions.md D118).
+// caller has to find it by.
 func (c *Core) AddAgent(ctx context.Context, w Workspace, r Resume) (revier.PanelID, AgentOutcome, error) {
 	return c.newAgent(ctx, w, r, false)
 }

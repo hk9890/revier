@@ -19,7 +19,7 @@ import (
 const curtainCmd = "_curtain"
 
 // cmdCurtain is one curtain: it draws the walk the surface at the socket
-// sends, until the socket ends (decisions.md D192). A socket it cannot reach
+// sends, until the socket ends. A socket it cannot reach
 // ends it at once, and its window with it.
 func cmdCurtain(args []string) error {
 	fs := flag.NewFlagSet(curtainCmd, flag.ContinueOnError)

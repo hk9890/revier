@@ -54,7 +54,7 @@ func linkFiled(t *testing.T, name string) {
 
 // A project closed here is off its row at the next survey of this machine,
 // with no linked host asked: a host that is slow or gone holds no row here
-// up (decisions.md D114).
+// up.
 func TestARowHereChangesBeforeALinkedHostAnswers(t *testing.T) {
 	m, rt, remote := besideALink(t)
 	th := theme.Default()
@@ -292,7 +292,7 @@ func TestTheFocusRegainedAsksTheLinkedHostsAtOnce(t *testing.T) {
 }
 
 // A host that gave no answer keeps its gap at the focus regained: asking it
-// at once would wait on it again (decisions.md D130).
+// at once would wait on it again.
 func TestTheFocusRegainedLeavesAHostThatGaveNoAnswerItsGap(t *testing.T) {
 	linkFiled(t, "alpha")
 	m, _, remote := besideALink(t)
@@ -314,7 +314,7 @@ func TestTheFocusRegainedLeavesAHostThatGaveNoAnswerItsGap(t *testing.T) {
 
 // A press while a round is out lets the next survey ask its host again. A
 // round that then gives no answer still starts the host's gap: the next
-// survey does not wait on it again (decisions.md D130).
+// survey does not wait on it again.
 func TestARoundThatFailsAfterAPressStillWaitsItsGap(t *testing.T) {
 	m, _, remote := besideALink(t)
 	remote.Err = errors.New("buildbox: no answer")

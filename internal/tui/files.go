@@ -19,10 +19,10 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// The surface holds prepared projects until a raise reads the files again
-// (decisions.md D17). A project the surface itself changed - written on the
-// project screen, or removed - is the exception: that change is the one it
-// knows about, so it applies it at once.
+// The surface holds prepared projects until a raise reads the files again. A
+// project the surface itself changed - written on the project screen, or
+// removed - is the exception: that change is the one it knows about, so it
+// applies it at once.
 
 // clonedMsg follows the clone Enter started for a project whose directory is
 // missing; the home target opens once it succeeds.
@@ -451,9 +451,8 @@ type cloneFail struct {
 	ran            bool
 }
 
-// cloned is the end of a clone. A failure is named in the footer
-// (decisions.md D157). Its reason is kept for the detail pane, which
-// otherwise keeps offering the same Enter.
+// cloned is the end of a clone. A failure is named in the footer. Its reason is
+// kept for the detail pane, which otherwise keeps offering the same Enter.
 func (m Model) cloned(msg clonedMsg) (tea.Model, tea.Cmd) {
 	m.cloneFailed = maps.Clone(m.cloneFailed)
 	if msg.err != nil {

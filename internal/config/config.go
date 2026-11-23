@@ -7,15 +7,15 @@
 // template that does not render or a pattern that does not compile: projects
 // leave this package prepared (core.Project), with that work done once.
 //
-// What a failure costs is the smallest thing that is wrong (decisions.md
-// D85). validateTargets refuses one target, validateProject refuses one
-// project, validateStatuses refuses one [[status]] table, and loading refuses
-// nothing: every file becomes a project, marked with what could not be read,
-// except a link to this machine, which Load leaves out and lists in SelfLinks
-// (D131). Nothing here returns an error for
-// a mistake in a project file, because there is no caller that mistake should
-// stop - revier is how a user reaches the project they have to fix. The write
-// paths are the exception, and ask Problems before they replace a file.
+// What a failure costs is the smallest thing that is wrong (decisions/0085).
+// validateTargets refuses one target, validateProject refuses one project,
+// validateStatuses refuses one [[status]] table, and loading refuses nothing:
+// every file becomes a project, marked with what could not be read, except a
+// link to this machine, which Load leaves out and lists in SelfLinks. Nothing
+// here returns an error for a mistake in a project file, because there is no
+// caller that mistake should stop - revier is how a user reaches the project
+// they have to fix. The write paths are the exception, and ask Problems before
+// they replace a file.
 package config
 
 import (
@@ -63,7 +63,7 @@ type Config struct {
 	// Problems is what config.toml declares that nothing can use, each with
 	// its reason: an action the TUI could never run, a shared target no
 	// project could take, a probe half declared, a [ui] value that does not
-	// resolve. Each costs itself alone (decisions.md D85): the action stays
+	// resolve. Each costs itself alone (decisions/0085): the action stays
 	// unbound, the target reaches no project, the probe is not run, an
 	// unknown theme or glyph set is the default, a trigger key that does not
 	// parse refuses only the keys commands, and the file is otherwise read
@@ -72,7 +72,7 @@ type Config struct {
 	Problems []error `toml:"-"`
 
 	// SelfLinks is the files of the links whose host is this machine, which
-	// Load leaves out (decisions.md D131). `revier doctor` says how many.
+	// Load leaves out. `revier doctor` says how many.
 	SelfLinks []string `toml:"-"`
 
 	statuses []core.Status  // Status without the tables a rule refused
@@ -145,9 +145,9 @@ func Root() (string, error) {
 }
 
 // Load reads the global config and every project under <root>/projects,
-// without the links to this machine, whose files it lists in SelfLinks
-// (decisions.md D131). A missing root or a missing config.toml is not an
-// error: revier starts with no projects rather than refusing to run.
+// without the links to this machine, whose files it lists in SelfLinks. A
+// missing root or a missing config.toml is not an error: revier starts with no
+// projects rather than refusing to run.
 func Load(root string) (*Config, []core.Project, error) {
 	cfg, err := Read(root)
 	if err != nil {
@@ -551,7 +551,7 @@ func newProblems(before, after core.Project) []error {
 }
 
 // nameOf is the name of the project a file holds: the file's name without
-// its extension (decisions.md D80).
+// its extension.
 func nameOf(path string) revier.ProjectName {
 	return revier.ProjectName(strings.TrimSuffix(filepath.Base(path), ".toml"))
 }
@@ -573,7 +573,7 @@ func Validate(p revier.Project) error {
 
 // validateProject holds the rules that refuse the project as a whole: there is
 // nowhere to run, no way to address it, or nothing to open. A project they
-// refuse is still loaded and listed, carrying the reason (decisions.md D85).
+// refuse is still loaded and listed, carrying the reason (decisions/0085).
 func validateProject(p revier.Project) error {
 	var errs []error
 
@@ -620,7 +620,7 @@ func validateProject(p revier.Project) error {
 // validateTargets checks each target on its own, returning one error per
 // target, parallel to p.Targets and nil where the target is sound. A target
 // these rules refuse loses only itself: the project keeps the others, and the
-// refused one reports why instead of disappearing (decisions.md D85).
+// refused one reports why instead of disappearing (decisions/0085).
 // prepared is p as core.PrepareProject made it, for the rules that read a
 // rendered value: the load has rendered every template once already.
 func validateTargets(p revier.Project, prepared core.Project) []error {
@@ -733,7 +733,7 @@ func validateTargets(p revier.Project, prepared core.Project) []error {
 			}
 			if len(r.Panels) > 0 && kind == revier.HostRuntime {
 				// Panels are what a tab starts, and a realization that is no
-				// tab has none (decisions.md D128).
+				// tab has none.
 				errs = append(errs, panelsOffATab(p, t))
 			}
 			if r.Name == "" && kind == revier.HostRuntime {
@@ -773,7 +773,7 @@ func renderedPlace(t revier.Target, kind revier.HostKind) string {
 	return r.Place
 }
 
-// validateCommand checks a target that runs a command (decisions.md D166).
+// validateCommand checks a target that runs a command.
 // The command does the run-or-raise in place of a host, so the target has no
 // realization beside it, no host to prefer, and is no home: a home is an
 // instance the others open in and a second press returns to.
@@ -799,7 +799,7 @@ func validateCommand(t revier.Target) []error {
 
 // nothingToStart refuses a realization of t with no launch and no tabs. On a
 // link the reason is the link's: the home alone has a list of tabs, the
-// derived one (decisions.md D128). A home with the name of the derived tab
+// derived one. A home with the name of the derived tab
 // gets none; one that also has a window gets none under any name.
 func nothingToStart(p revier.Project, t revier.Target, kind revier.HostKind) error {
 	if p.Remote != nil && kind == revier.HostRuntime {
@@ -887,7 +887,7 @@ func validateTab(p revier.Project, t revier.Target) []error {
 }
 
 // validateTabs checks the tabs and the active tab a realization of t
-// declares (decisions.md D126). Each rule is a list the open path could not
+// declares. Each rule is a list the open path could not
 // follow: an entry that is no tab of this target, or a list on a realization
 // that opens something else. A position flag would take one flag per position.
 // The file's order would put shared targets first and not say which tabs open.

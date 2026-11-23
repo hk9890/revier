@@ -649,7 +649,7 @@ func TestPollingClaimsNothingOutsideTheBounds(t *testing.T) {
 
 // A refresh the window host could not answer is not an empty listing: the
 // windows it lists again once it answers were there before, so none is new
-// and none is claimed (decisions.md D89).
+// and none is claimed.
 func TestAWindowHostThatFailedOnceClaimsNothingWhenItAnswersAgain(t *testing.T) {
 	_, wm, c, projects := world(t, 1)
 	wm.Add("Pull requests - Chromium", "chromium")

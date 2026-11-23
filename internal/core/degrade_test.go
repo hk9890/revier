@@ -1,6 +1,6 @@
-// Layer L2: a host that cannot list costs its own targets and no other's
-// (decisions.md D89), which is a decision the core makes from what each host
-// reports, so the fake host reports the failure.
+// Layer L2: a host that cannot list costs its own targets and no other's, which
+// is a decision the core makes from what each host reports, so the fake host
+// reports the failure.
 package core_test
 
 import (

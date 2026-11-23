@@ -24,8 +24,8 @@ import (
 // It opens from every screen on alt+l and a click on the footer's error, from
 // the surface on its button on the top bar too, and Esc goes back to the
 // screen it came from.
-// A link's operations log on its host, so this machine's file is all it reads
-// (decisions.md D157). Every field is drawn as text (D108).
+// A link's operations log on its host, so this machine's file is all it reads.
+// Every field is drawn as text.
 
 // logsKey opens the screen from any other, and closes it.
 const logsKey = "alt+l"
@@ -96,7 +96,7 @@ func logTime(t, today time.Time) string {
 	return t.Format("Jan 02 15:04")
 }
 
-// firstLine is the first line of a field, as text (decisions.md D108).
+// firstLine is the first line of a field, as text.
 func firstLine(s string) string {
 	first, _, _ := strings.Cut(plainText(s), "\n")
 	return first
@@ -169,7 +169,7 @@ func (m Model) logsKey(msg keyPress) (tea.Model, tea.Cmd) {
 // this process wrote at or before at, when at is a time: the line of the
 // error the footer showed. Nothing ties an error to its line but the time
 // it was set, so a warning this process wrote between the operation's line
-// and the footer would take the cursor (decisions.md D157). Finding the line
+// and the footer would take the cursor. Finding the line
 // by its text is no fix, because a reworded error no longer matches.
 func (sc *logsScreen) open(sf surface, now, at time.Time) error {
 	sc.reading = false

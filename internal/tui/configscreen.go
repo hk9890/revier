@@ -457,7 +457,7 @@ func (cs *configScreen) screen(sf surface) (string, int) {
 
 	// The problems stand over the rows: a theme the file names and the
 	// screen cannot draw is shown here as the default, and only this says
-	// why (decisions.md D85). Each is wrapped, not cut: a file that does not
+	// why (decisions/0085). Each is wrapped, not cut: a file that does not
 	// decode is named by its path before the reason.
 	for _, err := range cs.problems {
 		b.WriteString(hang("  ", err.Error(), w, th.Attention) + "\n")

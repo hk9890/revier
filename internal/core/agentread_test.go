@@ -107,7 +107,7 @@ func TestSendKeysTypesEachKeyInOrder(t *testing.T) {
 }
 
 // A key answers the dialog a prompt is kept out of and interrupts a working
-// agent, so no state refuses it (decisions.md D117).
+// agent, so no state refuses it.
 func TestSendKeysReachesAnAgentInAnyState(t *testing.T) {
 	for _, title := range []string{"idle", "busy", "ask permission", "mystery"} {
 		c, rt := agentCore(agentPanel("1", title))
@@ -147,8 +147,7 @@ func TestSendKeysNeedsARuntimeThatCanType(t *testing.T) {
 }
 
 // A script's tab: the same agent tab, with nothing made current and nothing
-// raised, and the new agent's panel returned to find it by
-// (decisions.md D118).
+// raised, and the new agent's panel returned to find it by.
 func TestAddAgentOpensTheTabAndLeavesTheFocus(t *testing.T) {
 	rt, wm, _, _ := osWindowHosts()
 	c := &core.Core{Runtime: rt, View: rt, Window: wm, Probes: []revier.AgentProbe{resumable()}}

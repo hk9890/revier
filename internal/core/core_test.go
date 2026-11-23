@@ -503,7 +503,7 @@ func TestToggleBackThroughTheOSWindow(t *testing.T) {
 	}
 }
 
-// The false positive the focus authority exists to refuse (decisions.md D16):
+// The false positive the focus authority exists to refuse:
 // the runtime target exists but the user is looking at the editor, so the key
 // goes to the target and never home.
 func TestToggleBackNeedsTheOSWindowFocused(t *testing.T) {
@@ -525,8 +525,7 @@ func TestToggleBackNeedsTheOSWindowFocused(t *testing.T) {
 }
 
 // A runtime that does not report OSWindows - a multiplexer - gets no bridge
-// to the window host: its refs are never judged by it, and never raised
-// (decisions.md D16, D177).
+// to the window host: its refs are never judged by it, and never raised.
 func TestNoBridgeWithoutOSWindows(t *testing.T) {
 	rt, wm, _, diffWm := osWindowHosts()
 	rt.SetCapabilities(revier.Capabilities{})
@@ -593,7 +592,7 @@ func TestGoPrefersTheBoundRef(t *testing.T) {
 	wm := hosttest.New("wm")
 	// The editor's title no longer matches the rule - it opened on the
 	// project and now names a file. The class is what a binding is made by
-	// (decisions.md D190) and re-checked against, so it still holds.
+	// (decisions/0190) and re-checked against, so it still holds.
 	editor := wm.AddInstance(revier.Instance{Title: "main.go - somewhere else", Class: "code"})
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm, Ledger: bindings("revier", core.Bindings{"editor": editor})}
 
@@ -731,7 +730,7 @@ func TestADetachedLaunchBindsTheOneNewWindowOfTheClass(t *testing.T) {
 func TestSurveyUsesBindings(t *testing.T) {
 	wm := hosttest.New("wm")
 	// A title that moved, which is what a binding exists to survive
-	// (decisions.md D190).
+	// (decisions/0190).
 	editor := wm.AddInstance(revier.Instance{Title: "renamed", Class: "code"})
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Window: wm, Ledger: bindings("revier", core.Bindings{"editor": editor})}
 	report, err := c.Survey(context.Background(), []core.Project{prepared(t, project())})
@@ -1061,7 +1060,7 @@ func TestGoRaisesAnUnnamedWindowInsteadOfOpeningASecond(t *testing.T) {
 }
 
 // The process id was rejected for pairing a pane to a window, because one
-// kitty process can own several OS windows (decisions.md D177). That case is
+// kitty process can own several OS windows. That case is
 // refused here rather than guessed at: a wrong title would send a keypress to
 // the wrong window.
 func TestTwoWindowsOfOneProcessAreLeftUnidentified(t *testing.T) {

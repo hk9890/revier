@@ -24,7 +24,7 @@ func TestACommandKeepsAStartDirectoryThatIsStillThere(t *testing.T) {
 // Every process it starts would otherwise inherit a directory that is gone,
 // and git, claude and a probe script each refuse to run in one, so every
 // agent would report unknown for a reason that has nothing to do with the
-// command (decisions.md D92).
+// command.
 func TestACommandLeavesAStartDirectoryThatIsGone(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

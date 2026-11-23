@@ -175,7 +175,7 @@ func TestAChordOneProjectDeclaresIsStillWanted(t *testing.T) {
 
 // A target refused at load wants no chord: the key it carries may be the one
 // it was refused for, held by another target, and asked for it would read as
-// a conflict that stops every project's keys (decisions.md D85).
+// a conflict that stops every project's keys (decisions/0085).
 func TestARefusedTargetWantsNoChord(t *testing.T) {
 	p := prepared(t, revier.Project{
 		Name: "demo", Path: "/home/user/demo",

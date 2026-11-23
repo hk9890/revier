@@ -90,7 +90,7 @@ func TestALaunchOverAPendingActionSaysItReplacedIt(t *testing.T) {
 // A press reads the ledger as it is when the press is made, so it sees what
 // another user of the ledger wrote since the core was built: here a launch
 // by a second core on the same ledger, as a desktop key's process is to the
-// surface (decisions.md D120).
+// surface.
 func TestAnActivationSeesWhatASecondLedgerUserWrote(t *testing.T) {
 	shortBindWait(t)
 	l := &ledger{}
@@ -232,8 +232,7 @@ func TestSettleKeepsALaunchWrittenSinceItsClockWasRead(t *testing.T) {
 
 // A window claimed for an action's launch is attached with the terminal
 // inside it, exactly as `revier attach` records one, so the agent a launched
-// terminal holds is surveyed from the moment it is claimed (decisions.md
-// D95).
+// terminal holds is surveyed from the moment it is claimed.
 func TestSettleClaimsTheTerminalWithTheWindow(t *testing.T) {
 	now := time.Now()
 	rt := hosttest.NewRuntime("rt")
@@ -253,7 +252,7 @@ func TestSettleClaimsTheTerminalWithTheWindow(t *testing.T) {
 }
 
 // An open ends the full shutdown on record, so the next surface does not
-// offer a restore over what the user opened since (decisions.md D141). A
+// offer a restore over what the user opened since. A
 // survey and its settle open nothing, and leave it.
 func TestAnOpenEndsTheShutdownOnRecordAndASettleDoesNot(t *testing.T) {
 	shortBindWait(t)

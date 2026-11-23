@@ -13,7 +13,7 @@ import (
 
 // An agent that starts empty with a recorded id never got a prompt, so the
 // plan says so rather than show the id as a conversation it resumes; one with
-// no id recorded needs no word (decisions.md D194).
+// no id recorded needs no word.
 func TestAnUnfiledAgentStartsEmptyWithItsReason(t *testing.T) {
 	r := core.RestoreResult{
 		RestoreStep: core.RestoreStep{Action: core.RestoreLaunch, Resumes: []core.Resume{

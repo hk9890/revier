@@ -36,7 +36,7 @@ func doctorRoot(t *testing.T, files map[string]string) {
 
 // doctor reports each problem under the file that holds it, and ends non-zero
 // so a script can act on it. It is the one place the reasons are read in full,
-// now that no other command refuses to run over them (decisions.md D85).
+// now that no other command refuses to run over them (decisions/0085).
 func TestDoctorReportsEachProblemUnderItsFile(t *testing.T) {
 	// Each project has a directory of its own, so no warning is mixed in
 	// with the problems.
@@ -163,7 +163,7 @@ func TestDoctorReportsConfigProblemsUnderTheirFile(t *testing.T) {
 
 // A refused [[status]] table is reported under the file that writes it, and
 // so is a pane status a project changes that still runs nothing: doctor is
-// where both are read (decisions.md D85).
+// where both are read (decisions/0085).
 func TestDoctorReportsStatusProblemsUnderTheirFile(t *testing.T) {
 	doctorRoot(t, map[string]string{
 		"sound.toml": sound,
@@ -242,8 +242,7 @@ key = "ctrl+shift+d"
 
 // With outside "agent", a key whose agent reads a project template fails at
 // every press outside a workspace, and kitty's own new tab hides it, so
-// doctor names the key; with outside "tab" no key runs an agent there
-// (decisions.md D164).
+// doctor names the key; with outside "tab" no key runs an agent there.
 func TestDoctorReportsAKeyWhoseAgentCannotRunOutsideAWorkspace(t *testing.T) {
 	agents := `
 [[agent]]
@@ -530,7 +529,7 @@ func TestDoctorWarnsWhenLinksShareARemoteProject(t *testing.T) {
 
 // Under hc, which draws nothing, doctor says which view shows it on this
 // machine: kitty where kitty and a display are, none where they are not, as
-// over ssh (decisions.md D185). The kitty and hc on PATH are never run.
+// over ssh. The kitty and hc on PATH are never run.
 func TestDoctorSaysWhichViewShowsHc(t *testing.T) {
 	t.Setenv("HC_SOCKET", filepath.Join(t.TempDir(), "s.sock"))
 	for _, c := range []struct {

@@ -242,7 +242,7 @@ func cmdAgentPrompt(out io.Writer, args []string) error {
 
 // agentPrompt is cmdAgentPrompt on the app that open makes: a test makes it on
 // a fake host. An agent still idle after the delivery gets the warning here,
-// and exits exitPromptIdle (decisions.md D196).
+// and exits exitPromptIdle (decisions/0196).
 func agentPrompt(out io.Writer, args []string, open func(context.Context, io.Writer) (*app, error)) error {
 	fs := flag.NewFlagSet("agent prompt", flag.ContinueOnError)
 	pos, err := parseArgs(fs, args)
@@ -273,9 +273,9 @@ func agentPrompt(out io.Writer, args []string, open func(context.Context, io.Wri
 }
 
 // cmdAgentRead prints what an agent said last, or with --screen what its
-// panel shows (decisions.md D116). Either is printed as text: what an agent
+// panel shows. Either is printed as text: what an agent
 // wrote and what a tool printed are not instructions to the terminal that
-// reads this (D108). The screen is not the default, because it hands the
+// reads this. The screen is not the default, because it hands the
 // caller a harness's chrome to parse.
 func cmdAgentRead(out io.Writer, args []string) error {
 	fs := flag.NewFlagSet("agent read", flag.ContinueOnError)
@@ -303,7 +303,7 @@ func cmdAgentRead(out io.Writer, args []string) error {
 	}
 	if !*screen {
 		// A message that cannot be read, for nothing to read or for a probe
-		// that broke, names the read that still works (decisions.md D116).
+		// that broke, names the read that still works.
 		said, err := a.core.Said(ctx, ag)
 		if err != nil {
 			return fmt.Errorf("%s: %w; --screen prints what its panel shows", pos[0], err)
@@ -338,7 +338,7 @@ func screenLines(text string, n int) []string {
 	return lines
 }
 
-// cmdAgentKeys types named keys into an agent's panel (decisions.md D117).
+// cmdAgentKeys types named keys into an agent's panel.
 func cmdAgentKeys(out io.Writer, args []string) error {
 	fs := flag.NewFlagSet("agent send-keys", flag.ContinueOnError)
 	pos, err := parseArgs(fs, args)
@@ -426,8 +426,7 @@ func cmdAgentClose(out io.Writer, args []string) error {
 }
 
 // closeAgent closes the panel of the agent an address names, and says
-// whether that closed the agent's whole tab or its panel alone (decisions.md
-// D94).
+// whether that closed the agent's whole tab or its panel alone.
 func (a *app) closeAgent(ctx context.Context, address string, force bool) error {
 	ag, err := a.agent(ctx, address)
 	if errors.Is(err, core.ErrNotAgent) {
@@ -520,7 +519,7 @@ func (a *app) newAgent(ctx context.Context, project, panel, dir string, r core.R
 
 // addAgent opens the agent tab where the core places it, leaves the focus
 // where it is, and prints the address the new agent answers to: the caller is
-// a script, which has nothing else to find it by (decisions.md D118).
+// a script, which has nothing else to find it by.
 func (a *app) addAgent(ctx context.Context, project, panel, dir string, r core.Resume) error {
 	return a.agentTab(ctx, project, panel, dir, r, true)
 }
@@ -587,7 +586,7 @@ func (a *app) addressed(address string) (core.Project, string, error) {
 }
 
 // cmdAgentExec becomes the project's agent, for a terminal on another machine:
-// it is what the agent panel of a link runs here over ssh (decisions.md D84).
+// it is what the agent panel of a link runs here over ssh (decisions/0084).
 func cmdAgentExec(args []string) error {
 	fs := flag.NewFlagSet("agent exec", flag.ContinueOnError)
 	project := projectFlag(fs)

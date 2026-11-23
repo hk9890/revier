@@ -58,7 +58,7 @@ type known struct {
 // was known of its scope, but keeps what a host that did not list held, and
 // a difference is a set operation, so a line two surfaces both wrote changes
 // nothing. A host that did not list, or a scope with no line for Stale, is
-// unknown and never empty (decisions.md D89).
+// unknown and never empty.
 func Replay(lines []Line, at time.Time) State {
 	lines = slices.Clone(lines)
 	slices.SortStableFunc(lines, func(a, b Line) int { return a.Time.Compare(b.Time) })
@@ -267,7 +267,7 @@ func (m Machine) unknown(host string, project revier.ProjectName) string {
 // Why a save and the state it was made in differ.
 const (
 	// NotAsked is a linked host the save did not ask: a close asks only the
-	// hosts it is about (decisions.md D115).
+	// hosts it is about.
 	NotAsked = "not asked by the save"
 	// UnreachableAtSave is a host that did not list, or did not answer, for
 	// the save.
@@ -279,8 +279,7 @@ const (
 	// it, which a save records as no target of its own.
 	InItsInstance = "a tab of its instance"
 	// NoConversation is an agent the save recorded with no conversation, or
-	// by its harness alone, as the agent of a tab that runs a launch is
-	// (decisions.md D68).
+	// by its harness alone, as the agent of a tab that runs a launch is.
 	NoConversation = "no conversation"
 	// HostUnknown is a host whose state the record does not know then.
 	HostUnknown = "host unknown"

@@ -18,7 +18,7 @@ import (
 )
 
 // A full shutdown or a restore that the popup runs runs under a curtain on
-// every monitor, which shows the walk's progress alone (decisions.md D192).
+// every monitor, which shows the walk's progress alone.
 // The walk opens the curtains before its first step, sends them each report,
 // and takes back what the user pressed on them as the surface's own keys. A
 // walk that went well lifts its curtains a moment after its end; any other
@@ -38,7 +38,7 @@ const curtainOpenWait = 3 * time.Second
 type curtainArgv func(m revier.Monitor, socket string, main bool) []string
 
 // WithCurtain gives the surface the launch of a curtain, so a full shutdown
-// or a restore runs under one on every monitor (decisions.md D192). Without
+// or a restore runs under one on every monitor. Without
 // it no curtain opens.
 func (m Model) WithCurtain(argv func(m revier.Monitor, socket string, main bool) []string) Model {
 	m.curtain = argv
@@ -356,7 +356,7 @@ func waitCurtain(r *curtainRun) tea.Cmd {
 }
 
 // curtained takes a press on a curtain as the surface's own: cancel is the
-// first ctrl+c, quit the second (decisions.md D140). Esc on a curtain hides
+// first ctrl+c, quit the second. Esc on a curtain hides
 // the curtains and leaves the walk running. The summary's Close ends them, as
 // does the last curtain gone some other way, closed by the window manager or
 // crashed: a run with no curtain left keeps no socket open.

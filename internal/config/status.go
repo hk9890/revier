@@ -32,7 +32,7 @@ func (c *Config) Statuses() []core.Status {
 }
 
 // validateStatuses is the tables a rule accepts, and one error per table it
-// refuses (decisions.md D85): the table goes, and nothing else does. inProject
+// refuses (decisions/0085): the table goes, and nothing else does. inProject
 // is a project file's tables, which hold the pane's places alone and may
 // leave run to the shared table they change.
 func validateStatuses(tables []StatusTable, inProject bool) ([]core.Status, []error) {

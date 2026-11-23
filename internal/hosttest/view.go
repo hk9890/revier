@@ -10,7 +10,7 @@ import (
 )
 
 // FakeView is an in-memory View that draws a runtime it is not, in windows of
-// its own, as kitty draws hc (decisions.md D180): an instance is shown once
+// its own, as kitty draws hc: an instance is shown once
 // Show opened a window for it, and a window closed by hand is gone while the
 // runtime runs on. It focuses only what it shows, reports the focus, maps a
 // key's window id to a runtime panel, and opens a tab beside a window of its

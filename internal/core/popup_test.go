@@ -38,7 +38,7 @@ func TestRaiseSelfRaisesTheTerminalThisProcessRunsIn(t *testing.T) {
 // The popup is raised by its class through the window host, as the press
 // that raises it is, and no runtime is asked: it is raised under every
 // runtime, and a runtime that lists no popup leaves it where the restore hid
-// it all the same (decisions.md D182).
+// it all the same.
 func TestRaisePopupRaisesThePopupByItsClassAlone(t *testing.T) {
 	rt := hosttest.NewRuntime("hc")
 	wm := hosttest.New("wm")
@@ -149,7 +149,7 @@ func TestHidePopupIsRefusedWithNothingToHide(t *testing.T) {
 
 // A raise of a minimized popup puts that on record for the surface, and
 // costs what the raise of one on the screen costs otherwise: the same
-// listings, and no switch (decisions.md D169).
+// listings, and no switch.
 func TestARaiseOfAMinimizedPopupIsOnRecord(t *testing.T) {
 	raise := func(minimized bool) (*hosttest.Fake, *hosttest.FakeRuntime) {
 		wm := hosttest.New("wm")
@@ -260,7 +260,7 @@ func TestPopupLaunchesAndPlacesByTheWorkarea(t *testing.T) {
 // first frame, by the monitor it opened on, so the launch raises it and
 // does not place it again: a place by the primary workarea would undo the
 // size they gave on another monitor. Rules that are not current, or that
-// cannot be read, leave the place to revier (decisions.md D191).
+// cannot be read, leave the place to revier.
 func TestPopupLeavesThePlaceToRulesThatAreCurrent(t *testing.T) {
 	withOwn := func(own []revier.WindowRule, user ...revier.WindowRule) *hosttest.FakeWindowRules {
 		r := hosttest.NewWindowRules(user...)
@@ -316,7 +316,7 @@ func (s *switches) switchPopup(context.Context) error {
 // A press on the popup that is the focused window already is the second
 // press of its key: the popup is told over its socket to switch its list, and
 // nothing is raised. The popup is found by its class alone, so no runtime is
-// asked, and the switch works under every runtime (decisions.md D182).
+// asked, and the switch works under every runtime.
 func TestPopupSwitchesItsListWhenItIsFocusedAlready(t *testing.T) {
 	wm := hosttest.New("wm")
 	open := wm.Add("revier", core.PopupClass)
@@ -384,7 +384,7 @@ func TestPopupRaisesAFocusedPopupThatTakesNoSwitch(t *testing.T) {
 
 // A revier the user runs in a terminal of their own is no popup: a press with
 // that terminal focused opens the popup over it, whatever runs in it, the
-// surface current included, and switches nothing (decisions.md D182). The
+// surface current included, and switches nothing. The
 // runtime is not asked, and the window the key was pressed over is asked for
 // once, for the switch and for the launch's line both.
 func TestPopupOpensOverAFocusedTerminalOfTheUsersOwn(t *testing.T) {
