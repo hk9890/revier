@@ -55,7 +55,7 @@ answer is named on stderr, and the events of the others are printed.
 
 // cmdEvents prints the event file, and with it what the revier on each host
 // a project here links to recorded. It counts nothing: what "used" means is
-// the reader's to decide (decisions/0112).
+// the reader's to decide.
 func cmdEvents(out io.Writer, args []string) error {
 	if len(args) > 0 && slices.Contains([]string{"help", "--help", "-h"}, args[0]) {
 		_, _ = fmt.Fprint(out, eventsUsage)

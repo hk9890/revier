@@ -35,8 +35,8 @@ type Remote interface {
 	Conversations(ctx context.Context, names []ProjectName) ([]ProjectView, error)
 
 	// Events is what the remote revier recorded in the last days, about every
-	// project it has, as `revier events --local` prints it there
-	// (decisions/0112). The answer is that machine's alone: it asks no
+	// project it has, as `revier events --local` prints it there.
+	// The answer is that machine's alone: it asks no
 	// host of its own.
 	Events(ctx context.Context, days int) ([]Event, error)
 

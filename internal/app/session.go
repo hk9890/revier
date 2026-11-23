@@ -68,7 +68,7 @@ func SaveChanged(ctx context.Context, c *core.Core, stateRoot string, r core.Rep
 // store writes s and logs what it holds and what it lacks, and by its reason
 // which save wrote the file. The state record has the save, failed or not,
 // and what the survey r it was made from saw, so a replay at the save can say
-// what it left out and why (decisions/0151).
+// what it left out and why.
 func store(c *core.Core, stateRoot string, r core.Report, s session.Session, gaps core.SessionGaps) (session.Session, string, error) {
 	stored, path, err := session.Save(stateRoot, s)
 	if err != nil {

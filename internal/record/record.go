@@ -1,6 +1,6 @@
 // Package record writes and reads revier's state record: what revier did and
 // what a surface saw, one JSON line each, appended to a file per day under
-// $STATE/record and never pruned (decisions/0151). `revier state` replays
+// $STATE/record and never pruned. `revier state` replays
 // it to say what was open at a moment.
 //
 // It is kept apart from the event file (decisions/0151): a reader counts

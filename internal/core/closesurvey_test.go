@@ -37,7 +37,7 @@ func TestACloseAsksNoHostOfALinkWithNothingOpenHere(t *testing.T) {
 
 // The host of a link that is open here is still asked, by the plan's survey
 // and by the recheck: its agents are its word, and a busy one refuses the
-// close (decisions/0084). A close of another project leaves it alone.
+// close. A close of another project leaves it alone.
 func TestACloseAsksTheHostOfTheLinkItCloses(t *testing.T) {
 	c, rt, remote, pane := linked(t, hostAgent("box.4242", revier.StatusIdle))
 	projects := []core.Project{prepared(t, project()), linkProject(t)}
