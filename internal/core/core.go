@@ -293,7 +293,7 @@ func (c *Core) resolveAt(p Project, i int) (revier.Host, revier.Realization, rev
 	// configuration refused, resolve to nothing, here, where every lookup
 	// that walks a project's targets passes. The keypress then fails loudly
 	// with the reason instead of running something built from a launch argv
-	// that did not render, or in a project with no path (decisions/0085).
+	// that did not render, or in a project with no path.
 	if p.Invalid != nil {
 		return nil, revier.Realization{}, revier.CompiledMatch{}, p.Invalid
 	}

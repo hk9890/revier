@@ -819,7 +819,7 @@ func (c *Core) rechecked(r Report, plan []CloseStep) []CloseStep {
 		// is the answer, and a plan handed back by a refusal comes in with
 		// the marks and agents that refusal read.
 		step.Unread, step.Agents = "", nil
-		// A link's agents are its host's word (decisions/0084). A host that
+		// A link's agents are its host's word. A host that
 		// stopped answering between the plan and the close reports none, and
 		// no agents read is not idle, so the panel here that shows a busy
 		// agent is not closed on a survey that could not ask about it.

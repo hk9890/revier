@@ -21,7 +21,7 @@ const (
 // Open decides what `revier open` and Enter on a project do, so the command
 // line and the surface cannot disagree. A project its file
 // refused is neither cloned nor opened: the reason is the one thing to do
-// about it, and a git_url the load refused must not reach git (decisions/0085).
+// about it, and a git_url the load refused must not reach git.
 // One with no home target is refused with ErrNoHome. A link is its host's to
 // clone, and a checkout that is here is gone to. One that is missing is cloned
 // when the file records where from; else the home target is raised when it

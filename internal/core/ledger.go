@@ -35,7 +35,7 @@ type Ledger interface {
 	Record(e revier.Event)
 	// Note appends one line to the state record: what an operation did,
 	// failed or not, or what a save saw. A line with no By is one an
-	// operation did (decisions/0151).
+	// operation did.
 	Note(l record.Line)
 	PopupMarks
 }
@@ -158,9 +158,9 @@ func (c *Core) settledProjects() []Project {
 // the one launch on record is the only one a window is attached for.
 //
 // The line is "claim: launch set aside" for a target's launch, kept until
-// LateWindow after launched_at (decisions/0190), and
-// "claim: launch replaced" for an action's. project, target and launched_at are
-// the replaced launch's, by_project and by_target the new one's, and age_ms is
+// LateWindow after launched_at, and "claim: launch replaced" for an action's.
+// project, target and launched_at are the replaced launch's, by_project and
+// by_target the new one's, and age_ms is
 // the replaced launch's age at at. A target's launch past BindWindow, still
 // kept, that another replaces before a settle set it aside is set aside with no
 // line: Launched returns only a launch still pending.

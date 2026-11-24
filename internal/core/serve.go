@@ -38,7 +38,7 @@ type Served struct {
 // resolved: a machine reached over ssh alone has no runtime, and serves its
 // panels all the same. A refused target is passed over, as
 // resolveAt passes over it: its realization is as written, not as rendered,
-// and nothing may run from an argv that did not render (decisions/0085).
+// and nothing may run from an argv that did not render.
 // The panels are the listed tabs' as the file declares them, with no argv of a
 // link filled in: the machine that serves a panel is the one the project is on.
 func workspace(p Project, kind revier.PanelKind) (revier.Realization, revier.PanelSpec, error) {

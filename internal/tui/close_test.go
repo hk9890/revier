@@ -478,7 +478,7 @@ func TestAltDelOnATargetClosedSinceAsks(t *testing.T) {
 // A shared target config.toml refuses reaches no project, so it is in no
 // project's targets either: alt+del on a target of the project's own file
 // asks its question, rather than reading the file against a shared list the
-// loader already threw away (decisions/0085).
+// loader already threw away.
 func TestAltDelOnAnOwnTargetBesideARefusedSharedTarget(t *testing.T) {
 	refused := sharedTargets + "\n[[target]]\nname = \"web\"\nhome = \"yes\"\n  [target.window]\n  launch = [\"firefox\"]\n  match = { class = \"^firefox$\" }\n"
 	own := demoProject + "\n[[target]]\nname = \"notes\"\n  [target.runtime]\n  name = \"notes\"\n  launch = [\"less\"]\n  match = { title = \"^notes$\" }\n"

@@ -563,7 +563,7 @@ func TestTwoLinksToOneProjectEachKeepTheirAgents(t *testing.T) {
 }
 
 // A target its file refused is not served: the realization it keeps is as
-// written, not as rendered, so nothing may run from it (decisions/0085),
+// written, not as rendered, so nothing may run from it,
 // and the reason is what the panel on the other machine prints. The shell of
 // a home whose listed tab is refused is refused with it, and is not a plain
 // shell in the place of the one the tab declares.
