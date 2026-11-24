@@ -1,6 +1,6 @@
 // Package ledger is the state file, the event file, the state record and the
 // per-project press lock as the core uses them: the one implementation of
-// core.Ledger outside a test (decisions.md D120).
+// core.Ledger outside a test.
 package ledger
 
 import (
@@ -201,11 +201,11 @@ func (f File) Update(apply func(*state.State) bool) *state.State {
 // it, a second one that sets it over the first, and each open that ends it.
 //
 // "shutdown state set" carries at and the session the shutdown saved, empty
-// when it made no save; a full shutdown writes the record after its save
-// (decisions.md D141). "shutdown state cleared" carries set_at, the at of the
-// record that ended: something opened, a restore started, the start dialog
-// started fresh, or a cancel or a second ctrl+c took the record back because
-// its shutdown left a step not reached.
+// when it made no save; a full shutdown writes the record after its save.
+// "shutdown state cleared" carries set_at, the at of the record that ended:
+// something opened, a restore started, the start dialog started fresh, or a
+// cancel or a second ctrl+c took the record back because its shutdown left a
+// step not reached.
 func logShutDown(before, after *state.ShutDown) {
 	switch {
 	case after != nil && after != before:
@@ -215,12 +215,11 @@ func logShutDown(before, after *state.ShutDown) {
 	}
 }
 
-// changes is what a write did, as lines of the state record (decisions.md
-// D151): the project it selected, the run of a command target it recorded,
-// each target it bound or unbound, and each instance it attached or
-// detached. Every write goes through here, so one place covers a landing, a
-// claim, a run, an attachment, a rename and a prune, in every process that
-// writes the state.
+// changes is what a write did, as lines of the state record (decisions/0151):
+// the project it selected, the run of a command target it recorded, each target
+// it bound or unbound, and each instance it attached or detached. Every write
+// goes through here, so one place covers a landing, a claim, a run, an
+// attachment, a rename and a prune, in every process that writes the state.
 func changes(was, is *state.State) []record.Line {
 	var out []record.Line
 	if is.Current != was.Current {

@@ -138,8 +138,7 @@ func covered(ops []string) int {
 }
 
 // A full shutdown from the popup covers every monitor before its first close,
-// sends each step to the curtains, and lifts them once it went well
-// (decisions.md D192).
+// sends each step to the curtains, and lifts them once it went well.
 func TestAFullShutdownFromThePopupRunsUnderACurtain(t *testing.T) {
 	rt, wm, c, projects, curtains := curtained(t, 2)
 	root := stateWith(t, nil)

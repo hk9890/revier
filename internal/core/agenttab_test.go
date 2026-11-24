@@ -386,7 +386,7 @@ func (f finding) FindPanel(_ context.Context, _ []revier.Instance, panel revier.
 }
 
 // The id a terminal key passes is the view's, so the view's finder maps it:
-// a finder on the runtime alone is not asked (decisions.md D176).
+// a finder on the runtime alone is not asked.
 func TestPanelOwnerAsksTheViewWhichInstanceAnIDMeans(t *testing.T) {
 	_, rt, projects, _, other := twoWorkspaces(t, []revier.Panel{{ID: "1"}}, []revier.Panel{{ID: "1"}})
 
@@ -652,8 +652,7 @@ func TestNewAgentRaisesTheOSWindow(t *testing.T) {
 }
 
 // With no OS window to raise, nothing opens: the tab would come up behind, and
-// its focus would be the notice a focus with no raise becomes
-// (decisions.md D63).
+// its focus would be the notice a focus with no raise becomes.
 func TestNewAgentOpensNothingItCannotRaise(t *testing.T) {
 	rt, _, _, _ := osWindowHosts()
 	c := &core.Core{Runtime: rt, View: rt, Window: hosttest.New("wm"), Probes: []revier.AgentProbe{resumable()}}

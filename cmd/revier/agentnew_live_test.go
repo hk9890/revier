@@ -1,8 +1,8 @@
 //go:build live
 
 // Layer L4 for `revier agent new` against a real hc core, shown in a fake
-// view. An agent tab is a tab (decisions.md D145), and on hc a tab is the
-// terminals of the workspace that share a tab's token (D179).
+// view. An agent tab is a tab, and on hc a tab is the
+// terminals of the workspace that share a tab's token.
 package main
 
 import (
@@ -114,7 +114,7 @@ func TestAgentNewNamesAPanelNoWorkspaceHolds(t *testing.T) {
 // With outside "agent", in a window of the view's that shows no workspace,
 // the agent key opens a tab of the view's own beside it that runs
 // config.toml's first named agent, a named agent's key that agent, and the
-// shell key a plain shell tab; hc starts none of them (decisions.md D183).
+// shell key a plain shell tab; hc starts none of them.
 func TestAgentNewOutsideAWorkspaceRunsTheConfiguredAgent(t *testing.T) {
 	scratch(t)
 	root := os.Getenv("REVIER_CONFIG_HOME")

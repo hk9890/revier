@@ -148,7 +148,7 @@ func TestAReturnHomeLandsInTheFirstPanelOfTheMarkedTab(t *testing.T) {
 
 // The panels of an instance revier opens are marked with the target it was
 // opened for, so the panel a return home lands in, the first of them, is
-// identified and not guessed at (decisions.md D100).
+// identified and not guessed at.
 func TestAnOpenedInstanceIsMarkedAtItsOwnPanel(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	c := &core.Core{Runtime: rt, View: rt}
@@ -514,7 +514,7 @@ func TestATabTargetsAgentIsRecordedOnceAndNotResumed(t *testing.T) {
 
 // An agent in an open tab target is addressed through the tab, and every
 // address the survey gives names its agent back, the tab's and the
-// workspace's (decisions.md D155).
+// workspace's.
 func TestATabsAgentIsAddressedThroughTheTab(t *testing.T) {
 	inTab := func(p revier.Panel) revier.Panel {
 		p.Vars = map[string]string{core.PanelTargetVar: "agent"}

@@ -37,7 +37,7 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	}
 	// Named, the list is those projects alone. This is how a revier on
 	// another machine is asked about the projects that live there
-	// (decisions.md D40), and a name it does not know is an error, so a
+	// (decisions/0040), and a name it does not know is an error, so a
 	// missing project file there is reported, not shown as nothing. The
 	// names it knows are listed all the same, for the person who asked about
 	// several at once and for the revier that asked about its links: it
@@ -84,8 +84,8 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	}
 	views := report.Views
 
-	// As with projects, the agent table says only what a panel here shows
-	// (decisions.md D104), and the JSON every agent the survey found.
+	// As with projects, the agent table says only what a panel here shows, and
+	// the JSON every agent the survey found.
 	switch {
 	case *agents && *asJSON:
 		err = a.printJSON(agentRows(views))
@@ -128,8 +128,8 @@ type agentRow struct {
 	// Address is what `revier agent` takes; an agent no target holds has
 	// none.
 	Address string `json:"address,omitempty"`
-	// Name is what the harness calls the agent, shown beside the address
-	// (decisions.md D161), which `--match` finds the agent's project by.
+	// Name is what the harness calls the agent, shown beside the address, which
+	// `--match` finds the agent's project by.
 	Name     string             `json:"name,omitempty"`
 	Project  revier.ProjectName `json:"project"`
 	Target   revier.TargetName  `json:"target"`
@@ -210,8 +210,8 @@ func (a *app) table(views []revier.ProjectView) error {
 	w := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
 	_, _ = fmt.Fprintln(w, "PROJECT\tSTATE\tAGENT\tTARGETS")
 	// The table is read by a person at this machine, and the JSON above by
-	// the revier on another: the table says only what a panel here shows
-	// (decisions.md D104), and the JSON says everything the survey found.
+	// the revier on another: the table says only what a panel here shows, and
+	// the JSON says everything the survey found.
 	for _, v := range a.core.Shown(views) {
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
 			v.Project.Label(), runState(v), agentSummary(v), targetSummary(v))

@@ -104,7 +104,7 @@ func TestACloseKeepsTheIdOfAnAgentItsHarnessNeverFiled(t *testing.T) {
 }
 
 // A close of one project leaves its late launch: the record is also the class
-// hold and the duplicate guard. A full shutdown ends it (decisions.md D199).
+// hold and the duplicate guard. A full shutdown ends it.
 func TestACloseOfOneProjectKeepsItsLateLaunch(t *testing.T) {
 	for only, want := range map[revier.ProjectName]int{"demo": 1, "": 0} {
 		c, _, report, projects := desktop(t)
@@ -308,7 +308,7 @@ func TestAFullShutdownWhoseRecordWasNotSavedIsNotRecorded(t *testing.T) {
 }
 
 // A full shutdown whose record an open ended on its walk is not on record
-// either (decisions.md D141): the next start offers nothing.
+// either: the next start offers nothing.
 func TestAFullShutdownWhoseRecordAnOpenEndedIsNotRecorded(t *testing.T) {
 	c, rt, report, projects := desktop(t)
 	rt.OnClose = func(revier.TargetRef) {

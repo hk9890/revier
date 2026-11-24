@@ -16,7 +16,7 @@ import (
 
 // Driving one agent from a script: find it, wait on its state, type into it.
 // Which panel may be typed into, and when, is policy, so every refusal is made
-// here. A runtime only delivers the text (decisions.md D31).
+// here. A runtime only delivers the text.
 
 var (
 	// ErrNoAgent means a project, or one of its targets, holds no agent panel.
@@ -50,7 +50,7 @@ var (
 	ErrNoMessage = errors.New("the agent's last message cannot be read")
 
 	// ErrStillIdle means a prompt was delivered and the agent was still idle
-	// when Prompt stopped watching it (decisions.md D196). The text is in the
+	// when Prompt stopped watching it (decisions/0196). The text is in the
 	// panel, so prompting again can type it twice.
 	ErrStillIdle = errors.New("the agent was still idle after the prompt was delivered")
 )
@@ -140,9 +140,9 @@ func Worst(agents []revier.AgentView) (revier.AgentState, bool) {
 // the project in the agent's address: empty, for the project's only agent; a
 // target name, for the only agent in that target; or a target and a panel id,
 // <target>:<panel>, for that panel of the target, unless a tab of another
-// target holds it, whose address it is then (decisions.md D155). Where
+// target holds it, whose address it is then. Where
 // several agents run in what addr names, the only one that is no named
-// agent's is the default agent, and the one meant (D145).
+// agent's is the default agent, and the one meant.
 func (c *Core) Agent(ctx context.Context, p Project, addr string) (Agent, error) {
 	a, err := parseAddress(p, addr)
 	if err != nil {
@@ -231,8 +231,8 @@ func (a address) noPanel() error {
 }
 
 // inAnotherTab refuses a panel address whose panel sits in a tab of another
-// target than the one it names: the tab's target is its one address
-// (decisions.md D155), and the refusal gives it.
+// target than the one it names: the tab's target is its one address, and the
+// refusal gives it.
 func (c *Core) inAnotherTab(snap snapshot, p Project, bound Bindings, a address, scope []held) error {
 	tabs := c.tabPlaces(snap, p, bound)
 	for _, h := range scope {
@@ -246,7 +246,7 @@ func (c *Core) inAnotherTab(snap snapshot, p Project, bound Bindings, a address,
 // ambiguous refuses where, which names every agent of found, with the
 // address of each. An agent no target holds - a link's tab moved to another
 // window - has none, and is named by its panel, which only the agent list
-// reaches (decisions.md D155).
+// reaches.
 func (c *Core) ambiguous(snap snapshot, p Project, bound Bindings, where string, found []Agent) error {
 	tabs := c.tabPlaces(snap, p, bound)
 	var addrs, loose []string
@@ -272,7 +272,7 @@ func (c *Core) ambiguous(snap snapshot, p Project, bound Bindings, where string,
 }
 
 // Address is an agent's address: its project, the target that holds it and
-// its panel (decisions.md D155). A panel id is one process's - a kitty window
+// its panel. A panel id is one process's - a kitty window
 // id is - and the target names the process, so the three name one agent.
 func Address(project revier.ProjectName, target revier.TargetName, panel revier.PanelID) string {
 	return string(project) + ":" + string(target) + ":" + panel.String()
@@ -500,7 +500,7 @@ func (c *Core) StartedAgent(ctx context.Context, p Project, addr string) (Agent,
 //
 // It returns once an idle agent has left idle, so a following Wait sees the
 // turn it asked for rather than the rest before it. An agent not seen to leave
-// idle answers ErrStillIdle (decisions.md D196), and one whose panel is gone
+// idle answers ErrStillIdle (decisions/0196), and one whose panel is gone
 // answers ErrAgentGone at once. An agent that was already working queues the
 // prompt, and nothing marks its arrival, so Prompt returns at once.
 func (c *Core) Prompt(ctx context.Context, a Agent, text string, poll time.Duration) (revier.AgentState, error) {
@@ -592,7 +592,7 @@ func keyBytes(name string) (string, error) {
 // SendKeys types the named keys into an agent's panel, in order, gap apart. It
 // asks nothing of the agent's state, where Prompt refuses two of them: a key
 // is how a dialog is answered and how a working agent is interrupted, and
-// the caller named each one (decisions.md D117). A name that is no key
+// the caller named each one. A name that is no key
 // refuses them all, so nothing is typed up to a mistake.
 //
 // An error after the first key says how many keys arrived: sending them again
@@ -625,9 +625,8 @@ func (c *Core) SendKeys(ctx context.Context, a Agent, names []string, gap time.D
 
 // Said is the last thing the agent said, as its probe reads it
 // (revier.Detailed): what `revier agent read` prints. The read is display,
-// as it is on the surface, and nothing is decided by it (decisions.md D106,
-// D116). An agent with no message to read answers ErrNoMessage; any other
-// error is a probe that broke.
+// as it is on the surface, and nothing is decided by it. An agent with no
+// message to read answers ErrNoMessage; any other error is a probe that broke.
 func (c *Core) Said(ctx context.Context, a Agent) (revier.AgentDetail, error) {
 	if a.link != nil {
 		return revier.AgentDetail{}, fmt.Errorf("%w: its conversation is on %s", ErrNoMessage, a.link.Remote.Host)
@@ -687,9 +686,9 @@ func (c *Core) reread(ctx context.Context, a Agent) (revier.AgentState, error) {
 // agent that listing did not hold has no detail until the next survey.
 //
 // A detail is empty for an agent whose probe does not say, one on another
-// machine, and one whose probe failed: the detail is display (decisions.md
-// D106), and the failure is logged rather than shown. A probe with nothing to
-// read (revier.ErrNoDetail) has not failed, and is not logged either.
+// machine, and one whose probe failed: the detail is display, and the failure
+// is logged rather than shown. A probe with nothing to read
+// (revier.ErrNoDetail) has not failed, and is not logged either.
 //
 // A failed read is one WARN "detail" per panel and distinct err, with probe,
 // ref and panel. The surface keeps what that agent said last, and its

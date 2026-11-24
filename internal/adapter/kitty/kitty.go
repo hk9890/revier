@@ -1,8 +1,8 @@
 // Package kitty implements a Runtime and the View that shows it over kitty's
 // remote control: the same kitty processes run the programs and draw them, so
-// a kitty window id names a runtime panel directly (decisions.md D176, D178).
+// a kitty window id names a runtime panel directly.
 // It also implements the View of a runtime that draws nothing, hc, in
-// view.go: kitty windows that attach that runtime's panels (D180).
+// view.go: kitty windows that attach that runtime's panels.
 //
 // kitty is the terminal this machine actually uses; hc is the runtime that
 // headless tests run on. An instance is a kitty OS window, and the
@@ -78,14 +78,16 @@ var socketFile = regexp.MustCompile(`^(?:revier-)?kitty-(\d+)$`)
 // workspaceSocket is the socket of the workspace kitty: the one kitty process
 // this host starts, and opens every new OS window in. A kitty option is its
 // whole process's, so no OS window opens in a kitty the user or the popup
-// started: that kitty's options would reach it (decisions.md D165).
+// started: that kitty's options would reach it. One kitty
+// serves every workspace: a kitty per workspace costs its memory for each.
 var workspaceSocket = regexp.MustCompile(`/revier-kitty-\d+$`)
 
 // workspaceName is the workspace kitty's own name for an OS window: the one
 // of the window it hides, and of any window opened in it without a name, as
 // one opened by hand. kitty takes a process's `--name` for those, and a
 // workspace's name would make that window a second copy of the workspace.
-// No such window is listed: none is a workspace (decisions.md D168).
+// No such window is listed: none is a workspace, and pairing them in the
+// core would cost core work for a terminal the user has elsewhere.
 const workspaceName = "revier-kitty"
 
 // openVar is the user var every window an Open or an OpenTab launches carries,
@@ -99,7 +101,9 @@ const openVar = "REVIER_KITTY_OPEN"
 // 0.50 (read from kitty 0.50.0's protocol docs; not run against a live
 // kitty). The records name a program, not an agent, so the host passes them
 // on unread and a probe says what they mean. A user var of the same name is
-// dropped, so the var holds only what kitty reports (decisions.md D188).
+// dropped, so the var holds only what kitty reports. A
+// probe gets no socket, which would hand it all of kitty's remote control, and
+// the host has no built-in mapping until a second agent sends the records.
 const programStatusVar = "kitty_program_status"
 
 // runtimeDir is the directory that is the user's alone, and "" when the
@@ -464,7 +468,7 @@ func (h *Host) decode(l listing) []revier.Instance {
 		// An OS window kitty opened for itself carries the default instance
 		// name, which identifies nothing: every such window has it. Reporting
 		// it as no title at all is the fact the core needs to know that this
-		// window has to be identified some other way (decisions.md D22).
+		// window has to be identified some other way.
 		name := w.WMName
 		if name == defaultWMName {
 			name = ""
@@ -927,7 +931,7 @@ const minKitty = "0.42"
 // startProcess starts the workspace kitty as a service of the user's service
 // manager, so it has the session's login environment whatever process asked
 // first: started from a shell, it would hand that shell's environment to
-// every workspace after (decisions.md D167). Where there is none, kitty is
+// every workspace after. Where there is none, kitty is
 // started detached from this process.
 func (h *Host) startProcess(ctx context.Context, args ...string) error {
 	if h.start != nil {

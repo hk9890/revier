@@ -56,7 +56,7 @@ func RunTimeout(cmd revier.Command) (time.Duration, error) {
 	return d, nil
 }
 
-// runCommand is one press of a command target (decisions.md D166). A second
+// runCommand is one press of a command target. A second
 // press goes home while focus is still on the window the last run of this
 // target left it on; any other press runs the command, to its end or its
 // timeout. The Result of a run that moved focus names the window that has
@@ -82,7 +82,7 @@ func (c *Core) runCommand(ctx context.Context, p Project, i int, st *state.State
 		logging.Op("go", start, err, "project", p.Name, "target", name, "landed", res.Target, "ran", res.Ran, "focused", res.Focused)
 	}()
 	// Refused as resolveAt refuses any other target, before anything runs
-	// (decisions.md D85).
+	// (decisions/0085).
 	if p.Invalid != nil {
 		return Result{}, p.Invalid
 	}

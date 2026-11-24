@@ -169,7 +169,7 @@ func (m *Model) followPane(line int) {
 
 // detailContent is what this project is, then what is up, then what its agents
 // are doing, then the screen of the agent under the pane's cursor, mirrored
-// as the agent list's pane mirrors it (decisions.md D125).
+// as the agent list's pane mirrors it.
 //
 // A narrow pane stacks them, and the mirror takes the rows the others leave.
 // A wide pane puts the mirror beside the rest, so it has the whole height;
@@ -242,7 +242,7 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 	// Before the first survey the view is the files' alone, and says nothing
 	// about what runs: the pane says so, as the rows do by carrying no mark.
 	// A link's view says nothing about its checkout until its host has
-	// answered, which is after the survey of this machine (decisions.md D114).
+	// answered, which is after the survey of this machine.
 	answered := m.answered(v)
 	status, style := "stopped", th.NameDim
 	if !m.ready() || !answered {
@@ -512,8 +512,7 @@ const (
 )
 
 // nameLine is the pane's first line: the name button, and the project's
-// project-line status at the right edge where the button leaves room for it
-// (decisions.md D134).
+// project-line status at the right edge where the button leaves room for it.
 func (m Model) nameLine(name revier.ProjectName, w int) string {
 	button := m.nameButton(name, w)
 	room := w - lipgloss.Width(button) - gridGap
@@ -525,7 +524,7 @@ func (m Model) nameLine(name revier.ProjectName, w int) string {
 }
 
 // statusSection is the project's project status: a section of the pane under
-// the status's title (decisions.md D134), one segment to a line. Nothing
+// the status's title, one segment to a line. Nothing
 // shown yet is no section at all. An answer is shown only while its place
 // has the status that gave it, so that status's title is the place's own.
 func (m Model) statusSection(name revier.ProjectName, w int) string {

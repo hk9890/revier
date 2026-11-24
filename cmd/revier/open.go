@@ -37,8 +37,10 @@ func cmdOpen(ctx context.Context, a *app, args []string) error {
 	// A name revier does not know, typed in a directory, is a project being
 	// started: the file is written and the workspace opened in one command, as
 	// `os open` does. An open that then fails keeps the file, and its error
-	// says so (decisions.md D197). Without a name there is nothing to call it,
-	// and the usual resolution applies.
+	// says so. Removing the file would also have to undo
+	// the mise trust, without untrusting a directory the user trusted before.
+	// Without a name there is nothing to call it, and the usual resolution
+	// applies.
 	createdFile := ""
 	if _, known := a.project(revier.ProjectName(name)); name != "" && !known {
 		p, err := createProject(a.out, a.cfgRoot, a.core.Ledger, a.projects, revier.ProjectName(name))

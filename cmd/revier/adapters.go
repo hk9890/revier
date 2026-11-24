@@ -65,7 +65,7 @@ var (
 // optInRuntimes are registered and left out of defaultRuntimeOrder, which
 // TestEveryAdapterIsInItsDefaultOrder checks: selection tries a runtime
 // outside the default order only when config names it. hc is a prototype, and
-// must not take over a machine that has it installed (decisions.md D174).
+// must not take over a machine that has it installed.
 var optInRuntimes = []string{"hc"}
 
 // hostRemoved answers a config that still names a runtime or a view an
@@ -78,7 +78,8 @@ func (e hostRemoved) Error() string {
 }
 
 // removedHosts are the runtimes and the views an earlier release had, by
-// kind (decisions.md D175, D184).
+// kind. Keeping herdr beside hc meant a second host and probe to track for
+// the same makers' product. Its interface may come back as a view over hc.
 var removedHosts = map[string][]string{"runtime": {"herdr", "tmux"}, "view": {"tmux"}}
 
 // unknownHost is the error for a name in [hosts] that none of the adapters
@@ -138,12 +139,11 @@ func selectTerminal(ctx context.Context, cfg *config.Config, want []string) (rev
 }
 
 // views are the compiled-in views. kitty is the one: it shows the kitty
-// runtime as that runtime, and hc in windows that attach its terminals
-// (decisions.md D178, D180).
+// runtime as that runtime, and hc in windows that attach its terminals.
 var views = []string{"kitty"}
 
 // viewOf is the view called name that shows rt. A variable, so a live test
-// shows a real runtime in a view that opens no window (decisions.md D184).
+// shows a real runtime in a view that opens no window.
 var viewOf = showWith
 
 // showWith is the view called name that shows rt, or an error when it
@@ -168,9 +168,9 @@ func showWith(ctx context.Context, name string, rt revier.Runtime) (revier.View,
 // selectView picks the view that shows rt. A configured list is a preference
 // order, as selectHost reads one, and a view it names that cannot show rt is
 // an error; among the defaults such a view is passed over, and finding none
-// leaves the runtime unshown: hc with no kitty, or no display, as over ssh
-// (decisions.md D185). With no runtime there is nothing to show, and no view
-// is selected, whatever the list names.
+// leaves the runtime unshown: hc with no kitty, or no display, as over ssh.
+// With no runtime there is nothing to show, and no view is selected, whatever
+// the list names.
 func selectView(ctx context.Context, want []string, rt revier.Runtime) (revier.View, error) {
 	if rt == nil {
 		return nil, nil
@@ -311,7 +311,7 @@ func sshRemote(host string) revier.Remote { return ssh.New(host) }
 
 // popupRules reads the window host's rules where its extension reads the
 // rules revier writes for the popup, so that a launch leaves the popup's
-// place to them (decisions.md D191). Elsewhere it is nil, and the launch
+// place to them. Elsewhere it is nil, and the launch
 // places the popup.
 func popupRules(win revier.WindowController) revier.WindowRules {
 	h, ok := win.(*gnome.Host)
@@ -330,7 +330,7 @@ func newCore(cfg *config.Config, rt revier.Runtime, view revier.View, win revier
 }
 
 // switchPopup tells the popup's surface to switch its list, over the socket
-// it listens on (decisions.md D182).
+// it listens on.
 func switchPopup(ctx context.Context) error {
 	path, err := popupswitch.Path()
 	if err != nil {
@@ -340,7 +340,7 @@ func switchPopup(ctx context.Context) error {
 }
 
 // servedProcesses lists what `revier agent exec` started here for a terminal
-// on another machine (decisions.md D84). It is not selected: it holds what no
+// on another machine (decisions/0084). It is not selected: it holds what no
 // runtime does, beside whichever runtime was. It needs a /proc, and a machine
 // without one serves panels that no survey sees.
 func servedProcesses() revier.Host {

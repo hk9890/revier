@@ -39,7 +39,7 @@ func TestCurtainTitleNamesTheMainCurtain(t *testing.T) {
 	}
 }
 
-// One curtain opens on each monitor and covers it (decisions.md D192). The
+// One curtain opens on each monitor and covers it. The
 // primary one opens first and is focused last, so its keys reach it.
 func TestOpenCurtainsCoversEachMonitorPrimaryFirst(t *testing.T) {
 	wm := twoMonitors()
@@ -250,7 +250,7 @@ func TestFocusCurtainLeavesAHiddenCurtainHidden(t *testing.T) {
 	}
 }
 
-// While a curtain is open the popup's key shows it again (decisions.md D192).
+// While a curtain is open the popup's key shows it again.
 // It does nothing else: no switch of the list and no raise of the popup.
 func TestPopupShowsAnOpenCurtainAndRaisesNoPopup(t *testing.T) {
 	wm, main, other := openCurtains(t)

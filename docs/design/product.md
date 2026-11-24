@@ -23,10 +23,10 @@ territory. revier is how you walk it.
 | **Target** | A named thing you reach with a key: the workspace, an editor, a diff viewer, a page |
 | **Home** | The project's workspace target — the terminal you live in and return to |
 | **Panel** | One terminal of a runtime target: an agent, a shell, a tool |
-| **Tab** | The panels of one instance that share a tab mark. The runtime keeps the mark, so a view that opens again draws the same tabs (D179) |
-| **Agent** | A program an agent panel runs. The layout's first agent panel is the project's default agent; a named agent is declared once and opened by its name (D145) |
+| **Tab** | The panels of one instance that share a tab mark. The runtime keeps the mark, so a view that opens again draws the same tabs |
+| **Agent** | A program an agent panel runs. The layout's first agent panel is the project's default agent; a named agent is declared once and opened by its name |
 | **Agent state** | What an agent panel is doing: idle, running, waiting for you, or unknown |
-| **Session** | A recorded set: which projects were open, which of their targets, and each agent's conversation, directory and named agent (D46, D146) |
+| **Session** | A recorded set: which projects were open, which of their targets, and each agent's conversation, directory and named agent |
 
 A target is reached one way: **run-or-raise it, revier's or its command's; a
 second press returns to the project's home.** Opening a project is
@@ -34,21 +34,21 @@ run-or-raise on its home target. Pressing the editor key is run-or-raise on its
 editor target. There is no second mechanism for a target. A command target
 hands the run-or-raise to a command the user writes, for a thing that shows in
 a window shared with other projects; revier keeps the key, the project and the
-second press (D166).
+second press.
 
 An agent tab or a shell tab is not a target. It is a launcher: each press opens
 one more beside the open workspace, because another agent on the same project
-is what the press asks for (D145).
+is what the press asks for.
 
 ## A target is logical; its realization is not
 
 "Diff viewer" means the same thing in every project that declares one. What
-the diff viewer *is* depends on which host can provide it (D14):
+the diff viewer *is* depends on which host can provide it:
 
 | Host | The same target, realized |
 |---|---|
 | Compositor (GNOME) | a Meld window, found by its window class, raised by the compositor |
-| Runtime (kitty, hc) | a diff in nvim, in a panel, found by what the runtime reports of it, shown and focused by the view (D176) |
+| Runtime (kitty, hc) | a diff in nvim, in a panel, found by what the runtime reports of it, shown and focused by the view |
 
 The key, the name, and the promise are identical. Only the resolution differs.
 This is why the same binding works on a desktop and on a headless SSH box, and
@@ -65,13 +65,13 @@ viewer. They get no key. One key opens the list of everything bound to the
 current project, and you pick from it.
 
 A key is a promise about where you land. Only a declared target can make that
-promise, which is why the two tiers exist (D12).
+promise, which is why the two tiers exist.
 
 ## How an instance becomes bound
 
 | Mechanism | Reliability | Used for |
 |---|---|---|
-| revier launches it | Deterministic in the launch's wait; a late window is bound at best effort (D190) | Keyed targets |
+| revier launches it | Deterministic in the launch's wait; a late window is bound at best effort (decisions/0190) | Keyed targets |
 | You attach it | Deterministic. You bind the focused instance to the current project | Anything |
 | Claim on appear | Best effort. After an action runs, revier claims the one new instance that no target matches | An action that opens a link |
 
@@ -80,12 +80,11 @@ Opening a link hands off to a browser that is already running, so no new process
 appears to correlate against, and the result may even be a tab rather than a
 window. Claim-on-appear runs in the TUI, the one long-lived process. No host
 reports window events, so the TUI finds the new instance by comparing one
-survey with the next (D87).
+survey with the next.
 
 A command target binds nothing. Its window is shared with other projects, so a
 binding would claim that window for one of them. revier records only the
-window the run left the focus on, which is enough to judge the second press
-(D166).
+window the run left the focus on, which is enough to judge the second press.
 
 Declared targets live in the project's configuration as match rules.
 Attachments live in revier's own state and last until the application
@@ -93,49 +92,53 @@ restarts, because instance ids do not survive a restart.
 
 ## Surface
 
-The picker and the monitor are one surface (D8): a list of projects, sorted so
+The picker and the monitor are one surface: a list of projects, sorted so
 the ones that need you come first, and a pane for the project under the
 cursor. Attention decides the order because an agent that waits for you is the
 reason to open revier at all. Every command is in the
 [CLI reference](../user-guide/cli.md).
 
 The agents of every project are a second list behind the key that opens the
-surface (D110). With
+surface. With
 many agents across many projects the question is which agent, and the project
 list answers it one project at a time. The second list orders every agent by
 need. It is a list of its own, not a mode of the project list, which would hide
 the projects it is for.
 
-A pane shows one agent's panel as the terminal draws it (D111, D125). No
+A pane shows one agent's panel as the terminal draws it. No
 harness renders a running session for another process, and a transcript is one
 harness's format; the panel is what every harness draws. The mirror shows the
-whole screen, the harness's own frame included (D137), because a cut by one
+whole screen, the harness's own frame included, because a cut by one
 harness's layout breaks on its next layout. Only colour passes from the screen
 to the surface, so what an agent printed cannot repaint the surface that shows
 it.
 
-The popup is the surface in a window revier places and run-or-raises (D76),
-sized by the window host's rules before it is drawn (D191).
-Leaving it hides it, and the next press raises it as Esc left it (D86, D169). A cold start on
-every press — a terminal, the TUI, and a first survey of every linked host —
+The popup is the surface in a window revier places and run-or-raises,
+sized by the window host's rules before it is drawn.
+Leaving it hides it, and the next press raises it as Esc left it. A cold start
+on every press — a terminal, the TUI, and a first survey of every linked host —
 is too slow for the one keystroke the product promises. A full shutdown is the
 exception: it quits the popup, because nothing is left to raise it over, and
-the next press is a cold start that offers the restore (D141).
+the next press is a cold start that offers the restore.
 
-A shutdown saves the session first, and refuses while an agent works or waits
-for an answer (D78). The guard sits in the close path, so every way to close
-passes it (D99). Nothing is killed, except under hc (D173); a window an
+A shutdown is the moment before a restart, so it saves the session first. It
+refuses while an agent works or waits for an answer, because that agent would
+lose its turn. The guard sits in the close path, so every way to close
+passes it. Nothing is killed, except under hc; a window an
 application keeps open stays open.
 
-A full shutdown is remembered until anything opens again (D141). The surface
+A full shutdown is remembered until anything opens again. The surface
 quits after it, and its next start opens on the restore of what it closed, or
 on a fresh start. Any open ends the memory, so a desktop key pressed in the
 meantime is never answered later by a dialog about a desktop that is gone.
 
-A surface without the focus refreshes slowly, since nobody reads it (D129). A
+A surface without the focus refreshes slowly, since nobody reads it. A
 linked host is asked at a bounded rate, and less often while it does not
-answer, because each round is a whole survey on that host (D130). This
-machine's rows never wait for a linked host (D114).
+answer, because each round is a whole survey on that host. This
+machine's rows never wait for a linked host.
+
+A command run in every project is revier's and not a separate tool's, because
+the list of projects is revier's.
 
 ## Scope
 
@@ -147,22 +150,24 @@ machine's rows never wait for a linked host (D114).
 - Attached instances through the project-scoped picker
 - Agent state for Claude Code, shown per project
 - kitty as runtime and view, GNOME window control, Claude probe
-- The popup the desktop key opens: the TUI in kitty on GNOME (D76), hidden and
-  raised again (D86)
+- The popup the desktop key opens: the TUI in kitty on GNOME, hidden and
+  raised again
 - JSON output
-- Projects on another machine, surveyed by the revier installed there (D40)
-- Saved sessions (D46) and shutdown (D78)
-- `revier doctor` (D85), `revier each` (D32) and `revier events` (D112)
-- The config assistant (D135)
-- The hc runtime, shown by kitty or by no view (D178)
+- Projects on another machine, surveyed by the revier installed there
+  (decisions/0040)
+- Saved sessions and shutdown
+- `revier doctor` (decisions/0085), `revier each` and `revier events`
+  (decisions/0112)
+- The config assistant
+- The hc runtime, shown by kitty or by no view
 
 **Out, deliberately**
 
 | Left out | Why |
 |---|---|
 | Dev container execution | The heaviest, least general transport. It belongs to whatever launches the shell, not to a project switcher. |
-| The contents of a pane across a reboot | The runtime owns persistence. hc keeps a panel when its view closes but not across a reboot (D173, D181), kitty keeps neither, and revier does not paper over the difference. The *set* of open projects is revier's own model and is recorded (D46). |
-| Browser tabs | A tab cannot be enumerated or activated from outside the browser. An app-mode window can, which is what a bound page is. A command target can hand a tab to a tool that drives the browser; revier still knows no tab (D166). |
+| The contents of a pane across a reboot | The runtime owns persistence. hc keeps a panel when its view closes but not across a reboot, kitty keeps neither, and revier does not paper over the difference. The *set* of open projects is revier's own model and is recorded. |
+| Browser tabs | A tab cannot be enumerated or activated from outside the browser. An app-mode window can, which is what a bound page is. A command target can hand a tab to a tool that drives the browser; revier still knows no tab. |
 
 ## Non-goals
 
@@ -173,13 +178,13 @@ revier does not wrap your agent or proxy its output. It starts the program a
 panel declares, then observes the panel and reports what it sees. The one
 agent it brings itself is its own config assistant, a project revier builds
 in, so that it gets run-or-raise, the survey and restore with no code of its
-own (D135).
+own.
 
 ## What degrades, and how far
 
 Degradation is per target, not per feature. A target is available when a host
 that can realize it is available. A command target needs no host: its command
-runs on any machine, and what it can reach there is its own concern (D166).
+runs on any machine, and what it can reach there is its own concern.
 
 | Environment | What works |
 |---|---|
@@ -196,6 +201,4 @@ The mechanism is portable. An individual target may not be, and its config says
 so by which realizations it declares.
 
 A mistake in the configuration degrades the same way: what is wrong is
-disabled, and nothing above it is (D85). A rule about one target disables that
-target, a rule about the project disables that project, and neither disables
-the rest. What is disabled stays listed with its reason.
+disabled, and nothing above it is (decisions/0085).

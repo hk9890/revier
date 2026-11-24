@@ -10,11 +10,11 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// The terminal's keys are revier's second key store, beside the desktop's
-// (decisions.md D147). revier owns its key file in the terminal's
-// configuration whole, so there is nothing to take over and no --force: a key
-// config.toml declares is written. What this file decides is which keys those
-// are, which one the desktop would take first, and what is in the way.
+// The terminal's keys are revier's second key store, beside the desktop's.
+// revier owns its key file in the terminal's configuration whole, so there is
+// nothing to take over and no --force: a key config.toml declares is written.
+// What this file decides is which keys those are, which one the desktop would
+// take first, and what is in the way.
 
 // ErrNoTermKeys means this machine has no terminal revier writes keys for.
 var ErrNoTermKeys = errors.New("no terminal revier writes keys for on this machine")
@@ -67,7 +67,7 @@ const (
 	// command on it. `revier setup install` writes it.
 	TermKeyMissing TermKeyStatus = "missing"
 	// TermKeyRefused: a desktop key revier wants is on the same chord, and the
-	// desktop takes a press before the terminal does (decisions.md D110), so
+	// desktop takes a press before the terminal does, so
 	// revier writes no map of it.
 	TermKeyRefused TermKeyStatus = "refused"
 )

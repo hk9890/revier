@@ -318,7 +318,7 @@ func containerProject(edit func(p *revier.Project)) revier.Project {
 }
 
 // A target that lists tabs is launched by them, so it needs no launch, and a
-// tab holds panels or a launch (decisions.md D126).
+// tab holds panels or a launch.
 func TestValidateAcceptsATargetThatListsItsTabs(t *testing.T) {
 	if err := config.Validate(containerProject(func(*revier.Project) {})); err != nil {
 		t.Fatalf("Validate: %v", err)
@@ -372,7 +372,7 @@ func TestLoadProjectReadsTheTabsOfATarget(t *testing.T) {
 }
 
 // A list that cannot be followed costs the target that declares it, and the
-// tabs it names stay usable at their own keys (decisions.md D85).
+// tabs it names stay usable at their own keys (decisions/0085).
 func TestLoadProjectRefusesOnlyTheTargetThatListsTheTabs(t *testing.T) {
 	body := strings.Replace(container, `active = "agent"`, `active = "editor"`, 1)
 	p := config.LoadProject(write(t, t.TempDir(), "demo.toml", body), config.Inherited{})
@@ -386,9 +386,8 @@ func TestLoadProjectRefusesOnlyTheTargetThatListsTheTabs(t *testing.T) {
 	}
 }
 
-// Panels on a target that is no tab are refused with the fix (decisions.md
-// D128). The refusal costs that target alone: the project stays listed, and
-// its other targets open.
+// Panels on a target that is no tab are refused with the fix. The refusal costs
+// that target alone: the project stays listed, and its other targets open.
 func TestLoadProjectRefusesPanelsOnATargetThatIsNoTab(t *testing.T) {
 	const body = `
 path = "/p"
@@ -438,7 +437,7 @@ func TestValidateAcceptsANamelessWindowAndAWordTargetName(t *testing.T) {
 
 // A pattern that does not compile and a template that does not render cost
 // their own target and nothing else: the project loads, its other targets
-// work, and the refused one carries the reason (decisions.md D85).
+// work, and the refused one carries the reason (decisions/0085).
 func TestLoadProjectRefusesOnlyTheBrokenTarget(t *testing.T) {
 	cases := map[string]string{
 		"bad regex":   strings.Replace(valid, `class = "^code$"`, `class = "("`, 1),
@@ -584,7 +583,7 @@ func TestLoadProjectExpandsHome(t *testing.T) {
 // A tab is its panels; it needs no launch of its own, and it need not be
 // listed. A window realization cannot have panels, because a window host
 // cannot see inside, and a runtime realization that is no tab has none
-// either, home or not (decisions.md D128).
+// either, home or not.
 func TestValidatePanelsStandInForLaunchOnATabAlone(t *testing.T) {
 	panels := []revier.PanelSpec{{Kind: revier.PanelAgent, Command: []string{"claude"}}, {Kind: revier.PanelShell}}
 	unlisted := tabProject(func(tab *revier.Target) { tab.Runtime.Launch, tab.Runtime.Panels = nil, panels })
@@ -618,8 +617,7 @@ func TestValidatePanelsStandInForLaunchOnATabAlone(t *testing.T) {
 }
 
 // A [[probe]] entry is loaded with its binary path expanded; a half-declared
-// one is left out and named in Problems, and the rest loads (decisions.md
-// D85).
+// one is left out and named in Problems, and the rest loads (decisions/0085).
 func TestLoadProbes(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "config.toml", "[[probe]]\nname = \"aider\"\nexec = \"~/bin/aider-probe\"\n")
@@ -681,7 +679,7 @@ glyphs = "nerd"
 
 // A typo in a theme or glyph name draws the default and is named in
 // Problems with the valid names, so `revier doctor` says what to write. It
-// costs the look alone, never the project set (decisions.md D85).
+// costs the look alone, never the project set (decisions/0085).
 func TestLoadDrawsTheDefaultForAnUnknownThemeAndNamesTheValidOnes(t *testing.T) {
 	root := projectsRoot(t, "[ui]\ntheme = \"dracula\"\nglyphs = \"runes\"\n", map[string]string{"demo.toml": valid})
 
@@ -906,7 +904,7 @@ func TestTwoSpellingsOfOneKeyAreADuplicate(t *testing.T) {
 // A key that does not parse is named in Problems at load, with the value, and
 // stays as written: the keys commands refuse it rather than bind the default
 // in place of the key the user chose, and nothing else is refused for it
-// (decisions.md D85). Reported at a keypress instead, it would look like a
+// (decisions/0085). Reported at a keypress instead, it would look like a
 // broken keyboard.
 func TestLoadNamesAnUnreadableTriggerKeyAndKeepsIt(t *testing.T) {
 	root := projectsRoot(t, "[ui]\ntrigger_key = \"<Nonsense>space\"\n", map[string]string{"demo.toml": valid})
@@ -931,7 +929,7 @@ func TestLoadNamesAnUnreadableTriggerKeyAndKeepsIt(t *testing.T) {
 
 // An action's key is the TUI's alone, so a key the TUI cannot receive, or
 // reads as filter text, is refused at load and named, rather than bound to a
-// key that does nothing. The action costs itself alone (decisions.md D85):
+// key that does nothing. The action costs itself alone (decisions/0085):
 // it stays listed, carrying the reason, and the file is otherwise read.
 func TestLoadRefusesAnActionKeyTheTUICannotRun(t *testing.T) {
 	for key, want := range map[string]string{

@@ -178,7 +178,7 @@ const exitEachFailed = 5
 const exitNoAssistant = 6
 
 // exitPromptIdle is returned when `revier agent prompt` delivered its text and
-// the agent stayed idle (decisions.md D196). It is not 1, so a script can tell
+// the agent stayed idle (decisions/0196). It is not 1, so a script can tell
 // a text that is in the panel from a prompt that was refused.
 const exitPromptIdle = 7
 
@@ -230,8 +230,8 @@ func logCommand(start time.Time, args []string, err error, status int) {
 // costs the record, not the command.
 //
 // `list` records only what went wrong. A surface with a linked project runs
-// `revier list` on that host every refresh (decisions.md D40), one process a
-// second, so its successes would bury the host's own log.
+// `revier list` on that host every few seconds, so its successes
+// would bury the host's own log.
 func openLog(args []string) {
 	cmd := "tui"
 	if len(args) > 0 {
@@ -305,7 +305,7 @@ func outcome(err error) (status int, say bool) {
 func run(out io.Writer, args []string) error {
 	// Before anything starts a process: a command run in a directory that was
 	// removed under the shell must not fail every probe and every git call
-	// for that reason (decisions.md D92). The surface leaves its start
+	// for that reason. The surface leaves its start
 	// directory outright, and does it after reading the project there.
 	leaveLostStartDir()
 

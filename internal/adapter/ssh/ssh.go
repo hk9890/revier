@@ -267,7 +267,7 @@ func (r *Remote) list(ctx context.Context, names []revier.ProjectName, flags ...
 // partial is the answer of a list of names that failed. A remote revier that
 // knows some of the names lists those and fails for the others, and one that
 // knows none lists nothing: a name it does not know is one link's fault,
-// which the core reports for that link alone (decisions.md D85). Every other
+// which the core reports for that link alone (decisions/0085). Every other
 // failure is the host's.
 //
 // The answer counts only when each name it leaves out has a line of its own

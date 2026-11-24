@@ -68,8 +68,8 @@ func TestALinksAgentTakesItsActivityFromThePanelHere(t *testing.T) {
 // hosttest.TitleProbe does not fit: it is not a revier.Titled, the capability
 // the core asks a link's agent for its activity through, so the title would
 // never be read. Its Inspect takes the activity from a title too, but the core
-// inspects a link's panel only in a terminal attached by hand (decisions.md
-// D101), which this workspace is not.
+// inspects a link's panel only in a terminal attached by hand, which this
+// workspace is not.
 type activityProbe struct{}
 
 func (activityProbe) Name() string            { return "claude" }
@@ -182,7 +182,7 @@ func TestALinksAgentIsAddressedByItsTab(t *testing.T) {
 		}
 	}
 	// The tab's panel has that one address: the workspace names it no second
-	// time (decisions.md D155).
+	// time.
 	if _, err := c.Agent(t.Context(), p, "home:9"); err == nil || !strings.Contains(err.Error(), "its address is far:agent:9") {
 		t.Errorf("Agent(far:home:9) err = %v, want the tab's address given", err)
 	}
@@ -190,7 +190,7 @@ func TestALinksAgentIsAddressedByItsTab(t *testing.T) {
 
 // A link's agent whose tab moved to a window no target of the link holds is
 // shown, and has no address: the refusal names its panel and suggests no
-// address that would itself be refused (decisions.md D155).
+// address that would itself be refused.
 func TestALinksAgentInNoTargetHasNoAddress(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox", revier.ProjectView{Project: revier.Project{Name: "far-there"}, PathExists: true,
 		Agents: []revier.AgentView{hostAgent("box.4242", revier.StatusIdle), hostAgent("box.4300", revier.StatusIdle)}})
@@ -214,7 +214,7 @@ func TestALinksAgentInNoTargetHasNoAddress(t *testing.T) {
 }
 
 // Beside a link's named agents, the link's address names its default agent,
-// as a local project's does (decisions.md D145): the one panel here that
+// as a local project's does: the one panel here that
 // carries no named agent's mark.
 func TestALinksAddressNamesItsDefaultAgent(t *testing.T) {
 	ssh := func(id string, pid int, vars map[string]string) revier.Panel {
@@ -563,7 +563,7 @@ func TestTwoLinksToOneProjectEachKeepTheirAgents(t *testing.T) {
 }
 
 // A target its file refused is not served: the realization it keeps is as
-// written, not as rendered, so nothing may run from it (decisions.md D85),
+// written, not as rendered, so nothing may run from it,
 // and the reason is what the panel on the other machine prints. The shell of
 // a home whose listed tab is refused is refused with it, and is not a plain
 // shell in the place of the one the tab declares.
@@ -643,8 +643,7 @@ func TestServeStartsTheDeclaredPanels(t *testing.T) {
 
 // A terminal attached to a link by hand holds an agent of this machine. It is
 // probed like any attachment, and the host's answer adds to it rather than
-// replacing it, so the view shows both and a shutdown sees the busy one
-// (decisions.md D101).
+// replacing it, so the view shows both and a shutdown sees the busy one.
 func TestALinkKeepsTheAgentInAnAttachedTerminal(t *testing.T) {
 	c, rt, _, _ := linked(t, hostAgent("box.4242", revier.StatusIdle))
 	c.Probes = []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Marker: "claude",
@@ -740,7 +739,7 @@ func TestShutdownLeavesOpenALinkWhoseHostStoppedAnswering(t *testing.T) {
 // that machine, and those stay in the survey - `revier list --json` is that
 // survey, and the revier on another machine reads it to learn about the agents
 // its own links started here. Shown drops them, so a project nothing here
-// holds counts no agents (decisions.md D104).
+// holds counts no agents.
 func TestShownDropsTheAgentsNoPanelHereShows(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox", revier.ProjectView{Project: revier.Project{Name: "far-there"}, PathExists: true,
 		Agents: []revier.AgentView{hostAgent("elsewhere.7", revier.StatusRunning)}})
@@ -863,7 +862,7 @@ func TestServeRunsTheNamedAgent(t *testing.T) {
 
 // An agent this side read in a link's window attached by hand, which its
 // host does not list, has no address: the link's address reaches only the
-// agents its host lists (decisions.md D155).
+// agents its host lists.
 func TestALinksAgentReadHereAloneHasNoAddress(t *testing.T) {
 	c, _, _, pane := linked(t)
 	c.Probes = []revier.AgentProbe{&hosttest.FakeProbe{Harness: "claude", Marker: "fixing",

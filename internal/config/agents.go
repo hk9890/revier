@@ -63,8 +63,8 @@ var agentName = regexp.MustCompile(`^[A-Za-z0-9_.][A-Za-z0-9_.-]*$`)
 // of config.toml's with no command, since no project could run it.
 // inProject is a project file's tables, which may leave the command to
 // config.toml's table of their name, and hold no key: the terminal's key
-// file is one per machine. A key there costs only itself (decisions.md
-// D85): keyErrs is one error per such key, and the agent keeps its command.
+// file is one per machine. A key there costs only itself (decisions/0085):
+// keyErrs is one error per such key, and the agent keeps its command.
 // config.toml's keys are validateTerminal's.
 func validateAgents(tables []map[string]any, inProject bool) (refused, keyErrs []error) {
 	refused = make([]error, len(tables))

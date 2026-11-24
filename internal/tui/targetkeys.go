@@ -54,7 +54,7 @@ func targetKeys(projects []core.Project, keys keyMap, unfolds bool) (map[core.Ch
 	var late []folded
 	for _, p := range projects {
 		for i, t := range p.Targets {
-			// A refused target binds nothing (decisions.md D85): the key it
+			// A refused target binds nothing (decisions/0085): the key it
 			// carries may be the one another target holds, which is what it
 			// was refused for.
 			if p.TargetErr(i) != nil {
@@ -94,7 +94,7 @@ func keyLabel(key string) string {
 
 // chordName is the key a target declares, in canonical form. A key that does
 // not parse binds nothing here; the target that declares it is refused at
-// load (decisions.md D85), and `revier doctor` is where that is read. Neither
+// load (decisions/0085), and `revier doctor` is where that is read. Neither
 // does a key typed as text: filtering is the primary way through ninety
 // projects, and a target bound to `o` must not swallow the `o` of `opencode`.
 func chordName(key string) (core.Chord, bool) {

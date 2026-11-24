@@ -13,9 +13,9 @@ import (
 )
 
 // Machine knows the link hosts that are the machine revier runs on, by their
-// own name or by the HostName the ssh configuration gives them (decisions.md
-// D131). It reads the hostname and the ssh configuration once, for every
-// host a caller then asks about.
+// own name or by the HostName the ssh configuration gives them. It reads the
+// hostname and the ssh configuration once, for every host a caller then asks
+// about.
 type Machine struct {
 	name string
 	ssh  sshconfig.File
@@ -46,7 +46,8 @@ func (m Machine) Is(host string) bool {
 }
 
 // RefuseLink refuses a link to host where host is this machine, since revier
-// leaves such a link out (decisions.md D131), and is nil for any other host.
+// leaves such a link out, and is nil for any other host.
+// An answer from the local survey is no substitute: it shows each agent twice.
 func (m Machine) RefuseLink(host string) error {
 	if !m.Is(host) {
 		return nil
@@ -55,7 +56,7 @@ func (m Machine) RefuseLink(host string) error {
 }
 
 // linkTOML is a new link: where the project is, and what the host says about
-// it that a target here renders (decisions.md D41, D83). The path and the
+// it that a target here renders. The path and the
 // repository are the host's answer when the link is written, kept as written
 // because neither names anything on this machine; everything else is derived.
 // The name on the host is written only when it differs, so the file says no
@@ -86,7 +87,7 @@ const agentTab revier.TargetName = "agent"
 // says otherwise. The home target is the workspace as it is laid out here: a
 // container that lists one tab, and that tab, a target named agent inside it
 // with an agent panel and a shell panel, each reaching the host to run
-// `revier agent exec` or `revier shell exec` there (decisions.md D84, D128).
+// `revier agent exec` or `revier shell exec` there (decisions/0084).
 // What argv reaches the host is the remote port's to say, and the core asks
 // it where the tabs are read: a panel here carries its kind and no command.
 // Which harness and which directory is the host's project file's to say. A
@@ -111,7 +112,7 @@ const agentTab revier.TargetName = "agent"
 // that lists it is refused with the reason. A home that has the name itself
 // gets no tab, and is refused for the name.
 //
-// A link has no list of tabs of its own (D128): one a runtime
+// A link has no list of tabs of its own: one a runtime
 // realization declares is dropped, with its active tab, before the home gets
 // the derived one.
 func link(p *revier.Project) {

@@ -62,7 +62,7 @@ key = "ctrl-o"
 
 // scratch builds an isolated config and state root and points the process at
 // them, and gives the test an hc core of its own, shown in a view that opens
-// no window (decisions.md D184). The runtime is hc and the view is named
+// no window. The runtime is hc and the view is named
 // kitty, as a user who switched to hc writes them; viewOf hands every run
 // the test's one FakeView in kitty's place, so what it shows outlives a
 // run, as kitty's windows do. hc's config, state, runtime directory and

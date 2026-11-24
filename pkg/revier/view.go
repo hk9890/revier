@@ -30,8 +30,7 @@ type ProjectView struct {
 // home target, which is what run-or-raise and a restore act on; a surface
 // draws Held, so a project with an attached terminal and no home reads as
 // open. Every agent a surface shows sits in a panel of an instance this
-// counts, so a project that reads as closed shows no agents
-// (decisions.md D104).
+// counts, so a project that reads as closed shows no agents.
 func (v ProjectView) Held() bool {
 	if v.Running {
 		return true
@@ -85,7 +84,7 @@ type AgentView struct {
 	Ref TargetRef `json:"ref,omitzero"`
 	// Target is the project's target the agent is addressed through, which
 	// with the project and the panel is the agent's one address:
-	// <project>:<target>:<panel> (decisions.md D155). It is empty for an
+	// <project>:<target>:<panel>. It is empty for an
 	// agent no target of this machine holds.
 	Target TargetName `json:"target,omitempty"`
 	State  AgentState `json:"state"`

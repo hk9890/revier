@@ -100,7 +100,7 @@ func TestSessionSaveThenRestoreAfterAReboot(t *testing.T) {
 // Every agent is recorded, with its conversation and directory, and every one
 // comes back on its conversation in the directory it worked in: the declared
 // agent in the workspace's layout, and each agent opened beside it in a tab of
-// its own, the terminals of a tab's token (decisions.md D145, D179).
+// its own, the terminals of a tab's token.
 func TestSessionRestoreOnHcBringsBackEveryAgent(t *testing.T) {
 	args := work(t)
 	agent := strings.TrimSuffix(args, ".args")

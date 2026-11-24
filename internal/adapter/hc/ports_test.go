@@ -8,7 +8,7 @@ import (
 )
 
 // hc runs programs and draws nothing, so it is a runtime and no view: the
-// wiring then finds no view of its own for it (decisions.md D176).
+// wiring then finds no view of its own for it.
 func TestHcIsARuntimeAndNoView(t *testing.T) {
 	var rt revier.Runtime = &hc.Host{}
 	if _, ok := rt.(revier.View); ok {

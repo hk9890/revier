@@ -158,7 +158,7 @@ var failedThere = ssh.FailedThere(errFailed)
 
 // A remote revier that does not know one of the names lists the others, says
 // why for that one, and exits 1. The others are the answer, so a stale link
-// costs no other link on its host (decisions.md D85). A profile can write
+// costs no other link on its host (decisions/0085). A profile can write
 // to stderr after revier did.
 func TestSurveyListsTheKnownNamesWhenTheHostDoesNotKnowOne(t *testing.T) {
 	r := ssh.New("buildbox")

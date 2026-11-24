@@ -1,5 +1,5 @@
 // Package popupswitch is the socket the popup's surface listens on, and the
-// press that tells it to switch its list there (decisions.md D182). The
+// press that tells it to switch its list there. The
 // desktop takes the trigger key before the popup's terminal sees it, so the
 // second press reaches the surface here, whatever runtime runs the popup.
 //

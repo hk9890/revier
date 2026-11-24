@@ -52,6 +52,7 @@ const (
 
 // setupStores are the three stores `revier setup` reads and writes. A nil
 // store is one this machine does not have; the error beside it says why.
+// One command covers all three because a user sets up a machine, not stores.
 type setupStores struct {
 	keys     revier.KeyBinder
 	term     revier.TermKeys

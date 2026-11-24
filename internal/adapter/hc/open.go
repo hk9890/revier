@@ -36,9 +36,9 @@ import (
 //
 // A terminal has no parent, so it outlives the terminal revier runs in, and
 // is not kept: a kept terminal hc brings back after a reboot is a bare shell
-// under the agent's labels (decisions.md D173). A panel's own command ends
+// under the agent's labels. A panel's own command ends
 // to a finished terminal, so the window that shows it can show what it left,
-// as the kitty runtime holds it (D187); a shell is removed when it exits.
+// as the kitty runtime holds it; a shell is removed when it exits.
 // Instances lists live terminals alone, so an instance whose terminals all
 // ended is never seen to be closed: sweep removes what no window took.
 //
@@ -108,8 +108,8 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 // panel of r, or r.Launch in r.Dir alone. They carry the instance's labels, a
 // new tab token, the place after the last tab the instance holds, their place
 // in the tab, and vars as labels of their own, so a view draws them as one
-// tab after the others, and two tabs of the same vars stay two (decisions.md
-// D179). hc keeps no focus, so the focus is a view's.
+// tab after the others, and two tabs of the same vars stay two. hc keeps no
+// focus, so the focus is a view's.
 //
 // A tab whose terminal fails is closed whole, found by its token, as Open
 // closes an instance: the core names the agent of a failed tab as not added.
@@ -299,7 +299,7 @@ func coreUnit(socket string) string {
 // whole life: started from a shell, it would hand that shell's venv or
 // credentials to every agent. So the start runs as a service of the user's
 // service manager, with the session's login environment and the socket this
-// host dials (decisions.md D167). The start forks the core and exits, which
+// host dials. The start forks the core and exits, which
 // the service takes as its start. Where there is no service manager, it runs
 // detached, in a session of its own with no terminal to write to, and with
 // coreEnv.

@@ -41,7 +41,7 @@ func TestCanCreateRefusesOnlyWhatALocalProjectHolds(t *testing.T) {
 }
 
 // The file `revier new` writes has its panels on a tab target, the one place
-// a file has them (decisions.md D128): home lists the tab, whose first entry
+// a file has them: home lists the tab, whose first entry
 // has the focus with no active line.
 func TestCreateWritesThePanelsOnATabOfHome(t *testing.T) {
 	root := t.TempDir()

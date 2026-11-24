@@ -75,9 +75,9 @@ func TestTheCursorFollowsAnOpenProjectThatNoLongerNeedsTheUser(t *testing.T) {
 	wantSelected(t, m, "project-03", "it is still open")
 }
 
-// A host that could not list has not said its projects closed (decisions.md
-// D89): the cursor stays on its project, in the pane too, and is still on it
-// when the host answers again.
+// A host that could not list has not said its projects closed: the cursor stays
+// on its project, in the pane too, and is still on it when the host answers
+// again.
 func TestAHostThatCannotListDoesNotTakeTheCursorOffItsProject(t *testing.T) {
 	rt, m, _ := openWorld(t, 4, "project-00", "project-01")
 

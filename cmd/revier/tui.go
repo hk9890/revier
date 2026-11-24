@@ -49,7 +49,7 @@ func cmdTUI(ctx context.Context, a *app) error {
 	if popup {
 		m = m.WithPopup()
 		// A full shutdown or a restore from the popup runs under a curtain
-		// on every monitor (decisions.md D192). Without its own path the
+		// on every monitor. Without its own path the
 		// popup runs them with none.
 		if self, err := os.Executable(); err == nil {
 			m = m.WithCurtain(func(mon revier.Monitor, socket string, isMain bool) []string {
@@ -69,7 +69,7 @@ func cmdTUI(ctx context.Context, a *app) error {
 }
 
 // listenForSwitch is the socket the popup's surface takes the second press
-// of the desktop's key on (decisions.md D182), and nil when it cannot have
+// of the desktop's key on, and nil when it cannot have
 // one: that press then raises the popup and does not switch its list. A
 // socket it cannot listen on logs a WARN "popup: no switch socket" with err.
 // Closing the socket removes its file.

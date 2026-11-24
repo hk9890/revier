@@ -115,7 +115,7 @@ func launches(rec *recorder) [][]string {
 // An instance no window shows gets one OS window titled as the instance, a
 // kitty tab per tab and a kitty window per panel, each attaching its
 // terminal under the vars that map it back, and none held: the attach ends
-// with its terminal (decisions.md D180).
+// with its terminal.
 func TestShowOpensAnOSWindowWithATabPerTabAndAWindowPerPanel(t *testing.T) {
 	v, rec := viewOn(t, hiddenOnly(t))
 	opened, err := v.Show(t.Context(), demo, true)
@@ -181,7 +181,7 @@ func TestAViewWindowsTitleSurvivesTheRoundTrip(t *testing.T) {
 }
 
 // Without open, an instance no window shows opens none: a script's tab opens
-// no window (decisions.md D118).
+// no window.
 func TestShowWithoutOpenOpensNoWindow(t *testing.T) {
 	v, rec := viewOn(t, hiddenOnly(t))
 	if opened, err := v.Show(t.Context(), demo, false); err != nil || opened {
@@ -266,7 +266,7 @@ func TestTheViewMapsHcRefsAndKittyWindowsBothWays(t *testing.T) {
 
 // A key passes the kitty window id; the view maps it to the hc terminal that
 // window attaches, in the instance that holds it. kitty's own window beside
-// them attaches nothing, and is outside every workspace (decisions.md D183).
+// them attaches nothing, and is outside every workspace.
 // An id that is no window of that kitty, as an hc address, and any id from
 // a command outside kitty, is hc's to look up.
 func TestFindPanelMapsAKittyWindowToTheTerminalItAttaches(t *testing.T) {
@@ -296,7 +296,7 @@ func TestFindPanelMapsAKittyWindowToTheTerminalItAttaches(t *testing.T) {
 // A tab outside a workspace is kitty's own, beside the key's window, in the
 // kitty the key was pressed in: a shell unheld, an agent held as the kitty
 // runtime holds a panel's command. With no directory asked for, it starts in
-// the key's window's, which kitty alone lists (decisions.md D153, D164).
+// the key's window's, which kitty alone lists.
 func TestOpenBesideIsAKittyTabBesideTheKeysWindow(t *testing.T) {
 	dir := t.TempDir()
 	v, rec := viewOn(t, withDir(t, dir))
@@ -318,7 +318,7 @@ func TestOpenBesideIsAKittyTabBesideTheKeysWindow(t *testing.T) {
 }
 
 // A key's window in a directory removed since gets kitty's own default
-// directory: kitty starts no process in a removed one (decisions.md D153).
+// directory: kitty starts no process in a removed one.
 func TestOpenBesideDropsARemovedDirectory(t *testing.T) {
 	v, rec := viewOn(t, withDir(t, t.TempDir()+"/removed"))
 	if err := v.OpenBeside(t.Context(), "6", revier.PanelSpec{Kind: revier.PanelShell}); err != nil {

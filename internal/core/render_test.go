@@ -184,7 +184,7 @@ func TestRenderFillsEveryPanelDirFromItsRealization(t *testing.T) {
 
 // An argument that renders to nothing is refused: a link written before its
 // host reported a path would otherwise launch an editor on the empty string,
-// and nothing would say why (decisions.md D83).
+// and nothing would say why.
 func TestRenderRejectsAnArgumentThatRendersToNothing(t *testing.T) {
 	link := &revier.Link{Host: "buildbox", Project: "far"}
 	for name, tc := range map[string]struct {

@@ -14,7 +14,7 @@ import (
 // A window host that did not answer lists no window for anything, so every
 // raise through it is refused with what went wrong, and never as a window
 // the host does not list: the two read the same to the user and only one of
-// them is true (decisions.md D89). Each test below is one way to an OS
+// them is true. Each test below is one way to an OS
 // window of a runtime whose view reports OSWindows.
 
 // assertHostSilence checks that err names the window host's own reason, is

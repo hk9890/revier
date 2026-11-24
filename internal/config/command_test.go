@@ -45,7 +45,7 @@ func TestACommandTargetLoads(t *testing.T) {
 }
 
 // Each rule refuses the command target alone, and the project keeps the
-// others (decisions.md D85).
+// others (decisions/0085).
 func TestACommandTargetIsRefusedAlone(t *testing.T) {
 	for name, tc := range map[string]struct {
 		body string
@@ -87,7 +87,7 @@ func TestACommandTargetIsRefusedAlone(t *testing.T) {
 }
 
 // A command target marked home before the real home costs only itself: the
-// real home loads and stays the project's (decisions.md D85).
+// real home loads and stays the project's (decisions/0085).
 func TestACommandTargetMarkedHomeTakesNoHomesPlace(t *testing.T) {
 	homeWeb := strings.Replace(web, "key = ", "home = true\nkey = ", 1)
 	first := "\n[[target]]\nname = \"home\""
@@ -121,8 +121,7 @@ func TestACommandTargetWithAnEmptyRunIsRefused(t *testing.T) {
 	}
 }
 
-// A run argument that renders empty refuses the target in that project
-// (decisions.md D83).
+// A run argument that renders empty refuses the target in that project.
 func TestACommandArgumentThatRendersEmptyIsRefused(t *testing.T) {
 	p := loadDemo(t, strings.Replace(valid, `url = "https://example.invalid/pulls"`, `url = ""`, 1)+web)
 	if err := refusalOf(p, "web"); err == nil || !strings.Contains(err.Error(), "renders to an empty argument") {

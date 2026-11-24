@@ -44,12 +44,13 @@ func (c *Core) activate(ctx context.Context, p Project, name revier.TargetName, 
 }
 
 // holdingPress runs one press that can launch under the project's press
-// lock, from the state it reads through the write of what the press did
-// (decisions.md D195). A press of another process then waits, reads that
-// write, lists again and raises the instance. press is told it waited: the
-// focus it then finds is the other press's work, so it does not toggle back.
-// The wait for a detached launch's window comes after the lock: its launch is
-// on record by then, and holds the next press back without it.
+// lock, from the state it reads through the write of what the press did. A
+// press of another process then waits, reads that write, lists again and raises
+// the instance. press is told it waited: the focus it then finds is the other
+// press's work, so it does not toggle back. The wait for a detached launch's
+// window comes after the lock: its launch is on record by then, and holds the
+// next press back without it. A record before Open would need an undo when Open
+// fails, and would let a survey bind a classless launch.
 func (c *Core) holdingPress(ctx context.Context, p Project, press func(st *state.State, waited bool) (Result, error)) (Result, error) {
 	waited := false
 	if c.Ledger != nil {

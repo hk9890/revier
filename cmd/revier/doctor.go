@@ -27,7 +27,7 @@ import (
 // it was printed by whichever command the user ran next, and nothing ran until
 // the file was fixed. Now a bad file costs only itself, which is the point, so
 // there has to be one place that answers "what is wrong with my configuration"
-// in full (decisions.md D85).
+// in full (decisions/0085).
 func cmdDoctor(out io.Writer, args []string) error {
 	if len(args) != 0 {
 		return fmt.Errorf("usage: revier doctor")
@@ -88,20 +88,19 @@ func cmdDoctor(out io.Writer, args []string) error {
 	// it.
 	if rt, view, err := selectTerminal(ctx, cfg, cfg.Hosts.Runtime); err == nil && rt != nil {
 		// Not a problem: under a runtime that draws nothing, which view
-		// shows it depends on the machine (decisions.md D185), and nothing
+		// shows it depends on the machine, and nothing
 		// else says so.
 		if line := shownBy(rt, view); line != "" {
 			_, _ = fmt.Fprintln(out, line)
 		}
 		// Not a problem either: the core runs while the user is logged in,
-		// and the logout that ends the last session ends it (decisions.md
-		// D167).
+		// and the logout that ends the last session ends it.
 		if line := coreLifetime(ctx, rt); line != "" {
 			_, _ = fmt.Fprintln(out, line)
 		}
 	}
 	// Not a problem: the files are shared between machines, and the link is
-	// right on the other one (decisions.md D131).
+	// right on the other one.
 	if n := len(cfg.SelfLinks); n > 0 {
 		_, _ = fmt.Fprintf(out, "skipped %s to this machine:\n", core.Count(n, "link"))
 		for _, file := range cfg.SelfLinks {
@@ -109,7 +108,7 @@ func cmdDoctor(out io.Writer, args []string) error {
 		}
 	}
 	// Not a problem either: the link works, and the remote screen does not
-	// list its machine (decisions.md D154).
+	// list its machine.
 	if off := offList(cfg, projects); len(off) > 0 {
 		_, _ = fmt.Fprintf(out, "%s to a machine not on the remote screen (a link works without it):\n", core.Count(len(off), "link"))
 		for _, p := range off {
@@ -117,7 +116,7 @@ func cmdDoctor(out io.Writer, args []string) error {
 		}
 	}
 	// Not a problem: a file of the assistant's name is the user's own
-	// assistant (decisions.md D135), and alt+a raises it from then on.
+	// assistant, and alt+a raises it from then on.
 	if i := slices.IndexFunc(projects, func(p core.Project) bool { return p.Name == config.Assistant }); i >= 0 {
 		_, _ = fmt.Fprintf(out, "note: %s replaces the built-in config assistant; delete the file to bring it back\n", projects[i].File)
 	}
@@ -195,11 +194,11 @@ func duplicates(projects []core.Project) []duplicate {
 }
 
 // outsideProblems is each terminal key that fails at every press outside a
-// workspace, because the agent it runs there cannot run in no project
-// (decisions.md D164). kitty's own new tab hides the failure, so doctor says
-// it; every other command does not, since the configuration loaded whole. A
-// key `revier setup install` does not write is never pressed, so it is left
-// out; with a trigger key that does not parse, install writes none.
+// workspace, because the agent it runs there cannot run in no project. kitty's
+// own new tab hides the failure, so doctor says it; every other command does
+// not, since the configuration loaded whole. A key `revier setup install` does
+// not write is never pressed, so it is left out; with a trigger key that does
+// not parse, install writes none.
 func outsideProblems(cfg *config.Config, projects []core.Project) []error {
 	trigger, err := cfg.TriggerKey()
 	if err != nil {

@@ -294,7 +294,7 @@ func TestPromptReportsAnAgentThatStaysIdle(t *testing.T) {
 
 // A panel id is one process's: two kitty processes each number their windows
 // from 1. The target in the address names the process, so each of two agents
-// in a window 1 has an address of its own (decisions.md D155).
+// in a window 1 has an address of its own.
 func TestAPanelIDHeldTwiceIsNamedByItsTarget(t *testing.T) {
 	rt := hosttest.NewRuntime("rt")
 	rt.Add("session:revier", "kitty", agentPanel("1", "idle"))
@@ -475,8 +475,8 @@ func TestWorstIsTheFirstAgentInTheWorstState(t *testing.T) {
 }
 
 // A panel of a tab placed inside another target is addressed through the
-// tab's target alone: the target it sits inside names it no second time
-// (decisions.md D155). A tab no declared target holds stays the home's.
+// tab's target alone: the target it sits inside names it no second time. A tab
+// no declared target holds stays the home's.
 func TestAPanelOfATabInsideHomeIsNotAddressedThroughHome(t *testing.T) {
 	marked := func(panel revier.Panel) revier.Panel {
 		panel.Vars = map[string]string{core.PanelTargetVar: "agent"}
@@ -502,8 +502,7 @@ func TestAPanelOfATabInsideHomeIsNotAddressedThroughHome(t *testing.T) {
 }
 
 // A panel of an instance two non-tab targets match answers to both addresses,
-// the survey prints the first, and neither reaches another agent
-// (decisions.md D155).
+// the survey prints the first, and neither reaches another agent.
 func TestAPanelOfTwoNonTabTargetsAnswersToBothAddresses(t *testing.T) {
 	p := prepared(t, revier.Project{Name: "demo", Path: "/srv/demo", Targets: []revier.Target{
 		{Name: "home", Home: true, Runtime: &revier.Realization{Match: revier.Match{Title: "^session:demo$"}}},

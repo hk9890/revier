@@ -56,7 +56,7 @@ func hcPath(t *testing.T) string {
 
 // A window whose command ended shows what it left and its exit code, though
 // the program ended before hc's attach could show it, and removes the
-// terminal on Enter (decisions.md D187).
+// terminal on Enter.
 func TestAWindowShowsWhatAnEndedCommandLeft(t *testing.T) {
 	h := world(t)
 	ref, panel := endedPanel(t, h)
@@ -172,8 +172,8 @@ func TestASweepRemovesAnEndedTerminalAfterAMinute(t *testing.T) {
 
 // A view's window, on a terminal of its own, attaches the panel while its
 // command runs; once the command ends the window shows what it left and its
-// exit code, its workspace still lists it, and it stays until Enter
-// (decisions.md D187). The test binary is revier here.
+// exit code, its workspace still lists it, and it stays until Enter. The test
+// binary is revier here.
 func TestAViewsWindowIsHeldUntilEnterOnceItsCommandEnds(t *testing.T) {
 	script, err := exec.LookPath("script")
 	if err != nil {

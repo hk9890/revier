@@ -20,7 +20,7 @@ import (
 //
 // A target the project shares with config.toml is written as the values that
 // differ from the shared one: the file never repeats a shared value, and
-// config.toml is never written from here (decisions.md D81).
+// config.toml is never written from here (decisions/0081).
 
 // Source is where a project's target comes from.
 type Source int
@@ -238,7 +238,7 @@ type projectFile struct {
 }
 
 // base is the table a target's realizations sit under in this file: a link
-// writes them under [target.remote] (decisions.md D82).
+// writes them under [target.remote] (decisions/0082).
 func (f projectFile) base() string {
 	if f.link {
 		return "target.remote"

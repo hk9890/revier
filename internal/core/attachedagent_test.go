@@ -54,7 +54,7 @@ func TestAnAttachedTerminalIsOneRow(t *testing.T) {
 	}
 }
 
-// An ambiguous window is attached alone (decisions.md D95), and then no
+// An ambiguous window is attached alone, and then no
 // agent is reported for it: two terminals of one process with one title cannot be told apart,
 // and attaching the wrong one is worse than attaching no terminal at all.
 func TestAnAmbiguousWindowAttachesAlone(t *testing.T) {
@@ -195,8 +195,7 @@ func TestShutdownAgentsEndsAnAgentInAnAttachedTerminal(t *testing.T) {
 
 // The picker focuses an attached instance by its ref alone, and an
 // attachment is now a terminal as well as a window: the OS window it lives in
-// is raised with it, because kitty on Wayland cannot raise its own
-// (decisions.md D177).
+// is raised with it, because kitty on Wayland cannot raise its own.
 func TestFocusingAnAttachedTerminalRaisesItsWindow(t *testing.T) {
 	c, rt, wm, _ := openDesktop(t, revier.StatusIdle)
 	term, _ := attachScratch(t, c, rt, wm)
@@ -214,8 +213,7 @@ func TestFocusingAnAttachedTerminalRaisesItsWindow(t *testing.T) {
 }
 
 // A terminal the window host lists no window for is not focused inside the
-// terminal either: a focus with no raise becomes an "is ready" notice
-// (decisions.md D63).
+// terminal either: a focus with no raise becomes an "is ready" notice.
 func TestFocusingAnUnraisableTerminalMovesNothing(t *testing.T) {
 	c, rt, wm, _ := openDesktop(t, revier.StatusIdle)
 	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
@@ -265,7 +263,7 @@ func TestASharedWindowTitleDoesNotDoubleAnAttachedRow(t *testing.T) {
 
 // A window host that did not answer refuses the focus with what went wrong,
 // not with the window being gone: the two read the same to the user and only
-// one of them is true (decisions.md D89).
+// one of them is true.
 func TestFocusNamesTheWindowHostThatDidNotAnswer(t *testing.T) {
 	c, rt, wm, _ := openDesktop(t, revier.StatusIdle)
 	term, _ := attachScratch(t, c, rt, wm)

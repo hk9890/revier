@@ -13,7 +13,7 @@ import (
 )
 
 // Rename gives a project a new name by moving its file, since the file name is
-// the name (decisions.md D80), and loads it back under the new one. A link
+// the name, and loads it back under the new one. A link
 // that leaves its name on the host to be derived from its own gets that name
 // written first, so the link still reaches the project it reached. An
 // existing file is never overwritten, and the old file is removed only once

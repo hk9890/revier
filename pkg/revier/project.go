@@ -3,8 +3,7 @@
 //
 // What each port is for is in docs/design/architecture.md. Every operation
 // revier performs is the same one: run-or-raise a named target, revier's or
-// its command's; a second press returns to the project's home (decisions.md
-// D166).
+// its command's; a second press returns to the project's home.
 package revier
 
 import (
@@ -20,7 +19,7 @@ type (
 // Project is a directory and the set of targets bound to it.
 type Project struct {
 	// Name is the project file's name without its extension. The file does
-	// not declare it (decisions.md D80).
+	// not declare it.
 	Name ProjectName `toml:"-" json:"name"`
 	Path string      `toml:"path" json:"path"`
 
@@ -30,11 +29,11 @@ type Project struct {
 	GitURL string `toml:"git_url" json:"git_url,omitempty"`
 
 	// Remote is set for a link: a project that lives on another machine and
-	// is surveyed and driven by the revier installed there (decisions.md
-	// D40). Its runtime instances, its agents and its checkout are that
-	// machine's; what is here is the pane that reaches it, and any target the
-	// link declares. Path, when set, is the path on the host, kept as written
-	// for templates; a link has no directory here.
+	// is surveyed and driven by the revier installed there (decisions/0040).
+	// Its runtime instances, its agents and its checkout are that machine's;
+	// what is here is the pane that reaches it, and any target the link
+	// declares. Path, when set, is the path on the host, kept as written for
+	// templates; a link has no directory here.
 	Remote *Link `toml:"remote" json:"remote,omitempty"`
 
 	Targets []Target          `toml:"target" json:"targets"`
@@ -99,7 +98,7 @@ type Target struct {
 
 	// Command is a target that runs a command in place of a window or a
 	// runtime realization: the command does the run-or-raise and the focus,
-	// and binds no instance (decisions.md D166).
+	// and binds no instance.
 	Command *Command `toml:"command" json:"command,omitempty"`
 }
 
@@ -141,7 +140,7 @@ type Realization struct {
 	Match Match `toml:"match" json:"match"`
 
 	// Panels is the layout of a tab. A project file declares them on a
-	// realization that has Inside and on no other (decisions.md D128). The
+	// realization that has Inside and on no other. The
 	// realization Open receives holds the panels of the first tab the
 	// instance opens with: the core puts them there. Runtime hosts only: a
 	// window host cannot see inside a terminal, and ignores it.
@@ -160,8 +159,8 @@ type Realization struct {
 	// width, height - in the window host's own vocabulary of pixels and
 	// workarea-relative words: "right top 75% 100%". It applies to a launch
 	// and never to a raise, because moving a window the user has already put
-	// somewhere is not revier's business (decisions.md D24). A view window
-	// that opens again over a live instance is placed as a launch's (D186).
+	// somewhere is not revier's business. A view window
+	// that opens again over a live instance is placed as a launch's.
 	//
 	// A window host that cannot place windows ignores it.
 	Place string `toml:"place" json:"place,omitempty"`
@@ -170,19 +169,18 @@ type Realization struct {
 	// of that target's instance rather than an instance of its own. Runtime
 	// realizations only, on a runtime that implements TabOpener. The tab
 	// runs Launch or holds Panels, one of the two. It is found by the
-	// target's name, which revier sets on it, so Match and Name are not used
-	// (decisions.md D64).
+	// target's name, which revier sets on it, so Match and Name are not used.
 	Inside TargetName `toml:"inside" json:"inside,omitempty"`
 
 	// Tabs lists, in order, the tab targets a new instance opens with. The
 	// realization then has no Launch of its own, and each entry is a target
-	// that is Inside this one (decisions.md D126). Runtime realizations only,
+	// that is Inside this one. Runtime realizations only,
 	// and never one with Inside. It applies when the instance is created: an
 	// open instance is not changed.
 	Tabs []TargetName `toml:"tabs" json:"tabs,omitempty"`
 
-	// Active names the entry of Tabs that has the focus in a new instance
-	// (decisions.md D126). Empty means the first entry.
+	// Active names the entry of Tabs that has the focus in a new instance.
+	// Empty means the first entry.
 	Active TargetName `toml:"active" json:"active,omitempty"`
 }
 

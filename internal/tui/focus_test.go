@@ -117,7 +117,7 @@ func TestTheFocusRegainedWithASurveyOutStartsNoOther(t *testing.T) {
 	}
 }
 
-// A launch still coming up is claimed by the survey (decisions.md D87), so a
+// A launch still coming up is claimed by the survey, so a
 // surface without the focus keeps the refresh, and a hidden popup keeps
 // surveying, until the launch is claimed or expires.
 func TestALaunchComingUpKeepsTheRefresh(t *testing.T) {
@@ -494,7 +494,7 @@ func escapedAndRaised(t *testing.T, m tui.Model, c *core.Core) tui.Model {
 func onAgents(m tui.Model) bool { return strings.Contains(query(m), "filter agents") }
 
 // surveys reports whether the next tick of m surveys: a popup taken as
-// hidden does not (decisions.md D86).
+// hidden does not.
 func surveys(m tui.Model) bool {
 	_, cmd := update(m, m.Ticked())
 	return cmd != nil
@@ -613,8 +613,7 @@ func TestTheRaiseOfAMinimizedPopupIsTakenOnce(t *testing.T) {
 }
 
 // A popup the desktop hid is found by the slow refresh's survey, which lists
-// the windows once, and surveys no more until it is raised (decisions.md
-// D86).
+// the windows once, and surveys no more until it is raised.
 func TestTheSlowRefreshFindsAHideByTheDesktop(t *testing.T) {
 	m, wm, _ := agentsPopup(t, false)
 	m, _ = update(m, tea.BlurMsg{})

@@ -26,7 +26,7 @@ func revierTerminal(address, state, reason string) *fakeTerminal {
 
 // A window whose terminal's program ended on its own shows what the program
 // left and how it ended, holds the terminal while it waits for Enter, and
-// removes it on Enter (decisions.md D187).
+// removes it on Enter.
 func TestAWindowHoldsATerminalWhoseProgramEnded(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
@@ -149,7 +149,7 @@ func TestAWindowIsNotHeldAfterADetachACloseAShellsExitOrForAUsersTerminal(t *tes
 
 // A held terminal is still its workspace's panel, so a press raises the
 // workspace and a key in the held window is the workspace's, as a held
-// kitty window is (decisions.md D187); a finished one no window holds is
+// kitty window is; a finished one no window holds is
 // no instance.
 func TestInstancesListAHeldTerminal(t *testing.T) {
 	c, sock := newCore(t)

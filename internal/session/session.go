@@ -41,7 +41,7 @@ var ErrNoSession = errors.New("no stored session")
 // ErrNoWholeSession is returned for the newest session when sessions are
 // stored but none stands for the whole set: each was saved as a project
 // closed. It wraps ErrNoSession, so a caller that only tells an empty store
-// from a failure still does (decisions.md D149).
+// from a failure still does.
 var ErrNoWholeSession = fmt.Errorf("%w of every open project", ErrNoSession)
 
 // Session is one recorded set of open projects.
@@ -79,7 +79,8 @@ const (
 	ReasonShutdown Reason = "shutdown"
 	// ReasonProjectClosed is the save made before one project is closed.
 	// It is not what a plain restore opens: a run of closes leaves the
-	// smallest set as the newest save (decisions.md D149).
+	// smallest set as the newest save. A plain restore neither falls back
+	// to it nor guesses a run of closes from sets that shrink.
 	ReasonProjectClosed Reason = "project-closed"
 	// ReasonSaved is a save asked for by hand.
 	ReasonSaved Reason = "saved"
@@ -89,7 +90,7 @@ const (
 )
 
 // Whole reports whether a save of this reason stands for the whole set that
-// was open, so that a plain restore may open it (decisions.md D149). A file
+// was open, so that a plain restore may open it. A file
 // with no reason predates the field and cannot be told apart, so it counts;
 // a reason this build does not know does not.
 func (r Reason) Whole() bool {
@@ -132,7 +133,7 @@ type Target struct {
 	// Agents are the agents the target's instance held, in the order the
 	// runtime listed them. The order is their identity: a restore gives the
 	// first to the first agent panel the project declares, and so on, and
-	// opens the rest beside the layout (decisions.md D146).
+	// opens the rest beside the layout.
 	Agents []Agent `toml:"agent,omitempty" json:"agents,omitempty"`
 }
 
@@ -141,10 +142,11 @@ type Target struct {
 // order, so the agents after it keep theirs. Name is the named agent it ran,
 // which a restore opens again and no other program in its place; it is empty
 // for the project's default agent, for a program started by hand in a panel,
-// and in a file written before the field existed (decisions.md D146). A
-// restore gives an agent with no name the agent that runs its harness
-// (D193). Unfiled says that its harness kept no conversation under Session
-// when the save ran, as for a Claude Code agent never prompted (D194).
+// and in a file written before the field existed. A
+// restore gives an agent with no name the agent that runs its harness. Unfiled
+// says that its harness kept no conversation under Session when the save ran,
+// as for a Claude Code agent never prompted. Dir is recorded because an agent
+// resumed from the repository root edits main.
 type Agent struct {
 	Harness string           `toml:"harness" json:"harness"`
 	Session revier.SessionID `toml:"session,omitempty" json:"session,omitempty"`
@@ -225,7 +227,7 @@ func write(path string, s Session) error {
 }
 
 // Rename moves what every stored session records under a project to its new
-// name, in place: a project renamed on the surface (decisions.md D80) is
+// name, in place: a project renamed on the surface is
 // still the one a session saved before the rename opens again. A session
 // that does not name the project is left as it is. What a surface last saw
 // is renamed too, so a rename made while no surface runs is not lost when
@@ -273,7 +275,7 @@ func renamed(s *Session, from, to revier.ProjectName) bool {
 // SeenPath is the file that holds what a running surface last saw. It is
 // beside the sessions directory and not in it, so List and a plain restore
 // never take it for a save: it becomes one only after an end with no
-// shutdown, by PromoteSeen (decisions.md D150).
+// shutdown, by PromoteSeen.
 func SeenPath(stateRoot string) string { return filepath.Join(stateRoot, "seen.toml") }
 
 // SaveSeen writes s as what the surface last saw, over the file it wrote
@@ -349,7 +351,7 @@ func taken(err error) error {
 
 // Load reads one session. An empty ref is what a restore after a reboot
 // means: the session Newest picks, or ErrNoWholeSession when none stands for
-// the whole set (decisions.md D149). Otherwise ref is an id, and failing that
+// the whole set. Otherwise ref is an id, and failing that
 // a name, whose newest holder is taken, whatever its reason.
 func Load(stateRoot, ref string) (Session, error) {
 	all, err := List(stateRoot)
@@ -381,7 +383,7 @@ func Load(stateRoot, ref string) (Session, error) {
 }
 
 // Newest is the first session of a newest-first list whose reason stands for
-// the whole set: the one a plain restore opens (decisions.md D149).
+// the whole set: the one a plain restore opens.
 func Newest(all []Session) (Session, bool) {
 	for _, s := range all {
 		if s.Reason.Whole() {
@@ -475,7 +477,7 @@ func (s Session) SameAs(o Session) bool {
 
 // SameMarkedAs is SameAs with the unfiled mark of each agent compared too: a
 // save that adds the mark is not held by one that lacks it, as what a surface
-// last saw, promoted after an unclean end, lacks it (decisions.md D194).
+// last saw, promoted after an unclean end, lacks it.
 func (s Session) SameMarkedAs(o Session) bool {
 	return s.same(o, func(p, q Agent) bool { return p == q })
 }

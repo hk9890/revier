@@ -10,7 +10,7 @@ the format is the user guide's [configuration reference](../user-guide/configura
 The format is built to keep three things true:
 
 - Every target is a run-or-raise binding, never a launcher, as the
-  [model](product.md#model) says (D145, D166).
+  [model](product.md#model) says.
 - Every command is an argument list, never a shell string, so there is no
   quoting to get wrong and no shell to inject into.
 - Anything one person needs — an editor, a ticket viewer, a browser, a

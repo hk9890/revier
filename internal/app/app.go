@@ -1,8 +1,10 @@
 // Package app is the use cases a driving surface asks for that are a sequence
 // across more than one store: the project files, a checkout, the state, the
-// saved sessions and the events (decisions.md D121). The command line and the
+// saved sessions and the events. The command line and the
 // TUI call it and keep only what is theirs: taking the input and showing the
 // result. A decision about a target or a host is not here; it is the core's.
+// The sequences are outside the core so that it stays free of files, and are
+// written once because a copy in each surface drifts from the other.
 package app
 
 import (
@@ -32,7 +34,7 @@ import (
 // trust has to say goes to warn. A directory that is not there records
 // gitURL, the repository the caller clones into it, or nothing.
 //
-// The state record has the create, refused or not (decisions.md D151).
+// The state record has the create, refused or not (decisions/0151).
 func CreateProject(cfgRoot string, ledger core.Ledger, projects []core.Project, name revier.ProjectName, dir, gitURL string, warn io.Writer) (p core.Project, err error) {
 	if name == "" {
 		name = config.NameFor(dir)
@@ -58,8 +60,8 @@ func CreateProject(cfgRoot string, ledger core.Ledger, projects []core.Project, 
 
 // Clone clones the repository of a project whose directory is missing, with
 // git's output on out, and reports whether it cloned. The state record has
-// each clone, and each refusal or failure, with its error (decisions.md
-// D151); a directory that is there writes nothing.
+// each clone, and each refusal or failure, with its error (decisions/0151); a
+// directory that is there writes nothing.
 func Clone(ledger core.Ledger, p revier.Project, out io.Writer) (bool, error) {
 	cloned, err := checkout.Ensure(p, out)
 	if cloned || err != nil {
@@ -71,7 +73,7 @@ func Clone(ledger core.Ledger, p revier.Project, out io.Writer) (bool, error) {
 // LinkProject writes a link under name to the project a host reports as on,
 // or under the project's own name when name is empty. A name whose file is
 // there is refused, so no project is overwritten, and so is a host that is
-// this machine, since revier leaves such a link out (decisions.md D131).
+// this machine, since revier leaves such a link out.
 // The state record has the link, refused or not.
 func LinkProject(cfgRoot string, ledger core.Ledger, name revier.ProjectName, host string, on revier.Project) (p core.Project, err error) {
 	if name == "" {
@@ -87,14 +89,13 @@ func LinkProject(cfgRoot string, ledger core.Ledger, name revier.ProjectName, ho
 }
 
 // RenameProject moves a project to a new name in the three stores that hold
-// it by name: the project file, the state, and the saved sessions
-// (decisions.md D80). It is refused, before the file moves, while the project
-// runs here or what of it runs is not known, as core.RefuseChange says of v,
-// the project's view, and s. The file is first, and a file that cannot be
-// moved changes nothing. The saved sessions are last and cannot fail the
-// rename: one that keeps the old name no longer opens the project, which the
-// log says, and the project itself is renamed. The state record has the
-// rename, refused, failed or not.
+// it by name: the project file, the state, and the saved sessions. It is
+// refused, before the file moves, while the project runs here or what of it
+// runs is not known, as core.RefuseChange says of v, the project's view, and s.
+// The file is first, and a file that cannot be moved changes nothing. The saved
+// sessions are last and cannot fail the rename: one that keeps the old name no
+// longer opens the project, which the log says, and the project itself is
+// renamed. The state record has the rename, refused, failed or not.
 func RenameProject(c *core.Core, cfgRoot, stateRoot string, v revier.ProjectView, s core.Settled, to revier.ProjectName, inh config.Inherited) (core.Project, error) {
 	from := v.Project.Name
 	var p core.Project

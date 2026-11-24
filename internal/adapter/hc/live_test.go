@@ -441,8 +441,7 @@ func TestClosePanelThenClose(t *testing.T) {
 }
 
 // A panel's command that ends leaves its terminal finished, for the window
-// that shows it to hold, and a read of it is what it left (decisions.md
-// D187).
+// that shows it to hold, and a read of it is what it left.
 func TestACommandThatEndsLeavesItsTerminalFinished(t *testing.T) {
 	h, c := world(t), ctx(t)
 	done := filepath.Join(t.TempDir(), "done")
@@ -465,8 +464,7 @@ func TestACommandThatEndsLeavesItsTerminalFinished(t *testing.T) {
 }
 
 // A shell that exits leaves no record: hc removes it at the exit, as the
-// kitty runtime holds no shell, and a read of it is a panel that is gone
-// (decisions.md D172).
+// kitty runtime holds no shell, and a read of it is a panel that is gone.
 func TestAShellThatExitsLeavesNoRecord(t *testing.T) {
 	h, c := world(t), ctx(t)
 	ref, err := h.Open(c, revier.Realization{Name: "shell", Panels: []revier.PanelSpec{{Kind: revier.PanelShell}}})

@@ -86,7 +86,7 @@ func TestDelDeclinedAtItsConfirmClosesNothingAndSaysSo(t *testing.T) {
 
 // The 2026-10-16 replay: a full shutdown of two projects, one opened again,
 // and del on it. The del saves the one project as the newest session, and a
-// plain restore still opens the full shutdown's (decisions.md D149).
+// plain restore still opens the full shutdown's.
 func TestADelAfterAFullShutdownLeavesItTheRestore(t *testing.T) {
 	rt, _, c, projects := world(t, 2)
 	rt.Add("session:project-00", "kitty")
@@ -192,7 +192,7 @@ func TestDelClosesAnAgentsTab(t *testing.T) {
 
 // An agent that starts a turn between the press and the close is not ended
 // by a del that would have closed at once: the close is refused, the plan is
-// shown with the agent busy, and the next press closes it (decisions.md D99).
+// shown with the agent busy, and the next press closes it.
 func TestDelOnAnAgentThatTurnedBusyAsksFirst(t *testing.T) {
 	rt, _, c, projects := world(t, 2)
 	probeOf(c).State.Status = revier.StatusIdle
@@ -437,7 +437,7 @@ func TestAltDelRefusesTheHomeTargetBeforeClosingIt(t *testing.T) {
 }
 
 // alt+del on a running project waits for a host that could not list: what
-// that host holds may be open, and no close reaches it (decisions.md D89).
+// that host holds may be open, and no close reaches it.
 func TestAltDelWaitsForAHostThatCouldNotList(t *testing.T) {
 	rt, wm, c, projects := world(t, 2)
 	inFiles(projects)
@@ -478,7 +478,7 @@ func TestAltDelOnATargetClosedSinceAsks(t *testing.T) {
 // A shared target config.toml refuses reaches no project, so it is in no
 // project's targets either: alt+del on a target of the project's own file
 // asks its question, rather than reading the file against a shared list the
-// loader already threw away (decisions.md D85).
+// loader already threw away.
 func TestAltDelOnAnOwnTargetBesideARefusedSharedTarget(t *testing.T) {
 	refused := sharedTargets + "\n[[target]]\nname = \"web\"\nhome = \"yes\"\n  [target.window]\n  launch = [\"firefox\"]\n  match = { class = \"^firefox$\" }\n"
 	own := demoProject + "\n[[target]]\nname = \"notes\"\n  [target.runtime]\n  name = \"notes\"\n  launch = [\"less\"]\n  match = { title = \"^notes$\" }\n"

@@ -232,7 +232,7 @@ func (f *FakeRuntime) Open(ctx context.Context, r revier.Realization) (revier.Ta
 
 // liveKind is the kind a host reports for the panel it started from spec: a
 // shell for a declared shell, and a tool for anything else. No host says
-// agent of a live panel (decisions.md D119).
+// agent of a live panel (decisions/0119).
 func liveKind(spec revier.PanelSpec) revier.PanelKind {
 	if spec.Kind == revier.PanelShell {
 		return revier.PanelShell

@@ -51,10 +51,13 @@ type State struct {
 	// launch replaced it, or it passed its window. A cold application opens
 	// its windows minutes late and in any order, so each is kept for
 	// LateWindow and bound to the one window its full rule alone matches.
+	// Closing a project keeps its late launches: each is also the class hold
+	// that stops another project taking the window, and the guard against a
+	// second launch. So a late window can still bind to the closed project.
 	Late []Launch `json:"late,omitempty"`
 
 	// ShutDown is the full shutdown on record, until anything opens again:
-	// the next surface offers to restore what it closed (decisions.md D141).
+	// the next surface offers to restore what it closed.
 	ShutDown *ShutDown `json:"shutdown,omitempty"`
 
 	// LastRun is the last run of a command target that moved focus: the
@@ -89,7 +92,7 @@ func (s *State) MarkShutDown(at time.Time, session string) {
 }
 
 // ClearShutDown ends the shutdown on record and reports whether there was
-// one. Anything opened since ends it (decisions.md D141), so a launch and a
+// one. Anything opened since ends it, so a launch and a
 // landing clear it too.
 func (s *State) ClearShutDown() bool {
 	had := s.ShutDown != nil

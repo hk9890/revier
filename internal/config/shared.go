@@ -13,8 +13,9 @@ import (
 )
 
 // A shared target is a [[target]] table in config.toml. Every project file
-// that is not a link gets it, merged with the project's own target of the
-// same name (decisions.md D59). The merge is on the tables as TOML decoded
+// gets it, merged with the project's own target of the same name
+// (decisions/0059). A local project takes its local part, and a link its
+// remote part (decisions/0082). The merge is on the tables as TOML decoded
 // them, not on revier.Target, because a decoded struct cannot tell a field
 // the project left out from one it set to its zero value.
 //
@@ -83,7 +84,7 @@ func validateRemoteKeys(name string, remote map[string]any) []error {
 }
 
 // errNameKey refuses a project file that names itself. The file name is the
-// project's name (decisions.md D80), and a key that could disagree with it
+// project's name, and a key that could disagree with it
 // would be ignored without a word.
 var errNameKey = errors.New("name is not read: the file name is the project's name; delete the line")
 
@@ -132,7 +133,7 @@ func decodeProject(data []byte, shared []map[string]any) (revier.Project, map[re
 
 // A target carries a realization for a local project under [target.window]
 // and [target.runtime], and one for a link under [target.remote.window] and
-// [target.remote.runtime] (decisions.md D82). Both parts together are only
+// [target.remote.runtime] (decisions/0082). Both parts together are only
 // ever written in config.toml, where one target serves every project: a
 // project file is one kind or the other, and writes the part of its kind. A
 // command, [target.command], is a local part alone: a link has no command
@@ -197,7 +198,7 @@ func localOnly(shared []map[string]any, link revier.Project) map[revier.TargetNa
 // realization nothing would ever read is a target that silently does
 // nothing, which is exactly what loading catches. The refusals are by target
 // name, one target's mistake costing that target and not the project
-// (decisions.md D85): the part is dropped by partsFor either way, and
+// (decisions/0085): the part is dropped by partsFor either way, and
 // loadProject lays the reason on the target once the project is prepared.
 func validateParts(targets []map[string]any, isLink bool) map[revier.TargetName]error {
 	out := map[revier.TargetName]error{}

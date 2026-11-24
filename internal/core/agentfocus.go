@@ -13,13 +13,13 @@ import (
 
 // goAgent brings an agent the survey reported to the front: its tab becomes
 // current and the window holding it is raised. A link's agent is reached the
-// same way, in the panel here that shows it (decisions.md D84). One that no
+// same way, in the panel here that shows it (decisions/0084). One that no
 // panel here shows - a link's started from another machine, or one this
 // machine serves to a terminal elsewhere - is ErrAgentElsewhere.
 //
 // The agent is named by its instance and its panel, as the survey saw it, and
 // not looked up again by panel id: a panel id is one process's, and two kitty
-// processes of one project can each hold a panel 1 (D75).
+// processes of one project can each hold a panel 1.
 func (c *Core) goAgent(ctx context.Context, p Project, a revier.AgentView) (res Result, err error) {
 	start := time.Now()
 	// When it returns, logs "go agent" with project, ref, panel and

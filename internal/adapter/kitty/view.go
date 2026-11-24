@@ -18,7 +18,7 @@ import (
 // The user vars of a kitty window the view opens: the runtime panel it
 // attaches, and the runtime instance that panel is in. They map a key's kitty
 // window id to the panel behind it, and a runtime ref to the windows that
-// show it (decisions.md D180).
+// show it.
 const (
 	viewPanelVar    = "REVIER_VIEW_PANEL"
 	viewInstanceVar = "REVIER_VIEW_INSTANCE"
@@ -32,7 +32,7 @@ type Attachable interface {
 }
 
 // View is the kitty View of a Runtime that is not kitty: hc, which draws
-// nothing (decisions.md D178, D180). It opens one kitty OS window per runtime
+// nothing. It opens one kitty OS window per runtime
 // instance in the workspace kitty, titled as the instance, one kitty tab per
 // tab of it, and one kitty window per panel, which runs the runtime's attach
 // of that panel and carries the panel and the instance in user vars. Every
@@ -40,9 +40,9 @@ type Attachable interface {
 // those vars.
 //
 // A window only attaches, so closing one ends no program, and the runtime
-// lists the instance on (D181). The window runs what the runtime's
+// lists the instance on. The window runs what the runtime's
 // AttachPanel gives, which ends with its panel, and the window with it: hc's
-// holds a command that ended until Enter (D187).
+// holds a command that ended until Enter.
 type View struct {
 	Runtime Attachable
 
@@ -52,8 +52,7 @@ type View struct {
 func (v *View) Name() string { return "kitty" }
 
 // Probe reports the view usable where kitty is and a display is to show it
-// on: over ssh or with no display, the runtime runs unshown (decisions.md
-// D178).
+// on: over ssh or with no display, the runtime runs unshown.
 func (v *View) Probe(ctx context.Context) error {
 	if err := v.kitty.Probe(ctx); err != nil {
 		return err
@@ -65,7 +64,7 @@ func (v *View) Probe(ctx context.Context) error {
 }
 
 // Capabilities says each instance is an OS window of the instance's title,
-// which the window host raises (decisions.md D177).
+// which the window host raises.
 func (v *View) Capabilities() revier.Capabilities {
 	return revier.Capabilities{OSWindows: true}
 }
@@ -355,7 +354,7 @@ func (v *View) FocusedPanel(ctx context.Context, ref revier.TargetRef) (revier.P
 // pressed in, which KITTY_LISTEN_ON names, to the runtime panel that window
 // attaches, and to the instance of instances that holds it. A window that
 // attaches no panel, as kitty's own, is a zero ref: a tab outside a
-// workspace opens beside it (decisions.md D183). An id that is no window of
+// workspace opens beside it. An id that is no window of
 // that kitty, one passed from no kitty, and one from a kitty that does not
 // answer, are the runtime's to look up, as an hc address a script passes is
 // (revier.ErrNoViewPanel).
@@ -390,10 +389,10 @@ func (v *View) FindPanel(ctx context.Context, instances []revier.Instance, panel
 // OpenBeside opens a kitty tab beside the window panel, in the kitty the key
 // was pressed in, running spec: kitty's own shell, or the agent spec runs,
 // held as the kitty runtime holds a panel's command. It is kitty's alone, so
-// the runtime lists no instance for it (decisions.md D183). Without spec.Dir
+// the runtime lists no instance for it. Without spec.Dir
 // it starts in the window's directory, read as the kitty runtime reads a
 // panel's, while it is a directory: the runtime lists no such window, so the
-// core cannot read it (D153, D164).
+// core cannot read it.
 func (v *View) OpenBeside(ctx context.Context, panel revier.PanelID, spec revier.PanelSpec) error {
 	socket := v.kitty.here()
 	if socket == "" {

@@ -19,17 +19,16 @@ const (
 )
 
 // Open decides what `revier open` and Enter on a project do, so the command
-// line and the surface cannot disagree (decisions.md D90). A project its file
+// line and the surface cannot disagree. A project its file
 // refused is neither cloned nor opened: the reason is the one thing to do
-// about it, and a git_url the load refused must not reach git (D85). One with
-// no home target is refused with ErrNoHome. A link is its host's to clone
-// (D83), and a checkout that is here is gone to. One that is missing is
-// cloned when the file records where from; else the home target is raised
-// when it runs, since raising touches no directory, and a fresh start is
-// refused rather than made in whatever directory the runtime falls back to.
-// running is asked only then, because it costs a listing; when it cannot
-// answer - its host could not list (D89) - the refusal carries that reason,
-// not a missing git_url.
+// about it, and a git_url the load refused must not reach git.
+// One with no home target is refused with ErrNoHome. A link is its host's to
+// clone, and a checkout that is here is gone to. One that is missing is cloned
+// when the file records where from; else the home target is raised when it
+// runs, since raising touches no directory, and a fresh start is refused rather
+// than made in whatever directory the runtime falls back to. running is asked
+// only then, because it costs a listing; when it cannot answer - its host could
+// not list - the refusal carries that reason, not a missing git_url.
 func Open(p Project, running func() (bool, error)) (Opening, error) {
 	if p.Invalid != nil {
 		return 0, p.Invalid

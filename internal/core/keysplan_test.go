@@ -328,7 +328,7 @@ func TestAKeyMovingBetweenTargetsLosesNeither(t *testing.T) {
 
 // An entry revier names is revier's whatever it runs. An older revier's keys
 // ran scripts that are gone; read as somebody else's, --force switched them
-// off and wrote a second entry beside each (decisions.md D77).
+// off and wrote a second entry beside each.
 func TestAnOlderReviersEntriesAreRewrittenInPlace(t *testing.T) {
 	w := hosttest.NewWriter("gnome",
 		hosttest.Custom("<Alt>space", `sh -lc "revier-popup"`, "revier-picker"),

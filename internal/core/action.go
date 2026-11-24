@@ -4,12 +4,12 @@ import "fmt"
 
 // ActionCommand is what runs for the named action on a project, and the
 // directory it runs in. A project on another machine runs the action there,
-// through the ssh its remote answers with, in no local directory (decisions.md
-// D40). A project on this machine runs run, rendered against the project, in
-// its checkout.
+// through the ssh its remote answers with, in no local directory
+// (decisions/0040). A project on this machine runs run, rendered against the
+// project, in its checkout.
 func (c *Core) ActionCommand(p Project, name string, run []string) (argv []string, dir string, err error) {
 	// A project its file refused as a whole has no directory an action could
-	// run in, and says so (decisions.md D85).
+	// run in, and says so (decisions/0085).
 	if p.Invalid != nil {
 		return nil, "", fmt.Errorf("action %q: %w", name, p.Invalid)
 	}

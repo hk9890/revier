@@ -69,7 +69,7 @@ func (o *Observer) Saw(s Seen, now time.Time) []Line {
 // carry is what is known of a scope after a survey of s: what s saw, and of
 // last what s could not see, because its host did not list, the linked host
 // did not answer, or it gave no answer for that link. That is not gone, and
-// is kept as it was last seen (decisions.md D89). A snapshot already holds
+// is kept as it was last seen. A snapshot already holds
 // what its writer kept, so a replay that starts there keeps it too.
 func carry(last, s Seen) Seen {
 	held := func(host string, project revier.ProjectName) bool {

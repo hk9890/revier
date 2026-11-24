@@ -21,9 +21,10 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// A [[status]] is a command whose output stands at one place on the surface
-// (decisions.md D134). The surface runs each one on its own timer, never in
-// the way of a frame, and draws what the last good run printed.
+// A [[status]] is a command whose output stands at one place on the surface.
+// The surface runs each one on its own timer, never in the way of a frame, and
+// draws what the last good run printed. The top line, the footer and the
+// project rows have no room for one at normal widths.
 const (
 	// statusBeat is how often the surface looks for a status that is due.
 	// No status runs more often than config.MinStatusEvery, so a beat of
@@ -41,7 +42,8 @@ const (
 )
 
 // segment is one piece of a status, coloured by its own level: the 5-hour
-// window red beside a 7-day window that is not.
+// window red beside a 7-day window that is not. It carries a level and no
+// colour, so the theme and NO_COLOR stay in charge.
 type segment struct {
 	Text  string `json:"text"`
 	Level string `json:"level"`
@@ -169,9 +171,9 @@ func (m *Model) followSelection() tea.Cmd {
 	return m.runDue()
 }
 
-// runDue starts a run of every place that is due: the rule's, and the
-// pane's for the selected project. Nothing runs while the popup is hidden;
-// the raise runs what fell due meanwhile.
+// runDue starts a run of every place that is due: the rule's, and the pane's
+// for the selected project alone, so the cost does not grow with the projects.
+// Nothing runs while the popup is hidden; a raise runs what fell due meanwhile.
 func (m *Model) runDue() tea.Cmd {
 	if m.hidden {
 		return nil

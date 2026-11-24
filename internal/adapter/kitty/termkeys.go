@@ -250,7 +250,7 @@ func renderBindings(bindings []revier.TermBinding) string {
 // the id of the focused window, and in kitty's own directory: one taken from
 // the window, --cwd=current, fails to start sh at all once that directory is
 // removed. revier opens the tab beside the window, and reads the window's
-// directory itself (decisions.md D153). When revier fails - it is not on the
+// directory itself. When revier fails - it is not on the
 // PATH, or its configuration does not load - the fallback opens kitty's own
 // tab, so the key still gives a terminal. No --allow-remote-control: a launched
 // process that has it is answered by the kitty it runs in, and that kitty

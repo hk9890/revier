@@ -17,7 +17,7 @@ import (
 
 // A tab is the terminals that share a token, after the tabs before it, and
 // two tabs of the same vars stay two; the names OpenTab gives are names hc
-// takes (decisions.md D179).
+// takes.
 func TestOpenTabThenInstancesListEachTabInOrder(t *testing.T) {
 	h, c := world(t), ctx(t)
 	dir := t.TempDir()
@@ -71,8 +71,8 @@ func TestATabThatExitsAtOnceLeavesTheInstance(t *testing.T) {
 }
 
 // A view's window runs revier's attach of one terminal, which ends when the
-// terminal is closed: the window ends with its panel (decisions.md D180),
-// and a close holds none (D187). The test binary is revier here, and script
+// terminal is closed: the window ends with its panel,
+// and a close holds none. The test binary is revier here, and script
 // gives the attach the terminal it needs.
 func TestAnAttachedPanelEndsWithItsTerminal(t *testing.T) {
 	script, err := exec.LookPath("script")
@@ -118,7 +118,7 @@ func TestAnAttachedPanelEndsWithItsTerminal(t *testing.T) {
 
 // A view's window that closes or crashes ends its attach as kitty does, by a
 // hang-up or a kill of the attach's process group, and its terminal runs on:
-// closing kitty ends no agent (decisions.md D181). The test binary is revier
+// closing kitty ends no agent. The test binary is revier
 // here.
 func TestAnAttachThatIsHungUpOrKilledLeavesItsTerminal(t *testing.T) {
 	script, err := exec.LookPath("script")

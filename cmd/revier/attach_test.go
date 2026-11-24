@@ -14,8 +14,7 @@ import (
 )
 
 // `revier attach` records the window the user is looking at and the terminal
-// inside it, so the survey has panels to probe for the agent in it
-// (decisions.md D95).
+// inside it, so the survey has panels to probe for the agent in it.
 func TestAttachRecordsTheTerminalInTheWindow(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.SetCapabilities(revier.Capabilities{OSWindows: true})
@@ -44,7 +43,7 @@ func TestAttachRecordsTheTerminalInTheWindow(t *testing.T) {
 
 // A window no terminal pairs with beyond doubt is attached alone: two
 // unnamed terminals of one process cannot be told apart, and attaching the
-// wrong one is worse than attaching none (decisions.md D95).
+// wrong one is worse than attaching none.
 func TestAttachRecordsAnAmbiguousWindowAlone(t *testing.T) {
 	rt := hosttest.NewRuntime("kitty")
 	rt.SetCapabilities(revier.Capabilities{OSWindows: true})

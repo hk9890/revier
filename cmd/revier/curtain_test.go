@@ -9,9 +9,9 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// A curtain's kitty has the curtains' class, which no window rule names
-// (decisions.md D192). It has the title of its monitor and runs the curtain
-// on the surface's socket, and the primary monitor's lists the steps.
+// A curtain's kitty has the curtains' class, which no window rule names. It has
+// the title of its monitor and runs the curtain on the surface's socket, and
+// the primary monitor's lists the steps.
 func TestCurtainArgvRunsTheCurtainOfItsMonitor(t *testing.T) {
 	primary := revier.Monitor{Index: 0, Primary: true}
 	argv := curtainArgv("/usr/bin/revier", primary, "/run/user/1000/revier-curtain-7.sock", true)

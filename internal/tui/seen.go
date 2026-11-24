@@ -12,8 +12,9 @@ import (
 
 // What the surface last saw: while it runs, it keeps what its surveys find
 // open as one session file outside the saved ones, so an end with no
-// shutdown - a killed terminal, a power loss - still leaves a restore point
-// (decisions.md D150).
+// shutdown - a killed terminal, a power loss - still leaves a restore point.
+// Neither a save on SIGHUP, which a SIGKILL never sends, nor a replay of the
+// state record takes the place of this file.
 
 // recoveredMsg is the check for an end with no shutdown, answered: the
 // session to offer when ok.
@@ -25,7 +26,7 @@ type recoveredMsg struct {
 
 // observe is what the surface does with each survey it shows: the survey of
 // this machine, or answered, the answers of the linked hosts a round asked.
-// It records what the survey saw in the state record (decisions.md D151),
+// It records what the survey saw in the state record (decisions/0151),
 // and keeps it as what the surface last saw (keepSeen). Both are written by
 // the command it returns, never in Update.
 func (m *Model) observe(answered *core.RemoteAnswers) tea.Cmd {

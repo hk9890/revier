@@ -122,7 +122,7 @@ func TestSendTextFailsWhenTheCoreClosesTheAttachEarly(t *testing.T) {
 }
 
 // A terminal of the instance that a close removed reads as a panel that is
-// gone (decisions.md D172), and is not read.
+// gone, and is not read.
 func TestReadPanelOfATerminalACloseRemovedSaysThePanelIsGone(t *testing.T) {
 	c, sock := homeCore(t)
 	h := &hc.Host{Socket: sock}
@@ -157,7 +157,7 @@ func TestReadPanelAsksForTheScreenAlone(t *testing.T) {
 }
 
 // A terminal hc no longer holds is a panel that is gone, and any other
-// failure stays a failure (decisions.md D172).
+// failure stays a failure.
 func TestReadPanelOfATerminalHcNoLongerHoldsSaysThePanelIsGone(t *testing.T) {
 	c, sock := homeCore(t)
 	h := &hc.Host{Socket: sock}

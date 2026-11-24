@@ -187,8 +187,7 @@ func TestAPlannedResumeShowsItsConversation(t *testing.T) {
 }
 
 // The sessions screen starts on the session a plain restore opens, not on a
-// close saved after it, so Enter there is `revier session restore`
-// (decisions.md D149).
+// close saved after it, so Enter there is `revier session restore`.
 func TestTheSessionsScreenStartsOnWhatARestoreOpens(t *testing.T) {
 	_, _, c, projects := world(t, 2)
 	root := stateWith(t, nil)
@@ -277,7 +276,7 @@ func TestARestoreRaisesTheSurfaceOnceItEnds(t *testing.T) {
 
 // The popup is raised by its class through the window host once a restore
 // ends, not by its panel: a runtime that lists no popup, as hc does, leaves
-// it raised all the same (decisions.md D182).
+// it raised all the same.
 func TestARestoreRaisesThePopupByItsClass(t *testing.T) {
 	rt, wm, c, projects := world(t, 2)
 	c.Self = func(revier.Panel) bool { return false }

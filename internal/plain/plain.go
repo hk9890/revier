@@ -1,6 +1,7 @@
 // Package plain takes off what an agent, a tool or a status command wrote
 // for the terminal, so that what is left is drawn as text. An agent's message
-// must be (decisions.md D108).
+// must be. The harness cannot clean it for revier, since it
+// does not own what a tool wrote into the transcript it keeps.
 package plain
 
 import (

@@ -61,7 +61,7 @@ func TestInstancesParseOSWindowsWithPanels(t *testing.T) {
 
 	// The first window carries kitty's default name, which identifies
 	// nothing; the adapter reports that as no title, and the core learns one
-	// from the window manager (decisions.md D22). The second was named by
+	// from the window manager. The second was named by
 	// revier and identifies itself.
 	legacy, ws := got[0], got[1]
 	if legacy.Title != "" || legacy.Ref.Title != "" {

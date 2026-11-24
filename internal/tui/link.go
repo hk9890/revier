@@ -24,7 +24,7 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// The remote screen (decisions.md D154): alt+r lists the machines config.toml
+// The remote screen: alt+r lists the machines config.toml
 // declares, each with what its revier answered when the screen opened. Enter
 // on one asks the revier there for its projects, Enter on a project asks what
 // to name the link, and Enter on the name writes it here, which is then a row
@@ -323,8 +323,7 @@ func (m *Model) addLink(l linked) {
 	// Provisional, until the survey answers: the host's own view, as the
 	// merge would lay it over a local one with no pane here yet. Its agents
 	// go with its panes: no panel here shows one yet, so the row counts none
-	// rather than counting the host's in a project it draws as closed
-	// (decisions.md D104).
+	// rather than counting the host's in a project it draws as closed.
 	view := l.view
 	view.Project, view.Running, view.Home, view.Targets, view.Agents = p.Project, false, revier.TargetRef{}, nil, nil
 	m.addProject(p, view)
@@ -389,7 +388,7 @@ func (s *linkScreen) load(c *core.Core, hosts []string, at string) tea.Cmd {
 }
 
 // check asks a machine for its revier's version, off the terminal. It is no
-// survey, so it is no round of the host's (decisions.md D154, D130).
+// survey, so it is no round of the host's.
 func (s *linkScreen) check(c *core.Core, host string) tea.Cmd {
 	s.asks++
 	ask := s.asks

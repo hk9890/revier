@@ -15,9 +15,8 @@ import (
 )
 
 // A link with nothing open here sorts with the closed projects, however
-// much its host's agent wants the user: that agent is on no row
-// (decisions.md D104), so it lifts nothing above the projects that are open
-// here.
+// much its host's agent wants the user: that agent is on no row, so it lifts
+// nothing above the projects that are open here.
 func TestALinkNothingHereHoldsSortsBelowTheOpenProjects(t *testing.T) {
 	rt, _, _, local := world(t, 3) // project-02 is open
 	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusAttention))
@@ -56,8 +55,7 @@ func TestARemoteProjectShowsItsHostsAgent(t *testing.T) {
 // A link with nothing open here counts no agents, whatever its host reports.
 // The host lists every agent in its project, including ones opened on that
 // machine, and no panel here shows those: the row would otherwise count an
-// agent that Enter cannot reach, in a project the same row calls closed
-// (decisions.md D104).
+// agent that Enter cannot reach, in a project the same row calls closed.
 func TestALinkNothingHereHoldsCountsNoAgent(t *testing.T) {
 	remote := hosttest.NewRemote("buildbox", hostSays("alpha", revier.StatusAttention))
 	c := &core.Core{Runtime: hosttest.NewRuntime("rt"), Machine: "box", Remotes: map[string]revier.Remote{"buildbox": remote}}

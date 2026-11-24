@@ -19,9 +19,9 @@ func (mute) Conversations(ctx context.Context, _ []revier.ProjectName) ([]revier
 	return nil, ctx.Err()
 }
 
-// A save waits HostWait for the host of an open link and not its whole bound
-// (decisions.md D115): a host that never answered held the save before a
-// close for thirty seconds. The save names the host it could not ask.
+// A save waits HostWait for the host of an open link and not its whole bound: a
+// host that never answered held the save before a close for thirty seconds. The
+// save names the host it could not ask.
 func TestASaveWaitsHostWaitForAHostThatNeverAnswers(t *testing.T) {
 	defer func(w time.Duration) { core.HostWait = w }(core.HostWait)
 	core.HostWait = 20 * time.Millisecond

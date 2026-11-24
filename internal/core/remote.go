@@ -15,11 +15,12 @@ import (
 )
 
 // A remote project - one whose file names a host - is surveyed by the revier
-// on that host (decisions.md D40). Its agents and its checkout are on that
+// on that host (decisions/0040). Its agents and its checkout are on that
 // machine, where the local hosts and probes cannot see them, so this side asks
 // the revier there and takes its answer. What stays local is the workspace
 // that shows it: the home target here lists one tab, whose panels each run an
-// ssh onto the host, matched, raised and closed like any other (D84).
+// ssh onto the host, matched, raised and closed like any other
+// (decisions/0084).
 
 // RemoteOf returns the remote a project lives on: nil for a project on this
 // machine, and an error for a host nothing is wired for.
@@ -48,14 +49,14 @@ func (c *Core) remote(host string) (revier.Remote, error) {
 }
 
 // ProjectsOn lists every project the revier on a host has, as it sees them:
-// what the remote screen offers to link (decisions.md D154).
+// what the remote screen offers to link.
 func (c *Core) ProjectsOn(ctx context.Context, host string) ([]revier.ProjectView, error) {
 	return c.survey(ctx, host, nil)
 }
 
 // VersionOn is the version of the revier on a host: whether a machine on the
-// remote screen answers and runs one (decisions.md D154). It is no survey,
-// so it is no round of the host's (D130).
+// remote screen answers and runs one. It is no survey,
+// so it is no round of the host's.
 func (c *Core) VersionOn(ctx context.Context, host string) (string, error) {
 	r, err := c.remote(host)
 	if err != nil {
@@ -70,7 +71,7 @@ func (c *Core) VersionOn(ctx context.Context, host string) (string, error) {
 // machine by its first label, so dt and dt.local are one machine. A loopback
 // name is not: ssh reaches a VM or a tunnel through one, by its port. A link
 // to this machine asks itself over ssh for what it lists already, so revier
-// knows no such link (decisions.md D131).
+// knows no such link.
 func ThisMachine(machine string, names ...string) bool {
 	short := func(name string) string {
 		label, _, _ := strings.Cut(strings.ToLower(strings.TrimSuffix(name, ".")), ".")
@@ -111,7 +112,7 @@ func linkNames(projects []Project) map[revier.Link]revier.ProjectName {
 // agents of the links open here are working on. A host that takes a
 // connection and then says nothing would otherwise hold the save for its
 // whole bound, and the agents on this machine, asked after it, would be asked
-// on a bound already spent (decisions.md D115). A variable so a test can
+// on a bound already spent. A variable so a test can
 // shorten it.
 var HostWait = 10 * time.Second
 
@@ -298,11 +299,11 @@ func (c *Core) survey(ctx context.Context, host string, names []revier.ProjectNa
 // there names a further host - has said why, and that word is this side's
 // too. So is a file there that did not load whole: the host lists the project
 // and says what is wrong with it, and this side is the only place the user
-// reading the surface would ever see it (decisions.md D85). It is added to
+// reading the surface would ever see it (decisions/0085). It is added to
 // what this side's own file was refused for, since the two are separate
 // mistakes in separate files.
 //
-// The agents add to the ones read here rather than replacing them (D101): a
+// The agents add to the ones read here rather than replacing them: a
 // terminal attached to the link by hand can hold an agent this side read for
 // itself. merge returns the ones it added, which are
 // the only ones the host named and so the only ones localise has a tag for;
@@ -333,7 +334,7 @@ func merge(v *revier.ProjectView, a remoteAnswer) []revier.AgentView {
 
 // dropDoubles removes an agent the host reported that localise placed on a
 // panel this side already read: one agent seen twice, which would double the
-// row's count and name it twice on a close (decisions.md D101). Whether the
+// row's count and name it twice on a close. Whether the
 // probe here claims a panel running an ssh is the probe's business, so the
 // two are told apart by the panel they landed on and not by assuming they
 // cannot meet. The local one stands: it read the panel itself, while the
@@ -367,8 +368,8 @@ func dropDoubles(v *revier.ProjectView, at int) {
 
 // RemoteEvents asks the revier on every host the projects name for what it
 // recorded in the last days, every host at once, and marks each event with
-// its host and with the project here that links to its project there
-// (decisions.md D112). A host that fails costs its own events and is returned
+// its host and with the project here that links to its project there.
+// A host that fails costs its own events and is returned
 // by name with why; the others answer.
 func (c *Core) RemoteEvents(ctx context.Context, projects []Project, days int) ([]revier.Event, map[string]error) {
 	hosts := map[string]bool{}

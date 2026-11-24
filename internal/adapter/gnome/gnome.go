@@ -8,7 +8,7 @@
 // docs/TESTING.md confines the manual layer to this package.
 //
 // wctl reports no events, so claim-on-appear diffs successive Instances calls
-// on the refresh the TUI already runs (decisions.md D87). `wctl wait` is no
+// on the refresh the TUI already runs. `wctl wait` is no
 // event either: it answers once, with the first window that matches, open or
 // new.
 package gnome

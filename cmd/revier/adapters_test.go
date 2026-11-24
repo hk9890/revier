@@ -58,7 +58,7 @@ func TestSelectRuntimeRejectsAnUnknownName(t *testing.T) {
 
 // A config written for a release that had the herdr or the tmux runtime is
 // told it was removed and what to name instead, not that it is an unknown
-// name (decisions.md D175, D184).
+// name.
 func TestSelectRuntimeSaysARemovedRuntimeWasRemoved(t *testing.T) {
 	for _, name := range []string{"herdr", "tmux"} {
 		_, err := selectHost(t.Context(), "runtime", []string{name, "kitty"}, defaultRuntimeOrder, runtimeAdapters())
@@ -133,7 +133,7 @@ func TestEveryAdapterIsInItsDefaultOrder(t *testing.T) {
 // A runtime that draws its own instances is its own view, and with no list
 // it is the one chosen: kitty shows itself as before. hc draws
 // nothing, so with no list it is shown by kitty where kitty and a display
-// are, and by no view where they are not, as over ssh (decisions.md D185).
+// are, and by no view where they are not, as over ssh.
 func TestTheDefaultViewIsTheRuntimesOwn(t *testing.T) {
 	kittyOnPath(t, false)
 	for name, rt := range runtimeAdapters() {

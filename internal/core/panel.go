@@ -24,13 +24,13 @@ var errTab = errors.New("a tab has no instance of its own")
 // PanelTargetVar is the panel variable that names the target a tab was
 // opened for. It is the tab's whole identity: a title is the program's to
 // change, and a position is not an identity. Every panel of the tab carries
-// it, so the tab is found while any of them is open (decisions.md D64).
+// it, so the tab is found while any of them is open.
 const PanelTargetVar = "revier_target"
 
 // PanelHomeVar is the panel variable that names the target an instance was
 // opened for. It marks the panels of the instance's own tab, and the first of
 // them is the one a press that returns home from a tab lands in, so that panel
-// is identified rather than guessed at (decisions.md D100). In an instance
+// is identified rather than guessed at. In an instance
 // that opens with its tabs they are the panels of the active tab.
 const PanelHomeVar = "revier_home"
 
@@ -55,9 +55,8 @@ func (c *Core) tabsHost(name revier.TargetName, real revier.Realization, host re
 	return opener, nil
 }
 
-// opening is how a new instance of a target that lists its tabs comes up
-// (decisions.md D126): the tabs in the order they open, and the one that has
-// the focus afterwards.
+// opening is how a new instance of a target that lists its tabs comes up: the
+// tabs in the order they open, and the one that has the focus afterwards.
 type opening struct {
 	target revier.TargetName
 	tabs   []revier.Target
@@ -104,7 +103,7 @@ func (c *Core) listedTabs(p Project, real revier.Realization) ([]revier.Target, 
 
 // layout is the panels a workspace declares, which is where its agent panel
 // and its shell panel are read from: the panels of the tabs it lists, in
-// their order (decisions.md D128). So the first panel of a kind is the one of
+// their order. So the first panel of a kind is the one of
 // the first listed tab that declares it, and a target that lists no tab has
 // no layout: panels are on a tab alone. Every reader of a workspace's
 // declared panels that starts one here takes them from here: an agent tab, a
@@ -133,7 +132,7 @@ func listedTab(p revier.Project, t revier.Target) bool {
 }
 
 // panelTab reports whether t is a listed tab that holds panels: a part of its
-// workspace's layout (decisions.md D128), and not a tab that runs a launch.
+// workspace's layout, and not a tab that runs a launch.
 func panelTab(p revier.Project, t revier.Target) bool {
 	return tabTarget(t) && len(t.Runtime.Panels) > 0 && listedTab(p, t)
 }
@@ -180,8 +179,7 @@ func (c *Core) opening(p Project, name revier.TargetName, real revier.Realizatio
 }
 
 // vars is the mark on the panels of a tab: the tab's own, and on the active
-// tab the home mark beside it, so a return home lands there
-// (decisions.md D100).
+// tab the home mark beside it, so a return home lands there.
 func (o opening) vars(tab revier.TargetName) map[string]string {
 	vars := map[string]string{PanelTargetVar: string(tab)}
 	if tab == o.active {
@@ -354,7 +352,7 @@ func ownTab(in revier.Instance, panel revier.PanelID) (own, known bool) {
 //
 // An instance opened before the mark existed carries none, and falls back to
 // the first panel no tab target claims. That guess can land in a shell inside
-// a tab, which is what the mark exists to stop (decisions.md D100).
+// a tab, which is what the mark exists to stop.
 func ownPanel(in revier.Instance) (revier.PanelID, bool) {
 	for _, panel := range in.Panels {
 		if panel.Vars[PanelHomeVar] != "" {
@@ -386,7 +384,7 @@ func ownPanel(in revier.Instance) (revier.PanelID, bool) {
 // "tab gone at its focus, pressed again" at INFO before the second pass, with
 // project, target and err, the focus error of the first pass. A second such end
 // fails the press with its own focus error. A press with raiseOnly, which
-// waited for another press's lock, does not go home either (decisions.md D195).
+// waited for another press's lock, does not go home either.
 func (c *Core) goTab(ctx context.Context, p Project, i int, bound Bindings, resumes []Resume, raiseOnly bool) (Result, error) {
 	res, err := c.goTabOnce(ctx, p, i, bound, resumes, raiseOnly)
 	var gone tabGone
@@ -548,7 +546,7 @@ func lost(ctx context.Context, host revier.Runtime, ref revier.TargetRef, panel 
 // active tab of an instance that was there, and that has lost every panel
 // with the home mark, gets that mark again: every other tab of such an
 // instance carries a target mark, so nothing else names where a return home
-// lands. An instance this press opened has its mark (decisions.md D100).
+// lands. An instance this press opened has its mark.
 func (c *Core) tabVars(p Project, t revier.Target, in revier.Instance, opened bool) map[string]string {
 	vars := map[string]string{PanelTargetVar: string(t.Name)}
 	if opened || slices.ContainsFunc(in.Panels, func(panel revier.Panel) bool { return panel.Vars[PanelHomeVar] != "" }) {

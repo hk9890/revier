@@ -19,7 +19,8 @@ A press of the key of a window or runtime target does one of three things:
 A press on the home target itself only raises it.
 
 A press on an open tab that lost a panel it declares raises the tab and does
-not bring the panel back. To get the panel back, close the tab and press again.
+not bring the panel back, because you may have closed it on purpose. To get the
+panel back, close the tab and press again.
 
 A command target is the one exception: revier does not run or raise it
 itself. A press runs your command, and the command shows the thing and raises

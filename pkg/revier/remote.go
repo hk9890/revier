@@ -5,12 +5,12 @@ import (
 	"errors"
 )
 
-// Remote is a revier on another machine (decisions.md D40). It is asked what
+// Remote is a revier on another machine (decisions/0040). It is asked what
 // it knows, and nothing else: it lists no instances, opens nothing and focuses
 // nothing here. What runs on the remote machine is that revier's business,
 // surveyed by its own hosts and probes, and this side reads the view it
 // produces. The terminals that show what runs there are panels of this
-// machine's runtime, and are driven as such (D84).
+// machine's runtime, and are driven as such (decisions/0084).
 type Remote interface {
 	// Name is the host as the project file names it.
 	Name() string
@@ -35,8 +35,8 @@ type Remote interface {
 	Conversations(ctx context.Context, names []ProjectName) ([]ProjectView, error)
 
 	// Events is what the remote revier recorded in the last days, about every
-	// project it has, as `revier events --local` prints it there
-	// (decisions.md D112). The answer is that machine's alone: it asks no
+	// project it has, as `revier events --local` prints it there.
+	// The answer is that machine's alone: it asks no
 	// host of its own.
 	Events(ctx context.Context, days int) ([]Event, error)
 
@@ -49,10 +49,10 @@ type Remote interface {
 
 	// PanelCommand is the argv a panel of this machine's runtime runs to show
 	// the project's agent or shell: `revier <kind> exec -p <project>` on the
-	// remote, kind being PanelAgent or PanelShell (decisions.md D84). A
+	// remote, kind being PanelAgent or PanelShell (decisions/0084). A
 	// non-empty agent is the named agent the panel runs, `--agent <agent>`
 	// there: the remote's configuration declares it, and refuses a name it
-	// does not (D146). Arguments appended to the argv reach that command as
+	// does not. Arguments appended to the argv reach that command as
 	// they are, which is how a restore passes the conversation to resume and
 	// the directory to start in.
 	PanelCommand(project ProjectName, kind PanelKind, agent string) []string

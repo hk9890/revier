@@ -88,7 +88,7 @@ func TestLinkAsksAHostThatIsNotDeclared(t *testing.T) {
 }
 
 // This machine is refused before it is asked: the ask would be ssh to
-// itself, and the link would be left out of every load (decisions.md D131).
+// itself, and the link would be left out of every load.
 func TestLinkRefusesThisMachineBeforeAskingIt(t *testing.T) {
 	machine, err := os.Hostname()
 	if err != nil {

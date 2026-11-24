@@ -9,7 +9,7 @@ import (
 // unset or missing. The start directory is often a worktree, and the process
 // outlives it: once it is removed, every process started from here inherits a
 // directory that no longer exists, and git, claude and a probe script each
-// refuse to run in one (decisions.md D92).
+// refuse to run in one.
 //
 // A home it cannot move into writes one WARN "start directory" with err
 // for each call. A command calls it through leaveLostStartDir only when its

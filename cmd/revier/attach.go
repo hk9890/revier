@@ -13,7 +13,7 @@ import (
 
 // cmdAttach attaches the focused window to a project. The state record has
 // the attach, failed or not: what it changed is in the state's own lines, and
-// a failure is in no other (decisions.md D151).
+// a failure is in no other (decisions/0151).
 func cmdAttach(ctx context.Context, a *app, args []string) (err error) {
 	fs := flag.NewFlagSet("attach", flag.ContinueOnError)
 	project := projectFlag(fs)
@@ -43,7 +43,7 @@ func cmdAttach(ctx context.Context, a *app, args []string) (err error) {
 	}
 	// The terminal inside the window is attached with it when the two pair
 	// beyond doubt: a window carries no panels, so the window alone leaves a
-	// survey nothing to probe for the agent in it (decisions.md D95).
+	// survey nothing to probe for the agent in it.
 	refs := a.core.Attachment(ctx, ref)
 	a.commit(p.Name, func(s *state.State) {
 		for _, r := range refs {

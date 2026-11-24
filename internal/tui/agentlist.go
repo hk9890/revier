@@ -25,8 +25,7 @@ import (
 // one row each, the ones that need the user first. The project list answers
 // "which project", and this one "which agent", which is the question when
 // thirty of them run across ten projects. The key that opens the surface
-// switches between the two, and the surface always opens on the projects
-// (decisions.md D110).
+// switches between the two, and the surface always opens on the projects.
 //
 // A row is the agent's state, what it is on, and how long ago it spoke, over
 // its project and the directory it works in, and the tokens and the cache of
@@ -214,7 +213,7 @@ func (i agentItem) where(inPane bool) string {
 
 // name is the name the harness gives the agent, which Claude Code's peer
 // messages address, or nothing. The pane shows it; the row leaves it out, as
-// it repeats the project (decisions.md D170).
+// it repeats the project.
 func (i agentItem) name() string {
 	return printable(i.agent.State.Name)
 }
@@ -315,10 +314,10 @@ func agentLines(th theme.Theme, it agentItem, matches []int, width int, sel, ove
 	prefix := bar + space(1)
 	indent := lipgloss.Width(prefix) + listedStateWidth
 
-	// The state leads, as its glyph alone (decisions.md D171): the agent list
-	// is sorted by it, and its pane says it in words. The age stands at the
-	// right edge, in a column of its own, so the order within a state reads
-	// down it.
+	// The state leads, as its glyph alone: the agent list is sorted by it,
+	// and its pane says it in words. A word for the ascii glyphs alone would
+	// be a second rule for one row. The age stands at the right edge, in a
+	// column of its own, so the order within a state reads down it.
 	status := it.agent.State.Status
 	state := cell(style(statusStyle(th, status)).Render(statusGlyph(th, status)), listedStateWidth)
 	age := ""
@@ -410,7 +409,7 @@ var listedRank = map[revier.Status]int{
 // first: the one that just stopped is the one to look at. A working agent
 // speaks all the time, and a row that moved on every line would not be
 // readable, so those stand by project and panel, and so does an agent whose
-// state or time nothing says (decisions.md D110).
+// state or time nothing says.
 func agentItems(views []revier.ProjectView, details map[agentKey]revier.AgentDetail, now time.Time) []list.Item {
 	var items []agentItem
 	for _, v := range views {

@@ -57,7 +57,7 @@ func TestSeenRecordsWhatSessionRecordsWithoutAskingAProbe(t *testing.T) {
 }
 
 // A host here that could not list hides what it holds, so nothing is taken
-// from that survey (decisions.md D89).
+// from that survey.
 func TestSeenTakesNothingWhileAHostHereCannotList(t *testing.T) {
 	c, projects := degraded(t, "wm")
 	report, err := c.Survey(context.Background(), projects)

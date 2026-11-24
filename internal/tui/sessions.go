@@ -199,7 +199,7 @@ func (m Model) nameSession() (tea.Model, tea.Cmd) {
 
 // saved takes a save's answer. A dialog after an end with no shutdown still
 // held back goes once the save is made: it would offer an older session than
-// the one just saved, which a start does not (decisions.md D150).
+// the one just saved, which a start does not.
 func (m Model) saved(msg savedMsg) (tea.Model, tea.Cmd) {
 	if err := m.sessions.saved(m.stateRoot, *m.theme, msg); err != nil {
 		m.err = err
@@ -265,7 +265,7 @@ func (sc *sessionsScreen) open(root string, th theme.Theme, id string) error {
 
 // load reads the saved sessions under root into the screen's rows, with the
 // cursor on the session of that id, or on the one a plain restore opens, so
-// Enter there is `revier session restore` (decisions.md D149). With none of
+// Enter there is `revier session restore`. With none of
 // the whole set it is on the newest.
 func (sc *sessionsScreen) load(root string, th theme.Theme, id string) error {
 	all, err := session.List(root)
@@ -408,7 +408,7 @@ func (sc *sessionsScreen) restore(sf surface) (tea.Cmd, error) {
 	sc.restoring = it.session.ID
 	// A restore is an open, so the shutdown on record ends as it starts: a
 	// restore that never reaches its first launch does not bring the start
-	// dialog back (decisions.md D141).
+	// dialog back.
 	app.ClearShutDown(sf.core)
 	projects, s := sf.projects, it.session
 	written := make(chan struct{}, 1)

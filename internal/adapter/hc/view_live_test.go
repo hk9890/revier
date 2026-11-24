@@ -1,10 +1,9 @@
 //go:build live
 
 // Layer L4: the core against a real hc core of the test's own and the fake
-// view that draws it in windows of its own, as kitty does over hc
-// (decisions.md D180). A real kitty view needs a display, which no test may
-// reach; this proves what hc gives the view: tabs, their order, and
-// terminals that outlive it.
+// view that draws it in windows of its own, as kitty does over hc. A real kitty
+// view needs a display, which no test may reach; this proves what hc gives the
+// view: tabs, their order, and terminals that outlive it.
 package hc_test
 
 import (
@@ -116,8 +115,8 @@ func TestTheCoreOpensTabsOnHcAndTheViewDrawsThem(t *testing.T) {
 }
 
 // A view closed by hand leaves every terminal running: the next press, and a
-// restore, open the view over the same terminals and start none
-// (decisions.md D181). A shutdown then ends them through hc.
+// restore, open the view over the same terminals and start none. A shutdown
+// then ends them through hc.
 func TestAClosedViewEndsNoTerminalAndComesBackOverThem(t *testing.T) {
 	h, c := world(t), ctx(t)
 	view := hosttest.NewView("kitty")

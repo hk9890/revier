@@ -418,7 +418,8 @@ func allBuiltin(evict []revier.Binding) bool {
 // undoFor is the command that puts back every desktop default the step clears.
 // A default is a setting rather than an entry, so nothing revier keeps and
 // nothing the displaced program does will return it: this line is the only way
-// back, and it is printed beside the key.
+// back, and it is printed beside the key. A displaced custom shortcut has no
+// such line: revier keeps no backup, and the tool that wrote it restores it.
 func undoFor(evict []revier.Binding) string {
 	var out []string
 	for _, b := range evict {

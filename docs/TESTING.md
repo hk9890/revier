@@ -29,6 +29,10 @@ resolution, toggle-back, and the degradation rules need no tool at all.
 L2 does not replace L4. The fake has no opinion about focus, so a press
 that did not focus after `Open` passed L2 and failed L4.
 
+Keep hc the one headless runtime: a second runtime kept for tests alone is a
+host maintained for nobody. Focus over a real view and a read's history have
+no headless test; check them at L6.
+
 ## What every host test must cover
 
 - **`Open` produces what `Match` finds** ([CODING.md](CODING.md)).

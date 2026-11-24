@@ -17,8 +17,8 @@ import (
 const PopupClass = "revier-popup"
 
 // PopupEnv is the variable the popup's terminal starts the surface with, so
-// the surface knows it is the popup and hides on Esc instead of exiting
-// (decisions.md D86). A surface started in any other terminal has none.
+// the surface knows it is the popup and hides on Esc instead of exiting. A
+// surface started in any other terminal has none.
 const PopupEnv = "REVIER_POPUP"
 
 // ErrNoPopupHost means the window host cannot do what the popup needs: list
@@ -34,18 +34,18 @@ const (
 )
 
 // Popup switches the list of the popup when the popup is the focused window:
-// the second press of the key (decisions.md D182). Otherwise it raises the
+// the second press of the key. Otherwise it raises the
 // popup when it is open, or launches what argv returns, which must start a
 // terminal of class PopupClass running the surface, then raises the new
-// window and places it (D76). A revier the user runs in a terminal of their
+// window and places it. A revier the user runs in a terminal of their
 // own is no popup: the key raises or opens the popup over it. The size is
 // decided before the launch, so revier places the window once and never
 // measures it to place it again. Where the window host's rules for the popup
 // are current, they placed it before its first frame, by the monitor it
-// opened on, and revier does not place it again (D191). argv is a function,
+// opened on, and revier does not place it again. argv is a function,
 // asked only for a launch: what it carries - the project the surface opens
 // on - costs a listing the raise must not pay. While a curtain is open the
-// press shows it again (D192). It does nothing else.
+// press shows it again. It does nothing else.
 func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (revier.TargetRef, error) {
 	if c.Window == nil {
 		return revier.TargetRef{}, ErrNoPopupHost
@@ -59,7 +59,7 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 		return revier.TargetRef{}, err
 	}
 	// While a run shows its curtain the surface takes no key, and the press
-	// brings back a curtain Esc hid (decisions.md D192).
+	// brings back a curtain Esc hid.
 	if curtains := curtainWindows(before); len(curtains) > 0 {
 		main := curtains[len(curtains)-1].Ref
 		// Logs "popup: show the curtain" with ref, the main curtain, and
@@ -88,7 +88,8 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 		// open popup.
 		slog.Info("popup: raise", "ref", w.Ref, "minimized", w.Minimized)
 		// The surface reads it at the focus the raise gives it, so it is on
-		// record first (decisions.md D169).
+		// record first. A key typed in at the raise costs
+		// two kitty round trips, and a look after the blur leaves a gap.
 		marked := c.Ledger != nil && w.Minimized
 		if marked {
 			if err := c.Ledger.MarkPopupHidden(); err != nil {
@@ -230,7 +231,7 @@ func (c *Core) RaiseSelf(ctx context.Context) error {
 // RaisePopup brings the popup back to the front once a restore has ended, as
 // RaiseSelf does for any other surface. The popup is found by its class
 // through the window host, as the press that raises it is: no runtime is
-// asked, so it is raised under every runtime (decisions.md D182). It is
+// asked, so it is raised under every runtime. It is
 // ErrNoPopupHost with no window host.
 func (c *Core) RaisePopup(ctx context.Context) error {
 	if c.Window == nil {
@@ -254,7 +255,7 @@ func (c *Core) RaisePopup(ctx context.Context) error {
 }
 
 // HidePopup takes the open popup off the screen and keeps it, for the next
-// press to raise with everything it holds (decisions.md D86). It is
+// press to raise with everything it holds. It is
 // ErrNoPopupHost where the window host cannot hide, and an error when no
 // popup is open; the surface exits on either, as it did before.
 func (c *Core) HidePopup(ctx context.Context) error {
@@ -277,14 +278,14 @@ func (c *Core) HidePopup(ctx context.Context) error {
 
 // TakePopupHidden reports whether the press that raised the popup found it
 // minimized, and takes it off the record: the surface asks at each focus, so
-// the next focus, with no press, finds none (decisions.md D169).
+// the next focus, with no press, finds none.
 func (c *Core) TakePopupHidden() bool {
 	return c.Ledger != nil && c.Ledger.TakePopupHidden()
 }
 
 // PopupMinimized reports whether the survey listed the popup's window
 // minimized: a popup without the focus finds the desktop's hide in it, and
-// stops surveying (decisions.md D169).
+// stops surveying.
 func (r Report) PopupMinimized() bool {
 	w, ok := popupWindow(r.Windows)
 	return ok && w.Minimized
@@ -314,7 +315,7 @@ type popupTier struct {
 // on a laptop all of it.
 //
 // revier writes them as the window host's rules, which place the popup
-// against its monitor before its first frame (decisions.md D191). Where
+// against its monitor before its first frame. Where
 // those rules are not current, revier places the popup it launched by them
 // itself, against the primary monitor's workarea.
 var popupTiers = []popupTier{

@@ -14,7 +14,8 @@ import (
 // detailWait bounds one read of what a project's agents said, and one read of
 // the mirror's screen. A detail read asks no host and runs no listing: it is
 // the end of a file per agent, which answers in milliseconds, through the
-// listing the survey keeps.
+// listing the survey keeps. A longer bound on a listing of its own is no fix:
+// it still holds the survey back.
 const detailWait = 2 * time.Second
 
 // partialAnswers is how many answers in a row that left an agent unread the
@@ -47,11 +48,11 @@ type detailsMsg struct {
 // askDetails sends for what every agent of the project under the list's
 // cursor said last, and when: when another project comes under it, and again
 // on every survey. The pane's agent rows draw it as the agent list's do, and
-// which agent the pane mirrors first depends on when each spoke (decisions.md
-// D125). The read runs off the update loop, so the screen never waits on it.
+// which agent the pane mirrors first depends on when each spoke. The read runs
+// off the update loop, so the screen never waits on it.
 //
 // The agent list asks for every agent on the surface instead: its rows stand
-// in the order the agents spoke in (D110).
+// in the order the agents spoke in.
 func (m *Model) askDetails(msg tea.Msg) tea.Cmd {
 	name, agents := m.detailsWanted()
 	if len(agents) == 0 {
@@ -218,7 +219,7 @@ var agentRank = map[revier.Status]int{
 }
 
 // firstAgent is the row most worth a look, by agentRank. Among equals, the
-// one that spoke last (decisions.md D125).
+// one that spoke last.
 func (m Model) firstAgent(rows []agentRow) int {
 	best := 0
 	for i := range rows {

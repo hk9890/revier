@@ -57,7 +57,7 @@ func (m Model) askClose() (tea.Model, tea.Cmd) {
 		if !r.attached.IsZero() {
 			return m.closeRow(name, core.CloseRow{Attached: r.attached}, r.attached.Title, false)
 		}
-		// Whether it is open is not known (decisions.md D89): the host says,
+		// Whether it is open is not known: the host says,
 		// not a plan made without it.
 		if r.target.Unknown != "" {
 			m.err = fmt.Errorf("%s: %s; wait for the host before closing it", r.target.Name, r.target.Unknown)

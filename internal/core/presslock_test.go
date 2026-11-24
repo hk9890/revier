@@ -1,5 +1,5 @@
 // Layer L2: one press at a time per project launches, whichever process it
-// runs in (decisions.md D195), and a launch whose later steps fail is still
+// runs in, and a launch whose later steps fail is still
 // placed.
 package core_test
 

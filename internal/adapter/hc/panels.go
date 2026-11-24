@@ -57,8 +57,8 @@ var errNotInInstance = errors.New("not in the instance")
 // finished, with errNotInInstance. A terminal hc no longer holds, as one a
 // close, a window or a sweep removed, or a shell that exited, is a panel
 // that is gone: the
-// error wraps revier.ErrPanelGone, which a read reports as such (decisions.md
-// D172), a close takes as done, and a send fails on.
+// error wraps revier.ErrPanelGone, which a read reports as such, a close takes
+// as done, and a send fails on.
 func (s *session) holds(ref ref, r revier.TargetRef, panel revier.PanelID) error {
 	address := panel.String()
 	if ref.byHand() {
@@ -156,7 +156,7 @@ const typedChunk = 64 << 10
 // and hc's terminal record does not say which program is full-screen.
 //
 // A terminal hc says not_found of is a panel that is gone: the read wraps
-// revier.ErrPanelGone (decisions.md D172). hc reads a finished terminal it
+// revier.ErrPanelGone. hc reads a finished terminal it
 // still holds as it was left. A terminal of another instance is refused.
 func (h *Host) ReadPanel(ctx context.Context, r revier.TargetRef, panel revier.PanelID, _ bool) (string, error) {
 	s, ref, err := h.session(ctx, r, false)
@@ -227,8 +227,8 @@ func (h *Host) AttachCommand(r revier.TargetRef) ([]string, error) {
 }
 
 // AttachPanel is the argv a view's window runs to show one terminal: hc's
-// attach of its address (decisions.md D180), through revier's Attach, which
-// holds the window once the terminal's program ends (D187). The window
+// attach of its address, through revier's Attach, which
+// holds the window once the terminal's program ends. The window
 // starts in the view's own environment, not this process's, so the argv
 // names hc and revier by their paths and the core by its socket, even when
 // none was set here.

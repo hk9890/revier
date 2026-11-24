@@ -35,8 +35,14 @@ Its rules are not visible from the code.
 
 **MUST read [docs/design/README.md](docs/design/README.md) before the first edit
 under `pkg/revier/`, `internal/core/` or `docs/design/`, and before writing any
-plan that touches `cmd/`, `pkg/` or `internal/`.** The decision log names the
-models it rejected, so a rejected idea is not proposed again.
+plan that touches `cmd/`, `pkg/` or `internal/`.** The model and its boundaries
+are not visible from the code.
+
+### Decisions in force
+
+**MUST read the records in [docs/decisions/](docs/decisions/) that bear on the
+change before editing `cmd/`, `pkg/` or `internal/`.** A change against a record
+is the user's call.
 
 ### Testing and verification
 
@@ -78,5 +84,5 @@ dispatched by hand, and the dispatched ref must be the tagged commit.
 **MUST read [docs/DOCUMENTING.md](docs/DOCUMENTING.md) AND invoke the
 `instruction-writing:writing-project-docs` skill before creating or editing ANY
 Markdown file** — the root steering files, anything under `docs/`,
-`docs/design/` or `docs/user-guide/`. The three trees have different owners and
-different registers.
+`docs/decisions/`, `docs/design/` or `docs/user-guide/`. The four trees have
+different owners and different registers.

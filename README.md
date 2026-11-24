@@ -99,7 +99,8 @@ Early, but usable. Linux only.
   [command line reference](docs/user-guide/cli.md).
 
 To follow the design, read [docs/design/](docs/design/README.md) — it states
-the model, its boundaries and the reasons, and logs the decisions behind it.
+the model, its boundaries and the reasons. The decisions behind it are in
+[docs/decisions/](docs/decisions/).
 
 ## Install
 

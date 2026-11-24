@@ -19,13 +19,13 @@ import (
 
 // The project screen, alt+e or the name at the top of the pane: the project
 // file of the highlighted project, as the config screen is config.toml
-// (decisions.md D81). Its name, path and git_url are typed in place, and its
+// (decisions/0081). Its name, path and git_url are typed in place, and its
 // targets are listed as the project has them, config.toml's among them, each
 // with the form the config screen uses. A change is written as it is made,
 // to the project file alone, and the surface takes the project as it now
 // loads.
 //
-// A name is the file's name (D80), so a new one moves the file; a link's host
+// A name is the file's name, so a new one moves the file; a link's host
 // and its name there are the link's identity and are shown, not offered.
 
 // projectField is a row of the screen's first section.

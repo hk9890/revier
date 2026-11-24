@@ -152,7 +152,7 @@ func TestPlaceTabTakesTheTargetAfterTheColonElseTheKindsTarget(t *testing.T) {
 
 // A shell tab of a project with no home target is refused with the
 // project's own reason where it has one, else for the missing home
-// (decisions.md D85).
+// (decisions/0085).
 func TestPlaceTabShellRefusesAProjectWithNoHome(t *testing.T) {
 	homeless := prepared(t, revier.Project{Name: "homeless", Path: t.TempDir(), Targets: []revier.Target{
 		{Name: "side", Runtime: &revier.Realization{Name: "side", Match: revier.Match{Title: "^side$"}}},
@@ -231,7 +231,7 @@ func TestPlaceTabAtAPanelDropsADirOutsideItsProject(t *testing.T) {
 // worktree removed under the panel's shell, given by a key or reported by
 // the runtime, or a panel directory outside the project, opens the tab where
 // the project's own tab would. Outside a workspace the plain tab starts in
-// the panel's directory too (decisions.md D153).
+// the panel's directory too.
 func TestPlaceTabAtAPanelShellStartsInThePanelsDirectory(t *testing.T) {
 	demo := placeProject(t, "demo")
 	here, given := mkdir(t, filepath.Join(demo.Path, "wt")), mkdir(t, filepath.Join(demo.Path, "given"))
@@ -272,7 +272,7 @@ func TestPlaceTabAtAPanelShellStartsInThePanelsDirectory(t *testing.T) {
 
 // An agent tab at a panel starts in the Dir given, else in the project,
 // never in the panel's own directory: an agent pressed from a worktree starts
-// where it can enter any worktree (decisions.md D158). Outside a workspace
+// where it can enter any worktree. Outside a workspace
 // the key opens a plain shell tab, which starts in the panel's directory.
 func TestPlaceTabAtAPanelAgentStartsInTheProject(t *testing.T) {
 	demo := placeProject(t, "demo")
@@ -329,7 +329,7 @@ func TestPlaceTabRefusesADirThatIsNotADirectory(t *testing.T) {
 
 // Without the focus the tab opens and the focus stays where it is, and the
 // placed tab carries the address the new agent answers to, which is all a
-// script has to find it by (decisions.md D118, D155).
+// script has to find it by.
 func TestPlaceTabNoFocusGivesTheAddress(t *testing.T) {
 	demo := placeProject(t, "demo")
 	rt := hosttest.NewRuntime("kitty")

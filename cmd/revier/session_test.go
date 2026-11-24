@@ -69,7 +69,7 @@ func restoreApp(t *testing.T, root string) *app {
 }
 
 // A plain restore opens the full shutdown's save, not the close saved after
-// it, which holds less (decisions.md D149).
+// it, which holds less.
 func TestSessionRestoreWithoutRefSkipsAProjectClose(t *testing.T) {
 	root := t.TempDir()
 	saveAt(t, root, 22, session.ReasonShutdown, "home", "diff")
@@ -112,7 +112,7 @@ func TestSessionListNamesWhatARestoreOpens(t *testing.T) {
 
 // After an end with no shutdown, a plain restore saves what the TUI last saw
 // and opens it, over an older save that holds less; its dry run says so and
-// saves nothing (decisions.md D150).
+// saves nothing.
 func TestAPlainRestoreAfterAnUncleanEndOpensWhatWasLastSeen(t *testing.T) {
 	root := t.TempDir()
 	saveAt(t, root, 22, session.ReasonShutdown, "home")

@@ -10,7 +10,7 @@ import (
 // is one way; a target that is not the home is another, and so is a terminal
 // attached by hand, which the survey adds as a target of its own. Every agent
 // a surface shows sits in a panel of one of these, so a project that reads as
-// closed shows no agents (decisions.md D104).
+// closed shows no agents.
 func TestHeldIsAnyTargetOrAttachmentHere(t *testing.T) {
 	ref := revier.TargetRef{Host: "kitty", ID: "@1"}
 	for name, v := range map[string]revier.ProjectView{

@@ -3,17 +3,17 @@
 // project's targets, attached instances and agents, and the terminal of one of
 // its agents, mirrored. Tab moves the cursor between the projects and the
 // agents, and alt+t to the targets. Enter activates. It is the picker and the
-// monitor at once (decisions.md D8, D125). The key that opens it puts a
+// monitor at once. The key that opens it puts a
 // second list in the first one's place: every agent of every project, with
 // the terminal of the one under the cursor mirrored beside it as the project
-// pane mirrors it (D110, D111).
+// pane mirrors it.
 //
 // Every project, target and agent it draws comes from core.SurveyLocal,
 // refreshed on a timer that never overlaps itself and that slows down while
-// the terminal has no focus (D129), with what core.AskRemotes last brought
-// from the linked hosts laid over it (D114), and every action goes through
+// the terminal has no focus, with what core.AskRemotes last brought
+// from the linked hosts laid over it, and every action goes through
 // the same core paths the CLI commands use. The three reads outside that path
-// are core.Details, when an agent spoke last and what it said (D106), which
+// are core.Details, when an agent spoke last and what it said, which
 // the surface asks for on its own and no survey carries, core.Screen, the
 // mirror's, and the [[status]] commands, which it runs on a timer of their
 // own.
@@ -280,8 +280,8 @@ func New(c *core.Core, projects []core.Project, stateRoot string, cfg *config.Co
 	m.status.beating = m.anyStatus()
 	// The first survey matches through the bindings too. Left to the survey's
 	// own answer to fill in, they reach only the second one, a refresh later.
-	// After a full shutdown the first screen offers the restore (decisions.md
-	// D141), which keep puts up.
+	// After a full shutdown the first screen offers the restore, which keep
+	// puts up.
 	m.keep(c.Ledger.State())
 	// The project field has the cursor from the start: the surface filters as
 	// you type, so it is where a keystroke lands. Init focuses it again for
@@ -309,8 +309,8 @@ func (m Model) WithAssistant(p core.Project) Model {
 
 // WithPopup makes the surface the popup: Esc on the list and a go hide its
 // window instead of exiting, nothing surveys while it is hidden unless a
-// launch is coming up, and the raise surveys once and resumes (decisions.md
-// D86, D129). A hide by the desktop is Esc's hide (D169).
+// launch is coming up, and the raise surveys once and resumes. A hide by the
+// desktop is Esc's hide.
 func (m Model) WithPopup() Model {
 	m.popup = true
 	return m
@@ -318,7 +318,7 @@ func (m Model) WithPopup() Model {
 
 // WithSwitchSocket gives the popup the socket it listens on for the second
 // press of the desktop's key, which the desktop takes before the popup's
-// terminal sees it (decisions.md D182). A press there is the switch key
+// terminal sees it. A press there is the switch key
 // pressed in the surface. The caller closes ln once the surface has ended.
 func (m Model) WithSwitchSocket(ln net.Listener) Model {
 	m.switchSocket = ln
@@ -442,7 +442,8 @@ type tickMsg struct{ chain int }
 
 // blurredRefresh is how often a surface whose window has no focus refreshes:
 // nobody reads it closely, and each refresh costs every linked host a survey
-// of its own (decisions.md D129).
+// of its own. It slows and does not stop: a full stop
+// leaves rows of any age on a second screen.
 const blurredRefresh = 10 * time.Second
 
 // spinMsg advances the working spinner. It runs on its own timer, because
@@ -527,27 +528,26 @@ func (m Model) hide(went bool) tea.Cmd {
 }
 
 // takesHide reports a popup that takes a hide by the desktop as Esc's: one
-// in a state Esc hides from, which the surface has not hidden itself
-// (decisions.md D169). A popup that asks a question or shows a screen does
-// not, as Esc's raise would drop the question, or the offer or the question
-// the screen holds, and both wait for the user; nor does one that walks a
-// restore or a shutdown, which Esc cannot hide either.
+// in a state Esc hides from, which the surface has not hidden itself. A popup
+// that asks a question or shows a screen does not, as Esc's raise would drop
+// the question, or the offer or the question the screen holds, and both wait
+// for the user; nor does one that walks a restore or a shutdown, which Esc
+// cannot hide either.
 func (m Model) takesHide() bool {
 	return m.popup && !m.hidden && m.dialog == dialogNone && m.confirm == "" && !m.shut.one && !m.walking()
 }
 
 // hideTaken is the popup's state once its window is off the screen, by Esc,
-// a go or the desktop: the raise that follows is one, whichever hid it
-// (decisions.md D169).
+// a go or the desktop: the raise that follows is one, whichever hid it.
 func (m *Model) hideTaken() {
 	m.hidden = true
 }
 
 // clearForRaise leaves what Esc leaves before it hides: no query and no
 // note, and the cursor on the project list. Esc clears them on its way out,
-// a go and the desktop do not, so the raise clears them for all three
-// (decisions.md D169). An error stays, to be read: a go may fail once its
-// window took the focus and the desktop hid the popup.
+// a go and the desktop do not, so the raise clears them for all three. An error
+// stays, to be read: a go may fail once its window took the focus and the
+// desktop hid the popup.
 func (m *Model) clearForRaise() {
 	m.copied, m.closeDone = 0, ""
 	if m.afilter != "" {
@@ -563,7 +563,7 @@ func (m *Model) clearForRaise() {
 }
 
 // hiddenByDesktop takes the desktop's hide of the popup as Esc's, and the
-// next raise as Esc's raise (decisions.md D169).
+// next raise as Esc's raise.
 func (m *Model) hiddenByDesktop() {
 	slog.Info("popup: hidden by the desktop")
 	m.hideTaken()
@@ -593,9 +593,10 @@ const localHostWait = 10 * time.Second
 
 // Survey is one refresh of what this machine answers by itself: one bulk
 // listing per host here, matched locally. The linked hosts are AskRemotes's,
-// so a host that is slow or gone holds no row here up (decisions.md D114). It
+// so a host that is slow or gone holds no row here up. It
 // is a command so the terminal stays responsive while hosts answer, and it
-// schedules nothing itself, so two surveys never run at once.
+// schedules nothing itself, so two surveys never run at once. A close painted
+// from its own result is no substitute: every other row still waits.
 func (m Model) Survey() tea.Cmd {
 	c, projects, look := m.core, m.projects, m.look
 	return func() tea.Msg {
@@ -637,10 +638,10 @@ func (m Model) AskRemotes(hosts ...string) tea.Cmd {
 
 // remoteGap is the least time between the starts of two rounds to one linked
 // host. Each round is a whole survey on that machine, and a surface with the
-// focus refreshes every second; the rows of this machine keep that refresh
-// (decisions.md D114, D130). The timing is the surface's and not the core's:
-// the surface is the one caller that asks the hosts again and again, and
-// core.AskRemotes asks each host once per call.
+// focus refreshes every second; the rows of this machine keep that refresh. The
+// timing is the surface's and not the core's: the surface is the one caller
+// that asks the hosts again and again, and core.AskRemotes asks each host once
+// per call.
 const remoteGap = 5 * time.Second
 
 // remoteGapMost bounds the gap of a host that gave no answer: each round in a
@@ -669,7 +670,7 @@ func (m *Model) startRound(host string, at time.Time) {
 
 // askAgain lets the next survey ask each linked host that answered its last
 // round, whatever its gap. A host that gave no answer keeps its gap, so a
-// press or a refocus does not wait on it again (decisions.md D130).
+// press or a refocus does not wait on it again.
 func (m *Model) askAgain() {
 	m.rounds = maps.Clone(m.rounds)
 	maps.DeleteFunc(m.rounds, func(host string, _ time.Time) bool { return m.failed[host] == 0 })
@@ -708,8 +709,7 @@ func tick(d time.Duration, chain int) tea.Cmd {
 
 // interval is how long the surface waits for its next refresh: the refresh
 // with the focus, longer without it. A launch still coming up keeps the
-// refresh, because the survey is what claims its window (decisions.md D87,
-// D129).
+// refresh, because the survey is what claims its window.
 func (m *Model) interval() time.Duration {
 	if m.blurred && !m.claiming() {
 		return blurredRefresh
@@ -915,7 +915,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.show()
 			seen = m.observe(nil)
 			// The desktop hid the popup while it had no focus: it stops
-			// surveying, as after Esc (decisions.md D169).
+			// surveying, as after Esc.
 			if msg.look == m.look && m.blurred && m.takesHide() && msg.report.PopupMinimized() {
 				m.hiddenByDesktop()
 			}
@@ -924,7 +924,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// it the rounds of the linked hosts that a survey starts: a round
 		// trip to each of them a second is for nothing. A launch still coming
 		// up keeps the chain until its window is claimed or the launch
-		// expires, since the survey is what claims it (decisions.md D87).
+		// expires, since the survey is what claims it.
 		if m.hidden {
 			if !m.claiming() {
 				m.idle = true
@@ -953,8 +953,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.failed[host]++
 				// A press or a refocus while the round ran forgot when it
-				// started. A host that gave no answer still waits its gap
-				// (decisions.md D130), counted here from the failure.
+				// started. A host that gave no answer still waits its gap,
+				// counted here from the failure.
 				if _, ok := m.rounds[host]; !ok {
 					m.startRound(host, m.now())
 				}
@@ -1018,15 +1018,13 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.BlurMsg:
 		// The window lost the focus: the surface refreshes slowly, and the
-		// spinner and the hover stop, until the focus is back (decisions.md
-		// D129).
+		// spinner and the hover stop, until the focus is back.
 		m.blurred = true
 		m.look++
 		return m, nil
 	case tea.FocusMsg:
 		// A press that raised the popup from minimized raises it as after
-		// Esc, whatever hid it: wctl tells of no hide (decisions.md D87,
-		// D169).
+		// Esc, whatever hid it: wctl tells of no hide.
 		if m.popup && m.core.TakePopupHidden() && m.takesHide() {
 			m.hiddenByDesktop()
 		}
@@ -1039,7 +1037,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// before. A chain still running while hidden goes on by itself.
 		if m.hidden {
 			// The surface opens on the projects, a raise included: the press
-			// that raises it is the one that opened it (decisions.md D110). A
+			// that raises it is the one that opened it. A
 			// delete, or a close a del planned, still asked from before the
 			// hide is not asked again, nor once a plan still out lands.
 			m.hidden, m.agents.shown = false, false
@@ -1132,11 +1130,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// survey, not at the end of the host's gap.
 		m.askAgain()
 		// A press that brought a target or an agent to the front is done
-		// with the popup: it leaves the screen, and with it the refresh
-		// (decisions.md D129). A failure stays on the screen to be read, and
-		// a raise, a press, a click or a wheel turn since the go is the
-		// user's next errand: a delete asked after it keeps the popup up to
-		// be answered.
+		// with the popup: it leaves the screen, and with it the refresh. A
+		// failure stays on the screen to be read, and a raise, a press, a click
+		// or a wheel turn since the go is the user's next errand: a delete
+		// asked after it keeps the popup up to be answered.
 		if msg.went && msg.err == nil && m.popup && !m.hidden && msg.errands == m.errands {
 			return m, m.hide(true)
 		}
@@ -1220,21 +1217,20 @@ func (m Model) keyIn(msg keyPress) (tea.Model, tea.Cmd) {
 // not the surface, so the ledger logs it and nothing is shown.
 //
 // The start dialog goes once its shutdown is no longer on record: something
-// opened since, and a restore over it is what the dialog must never offer
-// (decisions.md D141). It comes up for a shutdown this surface has not
-// offered yet - the first state it reads, or a `revier shutdown` run
-// elsewhere while it stays on the screen - but only over the plain surface:
-// a screen, a query, a question or a walk the user is in is left alone, and
-// the next state read after it offers the dialog. A shutdown already offered
-// is not offered again, so a user who went on to pick a session and came
-// back is not asked twice. A dialog up for an older shutdown is put up again
-// for the newer one, so it never offers a session no shutdown on record saved.
-// A dialog under the logs screen is the dialog: Esc goes back to what it
-// became. The dialog after an end with no shutdown has no record to go with, so only
-// a choice takes it down (D150); held back from a surface that is not plain,
-// it too comes up at the next state read that finds the surface plain, unless
-// a shutdown recorded since, or a restore or a save made since, has taken its
-// place.
+// opened since, and a restore over it is what the dialog must never offer. It
+// comes up for a shutdown this surface has not offered yet - the first state it
+// reads, or a `revier shutdown` run elsewhere while it stays on the screen -
+// but only over the plain surface: a screen, a query, a question or a walk the
+// user is in is left alone, and the next state read after it offers the dialog.
+// A shutdown already offered is not offered again, so a user who went on to
+// pick a session and came back is not asked twice. A dialog up for an older
+// shutdown is put up again for the newer one, so it never offers a session no
+// shutdown on record saved. A dialog under the logs screen is the dialog: Esc
+// goes back to what it became. The dialog after an end with no shutdown has no
+// record to go with, so only a choice takes it down; held back from a surface
+// that is not plain, it too comes up at the next state read that finds the
+// surface plain, unless a shutdown recorded since, or a restore or a save made
+// since, has taken its place.
 func (m *Model) keep(st *state.State) {
 	m.attached, m.bound, m.pending, m.late = st.Attached, st.Bound, st.Launch, st.Late
 	m.onRecord = st.ShutDown != nil
@@ -1282,7 +1278,7 @@ func (m *Model) plain() bool {
 }
 
 // offerResume puts the start dialog up on the raise of the popup when a full
-// shutdown is on record (decisions.md D141). `revier shutdown` records one
+// shutdown is on record. `revier shutdown` records one
 // while the popup is hidden: the popup outlives that shutdown. The raise is a
 // new errand, so it offers the dialog at once and over any screen, also a
 // shutdown the popup offered before; a refresh offers only one it has not
@@ -1612,10 +1608,9 @@ func (m Model) act() (Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
-	// What Enter does is the core's decision, the one `revier open` makes
-	// (decisions.md D90); the surface renders it. A project with no home has
-	// nothing to open, so the cursor goes to what it does have, with the
-	// reason in the footer.
+	// What Enter does is the core's decision, the one `revier open` makes; the
+	// surface renders it. A project with no home has nothing to open, so the
+	// cursor goes to what it does have, with the reason in the footer.
 	home, _ := p.Home()
 	open, err := core.Open(p, func() (bool, error) {
 		// The last survey's word. A home its host could not list is

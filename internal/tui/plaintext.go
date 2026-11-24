@@ -14,8 +14,7 @@ const tabWidth = 4
 // or speak to the emulator from inside a message quoting a tool's output; no
 // other control character but the newlines the lines are split on; and a tab
 // written as the spaces lipgloss draws it as. The row that shows a message's
-// first line styles it itself, so nothing the message carries is styling
-// (decisions.md D108).
+// first line styles it itself, so nothing the message carries is styling.
 func plainText(s string) string {
 	return strings.ReplaceAll(plain.Text(s), "\t", strings.Repeat(" ", tabWidth))
 }

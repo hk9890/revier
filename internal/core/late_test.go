@@ -1,5 +1,5 @@
 // Layer L2: a launch whose window comes after its wait, as a cold editor's
-// does, is bound as a late launch's when it comes (decisions.md D190). A
+// does, is bound as a late launch's when it comes (decisions/0190). A
 // window that never comes stands for a launch that hangs.
 package core_test
 
@@ -151,7 +151,7 @@ func TestALateLaunchTakesNoWindowAnotherRuleMatches(t *testing.T) {
 
 // A slot claim takes a window by its full rule and does not ask the late
 // launches, so the broader rule of "foo" takes the window that the late launch
-// of "foo bar" awaits (decisions.md D201).
+// of "foo bar" awaits.
 func TestASlotClaimTakesAWindowALateLaunchAwaits(t *testing.T) {
 	now := time.Now()
 	wm := hosttest.New("wm")
@@ -170,7 +170,7 @@ func TestASlotClaimTakesAWindowALateLaunchAwaits(t *testing.T) {
 }
 
 // A window bound after its launch's wait, by a late launch or by the survey's
-// claim, stays where it is: the user may have moved it (decisions.md D199).
+// claim, stays where it is: the user may have moved it.
 func TestAWindowBoundAfterItsLaunchsWaitIsNotPlaced(t *testing.T) {
 	now := time.Now()
 	launch := state.Launch{Project: "foo", Target: "editor", Class: "^" + ideaClass, At: now}

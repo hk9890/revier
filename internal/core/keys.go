@@ -118,7 +118,7 @@ func ValidateKeyTarget(name revier.TargetName) error {
 // install rewrites it without --force. It is revier's when it sits in an entry
 // revier names (bindingID), whatever it runs now, so an install from an older
 // revier - one that ran another command - is rewritten in place and not left
-// beside the new one (decisions.md D77). It is revier's too when it runs
+// beside the new one. It is revier's too when it runs
 // exactly a command revier writes, wherever the desktop filed it, because a
 // user who bound `sh -lc "revier go editor --picker"` by hand owns the same key
 // revier does.
@@ -216,7 +216,7 @@ func wantedChords(projects []Project, trigger Chord) []KeyRow {
 
 	for _, p := range projects {
 		for i, t := range p.Targets {
-			// A refused target wants no chord (decisions.md D85): it is still
+			// A refused target wants no chord (decisions/0085): it is still
 			// here carrying its key, and that key is what a rule refused it
 			// for - it does not parse, or another target holds it, which
 			// would read as a conflict of every project. `revier doctor` is
