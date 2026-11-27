@@ -41,8 +41,8 @@ runtime does not read hc's terminals.
 ## What changes
 
 - Each panel shows one hc terminal. Closing a panel, a tab or the whole
-  kitty ends no program. The next press, or `revier session restore`, opens
-  the OS window again over the running terminals.
+  kitty ends no program. The next press, or `revier session restore`, brings
+  back what you closed, over the running terminals.
 - To end a program, close it in revier: `revier shutdown` or `revier agent
   close`. Its panel then closes.
 - When a panel's command ends on its own, as an agent that exits or fails,

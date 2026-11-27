@@ -89,6 +89,12 @@ While a shutdown, a close or a restore runs, the TUI shows each step as
 than ctrl+c and no click does anything until it ends, except under
 [the popup's curtain](#the-popup).
 
+While a shutdown or a close runs, its title says to wait until it ends. After
+the last step it waits for what it closed to go: each such step shows
+`waiting` until then. A shutdown in which nothing failed, stayed open or was
+cancelled ends on `Shutdown complete`, and you can leave. A close with del
+says in the footer when it is complete.
+
 A restore ends on the project list, with the cursor on the project the
 session was left on. The footer names what did not open, or how many targets
 a cancel did not reach. When the restore ends, failed or cancelled too, the
@@ -161,6 +167,10 @@ kitty, and GNOME with the Window Control extension. See
   ctrl+c copies what you selected with shift+drag and clears that selection.
   With no such selection, ctrl+c does what the table above says.
 - When Enter or a target key brings a window to the front, the popup hides.
+  As after Esc, the next raise opens on the project list with no query.
+  It stays when you press a key, click, scroll or raise it again before the
+  window comes up, so a question you started, such as a delete, waits for
+  your answer.
 - `revier setup install` keeps the popup on top and hides it when another
   window takes the focus; see
   [The popup's window](integrations/gnome.md#the-popups-window). That hide
@@ -227,8 +237,11 @@ When revier ended without a shutdown, for example because its terminal was
 killed, the next start of the TUI, or of the popup, saves what it last saw
 open as a `last seen` session, if something of it is not open now. It then
 opens on a dialog: `revier ended without a shutdown; last changed 18:30.`
-The pane shows what that session holds.
-The choices are those of the dialog after a full shutdown.
+If you already typed a query or opened a screen, the dialog waits until you
+are back on the plain project list. The pane shows what that session holds.
+The choices are those of the dialog after a full shutdown. A restore or save
+from the sessions screen stops the dialog, and a later shutdown shows its own
+dialog in its place.
 The dialog stays until you choose, and shows once: a later start does not
 offer the session again. See
 [Save and restore sessions](projects.md#save-and-restore-sessions).

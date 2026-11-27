@@ -14,9 +14,12 @@ a window the user is reading.
 Every recipe below runs on a private substrate instead: an hc core of its
 own, shown in no view, or a werft lease, whose desktop is its own
 ([Drive the desktop on a werft lease](#drive-the-desktop-on-a-werft-lease)).
-Nothing here reaches the user's display, hc core or service manager, with one
-exception: [Verify the setup without the user's desktop](#verify-the-setup-without-the-users-desktop)
-asks the user's running wctl extension, and only reads from it.
+Nothing here reaches the user's display, hc core or service manager, with two
+exceptions that only read:
+[Verify a keybinding without pressing it](#verify-a-keybinding-without-pressing-it)
+reads the user's desktop keys and kitty configuration, and both it and
+[Verify the setup without the user's desktop](#verify-the-setup-without-the-users-desktop)
+ask the user's running wctl extension.
 
 `revier setup install` and `revier setup uninstall` rewrite the user's
 desktop keys, kitty configuration and window rules, the last two often links
@@ -37,8 +40,10 @@ Do all of this, every time, in the one shell that runs the recipes below:
   with its own config, state, runtime directory and socket, and no session
   bus.
 - Run every `hc` and every `./bin/revier` through `hcp`: any `hc` command
-  starts a core when none answers its socket, the user's own included, and
-  under `hcp` revier reaches no service manager and starts the core detached.
+  starts a core when none answers its socket, the user's own included.
+  Without `hcp`, revier starts the core as the unit `revier-hc-<socket hash>`
+  of the user's service manager; under `hcp` it reaches no manager and starts
+  the core detached.
 - Set `REVIER_SSH_CONFIG` to a scratch ssh configuration whenever a recipe
   reaches the remote screen: its "new" (alt+r, then alt+n) and the check for
   this machine then read it instead of `~/.ssh/config`.
@@ -143,8 +148,9 @@ hcp ./bin/revier session restore                     # the newest whole save, in
 agentpane                                            # the restore started a new agent terminal
 ```
 
-To run the resume path, with the fake `claude` from the agent monitor recipe
-on PATH:
+The save asks `claude agents --json` which conversation each agent
+terminal's process holds, and in which directory. To run the resume path,
+with the fake `claude` from the agent monitor recipe on PATH:
 
 - Give the terminal's file a `sessionId` and a `cwd`.
 - File a transcript for the conversation: revier resumes only a conversation

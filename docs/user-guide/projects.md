@@ -67,9 +67,8 @@ the old name, and an open window of the project is no longer found.
 
 A target that most projects have, such as an editor, goes once into
 `config.toml`, in the same form as in a project file. Every project then has
-it. How a project changes a shared target is in
-[Shared targets](configuration.md#shared-targets), and where to give its key
-in [Keys](configuration.md#keys).
+it. Give its key there too. How a project changes a shared target is in
+[Shared targets](configuration.md#shared-targets).
 
 An action is a command that opens nothing to return to, such as a copy to the
 clipboard:
@@ -145,10 +144,11 @@ last saw wins, and nothing is offered.
 A session records names, not windows. A restore reads the project files as
 they are now, leaves open targets as they are, and steps over a project or
 target that is gone. A Claude Code agent comes back on its conversation, in
-the directory it worked in; when it resumes and when it starts fresh is in
-[Resume an agent](agents.md#resume-an-agent). Other agents start fresh in the
-project directory. A [named agent](configuration.md#named-agents) comes back
-as that agent. The restore names each agent it skips. An
+the directory it worked in. Other agents start fresh in the project
+directory. A [named agent](configuration.md#named-agents) comes back as that
+agent. The restore names each agent it skips. When an agent resumes, when it
+starts fresh, and which agent comes back in which tab is in
+[Resume an agent](agents.md#resume-an-agent). An
 attached window is not saved. A target that is now a
 [command target](configuration.md#command-targets) is skipped: the restore
 runs no command.
@@ -171,8 +171,17 @@ press alt+q in the project list: it shows the plan before anything closes.
 A shutdown of every project, all of each, is remembered. The TUI quits after
 it, and its next start offers to restore the saved session or to start
 fresh; see [After a full shutdown](tui.md#after-a-full-shutdown). Anything
-you open first ends that offer. A full shutdown that did not close
-everything, or that you stopped, is not remembered.
+you open first ends that offer. A full shutdown is not remembered when:
+
+- it found nothing left to close;
+- revier could not write its state;
+- you opened something while it ran;
+- you stopped it before its last step, or while something it closed had not
+  gone;
+- a second copy of a closed workspace is still open after it.
+
+One you stopped before it saved the session leaves an earlier full shutdown
+remembered.
 
 A shutdown and a restore print one line per step as they run: its name
 before the step, what came of it after. A step that hangs is the last line

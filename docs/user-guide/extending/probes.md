@@ -41,7 +41,7 @@ file order, then the others.
 |---|---|---|
 | `id` | yes | The panel: a kitty window id, or an hc address. |
 | `kind` | yes | `shell` when the command is a shell, else `tool`. |
-| `title` | yes | The panel's title. Many agents write their state there. |
+| `title` | yes; empty for a link's panel | The panel's title. Many agents write their state there. |
 | `vars` | no | The panel's variables. |
 | `pid`, `command` | no | The panel's foreground process. |
 | `tab` | no | The panel's tab. |
