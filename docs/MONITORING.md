@@ -73,6 +73,8 @@ search its comment for the same quoted text, without the closing quote.
 - `$STATE/record/YYYY-MM-DD.jsonl` holds one JSON line per thing revier did,
   `by` `did`, with `err` when it failed, and per change a surface's survey
   saw, `by` `saw`. It is never pruned (decisions/0151).
+- `kind` names what a line is: the `ran`, `snapshot` and `survey` lines below
+  are values of `kind`.
 - Read it with `revier state --at <time>`: what was open then, per machine.
   `revier state --session <id>` names why each difference between a save and
   what was open when it was made is one; `revier state --help` lists the

@@ -32,24 +32,24 @@ and shows your workspaces.
 3. Run `revier doctor` to check the setup.
 
 Your project files stay as they are. A press opens the workspace in a kitty
-window, with its tabs, panels and keys as on kitty, and a second press goes
-home.
+OS window, with its tabs, panels and keys as on kitty, and a second press
+goes home.
 
 To switch back, run `revier shutdown` first, then remove the line: the kitty
 runtime does not read hc's terminals.
 
 ## What changes
 
-- Each kitty window shows one hc terminal. Closing a window, a tab or the
-  whole kitty ends no program. The next press, or `revier session restore`,
-  opens the window again over the running terminals.
+- Each panel shows one hc terminal. Closing a panel, a tab or the whole
+  kitty ends no program. The next press, or `revier session restore`, opens
+  the OS window again over the running terminals.
 - To end a program, close it in revier: `revier shutdown` or `revier agent
-  close`. Its window then closes.
+  close`. Its panel then closes.
 - When a panel's command ends on its own, as an agent that exits or fails,
-  its window stays open with what the command printed and its exit code, and
-  closes when you press Enter. Until then the window is still the
+  the panel stays open with what the command printed and its exit code, and
+  closes when you press Enter. Until then the panel is still the
   workspace's, and `revier agent close` or `revier shutdown` closes it. A
-  shell's window closes when the shell exits.
+  shell's panel closes when the shell exits.
 - `revier agent new --no-focus` adds the tab to the window that shows the
   workspace, and opens no window where none shows it.
 - In a kitty window that shows no workspace, the shell key opens a plain kitty

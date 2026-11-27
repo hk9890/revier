@@ -30,9 +30,8 @@ The standard owns the record's format, its three tests and its lifecycle.
 
 - Take no number below 0202. The numbers up to 0201 belonged to the old log,
   and the standard's next-number command does not see them.
-- Before a merge, check that no other branch took the record's number: two
-  files with one number merge without a conflict. When the number changes,
-  change it in the commit message, the PR title and the PR body too.
+- When a record's number changes before the merge, change it in the commit
+  message, the PR title and the PR body too.
 - Leave what describes an adapter or the core from the inside in the Go
   comment beside it: no design doc owns it.
 - When a record is withdrawn and nothing replaces it, delete it and remove

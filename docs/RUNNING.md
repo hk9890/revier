@@ -14,7 +14,9 @@ a window the user is reading.
 Every recipe below runs on a private substrate instead: an hc core of its
 own, shown in no view, or a werft lease, whose desktop is its own
 ([Drive the desktop on a werft lease](#drive-the-desktop-on-a-werft-lease)).
-Nothing here reaches the user's display, hc core or service manager.
+Nothing here reaches the user's display, hc core or service manager, with one
+exception: [Verify the setup without the user's desktop](#verify-the-setup-without-the-users-desktop)
+asks the user's running wctl extension, and only reads from it.
 
 `revier setup install` and `revier setup uninstall` rewrite the user's
 desktop keys, kitty configuration and window rules, the last two often links
@@ -27,17 +29,18 @@ worktree has none.
 
 ## Drive the CLI against a scratch configuration
 
-`REVIER_CONFIG_HOME` and `REVIER_STATE_HOME` redirect revier away from the
-user's projects and state. `hcp` runs a command on a private hc core: its own
-config, state, runtime directory and socket, and no session bus. Any `hc`
-command starts a core when none answers its socket, so run every `hc` and
-every `./bin/revier` through `hcp`. revier starts a core as the unit
-`revier-hc-<socket hash>` of the user's service manager; under `hcp` it reaches no manager
-and starts the core detached. Set all of it, every time, in the one shell
-that runs the recipes below. `REVIER_SSH_CONFIG` points the remote screen's
-"new" (alt+r, then alt+n) and the check for this machine at a scratch ssh
-configuration instead of `~/.ssh/config`; set it whenever a recipe reaches
-the remote screen.
+Set all of this, every time, in the one shell that runs the recipes below:
+
+- `REVIER_CONFIG_HOME` and `REVIER_STATE_HOME` redirect revier away from the
+  user's projects and state.
+- `hcp` runs a command on a private hc core: its own config, state, runtime
+  directory and socket, and no session bus.
+- Run every `hc` and every `./bin/revier` through `hcp`: any `hc` command
+  starts a core when none answers its socket, the user's own included.
+- Under `hcp`, revier reaches no service manager and starts the core detached.
+- Set `REVIER_SSH_CONFIG` to a scratch ssh configuration whenever a recipe
+  reaches the remote screen: its "new" (alt+r, then alt+n) and the check for
+  this machine then read it instead of `~/.ssh/config`.
 
 ```bash
 S=$(mktemp -d); mkdir -p "$S/projects" "$S/state"
@@ -139,11 +142,12 @@ hcp ./bin/revier session restore                     # the newest whole save, in
 agentpane                                            # the restore started a new agent terminal
 ```
 
-The save asks `claude agents --json` which conversation each agent
-terminal's process holds, and in which directory. To run the resume path,
-give the terminal's file a `sessionId` and a `cwd`, with the fake `claude`
-from the agent monitor recipe on PATH. File a transcript for the
-conversation too: revier resumes only a conversation Claude Code has filed.
+To run the resume path, with the fake `claude` from the agent monitor recipe
+on PATH:
+
+- Give the terminal's file a `sessionId` and a `cwd`.
+- File a transcript for the conversation: revier resumes only a conversation
+  Claude Code has filed.
 
 ```bash
 printf '{"pid": %s, "status": "idle", "sessionId": "abc-123", "cwd": "%s"}' "$pid" "$S" > "$CLAUDE_CONFIG_DIR/sessions/$pid.json"
@@ -338,9 +342,7 @@ revier shutdown --force                           # the terminals end, and their
 
 A `kitten @` command without `--to` addresses the socket of the kitty it runs
 inside. Pass `--to unix:$XDG_RUNTIME_DIR/kitty-<pid>` to reach another
-process; the pids are the kitty entries in `wctl list --json`. A kitty that
-`kitty.conf` puts on `listen_on unix:@kitty` is at `--to unix:@kitty-<pid>`;
-revier does not look for it.
+process; the pids are the kitty entries in `wctl list --json`.
 
 To drive save and restore across a real reboot, run the first block, reboot
 with `ssh -F <ssh_config> <lease-id> 'sudo -n systemctl reboot'`, wait for ssh

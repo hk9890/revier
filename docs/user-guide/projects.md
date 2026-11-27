@@ -13,7 +13,8 @@ cd ~/dev/shop
 revier new    # the project is called shop; or: revier new storefront
 ```
 
-A directory can be one project only. `revier new` prints the file it wrote.
+`revier new` prints the file it wrote. It refuses a directory that is already
+a project.
 
 `revier open shop`, with a name revier does not know, makes the project for
 the current directory and opens it. If the open then fails, the project file
@@ -66,10 +67,9 @@ the old name, and an open window of the project is no longer found.
 
 A target that most projects have, such as an editor, goes once into
 `config.toml`, in the same form as in a project file. Every project then has
-it. Give keys there: a key binds to a target's name, so it means the same
-target in every project. A project changes a shared target with a target of
-the same name that holds only the fields it changes; see
-[Shared targets](configuration.md#shared-targets).
+it. How a project changes a shared target is in
+[Shared targets](configuration.md#shared-targets), and where to give its key
+in [Keys](configuration.md#keys).
 
 An action is a command that opens nothing to return to, such as a copy to the
 clipboard:
@@ -145,20 +145,10 @@ last saw wins, and nothing is offered.
 A session records names, not windows. A restore reads the project files as
 they are now, leaves open targets as they are, and steps over a project or
 target that is gone. A Claude Code agent comes back on its conversation, in
-the directory it worked in, or fresh in that directory when it had no
-conversation yet; see [Agents](agents.md#resume-an-agent). Other
-agents start fresh in the project directory. A
-[named agent](configuration.md#named-agents) comes back as that agent; when
-its project no longer declares it, the restore skips it and says so. The
-first agents fill the target's agent panels, in order, and each runs that
-panel's command. An agent past them with no name, such as `dtop` you started
-in a shell panel, comes back
-in a tab of its own as the agent that runs that program: the default agent,
-or else a named agent. When no probe reads an agent's `command`, as with a
-`zsh -ilc` wrapper, the named agent whose name is the program runs it. When
-the default agent is such a wrapper, only that named agent takes its place,
-and otherwise the default agent comes back. When no agent of the project
-runs it, the restore skips it and says so. An
+the directory it worked in; when it resumes and when it starts fresh is in
+[Resume an agent](agents.md#resume-an-agent). Other agents start fresh in the
+project directory. A [named agent](configuration.md#named-agents) comes back
+as that agent. The restore names each agent it skips. An
 attached window is not saved. A target that is now a
 [command target](configuration.md#command-targets) is skipped: the restore
 runs no command.
@@ -181,13 +171,8 @@ press alt+q in the project list: it shows the plan before anything closes.
 A shutdown of every project, all of each, is remembered. The TUI quits after
 it, and its next start offers to restore the saved session or to start
 fresh; see [After a full shutdown](tui.md#after-a-full-shutdown). Anything
-you open first ends that offer. A full shutdown is not remembered when it
-found nothing left to close, when revier could not write its state, when you
-opened something while it ran, when you stopped it before its last step or
-while something it closed had not gone, or when a second copy of a closed
-workspace is still open after it.
-One you stopped before it saved the session leaves an earlier full shutdown
-remembered.
+you open first ends that offer. A full shutdown that did not close
+everything, or that you stopped, is not remembered.
 
 A shutdown and a restore print one line per step as they run: its name
 before the step, what came of it after. A step that hangs is the last line

@@ -19,10 +19,6 @@ the behaviour associated with it.
 | A test fake of a port that a test configures and reads back | `internal/hosttest` |
 | Any other fake, such as a port that fails or blocks | the test files of its package, as [TESTING.md](TESTING.md#conventions) says |
 
-Before a change to a port or to a decision the core makes, read the records in
-[docs/decisions/](decisions/) that bear on it: one may already settle it, or
-name the alternative it rejected.
-
 Keep the project model in `pkg/revier`: `Project`, `Target`, and the types of
 their fields, such as `Command`, `Link` and `HostKind`. It crosses a port: the
 `Remote` port's `Survey` and `Conversations` return `ProjectView`, which
@@ -50,9 +46,9 @@ Concretely, an adapter never: compiles a `Match`, reads `Target`, `Project`, or
 ## Two invariants
 
 **`Open` must produce an instance that the same realization's `Match` finds.**
-Otherwise every keypress opens another copy. `Realization.Name` exists for hosts
-that assign their own identity — an hc instance's name label, a browser
-`--class`. See `internal/adapter/hc.Host.Open`. A command target has no `Open`
+Otherwise every keypress opens another copy. A host that assigns its own
+identity satisfies it with `Realization.Name`: see
+`internal/adapter/hc.Host.Open`. A command target has no `Open`
 and no `Match`: its command does the run-or-raise, and the core runs it
 through `Core.Run`.
 
