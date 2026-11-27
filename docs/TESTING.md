@@ -27,9 +27,8 @@ host *reports*, and `hosttest.Fake` reports whatever a test needs — which is w
 resolution, toggle-back, and the degradation rules need no tool at all.
 
 L2 does not replace L4. L4 pins that a press on a real hc core focuses what
-`Open` made, as `hosttest.FakeView` reports the focus. Whether a real view
-then moves the focus is L6's, as is a read's history: neither has a headless
-test.
+`Open` made, as `hosttest.FakeView` reports the focus. Check at L6 whether a
+real view moves the focus, and a read's history: neither has a headless test.
 
 Keep hc the one headless runtime: a second runtime kept for tests alone is a
 host maintained for nobody.

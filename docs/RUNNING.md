@@ -29,15 +29,16 @@ worktree has none.
 
 ## Drive the CLI against a scratch configuration
 
-Set all of this, every time, in the one shell that runs the recipes below:
+Do all of this, every time, in the one shell that runs the recipes below:
 
-- `REVIER_CONFIG_HOME` and `REVIER_STATE_HOME` redirect revier away from the
-  user's projects and state.
-- `hcp` runs a command on a private hc core: its own config, state, runtime
-  directory and socket, and no session bus.
+- Export `REVIER_CONFIG_HOME` and `REVIER_STATE_HOME`, as the block does, to
+  redirect revier away from the user's projects and state.
+- Define `hcp`, as the block does: it runs a command on a private hc core,
+  with its own config, state, runtime directory and socket, and no session
+  bus.
 - Run every `hc` and every `./bin/revier` through `hcp`: any `hc` command
-  starts a core when none answers its socket, the user's own included.
-- Under `hcp`, revier reaches no service manager and starts the core detached.
+  starts a core when none answers its socket, the user's own included, and
+  under `hcp` revier reaches no service manager and starts the core detached.
 - Set `REVIER_SSH_CONFIG` to a scratch ssh configuration whenever a recipe
   reaches the remote screen: its "new" (alt+r, then alt+n) and the check for
   this machine then read it instead of `~/.ssh/config`.
