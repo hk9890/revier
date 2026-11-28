@@ -191,11 +191,9 @@ func dropLines(lines []string, from, to int) []string {
 			kept = append(kept, lines[j])
 			continue
 		}
-		end, _ := valueEnd(lines, j, at[1])
-		for k, col := j, at[1]; k <= end; k, col = k+1, 0 {
-			if c := commentOf(lines[k], col); c != "" {
-				kept = append(kept, leading(lines[j])+c)
-			}
+		end, _, comments := valueScan(lines, j, at[1])
+		for _, c := range comments {
+			kept = append(kept, leading(lines[j])+c)
 		}
 		j = end
 	}
@@ -211,28 +209,46 @@ func leading(line string) string {
 }
 
 // valueEnd finds where a value that starts at lines[i][col] ends: the line it
-// ends on, and the column after its last character. A bracket opens a value
-// that runs until it is closed, over as many lines as that takes; a quote
-// hides brackets and comment marks inside it.
+// ends on, and the column after its last character.
 func valueEnd(lines []string, i, col int) (int, int) {
+	end, endCol, _ := valueScan(lines, i, col)
+	return end, endCol
+}
+
+// valueScan is valueEnd, with each comment on the value's lines. A bracket
+// opens a value that runs until it is closed, over as many lines as that
+// takes, and so does a """ or ”' string, which can hold a line that reads as
+// a header or a key; a quote hides brackets and comment marks inside it.
+func valueScan(lines []string, i, col int) (int, int, []string) {
 	depth := 0
 	var quote byte
+	multi := false // quote opened a """ or ''' string
 	end, endCol := i, col
+	var comments []string
 	for ; i < len(lines); i, col = i+1, 0 {
 		line := lines[i]
 	scan:
 		for j := col; j < len(line); j++ {
 			c := line[j]
 			switch {
+			case quote != 0 && c == '\\' && quote == '"':
+				j++
+			case quote != 0 && c == quote && !multi:
+				quote, end, endCol = 0, i, j+1
+			case quote != 0 && c == quote && strings.HasPrefix(line[j:], strings.Repeat(string(c), 3)):
+				// A closing run of up to five quotes: the two before the
+				// last three are the string's own.
+				run := len(line[j:]) - len(strings.TrimLeft(line[j:], string(c)))
+				quote, multi, end, endCol = 0, false, i, j+min(run, 5)
+				j += min(run, 5) - 1
 			case quote != 0:
-				if c == '\\' && quote == '"' {
-					j++
-				} else if c == quote {
-					quote, end, endCol = 0, i, j+1
-				}
+			case (c == '"' || c == '\'') && strings.HasPrefix(line[j:], strings.Repeat(string(c), 3)):
+				quote, multi = c, true
+				j += 2
 			case c == '"' || c == '\'':
 				quote = c
 			case c == '#':
+				comments = append(comments, strings.TrimSpace(line[j:]))
 				break scan
 			case c == '[' || c == '{':
 				depth++
@@ -244,11 +260,11 @@ func valueEnd(lines []string, i, col int) (int, int) {
 				end, endCol = i, j+1
 			}
 		}
-		if depth <= 0 {
-			return end, endCol
+		if depth <= 0 && !multi {
+			return end, endCol, comments
 		}
 	}
-	return end, endCol
+	return end, endCol, comments
 }
 
 // replaceFile writes a file whole or not at all: a crash halfway through

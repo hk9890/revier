@@ -159,28 +159,6 @@ func actionValues(act Action) ([]actionValue, error) {
 	return out, nil
 }
 
-// commentOf is the comment on a line, read from the column its value text
-// starts at: a # that no quote hides, to the end of the line.
-func commentOf(line string, from int) string {
-	var quote byte
-	for j := from; j < len(line); j++ {
-		c := line[j]
-		switch {
-		case quote != 0:
-			if c == '\\' && quote == '"' {
-				j++
-			} else if c == quote {
-				quote = 0
-			}
-		case c == '"' || c == '\'':
-			quote = c
-		case c == '#':
-			return strings.TrimSpace(line[j:])
-		}
-	}
-	return ""
-}
-
 func sameAction(a, b Action) bool {
 	return a.Key == b.Key && a.Name == b.Name && slices.Equal(a.Run, b.Run)
 }
