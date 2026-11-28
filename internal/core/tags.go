@@ -24,19 +24,16 @@ func ParseTag(s string) (Tag, error) {
 	return Tag{Key: key, Value: value}, nil
 }
 
-// HasTags reports whether the project carries every one of tags.
-func HasTags(p revier.Project, tags []Tag) bool {
-	for _, t := range tags {
-		if v, ok := p.Tags[t.Key]; !ok || v != t.Value {
-			return false
-		}
-	}
-	return true
-}
-
 // WithTags is the projects that carry every one of tags, in the order given.
 func WithTags(projects []Project, tags []Tag) []Project {
-	return slices.DeleteFunc(slices.Clone(projects), func(p Project) bool { return !HasTags(p.Project, tags) })
+	return slices.DeleteFunc(slices.Clone(projects), func(p Project) bool {
+		for _, t := range tags {
+			if v, ok := p.Tags[t.Key]; !ok || v != t.Value {
+				return true
+			}
+		}
+		return false
+	})
 }
 
 // TagUse is one tag and the projects that carry it.

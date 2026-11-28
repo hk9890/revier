@@ -9,6 +9,7 @@ import (
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/plain"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -89,7 +90,8 @@ func cmdTags(w io.Writer, args []string) error {
 		for i, n := range u.Projects {
 			names[i] = string(n)
 		}
-		_, _ = fmt.Fprintf(tw, "%s\t%d\t%s\n", u.Tag, len(u.Projects), strings.Join(names, " "))
+		// A tab in a value would move every column after it.
+		_, _ = fmt.Fprintf(tw, "%s\t%d\t%s\n", plain.Line(u.String()), len(u.Projects), strings.Join(names, " "))
 	}
 	return tw.Flush()
 }

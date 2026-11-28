@@ -376,14 +376,4 @@ func (r statusResult) style(th theme.Theme, level string) lipgloss.Style {
 // printable is plain.Text on one line: a tab is a space, and a newline goes.
 // The command's colours are not the theme's, and a byte the width cannot
 // measure breaks the frame.
-func printable(s string) string {
-	return strings.Map(func(r rune) rune {
-		switch r {
-		case '\t':
-			return ' '
-		case '\n':
-			return -1
-		}
-		return r
-	}, plain.Text(s))
-}
+func printable(s string) string { return plain.Line(s) }

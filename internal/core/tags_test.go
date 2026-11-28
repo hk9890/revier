@@ -1,6 +1,7 @@
 package core_test
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 
@@ -77,6 +78,13 @@ func TestTagsInUseIsEachTagByKeyThenValueWithItsProjects(t *testing.T) {
 		{Tag: core.Tag{Key: "type", Value: "work"}, Projects: []revier.ProjectName{"shop"}},
 	}
 	if !slices.EqualFunc(got, want, func(a, b core.TagUse) bool { return a.Tag == b.Tag && slices.Equal(a.Projects, b.Projects) }) {
-		t.Errorf("TagsInUse = %+v, want %+v", got, want)
+		show := func(uses []core.TagUse) []string {
+			var out []string
+			for _, u := range uses {
+				out = append(out, fmt.Sprint(u.Tag, u.Projects))
+			}
+			return out
+		}
+		t.Errorf("TagsInUse = %v, want %v", show(got), show(want))
 	}
 }

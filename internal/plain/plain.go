@@ -12,6 +12,21 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+// Line is Text on one line: a tab is a space, and a newline goes. It is for
+// text drawn in one cell or one column, where a byte the width cannot measure
+// breaks the frame.
+func Line(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case '\t':
+			return ' '
+		case '\n':
+			return -1
+		}
+		return r
+	}, Text(s))
+}
+
 // Text is s with every escape sequence and every control character taken off
 // but the newline and the tab, and each "\r\n" a newline.
 func Text(s string) string {
