@@ -17,8 +17,9 @@ A findability map: where things live, and how to search for them.
 | `docs/user-guide/` | The [user guide](user-guide/README.md). The package carries its reference pages (`configuration.md`, `extending/`) into the binary, which `revier assist --reference` prints. |
 | `cmd/revier/` | CLI entry point. Constructs every port's adapter, also calls the `claude` adapter directly, and reads `proc`'s variable names. |
 
-Every other package says what it owns in the first sentence of its package
-doc comment; [Finding things](#finding-things) prints them all.
+Every other package says what it owns in its package doc comment. Its first
+sentence is in the map [Finding things](#finding-things) prints; read the
+rest with `go doc`.
 
 What each port is: [docs/design/architecture.md](design/architecture.md#ports).
 

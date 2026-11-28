@@ -40,6 +40,12 @@ const (
 // The kinds a survey writes, as "saw" lines. A surface's surveys write them
 // through Saw; a save writes a snapshot of its own. With no surface running,
 // only a save writes a "saw" line.
+//
+// A hidden popup writes the lines of a survey or a round already out at the
+// hide, then none, KindSurvey included, until its next raise, unless a launch
+// is coming up. A change made meanwhile carries the time of that raise's
+// survey. With no other surface surveying the scope, a replay calls it stale
+// in between.
 const (
 	// KindSnapshot is a whole survey of one scope, Machine, in Seen: at the
 	// first survey a surface makes of it, the first of a day, and one that
@@ -53,7 +59,10 @@ const (
 	KindTargetClosed   = "target closed"
 	KindAgentOpened    = "agent opened"
 	KindAgentClosed    = "agent closed"
-	KindAgentSession   = "agent session"
+	// KindAgentSession is an agent in the same panel whose harness,
+	// conversation, directory or named agent changed. It is not the event
+	// file's "agent session".
+	KindAgentSession = "agent session"
 	// KindHostUnreachable is a host of the scope that stopped listing (host),
 	// a linked host that stopped answering, or a link it stopped answering
 	// for (project), with err; KindHostBack is one that answers again. Until

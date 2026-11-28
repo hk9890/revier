@@ -52,7 +52,7 @@ runtime does not read hc's terminals.
   shell's panel closes when the shell exits.
 - `revier agent new --no-focus` adds the tab to the window that shows the
   workspace, and opens no window where none shows it.
-- In a kitty window that shows no workspace, the shell key opens a plain kitty
+- In a kitty OS window that shows no workspace, the shell key opens a plain kitty
   tab, as `outside = "tab"` says. revier does not list it, and it ends with
   kitty.
 

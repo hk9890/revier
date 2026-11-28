@@ -943,9 +943,9 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// up keeps the chain until its window is claimed or the launch
 		// expires, since the survey is what claims it. A failure that
 		// recovers while the popup is hidden writes its "<msg>: recovered"
-		// line (logging.Repeat) at the next call that succeeds: a linked
-		// host's at the raise, and a survey's at the raise too once the chain
-		// ended.
+		// line (logging.Repeat) at the next call that succeeds. A round or a
+		// survey already out at the hide can write it while hidden; once the
+		// chain ended, the next comes at the raise.
 		if m.hidden {
 			if !m.claiming() {
 				m.idle = true

@@ -9,9 +9,9 @@
 // project file can carry, because neither existed when the file was written.
 //
 // The sets live under the state root (Dir), where `revier session` saves and
-// reads them. Beside them is seen.toml (SeenPath), what a running surface
-// last saw. It becomes a stored session only after an end with no shutdown,
-// by PromoteSeen.
+// reads them. Beside the sessions directory is seen.toml (SeenPath), what a
+// running surface last saw. It becomes a stored session only after an end
+// with no shutdown, by PromoteSeen.
 //
 // It is separate from internal/state because the two have different
 // lifecycles. state.json is one live document, pruned on read against the
