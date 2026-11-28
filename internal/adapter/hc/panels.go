@@ -227,8 +227,8 @@ func (h *Host) AttachCommand(r revier.TargetRef) ([]string, error) {
 }
 
 // AttachPanel is the argv a view's window runs to show one terminal: hc's
-// attach of its address, through revier's Attach, which
-// holds the window once the terminal's program ends. The window
+// attach of its address, through revier's Attach, which titles the window
+// and holds it once the terminal's program ends. The window
 // starts in the view's own environment, not this process's, so the argv
 // names hc and revier by their paths and the core by its socket, even when
 // none was set here.
@@ -247,7 +247,7 @@ func (h *Host) AttachPanel(panel revier.PanelID) ([]string, error) {
 		return nil, fmt.Errorf("hc: the revier binary's path %s has a \"=\" in it, which env cannot run", h.Revier)
 	}
 	// A revier binary an upgrade removed under a running revier is no
-	// window's: the window shows the terminal unheld.
+	// window's: the window shows the terminal untitled and unheld.
 	if _, err := os.Stat(h.Revier); h.Revier == "" || err != nil {
 		return append(argv, path, "attach", panel.String()), nil
 	}

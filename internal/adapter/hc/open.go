@@ -31,8 +31,8 @@ import (
 // terminals share a new instance id as their revier.instance label, and carry
 // r.Name as revier.name, which Instances reads as the title, the token of the
 // instance's first tab and its place 0, their place in it as revier.panel,
-// and r.Vars as labels of their own, which Instances reports back as the
-// panel's Vars. Each is named rv-<id>-<place>, which the attach takes.
+// the panel's title, when it has one, as revier.title, and r.Vars as labels
+// of their own, which Instances reports back as the panel's Vars. Each is named rv-<id>-<place>, which the attach takes.
 //
 // A terminal has no parent, so it outlives the terminal revier runs in, and
 // is not kept: a kept terminal hc brings back after a reboot is a bare shell
@@ -107,9 +107,9 @@ func (h *Host) Open(ctx context.Context, r revier.Realization) (revier.TargetRef
 // OpenTab starts the terminals of a new last tab of the instance: one per
 // panel of r, or r.Launch in r.Dir alone. They carry the instance's labels, a
 // new tab token, the place after the last tab the instance holds, their place
-// in the tab, and vars as labels of their own, so a view draws them as one
-// tab after the others, and two tabs of the same vars stay two. hc keeps no
-// focus, so the focus is a view's.
+// in the tab, the panel's title when it has one, and vars as labels of their
+// own, so a view draws them as one tab after the others, and two tabs of the
+// same vars stay two. hc keeps no focus, so the focus is a view's.
 //
 // A tab whose terminal fails is closed whole, found by its token, as Open
 // closes an instance: the core names the agent of a failed tab as not added.
