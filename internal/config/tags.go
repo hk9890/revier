@@ -78,15 +78,16 @@ func ValidateTagKey(key string) error {
 }
 
 // errTagsShape refuses a write whose result is not the file with the asked-for
-// tags and nothing else changed.
+// tags and nothing else changed, or that would declare the tags a second time.
 var errTagsShape = errors.New("the tags are not written as plain keys under [tags]; change them by hand")
 
 // WriteTags sets each of set in the [tags] table of a project file and
 // removes each key of remove, line by line. Comments stay, and so does every
-// other value: a write that would change one is refused, such as where the
-// file writes the tags as a dotted key or an inline table, and so is one that
-// adds a problem. Tags that are already as asked are not written. The blank
-// lines at the end of the file are not kept.
+// other value: a write that would change one is refused, and so is one that
+// adds a problem, and one that sets a tag where the file declares its tags
+// with no [tags] header: as dotted keys, an inline table or sub-tables alone.
+// Tags that are already as asked are not written. The blank lines at the end
+// of the file are not kept.
 func WriteTags(file string, set []core.Tag, remove []string, inh Inherited) (core.Project, error) {
 	for _, t := range set {
 		if err := ValidateTagKey(t.Key); err != nil {
