@@ -77,15 +77,17 @@ func (m *Model) field() *textinput.Model {
 
 // query applies a section's query to its rows. The first match is selected,
 // as the list selects it on a project query: typing an agent's name is a
-// choice of that agent. An empty agent query hands the choice back to the
-// pane (chooseAgent).
+// choice of that agent. Of the agents, it is the match the pane would choose
+// (firstAgent): the matches keep the order's groups, so the working agents
+// stand above the agent typed for. An empty agent query hands the choice back
+// to the pane (chooseAgent).
 func (m *Model) query(f focus, q string) {
 	switch f {
 	case focusAgents:
 		m.afilter, m.achosen, m.akept = q, agentKey{}, agentKey{}
 		m.ainput.SetValue(q)
 		if q != "" {
-			m.pickAgent(0)
+			m.pickAgent(m.firstAgent(m.agentRows()))
 		}
 	default:
 		m.setFilter(q)
@@ -134,26 +136,31 @@ func harnessOf(a revier.AgentView) string {
 }
 
 // agentRows is the pane's Agents section: every agent of the project under
-// the cursor, or, while an agent query is typed, the ones it matches. The
-// section sorts its rows into no groups, so a whole match and then the score
-// order them (ranked).
+// the cursor, in the agent list's order (listedOrder) at the moment the pane
+// was drawn (aorderAt), or, while an agent
+// query is typed, the ones it matches, which keep the groups of that order
+// (ranked).
 func (m Model) agentRows() []agentRow {
 	v, ok := m.selected()
 	if !ok {
 		return nil
 	}
 	all := make([]agentRow, len(v.Agents))
-	labels := make([]string, len(v.Agents))
-	now := m.now()
 	for i, a := range v.Agents {
-		all[i] = agentRow{agentItem: newAgentItem(a, v.Project, m.adetails[keyOf(a)], now)}
-		labels[i] = all[i].filterValue(true)
+		all[i] = agentRow{agentItem: newAgentItem(a, v.Project, m.adetails[keyOf(a)], m.aorderAt)}
 	}
+	order := listedOrder(m.aorderAt)
+	slices.SortStableFunc(all, func(a, b agentRow) int { return order(a.agentItem, b.agentItem) })
 	if m.afilter == "" {
 		return all
 	}
+	labels := make([]string, len(all))
+	for i, r := range all {
+		labels[i] = r.filterValue(true)
+	}
+	group := func(i int) int { return listedRank[all[i].agent.State.Status] }
 	var out []agentRow
-	for _, rank := range ranked(ungrouped)(m.afilter, labels) {
+	for _, rank := range ranked(group)(m.afilter, labels) {
 		r := all[rank.Index]
 		r.matches = rank.MatchedIndexes
 		out = append(out, r)

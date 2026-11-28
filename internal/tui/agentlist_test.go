@@ -171,31 +171,94 @@ func TestAnAgentWithNoTitleShowsWhatItSaidLast(t *testing.T) {
 	}
 }
 
-// The agents that need the user come first, then the working ones, then the
-// ones at rest, then the unknown. Those that need the user and those at rest
-// stand by when they spoke, the latest first; the working ones by project.
-func TestTheAgentListIsOrderedByStateAndThenByWhenEachSpoke(t *testing.T) {
+// The working agents come first, by project, then the agents that wait for
+// the user, asking or at rest, as one group, then the unknown. In the group a
+// warm cache goes first, the soonest to go cold first; then a cold cache, and
+// then no cache, each the latest to speak first. The list opens on the agent
+// whose cache goes cold soonest.
+func TestTheAgentListIsOrderedByStateAndThenByTheCache(t *testing.T) {
 	now := time.Now()
 	m, _, _ := listedWorld(t, 140, 40,
 		listed{project: "beta", status: revier.StatusRunning, on: "work-b", at: now.Add(-time.Minute)},
-		listed{project: "alpha", status: revier.StatusIdle, on: "idle-old", at: now.Add(-3 * time.Hour)},
+		listed{project: "alpha", status: revier.StatusIdle, on: "cold-old", at: now.Add(-3 * time.Hour), cache: now.Add(-2 * time.Hour)},
 		listed{project: "alpha", status: revier.StatusUnknown, on: "unknown-a"},
-		listed{project: "alpha", status: revier.StatusAttention, on: "asks-old", at: now.Add(-2 * time.Hour)},
-		listed{project: "beta", status: revier.StatusIdle, on: "idle-new", at: now.Add(-2 * time.Minute)},
+		listed{project: "alpha", status: revier.StatusAttention, on: "warm-late", at: now.Add(-5 * time.Minute), cache: now.Add(55 * time.Minute)},
+		listed{project: "beta", status: revier.StatusIdle, on: "uncached-new", at: now.Add(-2 * time.Minute)},
 		listed{project: "alpha", status: revier.StatusRunning, on: "work-a", at: now.Add(-time.Hour)},
-		listed{project: "beta", status: revier.StatusAttention, on: "asks-new", at: now.Add(-5 * time.Minute)},
-		listed{project: "beta", status: revier.StatusIdle, on: "idle-untimed"})
+		listed{project: "beta", status: revier.StatusIdle, on: "warm-soon", at: now.Add(-50 * time.Minute), cache: now.Add(10 * time.Minute)},
+		listed{project: "beta", status: revier.StatusAttention, on: "cold-new", at: now.Add(-70 * time.Minute), cache: now.Add(-10 * time.Minute)},
+		listed{project: "beta", status: revier.StatusIdle, on: "uncached-untimed"})
+	names := []string{"work-a", "work-b", "warm-soon", "warm-late", "cold-new", "cold-old", "uncached-new", "uncached-untimed", "unknown-a"}
 	var got []string
 	for _, row := range listedRows(m) {
-		for _, name := range []string{"asks-new", "asks-old", "work-a", "work-b", "idle-new", "idle-old", "idle-untimed", "unknown-a"} {
+		for _, name := range names {
 			if strings.Contains(row, name) {
 				got = append(got, name)
 			}
 		}
 	}
-	want := []string{"asks-new", "asks-old", "work-a", "work-b", "idle-new", "idle-old", "idle-untimed", "unknown-a"}
-	if !slices.Equal(got, want) {
-		t.Errorf("order = %v, want %v", got, want)
+	if !slices.Equal(got, names) {
+		t.Errorf("order = %v, want %v", got, names)
+	}
+	if row := selectedRow(t, m); !strings.Contains(row, "warm-soon") {
+		t.Errorf("selected = %q, want the agent whose cache goes cold soonest", row)
+	}
+}
+
+// The project pane's Agents stand in the agent list's order.
+func TestTheProjectPaneOrdersItsAgentsAsTheAgentListDoes(t *testing.T) {
+	now := time.Now()
+	m, _, _ := listedSurface(t, 160, 40,
+		listed{project: "alpha", status: revier.StatusIdle, on: "uncached", at: now.Add(-time.Minute)},
+		listed{project: "alpha", status: revier.StatusAttention, on: "warm-late", at: now.Add(-5 * time.Minute), cache: now.Add(55 * time.Minute)},
+		listed{project: "alpha", status: revier.StatusRunning, on: "working"},
+		listed{project: "alpha", status: revier.StatusIdle, on: "warm-soon", at: now.Add(-50 * time.Minute), cache: now.Add(10 * time.Minute)})
+	body := pane(m.Said())
+	var at []int
+	for _, name := range []string{"working", "warm-soon", "warm-late", "uncached"} {
+		at = append(at, strings.Index(body, name))
+	}
+	if at[0] < 0 || !slices.IsSorted(at) {
+		t.Errorf("pane = %q, want working, warm-soon, warm-late, uncached in that order", body)
+	}
+}
+
+// An agent query over the pane keeps the groups of the order: a working
+// agent stays above a waiting one that holds the query whole. The cursor goes
+// to the waiting one, and Enter to its panel.
+func TestAnAgentQueryInThePaneKeepsTheWorkingAgentsFirst(t *testing.T) {
+	m, rt, _ := listedSurface(t, 160, 40,
+		listed{project: "alpha", status: revier.StatusIdle, on: "tests"},
+		listed{project: "alpha", status: revier.StatusRunning, on: "txexsxtxs"})
+	m, _ = press(m.Said(), "tab")
+	m, _ = press(m, "tests")
+	body := pane(m)
+	// The last "tests" line is the row: the first is the query.
+	working, waiting := strings.Index(body, "txexsxtxs"), strings.LastIndex(body, "tests\n")
+	if working < 0 || waiting < 0 || working > waiting {
+		t.Errorf("pane = %q, want the working agent above the waiting one", body)
+	}
+	_, cmd := press(m, "enter")
+	runAll(cmd)
+	if !slices.Equal(rt.PanelFocuses, []revier.PanelID{"1"}) {
+		t.Errorf("panel focuses = %v, want the waiting agent's panel", rt.PanelFocuses)
+	}
+}
+
+// A query over the agent list puts the cursor on the first match that waits
+// for the user, past the working agents its group order puts above it.
+func TestAQueryOverTheAgentListGoesToTheWaitingMatch(t *testing.T) {
+	m, rt, _ := listedWorld(t, 140, 30,
+		listed{project: "alpha", status: revier.StatusAttention, on: "tests"},
+		listed{project: "beta", status: revier.StatusRunning, on: "txexsxtxs"})
+	m, _ = press(m, "tests")
+	if row := selectedRow(t, m); !strings.Contains(row, "tests") || strings.Contains(row, "txexsxtxs") {
+		t.Fatalf("selected = %q, want the agent that waits", row)
+	}
+	_, cmd := press(m, "enter")
+	runAll(cmd)
+	if !slices.Equal(rt.PanelFocuses, []revier.PanelID{"1"}) {
+		t.Errorf("panel focuses = %v, want the waiting agent's panel", rt.PanelFocuses)
 	}
 }
 
@@ -210,16 +273,14 @@ func TestTheCursorFollowsItsAgentThroughAReordering(t *testing.T) {
 	if row := selectedRow(t, m); !strings.Contains(row, "the worker") {
 		t.Fatalf("selected = %q after up, want the worker", row)
 	}
-	// The worker ends its turn after the other spoke: it goes under the
-	// rester's group head, to the top of the agents at rest, and the rester
-	// stays above nothing. It moves from row 0 to row 0 of another group, so
-	// the rester is made to need the user to move the worker down a row.
+	// The worker ends its turn and joins the rester's group. It has said
+	// nothing, and the agent with no time stands last there, so it moves
+	// from row 0 to row 1.
 	fakes[0].State.Status = revier.StatusIdle
-	fakes[1].State.Status = revier.StatusAttention
 	m = survey(m).Said()
 	rows := listedRows(m)
 	if len(rows) != 2 || !strings.Contains(rows[0], "the rester") || !strings.Contains(rows[1], "the worker") {
-		t.Fatalf("rows = %q, want the agent that needs the user first", rows)
+		t.Fatalf("rows = %q, want the agent that spoke first", rows)
 	}
 	if row := selectedRow(t, m); !strings.Contains(row, "the worker") {
 		t.Errorf("selected = %q after the reordering, want the cursor still on its agent", row)

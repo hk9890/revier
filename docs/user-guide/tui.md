@@ -116,12 +116,19 @@ selection.
 Press alt+space to see every agent of every open project. In the popup, press
 the trigger key instead. In a terminal of your own, the trigger key opens the
 popup; where the trigger key is alt+space, click `agents` in the top line.
-Agents that need you are on top, then working agents, then idle ones, then
-those in state `unknown`. Among those that need
-you and among the idle ones, the one that spoke last is first. The list
-opens with no query, on the first agent that needs you or, if none does, the
-first idle one. It skips working agents because they need nothing from you
-yet. When every agent is working or `unknown`, it opens on the first row.
+Working agents are on top, then the agents that wait for you, then those in
+state `unknown`. The agents that wait for you are the ones that need you and
+the idle ones, in one group:
+
+1. Those whose prompt cache is warm, the one that goes cold soonest first. A
+   prompt to an agent costs the least while its cache is warm.
+2. Those whose cache is cold, the one that spoke last first.
+3. Those that report no cache, the one that spoke last first.
+
+The list opens with no query, on the first agent that waits for you in the
+order above. It skips working agents because they need
+nothing from you yet. When every agent is working or `unknown`, it opens on
+the first row. The project pane's Agents stand in the same order.
 
 Each agent takes two lines:
 

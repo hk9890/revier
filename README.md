@@ -28,14 +28,14 @@ territory.
   window and hides when you bring a window to the front.
   See [The popup](docs/user-guide/tui.md#the-popup).
 - **All agents in one list.** In the popup, press the trigger key again to
-  see every agent of every open project in one list. Agents that need you are on top, then working, idle and `unknown` agents. The
+  see every agent of every open project in one list. Working agents are on top, then the agents that wait for you, the one whose prompt cache goes cold soonest first. The
   project list shows each project with its agents
   counted by state. See [The agent list](docs/user-guide/tui.md#the-agent-list).
 - **Jump to an agent.** Select an agent and press Enter. revier raises its
   tab and its window. The pane shows the agent's terminal as it is now.
   See [Move and act](docs/user-guide/tui.md#move-and-act).
 
-![Alt+Space twice shows every agent, the one that needs you on top; Enter jumps to it](.github/assets/agents.webp)
+![Alt+Space twice shows every agent; Enter jumps to it](.github/assets/agents.webp)
 
 **Open a project and its tools**
 

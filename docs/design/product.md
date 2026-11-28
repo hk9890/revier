@@ -101,8 +101,10 @@ reason to open revier at all. Every command is in the
 The agents of every project are a second list behind the key that opens the
 surface. With
 many agents across many projects the question is which agent, and the project
-list answers it one project at a time. The second list orders every agent by
-need. It is a list of its own, not a mode of the project list, which would hide
+list answers it one project at a time. The second list puts the working
+agents first and then orders the agents that wait for you by how soon their
+prompt cache goes cold, because a prompt to a warm cache costs the least. It
+is a list of its own, not a mode of the project list, which would hide
 the projects it is for.
 
 A pane shows one agent's panel as the terminal draws it. No
