@@ -16,7 +16,7 @@ func TestSetReadsPastAMultiLineString(t *testing.T) {
 		`"""` + "\n[hosts]\nruntime = x # no comment\n" + `"""`,
 		`'''` + "\n[hosts]\n" + `'''`,
 		`"""` + "\n" + `say \"""` + "\n" + `"""`, // an escaped quote run is the string's own
-		`"""` + "a\n" + `b"""""`,                // the two quotes before the closing three are the string's own
+		`"""` + "a\n" + `b"""""`,                 // the two quotes before the closing three are the string's own
 	} {
 		root := writeConfig(t, "[ui]\nnote = "+value+"\ntheme = \"catppuccin-mocha\"\n")
 		if err := config.Set(root, "ui", "theme", "catppuccin-latte"); err != nil {

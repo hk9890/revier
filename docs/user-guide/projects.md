@@ -104,7 +104,9 @@ revier tag --match dynatrace type=work   # every project whose name, directory o
 ```
 
 `revier tag` writes the `[tags]` table of the project file and keeps the rest
-of the file as it is. You can also write the table by hand:
+of the file as it is. The project screen (alt+e) edits the tags too: Enter on
+a tag changes its value, alt+d removes it, and the last row adds one typed as
+`key=value`. You can also write the table by hand:
 
 ```toml
 # ~/.config/revier/projects/shop.toml
