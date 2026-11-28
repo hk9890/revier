@@ -203,7 +203,7 @@ runtime does, and no target resolves to it (decisions/0084).
 
 ## Package layout
 
-Where each package sits is in [OVERVIEW.md](../OVERVIEW.md#layout).
+Where each package sits is the [Layout table](../OVERVIEW.md#layout).
 
 `pkg/revier` is public because an out-of-tree adapter must import the ports.
 Everything else is internal, so the public surface stays small and stable. Go
