@@ -15,7 +15,8 @@ import (
 // Rename gives a project a new name by moving its file, since the file name is
 // the name, and loads it back under the new one. A link
 // that leaves its name on the host to be derived from its own gets that name
-// written first, so the link still reaches the project it reached. An
+// written first, so the link still reaches the project it reached; that write
+// is refused, and the rename with it, where the remote is dotted keys. An
 // existing file is never overwritten, and the old file is removed only once
 // the new one loads no worse than it did: what was wrong with the file before
 // is not the rename's to refuse.
@@ -40,7 +41,11 @@ func Rename(root string, from, to revier.ProjectName, inh Inherited) (core.Proje
 	}
 	text := string(data)
 	if declared.Remote != nil && declared.Remote.Project == "" {
-		text = string(withLineEnds(data, []byte(setKey(text, "remote", "project", quote(string(from))))))
+		text = setKey(text, "remote", "project", quote(string(from)))
+		if addsSecondTable(string(data), text, "remote") {
+			return core.Project{}, fmt.Errorf("%s: %w", old, errDotted("remote"))
+		}
+		text = string(withLineEnds(data, []byte(text)))
 	}
 	before := loadProject(old, data, inh)
 	p, err := writeUnless(root, to, text, inh, func(p core.Project) []error { return newProblems(before, p) })

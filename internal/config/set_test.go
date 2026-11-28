@@ -181,6 +181,37 @@ func TestSetRefusesAKeyItCannotEditInPlace(t *testing.T) {
 	}
 }
 
+// A value whose table the file declares as dotted keys gets no second table:
+// TOML allows a table once, which the decoder here does not enforce.
+func TestSetAddsNoSecondTable(t *testing.T) {
+	for name, text := range map[string]string{
+		"dotted":            "ui.theme = \"catppuccin-mocha\"\n",
+		"quoted dotted":     "\"ui\" . theme = \"catppuccin-mocha\"\n",
+		"a byte order mark": "\ufeffui.theme = \"catppuccin-mocha\"\n",
+	} {
+		root := writeConfig(t, text)
+		if err := config.Set(root, "ui", "glyphs", "ascii"); err == nil {
+			t.Errorf("%s: want an error", name)
+		}
+		if got := readConfig(t, root); got != text {
+			t.Errorf("%s: config.toml = %q, want it unchanged", name, got)
+		}
+	}
+
+	for name, c := range map[string]struct{ text, want string }{
+		"a dotted key of another table": {"hosts.runtime = [\"hc\"]\n", "hosts.runtime = [\"hc\"]\n\n[ui]\nglyphs = \"ascii\"\n"},
+		"a file that has both":          {"ui.theme = \"catppuccin-mocha\"\n\n[ui]\nglyphs = \"nerd\"\n", "ui.theme = \"catppuccin-mocha\"\n\n[ui]\nglyphs = \"ascii\"\n"},
+	} {
+		root := writeConfig(t, c.text)
+		if err := config.Set(root, "ui", "glyphs", "ascii"); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+		if got := readConfig(t, root); got != c.want {
+			t.Errorf("%s: config.toml = %q, want %q", name, got, c.want)
+		}
+	}
+}
+
 // A config.toml linked in from elsewhere, a dotfiles repository, is written
 // through the link, and the file keeps its permissions.
 func TestSetWritesThroughASymlinkAndKeepsTheMode(t *testing.T) {

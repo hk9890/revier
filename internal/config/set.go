@@ -24,7 +24,8 @@ import (
 // and refused for a problem it adds that the file did not have. It is also
 // read back: a key the line editor does not find where it looks, such as one
 // written as a dotted key or an inline table, would otherwise land twice or
-// not at all. That is refused, and the file stays as it was.
+// not at all. That is refused, and the file stays as it was; so is a write
+// that adds the table beside dotted keys of it.
 func Set(root, table, key string, value any) error {
 	path := File(root)
 	old, err := os.ReadFile(path)
@@ -51,6 +52,9 @@ func Set(root, table, key string, value any) error {
 	}
 	if got, err := valueAt(text, table, key); err != nil || got != literal {
 		return fmt.Errorf("%s: %s.%s is not written as a plain key under [%s]; change it by hand", path, table, key, table)
+	}
+	if addsSecondTable(string(old), text, table) {
+		return fmt.Errorf("%s: %w", path, errDotted(table))
 	}
 	return replaceFile(path, []byte(text))
 }
@@ -106,6 +110,42 @@ func setKey(text, table, key, literal string) string {
 		out += "\n\n"
 	}
 	return out + "[" + table + "]\n" + key + " = " + literal + "\n"
+}
+
+// addsSecondTable reports whether a write declares a table by its header
+// beside dotted keys of it, where the file did not. TOML refuses that, and the
+// decoder does not.
+func addsSecondTable(before, after, name string) bool {
+	return declaredTwice(after, name) && !declaredTwice(before, name)
+}
+
+// errDotted refuses a write that would add a table beside dotted keys of it.
+func errDotted(table string) error {
+	return fmt.Errorf("%s is written as dotted keys; write it as a [%s] table by hand first", table, table)
+}
+
+func declaredTwice(text, name string) bool {
+	// The decoder skips a byte order mark.
+	lines := strings.Split(strings.TrimPrefix(text, "\ufeff"), "\n")
+	if !slices.ContainsFunc(tables(lines), func(t table) bool { return !t.array && t.name == name }) {
+		return false
+	}
+	quoted := regexp.QuoteMeta(name)
+	dotted := regexp.MustCompile(`^\s*(?:` + quoted + `|"` + quoted + `"|'` + quoted + `')\s*\.`)
+	for i := 0; i < len(lines); i++ {
+		// Any header ends the top of the file, also one headerLine does not
+		// read, such as a quoted one.
+		if strings.HasPrefix(strings.TrimSpace(lines[i]), "[") {
+			return false
+		}
+		if at := keyLine.FindStringSubmatchIndex(lines[i]); at != nil {
+			if dotted.MatchString(lines[i]) {
+				return true
+			}
+			i, _ = valueEnd(lines, i, at[1])
+		}
+	}
+	return false
 }
 
 // table is the lines of one table in a file: its header, and the line after

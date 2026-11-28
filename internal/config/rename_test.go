@@ -46,6 +46,21 @@ func TestRenameKeepsTheProjectALinkReaches(t *testing.T) {
 	}
 }
 
+// The name written for a link whose file declares the remote as dotted keys
+// would be a second [remote] table, which TOML refuses.
+func TestRenameRefusesALinkWhoseRemoteIsDottedKeys(t *testing.T) {
+	root := projectsRoot(t, "", map[string]string{"far.toml": "remote.host = \"box\"\n"})
+	if _, err := config.Rename(root, "far", "near", config.Inherited{}); err == nil {
+		t.Error("want an error")
+	}
+	if _, err := os.Stat(config.ProjectFile(root, "near")); !os.IsNotExist(err) {
+		t.Errorf("the new file: err = %v, want none written", err)
+	}
+	if got, want := readTagFile(t, config.ProjectFile(root, "far")), "remote.host = \"box\"\n"; got != want {
+		t.Errorf("file = %q, want %q", got, want)
+	}
+}
+
 func TestRenameLeavesALinkThatNamesTheHostsProject(t *testing.T) {
 	body := strings.Replace(link, `host = "buildbox"`, "host = \"buildbox\"\nproject = \"other\"", 1)
 	root := renameRoot(t, "far", body)
