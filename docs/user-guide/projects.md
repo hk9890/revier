@@ -146,7 +146,7 @@ they are now, leaves open targets as they are, and steps over a project or
 target that is gone. A Claude Code agent comes back on its conversation, in
 the directory it worked in. Other agents start fresh in the project
 directory. A [named agent](configuration.md#named-agents) comes back as that
-agent. The restore names each agent it skips. When an agent resumes, when it
+agent. The restore says how many agents it skipped, and why. When an agent resumes, when it
 starts fresh, and which agent comes back in which tab is in
 [Resume an agent](agents.md#resume-an-agent). An
 attached window is not saved. A target that is now a

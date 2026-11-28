@@ -237,9 +237,9 @@ func (d *daily) openLocked() (bool, error) {
 
 // prune removes old files once a day, when the day's file is created, so a
 // keypress costs no directory listing. When it cannot list the log directory,
-// or cannot remove a file older than Keep days, it writes "log prune" once at
-// Warn, with dir and err. It stops at that failure, and the files it did not
-// remove stay.
+// or cannot remove a file past the newest Keep days, it writes "log prune"
+// once at Warn, with dir and err. It stops at that failure, and the files it
+// did not remove stay.
 func (d *daily) prune() {
 	if err := prune(d.dir, d.now()); err != nil {
 		slog.Warn("log prune", "dir", d.dir, "err", err)

@@ -4,7 +4,8 @@
 //
 // It is the one caller of state.Load and state.Update outside a test, so
 // every state write takes the state lock in File.Update, and File.Update
-// writes each change that write made as a line of the state record.
+// writes each selection, run, binding and attachment that write changed as a
+// line of the state record (changes).
 package ledger
 
 import (

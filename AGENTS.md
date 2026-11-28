@@ -37,9 +37,9 @@ Its rules are not visible from the code.
 [docs/design/product.md](docs/design/product.md) before the first edit under
 `pkg/revier/` or `internal/core/`, and before writing any plan that touches
 `cmd/`, `pkg/` or `internal/`. MUST read
-[docs/design/extending.md](docs/design/extending.md) too before the first edit
-under `internal/adapter/`, and before writing a plan that adds a host or a
-probe. MUST read [docs/design/README.md](docs/design/README.md) before the
+[docs/design/extending.md](docs/design/extending.md), with architecture.md and
+product.md, before the first edit under `internal/adapter/`, and before
+writing a plan that adds a host or a probe. MUST read [docs/design/README.md](docs/design/README.md) before the
 first edit under `docs/design/`.** The model and its boundaries are not visible from the
 code.
 

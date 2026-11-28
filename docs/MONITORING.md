@@ -8,8 +8,9 @@ doc reads what it already did.
 - One JSON line per record, in `$STATE/logs/revier-YYYY-MM-DD.log`.
 - `$STATE` is `$REVIER_STATE_HOME`, else `$XDG_STATE_HOME/revier`, else
   `~/.local/state/revier` (`internal/state.Root`).
-- A file older than `internal/logging.Keep` days is removed when a process
-  creates the day's file. A `log prune` `WARN` means some were not.
+- Only the newest `internal/logging.Keep` day files, today's included, stay:
+  the older ones are removed when a process creates the day's file. A
+  `log prune` `WARN` means some were not.
 - Every process appends to the same file: keybindings, the TUI, a restore. Split
   them by `pid`.
 - A remote project's operations run in the revier on its host, and log there.

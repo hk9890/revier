@@ -84,11 +84,12 @@ keys, so every letter goes to the query.
 | Esc | Clear the query. Then, from the Targets or the Agents, go back to the project list. Then quit, or hide the popup. In the agent list, Esc with no query quits or hides at once. |
 | ctrl+c | Quit. While a shutdown, a close or a restore runs: cancel it; a second ctrl+c quits. |
 
-While a shutdown, a close or a restore runs, the TUI shows each step as
-[Shut everything down](projects.md#shut-everything-down) says. No key other
+While a shutdown, a close or a restore runs, the TUI shows each step as it
+runs and what came of it. No key other
 than ctrl+c and no click does anything until it ends, except under
 [the popup's curtain](#the-popup). After ctrl+c the TUI stays open, to show
-what was done and what was not reached.
+what was done and what was not reached; see
+[Shut everything down](projects.md#shut-everything-down).
 
 While a shutdown or a close runs, its title says to wait until it ends. After
 the last step it waits for what it closed to go: each such step shows

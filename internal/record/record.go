@@ -7,7 +7,7 @@
 // those lines as uses, and a failure or a closed window is no use of a
 // project. An operation records what it did, failed or not. A surface records
 // what it saw, as the difference between two of its own surveys, and a save
-// records a snapshot of the survey it was made from.
+// that app.store makes records a snapshot of the survey it was made from.
 //
 // Like the log it is process-wide, and a process that never called Setup
 // records nothing.
@@ -38,18 +38,20 @@ const (
 )
 
 // The kinds a survey writes, as "saw" lines. A surface's surveys write them
-// through Saw; a save writes a snapshot of its own. With no surface running,
-// only a save writes a "saw" line.
+// through Saw; a save that app.store makes writes a snapshot of its own. With
+// no surface running, only such a save writes a "saw" line.
 //
 // A hidden popup writes the lines of a survey or a round already out at the
-// hide, then none, KindSurvey included, until its next raise, unless a launch
-// is coming up. A change made meanwhile carries the time of that raise's
-// survey. With no other surface surveying the scope, a replay calls it stale
-// in between.
+// hide, then none, KindSurvey included, until its next raise. A launch coming
+// up keeps this machine's survey going, but starts no round to a linked host.
+// A change made meanwhile carries the time of the next survey of its scope
+// after the raise. With no other surface surveying the scope, a replay calls
+// it stale in between.
 const (
 	// KindSnapshot is a whole survey of one scope, Machine, in Seen: at the
 	// first survey a surface makes of it, the first of a day, and one that
-	// sees another project list (Observer.Saw), and at each save, with Saved.
+	// sees another project list (Observer.Saw), and at each save app.store
+	// makes, with Saved. A last-seen save, and a save that failed, write none.
 	// Every other kind of this block but KindSurvey is one change since the
 	// surface's last survey of the scope.
 	KindSnapshot       = "snapshot"

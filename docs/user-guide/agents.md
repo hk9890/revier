@@ -125,15 +125,16 @@ command = ["sh", "-lc", "exec my-agent \"$@\"", "sh"]
 command = ["sh", "-lc", "my-agent"]
 ```
 
-A restored agent does one of three things:
+A restored agent resumes its conversation unless one of these holds, checked
+in this order:
 
-- **It resumes its conversation**, when Claude Code still has the
-  conversation and the directory the agent worked in is there.
-- **It starts fresh in its directory**, when Claude Code no longer has the
-  conversation: an agent that never got a prompt has none, and Claude Code
+- **The directory the agent worked in is gone.** It starts fresh in the
+  project, whatever became of its conversation.
+- **It cannot resume there.** It starts fresh when it ran in a tab target, or
+  when the panel it starts in now runs another harness.
+- **Claude Code no longer has the conversation.** It starts fresh in its
+  directory: an agent that never got a prompt has none, and Claude Code
   deletes old ones after `cleanupPeriodDays`, 30 days by default.
-- **It starts fresh in the project**, when the directory the agent worked in
-  is gone.
 
 A save by hand, at shutdown or at a project close notes an agent on this
 machine that never got a prompt. Its restore starts it fresh and does not say
