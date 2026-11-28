@@ -132,6 +132,11 @@ func WriteTags(file string, set []core.Tag, remove []string, inh Inherited) (cor
 		return loadProject(file, data, inh), nil
 	}
 	change := func(lines []string, _ projectFile) ([]string, error) {
+		// Tags with no [tags] header, such as dotted keys, would get a second
+		// table here: TOML refuses that, and the decoder does not.
+		if _, ok := before["tags"]; ok && len(set) > 0 && !hasTagsTable(lines) {
+			return nil, errTagsShape
+		}
 		for i, t := range set {
 			lines = putTag(lines, t.Key, literals[i])
 		}
@@ -156,6 +161,10 @@ func tagsDoc(text string) (map[string]any, error) {
 		delete(doc, "tags")
 	}
 	return doc, nil
+}
+
+func hasTagsTable(lines []string) bool {
+	return slices.ContainsFunc(tables(lines), func(t table) bool { return !t.array && t.name == "tags" })
 }
 
 // putTag puts key = literal under [tags], adding the table at the end of the

@@ -136,6 +136,29 @@ func TestWriteTagsRefusesWhatItCannotWriteAgain(t *testing.T) {
 	}
 }
 
+// Tags the file declares without a [tags] header get no second table beside
+// them: TOML allows a table once, which the decoder here does not enforce for
+// every shape.
+func TestWriteTagsAddsNoSecondTable(t *testing.T) {
+	for name, text := range map[string]string{
+		"a dotted key":         "tags.type = \"work\"\n" + taggedHome,
+		"a spaced dotted key":  "tags . type = \"work\"\n" + taggedHome,
+		"a quoted dotted key":  "\"tags\".type = \"work\"\n" + taggedHome,
+		"a dotted refused tag": "tags.count = 3\n" + taggedHome,
+		"an empty inline":      "tags = {}\n" + taggedHome,
+		"a quoted header":      taggedHome + "[\"tags\"]\ntype = \"work\"\n",
+		"an empty quoted one":  taggedHome + "[\"tags\"]\n",
+	} {
+		file := tagFile(t, text)
+		if _, err := config.WriteTags(file, []core.Tag{{Key: "added", Value: "x"}}, nil, config.Inherited{}); err == nil {
+			t.Errorf("%s: want an error", name)
+		}
+		if got := readTagFile(t, file); got != text {
+			t.Errorf("%s: a refused write changed the file:\n%s", name, got)
+		}
+	}
+}
+
 // A write changes the asked-for tags and no other value: a key that cannot be
 // removed is an error and not a write that did nothing, and a line inside a
 // quoted key's string is not the key it reads as.
