@@ -255,3 +255,62 @@ func (s *syncBuffer) String() string {
 	defer s.mu.Unlock()
 	return s.b.String()
 }
+
+// A window shows the panel's title until its program's own, which hc sends
+// again at the attach, replaces it, and the terminal's title stays the
+// program's. The test binary is revier here.
+func TestAViewsWindowIsTitledUntilItsProgramTitlesIt(t *testing.T) {
+	script, err := exec.LookPath("script")
+	if err != nil {
+		t.Skip("script is not installed; the attach needs a terminal")
+	}
+	for name, tc := range map[string]struct{ run, want, absent string }{
+		"a program that titles":   {`printf '\033]2;its own\007'; exec sleep 30`, "\x1b]2;its own", ""},
+		"a program that does not": {"exec sleep 30", "\x1b]2;the panel", "\x1b]2;its own"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h, c := world(t), ctx(t)
+			h.Revier = os.Args[0]
+			if _, err := h.Open(c, revier.Realization{Name: "home", Panels: []revier.PanelSpec{
+				{Kind: revier.PanelAgent, Title: "the panel", Command: []string{"sh", "-c", tc.run}},
+			}}); err != nil {
+				t.Fatalf("Open: %v", err)
+			}
+			panel := waitFor(t, h, func(in []revier.Instance) bool {
+				return len(in) == 1 && (tc.absent != "" || in[0].Panels[0].Title == "its own")
+			})[0].Panels[0]
+			if tc.absent != "" && panel.Title != "" {
+				t.Errorf("the panel's live title = %q, want none: the program set none", panel.Title)
+			}
+			argv, err := h.AttachPanel(panel.ID)
+			if err != nil {
+				t.Fatalf("AttachPanel: %v", err)
+			}
+			window := windowCmd(script, argv)
+			if _, err := window.StdinPipe(); err != nil {
+				t.Fatal(err)
+			}
+			var shown syncBuffer
+			window.Stdout = &shown
+			if err := window.Start(); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = window.Process.Kill(); _ = window.Wait() })
+			// hc's attach clears the screen once it draws, after the title.
+			deadline := time.Now().Add(10 * time.Second)
+			for !strings.Contains(shown.String(), tc.want) || !strings.Contains(shown.String(), "\x1b[2J") {
+				if time.Now().After(deadline) {
+					t.Fatalf("the window got %q, want %q", shown.String(), tc.want)
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+			got := shown.String()
+			if first := strings.Index(got, "\x1b]2;"); !strings.HasPrefix(got[first:], "\x1b]2;the panel\x1b\\") {
+				t.Errorf("the window got %q, want the panel's title first", got)
+			}
+			if tc.absent != "" && strings.Contains(got, tc.absent) {
+				t.Errorf("the window got %q, want no %q", got, tc.absent)
+			}
+		})
+	}
+}

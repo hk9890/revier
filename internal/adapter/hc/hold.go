@@ -1,6 +1,7 @@
 package hc
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/hk9890/revier/internal/plain"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
@@ -33,16 +35,20 @@ const heldLines = 1000
 // window waits for a person, not for the core.
 const heldWait = 5 * time.Second
 
+// titleWait bounds the call that titles a window: the attach waits for it.
+const titleWait = time.Second
+
 // heldPoll is how often a held window asks whether revier removed its
 // terminal, as a close or a shutdown does.
 const heldPoll = 500 * time.Millisecond
 
-// Attach runs hc's attach of panel on the terminal in and out are, then
-// holds the window when the terminal is revier's and its program ended on
-// its own: see hold. Input typed before the hold is
-// dropped, so a key meant for the program does not close the window. Past
-// the attach it never starts a core: it dials the socket alone.
+// Attach titles the window, see title, runs hc's attach of panel on the
+// terminal in and out are, then holds the window when the terminal is
+// revier's and its program ended on its own: see hold. Input typed before the
+// hold is dropped, so a key meant for the program does not close the window.
+// Beside the attach it never starts a core: it dials the socket alone.
 func (h *Host) Attach(ctx context.Context, bin string, panel revier.PanelID, in, out *os.File) error {
+	h.title(ctx, panel, out)
 	attach := exec.CommandContext(ctx, bin, "attach", panel.String())
 	attach.Stdin, attach.Stdout, attach.Stderr = in, out, out
 	attachErr := attach.Run()
@@ -52,6 +58,29 @@ func (h *Host) Attach(ctx context.Context, bin string, panel revier.PanelID, in,
 		return err
 	}
 	return attachErr
+}
+
+// title gives the window the panel's title, or its program's name, until the
+// program sets one of its own: a terminal names a window with no title after
+// the command it started, here the attach. hc's attach sends the title a
+// program set already, which replaces this one. It is written to the window
+// alone, never to hc's terminal, whose title a probe reads. A core that does
+// not answer leaves the window untitled, as the attach is what matters.
+func (h *Host) title(ctx context.Context, panel revier.PanelID, out io.Writer) {
+	calls, cancel := context.WithTimeout(ctx, titleWait)
+	defer cancel()
+	s, err := h.dial(calls, false)
+	if err != nil {
+		return
+	}
+	defer s.close()
+	var t terminal
+	if err := s.call("terminal.get", map[string]any{"terminal": panel.String()}, &t); err != nil {
+		return
+	}
+	// One line of plain text: a control character would end the sequence.
+	text := strings.Join(strings.Fields(plain.Text(cmp.Or(t.Labels[titleLabel], programOf(t)))), " ")
+	_, _ = fmt.Fprintf(out, "\x1b]2;%s\x1b\\", text)
 }
 
 // hold shows what a finished terminal of revier's left on out, with how its

@@ -47,6 +47,11 @@ func (h *Host) Hold(ctx context.Context, panel revier.PanelID, in io.Reader, out
 	return h.hold(ctx, panel, in, out)
 }
 
+// Title is title, for the tests of a window's title.
+func (h *Host) Title(ctx context.Context, panel revier.PanelID, out io.Writer) {
+	h.title(ctx, panel, out)
+}
+
 // Sweep is sweep on a session of its own, at now.
 func (h *Host) Sweep(ctx context.Context, now time.Time) error {
 	s, err := h.dial(ctx, false)

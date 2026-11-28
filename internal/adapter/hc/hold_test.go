@@ -223,3 +223,34 @@ func TestAttachPanelRunsRevierToHoldTheWindow(t *testing.T) {
 		t.Errorf("AttachPanel with revier gone = %q, %v; want %q", got, err, want)
 	}
 }
+
+// A window is titled with its panel's title, as one line of plain text, or
+// with its program's name, never with the attach command. A terminal that is
+// gone titles nothing.
+func TestAWindowIsTitledBeforeItsAttach(t *testing.T) {
+	for name, tc := range map[string]struct{ title, want string }{
+		"the panel's title":  {"Claude Code", "\x1b]2;Claude Code\x1b\\"},
+		"no title":           {"", "\x1b]2;claude\x1b\\"},
+		"control characters": {"a\x1b]2;b\x07\nc \u00e4", "\x1b]2;a c \u00e4\x1b\\"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c, sock := newCore(t)
+			term := revierTerminal("t1", "live", "")
+			if tc.title != "" {
+				term.Labels["revier.title"] = tc.title
+			}
+			c.terminals = []*fakeTerminal{term}
+			var out bytes.Buffer
+			(&hc.Host{Socket: sock}).Title(t.Context(), "t1", &out)
+			if out.String() != tc.want {
+				t.Errorf("the window got %q, want %q", out.String(), tc.want)
+			}
+		})
+	}
+	_, sock := newCore(t)
+	var out bytes.Buffer
+	(&hc.Host{Socket: sock}).Title(t.Context(), "t1", &out)
+	if out.Len() != 0 {
+		t.Errorf("a terminal that is gone gave the window %q, want nothing", out.String())
+	}
+}

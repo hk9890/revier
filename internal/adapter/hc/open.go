@@ -174,10 +174,10 @@ func (h *Host) closeAfter(ctx context.Context, core string, labels map[string]st
 }
 
 // start runs the panels of one tab, each with its command and env, under the
-// tab's labels, its place as revier.panel, and vars, and checks, in one
-// listing, that each still runs: one that ended is finished, or missing when
-// it was a shell, which hc removes as it exits. It returns the address of
-// the tab's first terminal.
+// tab's labels, its place as revier.panel, its title as revier.title, and
+// vars, and checks, in one listing, that each still runs: one that ended is
+// finished, or missing when it was a shell, which hc removes as it exits. It
+// returns the address of the tab's first terminal.
 //
 // The check sees only a program that ended before the listing: one that ends
 // a moment later leaves a tab without that panel. A terminal whose
@@ -187,6 +187,9 @@ func start(s *session, tab, vars map[string]string, panels []revier.PanelSpec, c
 	for i, p := range panels {
 		labels := maps.Clone(tab)
 		labels[panelLabel] = strconv.Itoa(i)
+		if p.Title != "" {
+			labels[titleLabel] = p.Title
+		}
 		maps.Copy(labels, vars)
 		params := map[string]any{
 			"labels": labels, "name": name(i), "no_parent": true, "keep": false, "rm": len(p.Command) == 0, "env": env,

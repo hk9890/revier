@@ -27,19 +27,21 @@ import (
 
 // The labels Open and OpenTab give each terminal of an instance: the
 // instance's id, the realization's name, the tab's token, the tab's place
-// among the tabs, and the terminal's place among the panels of its tab. The
-// token is the tab's own, so two tabs of the same vars, as two agent tabs,
-// stay two; the places keep the order a view draws them in.
+// among the tabs, the terminal's place among the panels of its tab, and the
+// panel's title when it has one. The token is the tab's own, so two tabs of
+// the same vars, as two agent tabs, stay two; the places keep the order a
+// view draws them in.
 const (
 	instanceLabel = "revier.instance"
 	nameLabel     = "revier.name"
 	tabLabel      = "revier.tab"
 	tabPlaceLabel = "revier.tabplace"
 	panelLabel    = "revier.panel"
+	titleLabel    = "revier.title"
 )
 
 // ownLabels are the labels that are revier's, and no panel var.
-var ownLabels = []string{instanceLabel, nameLabel, tabLabel, tabPlaceLabel, panelLabel, heldLabel}
+var ownLabels = []string{instanceLabel, nameLabel, tabLabel, tabPlaceLabel, panelLabel, titleLabel, heldLabel}
 
 // Host is an hc Runtime, and no View: hc keeps no focus and draws nothing,
 // so a terminal is put on an instance by attaching it, by hand or in a

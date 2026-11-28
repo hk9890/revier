@@ -25,7 +25,7 @@ import (
 // Each panel is a terminal with no parent, not kept, removed when its
 // program exits, named after the instance and its place, and labelled with
 // the instance, the name, the token and place 0 of the first tab, its place
-// in the tab, and the realization's vars.
+// in the tab, its title when it has one, and the realization's vars.
 func TestOpenLabelsAndNamesEachTerminal(t *testing.T) {
 	c, sock := newCore(t)
 	dir := t.TempDir()
@@ -34,7 +34,7 @@ func TestOpenLabelsAndNamesEachTerminal(t *testing.T) {
 		Name: "home", Dir: dir, Match: revier.Match{Title: "^home$"},
 		Vars: map[string]string{"revier_target": "home"},
 		Panels: []revier.PanelSpec{
-			{Kind: revier.PanelAgent, Command: []string{"sh", "-c", "sleep 30"}, Dir: dir},
+			{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"sh", "-c", "sleep 30"}, Dir: dir},
 			{Kind: revier.PanelShell, Dir: dir},
 		},
 	}
@@ -61,8 +61,8 @@ func TestOpenLabelsAndNamesEachTerminal(t *testing.T) {
 	for i, run := range runs {
 		labels := asMap(run["labels"])
 		if labels["revier.instance"] != id || labels["revier.name"] != "home" || labels["revier.panel"] != []string{"0", "1"}[i] ||
-			labels["revier.tab"] != token || labels["revier.tabplace"] != "0" || labels["revier_target"] != "home" || len(labels) != 6 {
-			t.Errorf("run %d labels = %v, want the instance, name, tab, tab place, place and var", i, labels)
+			labels["revier.tab"] != token || labels["revier.tabplace"] != "0" || labels["revier_target"] != "home" || len(labels) != []int{7, 6}[i] {
+			t.Errorf("run %d labels = %v, want the instance, name, tab, tab place, place and var, and a title on the first alone", i, labels)
 		}
 		if run["name"] != "rv-"+id+"-"+[]string{"0", "1"}[i] || run["no_parent"] != true || run["keep"] != false || run["cwd"] != dir {
 			t.Errorf("run %d = %v, want named after the instance, no parent, not kept, in %s", i, run, dir)
@@ -72,6 +72,9 @@ func TestOpenLabelsAndNamesEachTerminal(t *testing.T) {
 		if run["rm"] != (i == 1) {
 			t.Errorf("run %d rm = %v, want %v", i, run["rm"], i == 1)
 		}
+	}
+	if title := asMap(runs[0]["labels"])["revier.title"]; title != "Claude Code" {
+		t.Errorf("the agent's title label = %v, want Claude Code", title)
 	}
 	// A bare program name could name one of the user's hc templates, which hc
 	// would run in its place; a path never does.
