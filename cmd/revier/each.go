@@ -24,11 +24,14 @@ import (
 const eachUsage = `revier each - run one command in every project's directory
 
 usage:
-  revier each [--filter '<sh>'] [-n] -- <cmd> [args...]
+  revier each [-t key=value].. [--filter '<sh>'] [-n] -- <cmd> [args...]
   revier each log                          past runs, newest first
   revier each log <run>                    how each project ended
   revier each log <run> <project>          what the command printed there
 
+  -t, --tag key=value
+                   only the projects that carry the tag; given again, only
+                   those that carry every one. 'revier tags' lists them.
   --filter '<sh>'  a shell test run in each directory; the command runs only
                    where it exits 0. 'test -d .git' selects the repositories.
   -n, --dry-run    print the selection and run nothing
@@ -80,6 +83,8 @@ func cmdEach(w io.Writer, args []string) error {
 	var dry bool
 	fs.BoolVar(&dry, "dry-run", false, "print the selection and run nothing")
 	fs.BoolVar(&dry, "n", false, "print the selection and run nothing (shorthand)")
+	var tags tagFlags
+	tags.register(fs)
 	pos, err := parseArgs(fs, args[:sep])
 	if err != nil {
 		return err
@@ -97,6 +102,14 @@ func cmdEach(w io.Writer, args []string) error {
 		return err
 	}
 	warnProblems(cfg, projects)
+	// A project without the tags is not left out of the run, as a filtered
+	// one is: it was never in it, so it has no line.
+	if len(tags) > 0 {
+		projects = core.WithTags(projects, tags)
+		if len(projects) == 0 {
+			return fmt.Errorf("each: no project has the tags %s", tags.String())
+		}
+	}
 	var keep func(string) bool
 	if *filter != "" {
 		keep = shellTest(*filter)
@@ -124,7 +137,7 @@ func cmdEach(w io.Writer, args []string) error {
 	if err != nil {
 		return err
 	}
-	r, err := runlog.Start(stateRoot, argv, *filter, time.Now())
+	r, err := runlog.Start(stateRoot, argv, *filter, tags.words(), time.Now())
 	if err != nil {
 		return err
 	}
@@ -373,18 +386,23 @@ func cmdEachLog(w io.Writer, args []string) error {
 	}
 }
 
-// runCommand is how a run is named in a listing: what it ran, the filter that
-// chose where, and whether it got to the end. Each word is quoted as a shell
-// reads it back, so the line can be pasted to run the same command again.
+// runCommand is how a run is named in a listing: what it ran, the tags and
+// the filter that chose where, and whether it got to the end. Each word is quoted as a shell
+// reads it back, and the command always follows "--", so the line pasted
+// after `revier each` runs the same command again.
 func runCommand(r runlog.Run) string {
-	words := make([]string, len(r.Argv))
-	for i, w := range r.Argv {
-		words[i] = shell.Quote(w)
+	var words []string
+	for _, t := range r.Tags {
+		words = append(words, "-t", shell.Quote(t))
+	}
+	if r.Filter != "" {
+		words = append(words, "--filter", shell.Quote(r.Filter))
+	}
+	words = append(words, "--")
+	for _, w := range r.Argv {
+		words = append(words, shell.Quote(w))
 	}
 	s := strings.Join(words, " ")
-	if r.Filter != "" {
-		s = "--filter " + shell.Quote(r.Filter) + " -- " + s
-	}
 	if r.Finished.IsZero() {
 		s += "  (unfinished)"
 	}

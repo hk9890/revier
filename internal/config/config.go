@@ -437,7 +437,11 @@ func invalid(path string, err error) core.Project {
 func loadProject(path string, data []byte, inh Inherited) core.Project {
 	p, parts, err := decodeProject(data, inh.Targets)
 	if err != nil {
-		return invalid(path, fmt.Errorf("%s: %w", path, err))
+		// Its tags still select it: a listing by tag must show the project
+		// and its reason, not leave it out (decisions/0085).
+		bad := invalid(path, fmt.Errorf("%s: %w", path, err))
+		bad.Tags, bad.TagRefused = projectTags(data)
+		return bad
 	}
 	p.Name = nameOf(path)
 	// A path is expanded once, here, so every consumer - templates, working
@@ -465,6 +469,7 @@ func loadProject(path string, data []byte, inh Inherited) core.Project {
 		prepared.LocalOnly = localOnly(inh.Targets, p)
 	}
 	prepared.Status, prepared.StatusRefused = projectStatuses(data)
+	prepared.Tags, prepared.TagRefused = projectTags(data)
 	var unrendered []error
 	prepared.Agents, unrendered = renderAgents(p, agents)
 	prepared.AgentRefused = append(agentRefused, unrendered...)
@@ -493,7 +498,8 @@ func loadProject(path string, data []byte, inh Inherited) core.Project {
 
 // Problems is every reason a loaded project is not whole: the project-wide
 // refusal first, then one per refused target, then one per refused
-// [[status]] table, then one per refused [[agent]] table or key. It is
+// [[status]] table, then one per tag left out of [tags], then one per refused
+// [[agent]] table or key. It is
 // empty for a project that loaded entire, which is what `revier new` asks
 // before it keeps a file.
 func Problems(p core.Project) []error {
@@ -507,6 +513,7 @@ func Problems(p core.Project) []error {
 		}
 	}
 	out = append(out, p.StatusRefused...)
+	out = append(out, p.TagRefused...)
 	return append(out, p.AgentRefused...)
 }
 
@@ -514,8 +521,8 @@ func Problems(p core.Project) []error {
 // write is refused for. A write is refused for what it breaks and not for
 // what was broken before it, else one unfixed target would lock every other
 // edit of the file, and the file could only be repaired by hand. A problem
-// is the project's, one target's by name, or one status place's or named
-// agent's: the opening of its refusal, since a TOML error in the tables
+// is the project's, one target's by name, or one status place's, named
+// agent's or tag's: the opening of its refusal, since a TOML error in the tables
 // names a line, and an edit above them moves it.
 func newProblems(before, after core.Project) []error {
 	had := map[string]bool{}
@@ -540,10 +547,10 @@ func newProblems(before, after core.Project) []error {
 		what, _, _ := strings.Cut(err.Error(), ":")
 		return what
 	}
-	for _, err := range slices.Concat(before.StatusRefused, before.AgentRefused) {
+	for _, err := range slices.Concat(before.StatusRefused, before.AgentRefused, before.TagRefused) {
 		had[place(err)] = true
 	}
-	for _, err := range slices.Concat(after.StatusRefused, after.AgentRefused) {
+	for _, err := range slices.Concat(after.StatusRefused, after.AgentRefused, after.TagRefused) {
 		if !had[place(err)] {
 			out = append(out, err)
 		}

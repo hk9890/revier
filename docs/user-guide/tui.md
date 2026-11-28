@@ -40,14 +40,18 @@ machine shows its link name, for example `far@buildbox`; see
 ### The pane
 
 The pane's top line holds the project's name, which opens the project screen.
-Under it the pane shows the project's status, path and git URL, then two
-sections:
+Under it the pane shows the project's status, path, git URL and
+[tags](projects.md#tag-projects), then two sections:
 
 - **Targets**: each target, its key and its state, then each window you
   attached with `revier attach`.
 - **Agents**: each agent as the [agent list](#the-agent-list) shows it,
   without the project. Under the list is the terminal of the selected agent,
   as it is now.
+
+The tags take one line. When they do not fit, the line ends in how many more
+there are, or a tag too long for the line ends in …: click it to show every
+tag whole, and click it again to close it.
 
 When a file does not load or a host does not answer, the pane gives the
 reason. When the project directory is missing and the project has a
@@ -206,7 +210,7 @@ Each screen takes the place of the list. Esc goes back one step.
 |---|---|---|
 | alt+n | new | Add a project. Type a path, a name, or a git URL to clone. |
 | alt+r | remote | The machines you added, each with its revier version. Pick a machine, a project, a name to link a project there. On the screen, alt+n adds a machine from `~/.ssh/config` and alt+d removes one. See [links.md](links.md). |
-| alt+e | project | Edit the project's name, path, git URL and targets. Each change is written at once. |
+| alt+e | project | Edit the project's name, path, git URL, targets and tags. Each change is written at once. |
 | alt+s | sessions | Restore a saved session with Enter, save the open projects with alt+s, or shut down with alt+q. The cursor starts on the session `revier session restore` opens. Its top line has the save and shutdown buttons. See [projects.md](projects.md#save-and-restore-sessions). |
 | alt+q | shutdown | Close every project or one. It shows the plan and saves the session first. It belongs to the sessions screen; alt+q opens it from the project list too, and Esc goes back to where you opened it. |
 | alt+c | config | Change theme, glyphs, trigger key, runtime host, shared targets and actions. Each change is written to `config.toml` at once. |

@@ -94,12 +94,13 @@ func (m *Model) query(f focus, q string) {
 	}
 }
 
-// forgetPane drops the pane's query and cursors, and the agent the user
-// chose. They are about one project's rows, and mean nothing over another's.
+// forgetPane drops the pane's query and cursors, the agent the user chose,
+// and an open tags row. They are about one project's rows, and mean nothing over another's.
 func (m *Model) forgetPane() {
 	m.tcursor = 0
 	m.apartial = 0
 	m.pclick = paneClick{} // a click on the last project's row is not half of a double click on this one's
+	m.tagsOpen = false
 	m.query(focusAgents, "")
 }
 

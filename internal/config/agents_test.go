@@ -42,20 +42,6 @@ name = "agent"
     kind = "shell"
 `
 
-// loadOne loads config.toml and one project file, demo.toml.
-func loadOne(t *testing.T, cfgText, body string) (*config.Config, core.Project) {
-	t.Helper()
-	root := projectsRoot(t, cfgText, map[string]string{"demo.toml": body})
-	cfg, projects, err := config.Load(root)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if len(projects) != 1 {
-		t.Fatalf("Load: %d projects, want 1", len(projects))
-	}
-	return cfg, projects[0]
-}
-
 func agentNames(p core.Project) []string {
 	var out []string
 	for _, a := range p.Agents {

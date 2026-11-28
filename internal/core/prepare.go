@@ -42,6 +42,10 @@ type Project struct {
 	Agents       []NamedAgent
 	AgentRefused []error
 
+	// TagRefused is why each tag of the file's [tags] that a selector could
+	// not name is left out of Tags.
+	TagRefused []error
+
 	// LocalOnly is, for a link, each shared target of config.toml the link
 	// does not get because it has no [target.remote] part, by name, and true
 	// for a command target: a link runs no command target. A press on such

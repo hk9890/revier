@@ -280,3 +280,50 @@ func sharedTyped(t *testing.T, shared []map[string]any) []revier.Target {
 	}
 	return typed
 }
+
+// loadOne loads config.toml and one project file, demo.toml.
+func loadOne(t *testing.T, cfgText, body string) (*config.Config, core.Project) {
+	t.Helper()
+	root := projectsRoot(t, cfgText, map[string]string{"demo.toml": body})
+	cfg, projects, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(projects) != 1 {
+		t.Fatalf("Load: %d projects, want 1", len(projects))
+	}
+	return cfg, projects[0]
+}
+
+// taggedHome is a project file whose home loads whole, for the tests of its
+// [tags] to add to.
+const taggedHome = `path = "/tmp/demo"
+[[target]]
+name = "home"
+home = true
+  [target.runtime]
+  name = "session:{{.Name}}"
+  match = { title = "^session:{{.Name}}$" }
+    [[target.runtime.panels]]
+    kind = "shell"
+`
+
+// tagFile writes text as a project file of its own, demo.toml, and returns
+// its path; readTagFile reads it back.
+func tagFile(t *testing.T, text string) string {
+	t.Helper()
+	file := filepath.Join(t.TempDir(), "demo.toml")
+	if err := os.WriteFile(file, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return file
+}
+
+func readTagFile(t *testing.T, file string) string {
+	t.Helper()
+	data, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}

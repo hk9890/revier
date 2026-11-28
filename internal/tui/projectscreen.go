@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 
@@ -13,17 +15,18 @@ import (
 	"github.com/hk9890/revier/internal/app"
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
+	"github.com/hk9890/revier/internal/plain"
 	"github.com/hk9890/revier/internal/theme"
 	"github.com/hk9890/revier/pkg/revier"
 )
 
 // The project screen, alt+e or the name at the top of the pane: the project
 // file of the highlighted project, as the config screen is config.toml
-// (decisions/0081). Its name, path and git_url are typed in place, and its
+// (decisions/0081). Its name, path and git_url are typed in place, its
 // targets are listed as the project has them, config.toml's among them, each
-// with the form the config screen uses. A change is written as it is made,
-// to the project file alone, and the surface takes the project as it now
-// loads.
+// with the form the config screen uses, and its tags are typed in place too.
+// A change is written as it is made, to the project file alone, and the
+// surface takes the project as it now loads.
 //
 // A name is the file's name, so a new one moves the file; a link's host
 // and its name there are the link's identity and are shown, not offered.
@@ -55,7 +58,7 @@ type projectScreen struct {
 	edit     textinput.Model    // a field's value, while it is typed
 	tform    targetForm         // the target being added or changed, while its form is up
 	formAt   int                // the target the form changes, or one past the last for a new one
-	dropping bool               // whether the target under the cursor waits on a y to be deleted
+	dropping bool               // whether the tag or target under the cursor waits on a y to be deleted
 }
 
 func newProjectScreen(th theme.Theme) projectScreen {
@@ -145,6 +148,27 @@ func (ps *projectScreen) addTargetRow() int {
 	return len(ps.fields()) + len(ps.text.Targets)
 }
 
+// tagKeys are the tags' keys in the order the screen lists them.
+func (ps *projectScreen) tagKeys() []string {
+	return slices.Sorted(maps.Keys(ps.text.Tags))
+}
+
+// tagRow is the key of the tag the cursor is on, if any. The tags follow
+// the row that adds a target.
+func (ps *projectScreen) tagRow() (string, bool) {
+	keys := ps.tagKeys()
+	i := ps.row - ps.addTargetRow() - 1
+	if i < 0 || i >= len(keys) {
+		return "", false
+	}
+	return keys[i], true
+}
+
+// addTagRow is the row that adds a tag, the screen's last.
+func (ps *projectScreen) addTagRow() int {
+	return ps.addTargetRow() + 1 + len(ps.text.Tags)
+}
+
 // value is a field as the file has it.
 func (ps *projectScreen) value(f projectField) string {
 	switch f {
@@ -170,10 +194,11 @@ func (ps *projectScreen) key(sf surface, msg keyPress) (projectResult, tea.Cmd) 
 	case ps.dropping && key.Matches(msg, sf.keys.Quit):
 		return projectResult{err: sf.err}, tea.Quit
 	case ps.dropping:
-		return ps.dropTarget(sf, msg), nil
+		return ps.drop(sf, msg), nil
 	}
 	var res projectResult
 	i, onTarget := ps.targetRow()
+	tag, onTag := ps.tagRow()
 	switch {
 	case key.Matches(msg, sf.keys.Quit):
 		return res, tea.Quit
@@ -182,7 +207,21 @@ func (ps *projectScreen) key(sf surface, msg keyPress) (projectResult, tea.Cmd) 
 	case key.Matches(msg, sf.keys.Up):
 		ps.row = max(ps.row-1, 0)
 	case key.Matches(msg, sf.keys.Down):
-		ps.row = min(ps.row+1, ps.addTargetRow())
+		ps.row = min(ps.row+1, ps.addTagRow())
+	case onTag && key.Matches(msg, sf.keys.Delete):
+		ps.dropping = true
+	case onTag && key.Matches(msg, sf.keys.Enter):
+		cmd := ps.startEdit(sf, ps.text.Tags[tag])
+		// The input turns a tab and a newline into a space, so writing what
+		// it holds would lose them.
+		if ps.edit.Value() != ps.text.Tags[tag] {
+			ps.edit.Blur()
+			res.err = fmt.Errorf("tag %q holds a tab or a newline; change it with revier tag", tag)
+			return res, nil
+		}
+		return res, cmd
+	case ps.row == ps.addTagRow() && key.Matches(msg, sf.keys.Enter):
+		return res, ps.startEdit(sf, "")
 	case onTarget && key.Matches(msg, sf.keys.Delete):
 		pt := ps.text.Targets[i]
 		if pt.Source == config.FromShared || pt.Source == config.Derived {
@@ -195,14 +234,20 @@ func (ps *projectScreen) key(sf surface, msg keyPress) (projectResult, tea.Cmd) 
 	case ps.row == ps.addTargetRow() && key.Matches(msg, sf.keys.Enter):
 		return res, ps.openTargetForm(sf.theme, len(ps.text.Targets))
 	case key.Matches(msg, sf.keys.Enter):
-		// As wide as the row leaves it, so a long path scrolls under the
-		// cursor instead of running off the right edge, typed blind.
-		ps.edit.SetWidth(max(sf.list-lipgloss.Width(cursor(sf.theme, true))-configLabelWidth-1, 8))
-		ps.edit.SetValue(ps.value(ps.fields()[ps.row]))
-		ps.edit.CursorEnd()
-		return res, ps.edit.Focus()
+		return res, ps.startEdit(sf, ps.value(ps.fields()[ps.row]))
 	}
 	return res, nil
+}
+
+// startEdit types a value in place on the cursor's row: a field's, a tag's,
+// or the key=value of a new tag.
+func (ps *projectScreen) startEdit(sf surface, value string) tea.Cmd {
+	// As wide as the row leaves it, so a long path scrolls under the
+	// cursor instead of running off the right edge, typed blind.
+	ps.edit.SetWidth(max(sf.list-lipgloss.Width(cursor(sf.theme, true))-configLabelWidth-1, 8))
+	ps.edit.SetValue(value)
+	ps.edit.CursorEnd()
+	return ps.edit.Focus()
 }
 
 // editKey is a press while a field is typed. Enter writes it, Esc leaves it
@@ -217,7 +262,7 @@ func (ps *projectScreen) editKey(sf surface, msg keyPress) (projectResult, tea.C
 		ps.edit.Blur()
 		return res, nil
 	case key.Matches(msg, sf.keys.Enter):
-		res = ps.saveField(sf, ps.fields()[ps.row], strings.TrimSpace(ps.edit.Value()))
+		res = ps.saveEdit(sf, ps.edit.Value())
 		if res.err == nil {
 			ps.edit.Blur()
 		}
@@ -228,6 +273,42 @@ func (ps *projectScreen) editKey(sf surface, msg keyPress) (projectResult, tea.C
 	in, cmd := ps.edit.Update(msg.input())
 	ps.edit = in
 	return res, cmd
+}
+
+// saveEdit writes what was typed on the cursor's row: a tag's new value, as
+// typed, a new tag as key=value, or a field's value. The cursor follows a tag
+// by its key, since the file read back can hold others.
+func (ps *projectScreen) saveEdit(sf surface, typed string) projectResult {
+	tag, onTag := ps.tagRow()
+	t := core.Tag{Key: tag, Value: typed}
+	if !onTag {
+		typed = strings.TrimSpace(typed)
+		if ps.row != ps.addTagRow() {
+			return ps.saveField(sf, ps.fields()[ps.row], typed)
+		}
+		var err error
+		if t, err = core.ParseTag(typed); err != nil {
+			return projectResult{err: err}
+		}
+		if was, ok := ps.text.Tags[t.Key]; ok {
+			return projectResult{err: fmt.Errorf("tag %q is already %q; change it on its own row", t.Key, was)}
+		}
+	}
+	res := ps.writeTags(sf, []core.Tag{t}, nil)
+	if i := slices.Index(ps.tagKeys(), t.Key); res.err == nil && i >= 0 {
+		ps.row = ps.addTargetRow() + 1 + i
+	}
+	return res
+}
+
+// writeTags sets and removes tags in the project file, as revier tag does.
+func (ps *projectScreen) writeTags(sf surface, set []core.Tag, remove []string) projectResult {
+	p, _ := projectNamed(sf.projects, ps.name)
+	written, err := config.WriteTags(p.File, set, remove, sf.usable)
+	if err != nil {
+		return projectResult{err: err}
+	}
+	return ps.took(sf, written)
 }
 
 // saveField writes a field's value to the project file. The name is the
@@ -330,14 +411,22 @@ func (ps *projectScreen) saveTarget(sf surface, edit config.TargetEdit) projectR
 	return res
 }
 
-// dropTarget takes the key that answers the delete question. Only y deletes
-// the file's entry: a target of the project's own goes, and an override
-// leaves config.toml's target as it is there. ctrl+c quits before it gets
-// here.
-func (ps *projectScreen) dropTarget(sf surface, msg keyPress) projectResult {
+// drop takes the key that answers the delete question. Only y deletes: the
+// tag under the cursor, or the file's entry of its target. A target of the
+// project's own goes, and an override leaves config.toml's target as it is
+// there. ctrl+c quits before it gets here.
+func (ps *projectScreen) drop(sf surface, msg keyPress) projectResult {
 	ps.dropping = false
+	if msg.String() != "y" {
+		return projectResult{err: sf.err}
+	}
+	if tag, ok := ps.tagRow(); ok {
+		res := ps.writeTags(sf, nil, []string{tag})
+		ps.row = min(ps.row, ps.addTagRow())
+		return res
+	}
 	i, ok := ps.targetRow()
-	if msg.String() != "y" || !ok {
+	if !ok {
 		return projectResult{err: sf.err}
 	}
 	p, _ := projectNamed(sf.projects, ps.name)
@@ -354,9 +443,12 @@ func (ps *projectScreen) dropTarget(sf surface, msg keyPress) projectResult {
 	return res
 }
 
-// dropPrompt is the delete question for the target under the cursor.
+// dropPrompt is the delete question for the tag or target under the cursor.
 func (ps *projectScreen) dropPrompt(th theme.Theme) string {
 	question := ""
+	if tag, ok := ps.tagRow(); ok {
+		question = fmt.Sprintf("delete tag %q?", tag)
+	}
 	if i, ok := ps.targetRow(); ok {
 		pt := ps.text.Targets[i]
 		question = fmt.Sprintf("delete target %q?", pt.Target.Name)
@@ -371,14 +463,15 @@ func (ps *projectScreen) dropPrompt(th theme.Theme) string {
 // help is the footer on the project screen.
 func (ps *projectScreen) help(k keyMap) []key.Binding {
 	_, onTarget := ps.targetRow()
+	_, onTag := ps.tagRow()
 	switch {
 	case ps.edit.Focused():
 		return k.helpForConfig(configTyping)
 	case ps.tform.open:
 		return k.helpForConfig(ps.tform.helpKind())
-	case onTarget:
+	case onTarget, onTag:
 		return k.helpForConfig(configOnAction)
-	case ps.row == ps.addTargetRow():
+	case ps.row == ps.addTargetRow(), ps.row == ps.addTagRow():
 		return k.helpForConfig(configOnAdd)
 	}
 	return []key.Binding{helpKey("↑↓", "move"), helpKey("enter", "edit"), helpKey("esc", "back"), k.Quit}
@@ -458,6 +551,20 @@ func (ps *projectScreen) screen(sf surface) (string, int) {
 	if ps.tform.open && ps.formAt == len(ps.text.Targets) {
 		form()
 	}
+
+	b.WriteString(heading(th, "Tags", w))
+	typed := func(r int, value string) string {
+		if ps.edit.Focused() && ps.row == r {
+			return inputView(ps.edit)
+		}
+		return value
+	}
+	for i, tag := range ps.tagKeys() {
+		r := ps.addTargetRow() + 1 + i
+		// A key as wide as the label column would run into its value.
+		row(r, ellipsis(plain.Line(tag), configLabelWidth-1), typed(r, plain.Line(ps.text.Tags[tag])), "")
+	}
+	row(ps.addTagRow(), "+", typed(ps.addTagRow(), "add a tag"), "type key=value")
 
 	if len(ps.text.Vars) > 0 {
 		b.WriteString(heading(th, "Vars", w))

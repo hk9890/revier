@@ -46,6 +46,7 @@ type ProjectText struct {
 	GitURL  string
 	Remote  *revier.Link // a link's host and the name there, the derived one included
 	Vars    map[string]string
+	Tags    map[string]string // the tags a selector can name; doctor reports the others
 	Targets []ProjectTarget
 }
 
@@ -61,6 +62,7 @@ func ReadProject(file string, inh Inherited) (ProjectText, error) {
 		return ProjectText{}, fmt.Errorf("%s: %w", file, err)
 	}
 	out := ProjectText{Path: own.Path, GitURL: own.GitURL, Vars: own.Vars}
+	out.Tags, _ = projectTags(data)
 	merged, _, err := decodeProject(data, shared)
 	if err != nil {
 		return ProjectText{}, fmt.Errorf("%s: %w", file, err)

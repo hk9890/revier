@@ -797,6 +797,13 @@ func agentFacts(th theme.Theme, it agentItem, now time.Time, w int) string {
 	if it.project.GitURL != "" {
 		line("Git URL", it.project.GitURL, th.Path)
 	}
+	// The row stays closed, as the project pane's does, so many tags cannot
+	// push the mirror off a pane that does not scroll; the project pane opens
+	// it.
+	if tags := core.SortedTags(it.project.Tags); len(tags) > 0 {
+		row, _ := tagsRow(th, tags, w, false, false)
+		b.WriteString(row)
+	}
 	line("Harness", harnessOf(it.agent), th.Path)
 	if name := it.name(); name != "" {
 		line("Name", name, th.Path)

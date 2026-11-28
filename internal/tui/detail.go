@@ -273,6 +273,17 @@ func (m *Model) facts(v revier.ProjectView, w int) string {
 	if v.Project.GitURL != "" {
 		line("Git URL", v.Project.GitURL, th.Path)
 	}
+	// The tags row is one line until a click opens it: a project can carry
+	// many, and the rows under it are what the pane is read for.
+	m.tagspan = lineSpan{}
+	if tags := core.SortedTags(v.Project.Tags); len(tags) > 0 {
+		start := strings.Count(b.String(), "\n")
+		row, toggles := tagsRow(th, tags, w, m.tagsOpen, m.over.kind == hoverTags)
+		b.WriteString(row)
+		if toggles {
+			m.tagspan = lineSpan{start: start, end: strings.Count(b.String(), "\n")}
+		}
+	}
 	// A host that did not answer is said here, in full: the row says nothing
 	// about it, and this is where the reason is read.
 	if v.Unreachable != "" {

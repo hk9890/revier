@@ -16,7 +16,7 @@ var t0 = time.Date(2026, 9, 11, 14, 3, 22, 0, time.Local)
 
 func TestARunIsKeptUnderTheStateRoot(t *testing.T) {
 	state := t.TempDir()
-	r, err := runlog.Start(state, []string{"git", "pull"}, "test -d .git", t0)
+	r, err := runlog.Start(state, []string{"git", "pull"}, "test -d .git", nil, t0)
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestARunIsKeptUnderTheStateRoot(t *testing.T) {
 
 func TestAProjectsOutputCanBeReadAfterTheRun(t *testing.T) {
 	state := t.TempDir()
-	r, err := runlog.Start(state, []string{"echo", "hi"}, "", t0)
+	r, err := runlog.Start(state, []string{"echo", "hi"}, "", nil, t0)
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestAProjectsOutputCanBeReadAfterTheRun(t *testing.T) {
 // listed, and says it did not finish.
 func TestAnInterruptedRunIsListedUnfinished(t *testing.T) {
 	state := t.TempDir()
-	if _, err := runlog.Start(state, []string{"sleep", "600"}, "", t0); err != nil {
+	if _, err := runlog.Start(state, []string{"sleep", "600"}, "", nil, t0); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	runs, err := runlog.List(state)
@@ -83,7 +83,7 @@ func TestAnInterruptedRunIsListedUnfinished(t *testing.T) {
 func TestListIsNewestFirst(t *testing.T) {
 	state := t.TempDir()
 	for _, at := range []time.Time{t0, t0.Add(time.Hour), t0.Add(-time.Hour)} {
-		if _, err := runlog.Start(state, []string{"true"}, "", at); err != nil {
+		if _, err := runlog.Start(state, []string{"true"}, "", nil, at); err != nil {
 			t.Fatalf("Start: %v", err)
 		}
 	}

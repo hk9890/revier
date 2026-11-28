@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"log/slog"
 	"os"
@@ -77,12 +78,18 @@ func valueAt(text, table, key string) (string, error) {
 	return literalOf(v)
 }
 
+// keyPart is one part of a TOML key: bare, or quoted either way.
+const keyPart = `(?:[A-Za-z0-9_-]+|"(?:[^"\\]|\\.)*"|'[^']*')`
+
 var (
 	// headerLine is a table header, [name] or [[name]], with an optional
 	// comment after it.
 	headerLine = regexp.MustCompile(`^\s*(\[\[?)\s*([A-Za-z0-9_.-]+)\s*\]\]?\s*(#.*)?$`)
-	// keyLine is the start of a bare key's line, up to where its value begins.
-	keyLine = regexp.MustCompile(`^\s*([A-Za-z0-9_-]+)\s*=\s*`)
+	// keyLine is the start of a key's line, up to where its value begins. It
+	// takes a quoted and a dotted key too, so the editor reads past their
+	// values; the key it captures is as written, so only a bare one is ever
+	// the key an edit names.
+	keyLine = regexp.MustCompile(`^\s*(` + keyPart + `(?:\s*\.\s*` + keyPart + `)*)\s*=\s*`)
 )
 
 // setKey puts key = literal under [table] in text. A missing table is added
@@ -191,11 +198,9 @@ func dropLines(lines []string, from, to int) []string {
 			kept = append(kept, lines[j])
 			continue
 		}
-		end, _ := valueEnd(lines, j, at[1])
-		for k, col := j, at[1]; k <= end; k, col = k+1, 0 {
-			if c := commentOf(lines[k], col); c != "" {
-				kept = append(kept, leading(lines[j])+c)
-			}
+		end, _, comments := valueScan(lines, j, at[1])
+		for _, c := range comments {
+			kept = append(kept, leading(lines[j])+c)
 		}
 		j = end
 	}
@@ -211,44 +216,62 @@ func leading(line string) string {
 }
 
 // valueEnd finds where a value that starts at lines[i][col] ends: the line it
-// ends on, and the column after its last character. A bracket opens a value
-// that runs until it is closed, over as many lines as that takes; a quote
-// hides brackets and comment marks inside it.
+// ends on, and the column after its last character.
 func valueEnd(lines []string, i, col int) (int, int) {
+	end, endCol, _ := valueScan(lines, i, col)
+	return end, endCol
+}
+
+// valueScan is valueEnd, with each comment on the value's lines. A bracket
+// opens a value that runs until it is closed, over as many lines as that
+// takes, and so does a multi-line string, basic or literal, which can hold a
+// line that reads as a header or a key; a quote hides brackets and comment marks inside it.
+func valueScan(lines []string, i, col int) (int, int, []string) {
 	depth := 0
 	var quote byte
+	multi := false // quote opened a """ or ''' string
 	end, endCol := i, col
+	var comments []string
 	for ; i < len(lines); i, col = i+1, 0 {
 		line := lines[i]
 	scan:
 		for j := col; j < len(line); j++ {
 			c := line[j]
 			switch {
+			case quote != 0 && c == '\\' && quote == '"':
+				j++
+			case quote != 0 && c == quote && !multi:
+				quote, end, endCol = 0, i, j+1
+			case quote != 0 && c == quote && strings.HasPrefix(line[j:], strings.Repeat(string(c), 3)):
+				// A closing run of up to five quotes: the two before the
+				// last three are the string's own.
+				run := len(line[j:]) - len(strings.TrimLeft(line[j:], string(c)))
+				quote, multi, end, endCol = 0, false, i, j+min(run, 5)
+				j += min(run, 5) - 1
 			case quote != 0:
-				if c == '\\' && quote == '"' {
-					j++
-				} else if c == quote {
-					quote, end, endCol = 0, i, j+1
-				}
+			case (c == '"' || c == '\'') && strings.HasPrefix(line[j:], strings.Repeat(string(c), 3)):
+				quote, multi = c, true
+				j += 2
 			case c == '"' || c == '\'':
 				quote = c
 			case c == '#':
+				comments = append(comments, strings.TrimSpace(line[j:]))
 				break scan
 			case c == '[' || c == '{':
 				depth++
 			case c == ']' || c == '}':
 				depth--
 				end, endCol = i, j+1
-			case c == ' ' || c == '\t':
+			case c == ' ' || c == '\t' || c == '\r':
 			default:
 				end, endCol = i, j+1
 			}
 		}
-		if depth <= 0 {
-			return end, endCol
+		if depth <= 0 && !multi {
+			return end, endCol, comments
 		}
 	}
-	return end, endCol
+	return end, endCol, comments
 }
 
 // replaceFile writes a file whole or not at all: a crash halfway through
@@ -257,11 +280,32 @@ func valueEnd(lines []string, i, col int) (int, int) {
 // file keeps its permissions. A write that succeeds logs "config written" at
 // INFO with path, the file written through any link: config.toml or a
 // project's file.
+//
+// A file whose every line ends in CRLF keeps that: the line editor splits at
+// "\n", so a line it adds ends in "\n" alone, and the file would come out
+// mixed. A file that is mixed already is written as the editor left it.
 func replaceFile(path string, data []byte) error {
+	if old, err := os.ReadFile(path); err == nil {
+		data = withLineEnds(old, data)
+	}
 	real, err := fsutil.WriteThrough(path, data)
 	if err != nil {
 		return err
 	}
 	slog.Info("config written", "path", real)
 	return nil
+}
+
+// withLineEnds is data with CRLF line ends when every line of old has them.
+func withLineEnds(old, data []byte) []byte {
+	if !allCRLF(old) {
+		return data
+	}
+	return bytes.ReplaceAll(bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n")), []byte("\n"), []byte("\r\n"))
+}
+
+// allCRLF reports whether a file has line ends and each one is CRLF.
+func allCRLF(data []byte) bool {
+	lf := bytes.Count(data, []byte("\n"))
+	return lf > 0 && bytes.Count(data, []byte("\r\n")) == lf
 }
