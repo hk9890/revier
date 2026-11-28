@@ -6,6 +6,65 @@ history readable from a checkout with no network.
 Each section is also the text of its release on the
 [GitHub Releases](https://github.com/hk9890/revier/releases) page.
 
+## v0.32.0
+
+- **Action required: a `tags` key that a project or link file already has is
+  now read.** It must be a `[tags]` table whose values are quoted strings, such
+  as `type = "work"`. revier leaves out a tag of any other form, and one whose
+  key is empty or holds `=`; `revier doctor` names it and exits `1`. Correct or
+  delete it. The rest of the project still loads. Before, revier ignored the
+  key.
+- **Projects can carry tags.** A tag is your own `key=value` mark, such as
+  `type=work`. `revier tag type=work` tags the project of the current
+  directory, `-p` names another, and `-t` and `--match` tag every project they
+  select. `--remove type` removes a tag. You can also write the `[tags]` table
+  of a project file or a link file by hand.
+- **`revier list -t key=value` and `revier each -t key=value` select projects
+  by tag.** Give `-t` again to select the projects that carry every tag.
+  `revier tags` lists every tag in use and its projects, and `revier list
+  --json` carries the tags of each project.
+- **The TUI shows and edits tags.** The project pane shows them in a row that
+  opens on a click when they do not fit. The pane of the agent list shows them
+  on one line that does not open. The project screen (alt+e) has a Tags
+  section: Enter changes a value, alt+d removes a tag, and the last row adds
+  one.
+- **The agent list puts the working agents on top, then the agents that wait
+  for you, then the `unknown` ones.** Agents that ask and agents that are idle
+  are now one group. In it, the agent whose prompt cache goes cold soonest is
+  first, then the agents with a cold cache, then those with no cache. The list
+  opens on the first agent that waits for you. Before, the agents that ask
+  were on top and the idle ones were below the working ones.
+- **The Agents of the project pane use the same order.** The pane selects the
+  first agent that waits for you and shows its terminal, and stays on an idle
+  agent when another starts to ask. Before, the rows stood in the order of
+  their panels, and the pane selected an agent that asks ahead of an idle one.
+- **A query in the agent list or in a pane's Agents puts the cursor on the
+  first match that waits for you.** When none waits, the agent list puts it on
+  the first match, and the pane on the working match that spoke last.
+- **A write to a file with a multi-line string no longer fails or lands in the
+  wrong place.** A line such as `[x]` or `path = ...` inside a `"""` or `'''`
+  string was read as part of the file. The config screen refused the change.
+  The project screen could write the new path or clone URL into the string and
+  leave the real value as it was. A rename of a link could make it point to
+  another project on its host.
+- **Deleting a target removes all its lines.** Before, a line with a dotted or
+  a quoted key, such as `runtime.launch = ["nvim"]`, stayed in the file and
+  became part of the table above it.
+- **A write keeps the Windows line ends of a project file or `config.toml`.**
+  Before, the lines that revier wrote ended differently from the rest. This
+  includes a rename that changes a link file.
+- **alt+del in a text field, with the cursor on the last character, no longer
+  crashes the TUI.**
+- **With the hc runtime, a kitty panel shows its `title` until its program sets
+  one.** Without a `title`, it shows the first word of its command. Before, a
+  panel whose program set no title, such as a shell, was called `env`. A panel
+  that was started before the update shows the first word of its command until
+  you end its program and open it again.
+- **The command that `revier each log` prints has its `--` also when the run
+  had no `--filter`, so you can paste it after `revier each`.** Leave out the
+  `(unfinished)` mark of a run that did not end. Before, `revier each` refused
+  the line.
+
 ## v0.31.0
 
 - **Action required: a script that passes an empty `-p` now fails.** `-p ""`,
