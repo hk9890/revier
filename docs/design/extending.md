@@ -42,6 +42,5 @@ several. What an adapter must never decide is in
 
 ## What is not extensible, on purpose
 
-The store is TOML files on disk. The output formats are the TUI and JSON.
-Neither is behind an interface, because neither has a second implementation
-anyone has asked for. When one appears, the interface gets written then.
+The store and the output formats are not behind an interface:
+[architecture.md](architecture.md#the-other-ports) says why.

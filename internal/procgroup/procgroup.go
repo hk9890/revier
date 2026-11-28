@@ -3,17 +3,18 @@
 //
 // A group of its own keeps the ctrl+c a terminal sends to revier's group from
 // ending the command of a shutdown's or a restore's step: the first ctrl+c
-// cancels the walk after that step. The same group outlives revier when the
-// second ctrl+c ends it on a step that hangs, so the groups that run are kept
-// here, and KillAll ends them before revier exits.
+// cancels the walk after that step. The same group would outlive revier when
+// the second ctrl+c ends revier on a step that hangs, so the groups that run
+// are kept here, and at that second ctrl+c KillAll ends them before revier
+// exits.
 //
 // A command made by CommandContext ends with its whole group when its context
 // ends: a child it started would otherwise hold its output open past it.
 //
 // The process Run starts also ends when revier is killed, which KillAll
-// cannot see: a caller that kills a slow `revier list` at its deadline left
-// `claude agents --json` running, and its next poll started one more. The
-// kernel ends that process alone, not a child it started.
+// cannot see: else a caller that kills a slow `revier list` at its deadline
+// leaves `claude agents --json` running, and its next poll starts one more.
+// The kernel ends that process alone, not a child it started.
 package procgroup
 
 import (

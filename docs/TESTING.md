@@ -26,12 +26,12 @@ L2 is where most behaviour is pinned. The core's decisions depend only on what a
 host *reports*, and `hosttest.Fake` reports whatever a test needs — which is why
 resolution, toggle-back, and the degradation rules need no tool at all.
 
-L2 does not replace L4. The fake has no opinion about focus, so a press
-that did not focus after `Open` passed L2 and failed L4.
+L2 does not replace L4. L4 pins that a press on a real hc core focuses what
+`Open` made, as `hosttest.FakeView` reports the focus. Check at L6 whether a
+real view moves the focus, and a read's history: neither has a headless test.
 
 Keep hc the one headless runtime: a second runtime kept for tests alone is a
-host maintained for nobody. Focus over a real view and a read's history have
-no headless test; check them at L6.
+host maintained for nobody.
 
 ## What every host test must cover
 
@@ -70,14 +70,14 @@ no headless test; check them at L6.
     failure message there.
   - Add the function that resolves it to the list this rule opens with
     (`config.Root`, `state.Root`, `sshconfig.Path`).
-  - `testenv.Run` does not set the variable of another tool. Set it with
-    `t.Setenv` in each test that reaches that tool's path.
-  - The two exceptions: `testenv.Run` sets `KITTY_CONFIG_DIRECTORY` and
-    `XDG_CONFIG_HOME` too, because `revier setup` writes kitty's
-    configuration and wctl's rules file, and either can be a link into a
-    dotfiles repository. Still set `KITTY_CONFIG_DIRECTORY` with `t.Setenv`
-    in each test that reads or writes it; give a package whose code reaches
-    `kitty.ConfigDir` the `TestMain` above.
+  - `testenv.Run` sets the `REVIER_*` overrides, `KITTY_CONFIG_DIRECTORY` and
+    `XDG_CONFIG_HOME`: `revier setup` writes kitty's configuration and wctl's
+    rules file, and either can be a link into a dotfiles repository.
+  - Set the variable of any other tool with `t.Setenv` in each test that
+    reaches that tool's path.
+  - Set `KITTY_CONFIG_DIRECTORY` with `t.Setenv` in each test that reads or
+    writes kitty's configuration.
+  - Give a package whose code reaches `kitty.ConfigDir` the `TestMain` above.
   - Give `revier setup` in a `cmd/revier` test fake stores through
     `app.stores`, as `termOnly` in its `helpers_test.go` does: the default
     probes this machine and writes its desktop keys.
@@ -124,8 +124,8 @@ no headless test; check them at L6.
     accepts either outcome.
 - Build a `kitten @ ls` listing of the kitty view over hc from a recorded
   one, as `internal/adapter/kitty/testdata/ls-hc-view.json` is: recording
-  one opens windows on a desktop. Any `hc` command starts a core
-  when none answers its socket, the user's own included.
+  one opens windows on a desktop. Run an `hc` command only as
+  [RUNNING.md](RUNNING.md#drive-the-cli-against-a-scratch-configuration) says.
 - Call `testenv.NoServiceManager(t, dir)` in a live test that reaches a start
   through `internal/userunit` with the real `systemd-run` on PATH, as `world`
   does: without it, the test starts a unit in the user's own service manager.

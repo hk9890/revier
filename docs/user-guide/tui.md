@@ -85,9 +85,10 @@ keys, so every letter goes to the query.
 | ctrl+c | Quit. While a shutdown, a close or a restore runs: cancel it; a second ctrl+c quits. |
 
 While a shutdown, a close or a restore runs, the TUI shows each step as it
-runs and what came of it. No other key and no click does anything until it
-ends. ctrl+c stops it after the step that runs, and the TUI stays open to
-show what was done and what was not reached; see
+runs and what came of it. No key other
+than ctrl+c and no click does anything until it ends, except under
+[the popup's curtain](#the-popup). After ctrl+c the TUI stays open, to show
+what was done and what was not reached; see
 [Shut everything down](projects.md#shut-everything-down).
 
 While a shutdown or a close runs, its title says to wait until it ends. After

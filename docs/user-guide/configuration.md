@@ -525,15 +525,15 @@ hc's terminals; it works where kitty is installed and a display is set
 workspaces, and a press focuses nothing. With `runtime = ["none"]` there is
 nothing to show, and revier ignores `view`.
 
-A key you leave out uses its default, and revier skips a default host that
-does not work, without a message. `hc` is experimental, and revier uses it
-only where you name it. A list you write is strict: revier tries the names in
-order and stops at the first that works, or at `none`, which turns that kind
-off. When it reaches an unknown name first, or no name works, every
-command that opens, raises or lists stops with an error.
-`revier doctor`
-reports every unknown name, wherever it is in the list; it does not check
-whether a host works.
+- A key you leave out uses its default, and revier skips a default host that
+  does not work, without a message.
+- `hc` is experimental, and revier uses it only where you name it.
+- A list you write is strict: revier tries the names in order and stops at
+  the first that works, or at `none`, which turns that kind off.
+- When it reaches an unknown name first, or no name works, every command that
+  opens, raises or lists stops with an error.
+- `revier doctor` reports every unknown name, wherever it is in the list; it
+  does not check whether a host works.
 
 ## Statuses and probes
 

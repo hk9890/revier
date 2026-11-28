@@ -76,13 +76,13 @@ which says how that host opens and finds it:
 | `[target.window]`, for the window host | a Meld window, found by its window class |
 | `[target.runtime]`, for the runtime host | `nvim -d` in a terminal, found by its title |
 
-A target can have one part or both. When both hosts work, the window part
-wins, unless the target sets `prefer = "runtime"`. Targets that most projects
-share, such as an editor, go once in `config.toml`
+A target can have one part or both; which one a press uses is in
+[Targets](configuration.md#targets). Targets that most projects share, such
+as an editor, go once in `config.toml`
 ([Shared targets](configuration.md#shared-targets)).
 
-A third part, `[target.command]`, takes the place of both: revier runs your
-command, and the command does what a host does for the other parts.
+A third part, `[target.command]`, is for a thing no host opens; see
+[Which kind to declare](#which-kind-to-declare).
 
 ## Which kind to declare
 
@@ -113,8 +113,8 @@ key  = "ctrl-shift-i"
   run = ["repo-web", "{{.Name}}", "{{.GitURL}}"]
 ```
 
-**Use an action** when the result is not a place to go. An action key works
-only in the TUI. Use `revier run <name>` to run one from a shell.
+**Use an action** when the result is not a place to go. Use
+`revier run <name>` to run one from a shell.
 
 If a command target fails, `revier go` prints the command's last error line on
 stderr. In the TUI, the footer names the failure, and the logs screen (alt+l)
@@ -142,10 +142,6 @@ reads its state:
 | `running` | working, green | spinner, `⠋`, `\|` | The agent is in a turn. |
 | `idle` | idle, blue | pause, `◇`, `.` | The agent finished its turn and waits for a prompt. |
 | `unknown` | unknown, gray | question mark, `?`, `?` | A probe knows the agent but cannot read its state. |
-
-An agent's row in the agent list and the project pane shows the glyph alone,
-in the state's colour; the agent list's pane says the word, as does every
-other screen that lists agents.
 
 A program that no probe knows is not an agent, and revier does not list it.
 revier reads [Claude Code](integrations/claude-code.md) with nothing to

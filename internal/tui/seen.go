@@ -35,6 +35,11 @@ func (m *Model) observe(answered *core.RemoteAnswers) tea.Cmd {
 
 // recordSaw is the state record's lines of a survey: what changed since the
 // surface's last survey of each scope it saw, which the record works out.
+// The surface is the one caller of record.Saw. A hidden popup writes the
+// lines of a survey or a round already out at the hide, then none until its
+// next raise; a launch coming up keeps this machine's survey going, and no
+// round to a linked host. A change made meanwhile carries the time of the
+// next survey of its scope after the raise.
 func (m Model) recordSaw(answered *core.RemoteAnswers) tea.Cmd {
 	var saw []record.Seen
 	if answered == nil {

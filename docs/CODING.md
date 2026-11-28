@@ -46,9 +46,9 @@ Concretely, an adapter never: compiles a `Match`, reads `Target`, `Project`, or
 ## Two invariants
 
 **`Open` must produce an instance that the same realization's `Match` finds.**
-Otherwise every keypress opens another copy. `Realization.Name` exists for hosts
-that assign their own identity — an hc instance's name label, a browser
-`--class`. See `internal/adapter/hc.Host.Open`. A command target has no `Open`
+Otherwise every keypress opens another copy. A host that assigns its own
+identity satisfies it with `Realization.Name`: see
+`internal/adapter/hc.Host.Open`. A command target has no `Open`
 and no `Match`: its command does the run-or-raise, and the core runs it
 through `Core.Run`.
 

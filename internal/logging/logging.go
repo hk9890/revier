@@ -3,6 +3,10 @@
 // appends to the same file - a keybinding's, the TUI, a restore - so each line
 // carries the pid and the command that wrote it.
 //
+// Op, Poll and PollAt time an operation from its start, and every line they
+// write carries duration_ms. Poll, PollAt and Repeat keep a poll that recurs
+// from writing a line on every refresh.
+//
 // Read is the one reader of it: the WARN and ERROR lines the TUI's logs
 // screen lists.
 //
@@ -21,7 +25,8 @@ import (
 	"time"
 )
 
-// Keep is how many days of files stay on disk, today's included.
+// Keep is how many days of files stay on disk, today's included. The older
+// ones are removed when a process creates the day's file.
 const Keep = 14
 
 // SlowPoll is how long a background poll - a survey the TUI refreshes on, the
@@ -100,6 +105,10 @@ func PollAt(key, op string, slow time.Duration, start time.Time, err error, attr
 // only with a message it has not logged since the last success; the first
 // success after it is one Info line. A host down for an hour is two lines, not
 // one per refresh, and one that fails three ways in turn is four.
+//
+// The Warn line is op with err. The Info line is op+": recovered" with was,
+// the err of the run's last failure, last_failed, when that failure was, and
+// failures, how many calls of the run failed.
 func Repeat(key, op string, err error, attrs ...any) {
 	recurring.repeat(key, op, err, attrs)
 }
@@ -228,9 +237,9 @@ func (d *daily) openLocked() (bool, error) {
 
 // prune removes old files once a day, when the day's file is created, so a
 // keypress costs no directory listing. When it cannot list the log directory,
-// or cannot remove a file older than Keep days, it writes "log prune" once at
-// Warn, with dir and err. It stops at that failure, and the files it did not
-// remove stay.
+// or cannot remove a file past the newest Keep days, it writes "log prune"
+// once at Warn, with dir and err. It stops at that failure, and the files it
+// did not remove stay.
 func (d *daily) prune() {
 	if err := prune(d.dir, d.now()); err != nil {
 		slog.Warn("log prune", "dir", d.dir, "err", err)

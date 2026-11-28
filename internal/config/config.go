@@ -1,5 +1,6 @@
-// Package config loads revier's configuration: the global settings and one
-// TOML file per project.
+// Package config loads, validates and writes revier's configuration: the
+// global settings and one TOML file per project, including the file that
+// `revier new` writes from the built-in template (Create).
 //
 // Validation happens here rather than at the keystroke. A match that
 // constrains nothing, a project with no home target, or two targets sharing a

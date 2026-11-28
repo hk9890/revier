@@ -5,8 +5,9 @@
 //
 // It is kept apart from the event file (decisions/0151): a reader counts
 // those lines as uses, and a failure or a closed window is no use of a
-// project. An operation records what it did, failed or not; only a surface
-// records what it saw, as the difference between two of its own surveys.
+// project. An operation records what it did, failed or not. A surface records
+// what it saw, as the difference between two of its own surveys, and a save
+// that app.store makes records a snapshot of the survey it was made from.
 //
 // Like the log it is process-wide, and a process that never called Setup
 // records nothing.
@@ -30,25 +31,50 @@ import (
 )
 
 // By says whose a line is: an operation of the writing process did it, or a
-// surface's survey saw it.
+// survey saw it, a surface's or the one a save was made from.
 const (
 	ByDid = "did"
 	BySaw = "saw"
 )
 
-// The kinds a survey writes, as "saw" lines.
+// The kinds a survey writes, as "saw" lines. A surface's surveys write them
+// through Saw; a save that app.store makes writes a snapshot of its own. With
+// no surface running, only such a save writes a "saw" line.
+//
+// A hidden popup writes the lines of a survey or a round already out at the
+// hide, then none, KindSurvey included, until its next raise. A launch coming
+// up keeps this machine's survey going, but starts no round to a linked host.
+// A change made meanwhile carries the time of the next survey of its scope
+// after the raise. With no other surface surveying the scope, a replay calls
+// it stale in between.
 const (
-	KindSnapshot        = "snapshot"
-	KindInstanceOpened  = "instance opened"
-	KindInstanceClosed  = "instance closed"
-	KindTargetOpened    = "target opened"
-	KindTargetClosed    = "target closed"
-	KindAgentOpened     = "agent opened"
-	KindAgentClosed     = "agent closed"
-	KindAgentSession    = "agent session"
+	// KindSnapshot is a whole survey of one scope, Machine, in Seen: at the
+	// first survey a surface makes of it, the first of a day, and one that
+	// sees another project list (Observer.Saw), and at each save app.store
+	// makes, with Saved. A last-seen save, and a save that failed, write none.
+	// Every other kind of this block but KindSurvey is one change since the
+	// surface's last survey of the scope.
+	KindSnapshot       = "snapshot"
+	KindInstanceOpened = "instance opened"
+	KindInstanceClosed = "instance closed"
+	KindTargetOpened   = "target opened"
+	KindTargetClosed   = "target closed"
+	KindAgentOpened    = "agent opened"
+	KindAgentClosed    = "agent closed"
+	// KindAgentSession is an agent in the same panel whose harness,
+	// conversation, directory or named agent changed. It is not the event
+	// file's "agent session".
+	KindAgentSession = "agent session"
+	// KindHostUnreachable is a host of the scope that stopped listing (host),
+	// a linked host that stopped answering, or a link it stopped answering
+	// for (project), with err; KindHostBack is one that answers again. Until
+	// then a replay keeps what was last seen of it, marked unknown (carry).
 	KindHostUnreachable = "host unreachable"
 	KindHostBack        = "host back"
-	KindSurvey          = "survey"
+	// KindSurvey is a survey that saw no change, written once a scope went a
+	// Beat, five minutes, with no line. A replay calls a scope with no line
+	// for Stale, six minutes, unknown.
+	KindSurvey = "survey"
 )
 
 // The kinds an operation writes, as "did" lines, each with err when it
@@ -76,7 +102,12 @@ const (
 	KindUnbound         = "unbound"
 	KindAttached        = "attached"
 	KindDetached        = "detached"
-	KindRan             = "ran"
+	// KindRan is a run of a command target that moved the focus, with
+	// project, target, and the host and ref the focus moved to. A write
+	// records it only when it differs from the run the state file held. It
+	// opens nothing: a replay lists it among what was done since this
+	// machine's last survey, and holds no target open for it.
+	KindRan = "ran"
 )
 
 // Line is one line of the record. Machine is the linked host a line is

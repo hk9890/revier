@@ -14,7 +14,12 @@ a window the user is reading.
 Every recipe below runs on a private substrate instead: an hc core of its
 own, shown in no view, or a werft lease, whose desktop is its own
 ([Drive the desktop on a werft lease](#drive-the-desktop-on-a-werft-lease)).
-Nothing here reaches the user's display, hc core or service manager.
+Nothing here reaches the user's display, hc core or service manager, with two
+exceptions that only read:
+[Verify a keybinding without pressing it](#verify-a-keybinding-without-pressing-it)
+reads the user's desktop keys and kitty configuration, and both it and
+[Verify the setup without the user's desktop](#verify-the-setup-without-the-users-desktop)
+ask the user's running wctl extension.
 
 `revier setup install` and `revier setup uninstall` rewrite the user's
 desktop keys, kitty configuration and window rules, the last two often links
@@ -156,9 +161,11 @@ agentpane                                            # the restore started a new
 
 The save asks `claude agents --json` which conversation each agent
 terminal's process holds, and in which directory. To run the resume path,
-give the terminal's file a `sessionId` and a `cwd`, with the fake `claude`
-from the agent monitor recipe on PATH. File a transcript for the
-conversation too: revier resumes only a conversation Claude Code has filed.
+with the fake `claude` from the agent monitor recipe on PATH:
+
+- Give the terminal's file a `sessionId` and a `cwd`.
+- File a transcript for the conversation: revier resumes only a conversation
+  Claude Code has filed.
 
 ```bash
 agentpane                       # sets $pid: a new bash starts without it
@@ -284,10 +291,13 @@ Call the Skill tool with `werft:werft` for the lease flow.
   the lease's PATH and runs `revier setup install` there.
 - Run revier and hc in the lease without `REVIER_CONFIG_HOME` or `hcp`: its
   configuration, state and hc core are scratch already.
-- Write each block below to a file under `hako-private/`, copy it in with
-  `scp -F <ssh_config> <file> <lease-id>:`, and run it in one ssh call:
-  `ssh -F <ssh_config> <lease-id> 'sh ./<file>'`. A variable then lives
-  across its lines, and the block's quotes need no escaping.
+- Run each block below as a file:
+  1. Write it to `hako-private/<name>.sh`.
+  2. Copy it in: `scp -F <ssh_config> hako-private/<name>.sh <lease-id>:`.
+     It lands in the lease's home as `<name>.sh`.
+  3. Run it in one ssh call:
+     `ssh -F <ssh_config> <lease-id> 'sh ./<name>.sh'`. A variable then lives
+     across its lines, and the block's quotes need no escaping.
 - Start a block that reaches the desktop with `. ./session.sh`: it sets the
   GNOME session's environment and defines `kitty_socket` and `gnome_wait`.
 - After a rebuild, run `scripts/lease-desktop <lease-id>` again: it replaces
@@ -332,9 +342,7 @@ revier shutdown --force                           # the terminals end, and their
 
 A `kitten @` command without `--to` addresses the socket of the kitty it runs
 inside. Pass `--to unix:$XDG_RUNTIME_DIR/kitty-<pid>` to reach another
-process; the pids are the kitty entries in `wctl list --json`. A kitty that
-`kitty.conf` puts on `listen_on unix:@kitty` is at `--to unix:@kitty-<pid>`;
-revier does not look for it.
+process; the pids are the kitty entries in `wctl list --json`.
 
 To drive save and restore across a real reboot, run the first block, reboot
 with `ssh -F <ssh_config> <lease-id> 'sudo -n systemctl reboot'`, wait for ssh

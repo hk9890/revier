@@ -50,7 +50,15 @@ revier adds:
 | `REVIER_PROJECT_PATH` | The project's `path`. On a link, the path on the host. |
 | `REVIER_PROJECT_HOST` | A link's host. Not set for a local project. |
 
-To work in the checkout, start the command with `cd "$REVIER_PROJECT_PATH"`.
+To work in the checkout, run a shell that goes there first:
+
+```toml
+run = ["sh", "-c", "cd \"$REVIER_PROJECT_PATH\" && git status --short"]
+```
+
+On a link, that path is on the host and the command runs on this machine, so
+the command must reach the host itself, for example with
+`ssh "$REVIER_PROJECT_HOST"`.
 
 ## Output
 

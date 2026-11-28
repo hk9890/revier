@@ -125,15 +125,37 @@ command = ["sh", "-lc", "exec my-agent \"$@\"", "sh"]
 command = ["sh", "-lc", "my-agent"]
 ```
 
-When the directory the agent worked in is gone, the agent starts fresh in the
-project. When Claude Code no longer has the conversation, the agent starts
-fresh in its directory: an agent that never got a prompt has none, and Claude
-Code deletes old ones after `cleanupPeriodDays`, 30 days by default. A save
-by hand, at shutdown or at a project close notes an agent on this machine that
-never got a prompt, so its restore starts it fresh and does not say that its
-conversation is gone. A save of what revier last saw
-before an unclean end, and an agent on a linked host, carry no such note. When that agent got its first
-prompt after the save, the restore resumes it.
+A restored agent resumes its conversation unless one of these holds, checked
+in this order:
+
+- **The directory the agent worked in is gone.** It starts fresh in the
+  project, whatever became of its conversation.
+- **It cannot resume there.** It starts fresh when it ran in a tab target, or
+  when the panel it starts in now runs another harness.
+- **Claude Code no longer has the conversation.** It starts fresh in its
+  directory: an agent that never got a prompt has none, and Claude Code
+  deletes old ones after `cleanupPeriodDays`, 30 days by default.
+
+A save by hand, at shutdown or at a project close notes an agent on this
+machine that never got a prompt. Its restore starts it fresh and does not say
+that its conversation is gone, or resumes it when it got its first prompt
+after the save. A `last seen` save and an agent on a linked host carry no
+such note.
+
+Which agent a restore starts, and where:
+
+- The first agents fill the target's agent panels, in order, and each runs
+  that panel's command.
+- A [named agent](configuration.md#named-agents) comes back as that agent.
+  When its project no longer declares it, the restore skips it and says so.
+- An agent past the panels with no name, such as `dtop` you started in a
+  shell panel, comes back in a tab of its own as the agent that runs that
+  program: the default agent, or else a named agent. When no agent of the
+  project runs it, the restore skips it and says so.
+- When no probe reads an agent's `command`, as with a `zsh -ilc` wrapper, the
+  named agent whose name is the program runs it. When the default agent is
+  such a wrapper, only that named agent takes its place, and otherwise the
+  default agent comes back.
 
 ## Let an agent configure revier
 

@@ -37,11 +37,15 @@ file order, then the others.
 {"id":"3","kind":"tool","title":"aider: refactoring the store","vars":{"revier_target":"agent"},"pid":41221,"command":["aider"],"tab":"2"}
 ```
 
-`id` is the panel (kitty window id, hc address) and `tab` its tab. `kind` is
-`shell` when the command is a shell, else `tool`. `title` is the panel's
-title; many agents write their state there. `vars`, `pid`, `command`, `tab`
-and `dir` are optional. `pid` and `command` are the panel's foreground process.
-`dir` is the panel's working directory.
+| Field | Always there | Meaning |
+|---|---|---|
+| `id` | yes | The panel: a kitty window id, or an hc address. |
+| `kind` | yes | `shell` when the command is a shell, else `tool`. |
+| `title` | yes; empty for a link's panel | The panel's title. Many agents write their state there. |
+| `vars` | no | The panel's variables. |
+| `pid`, `command` | no | The panel's foreground process. |
+| `tab` | no | The panel's tab. |
+| `dir` | no | The panel's working directory. |
 
 With the kitty runtime and kitty 0.50 or later, `vars` has
 `kitty_program_status` when a program in the window reported its state with
