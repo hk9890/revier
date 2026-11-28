@@ -102,7 +102,7 @@ type = "work"
 language = "go"
 ```
 
-Each value is one string. Then select by them:
+Then select by them:
 
 ```bash
 revier tags                          # every tag in use, and its projects
