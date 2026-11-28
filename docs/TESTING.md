@@ -114,7 +114,8 @@ no headless test; check them at L6.
   revier's labels. Point the paths in `hc_integration_test.go` at them.
 - Run hc in a live test on a private core only: `world` in
   `internal/adapter/hc/helpers_live_test.go`, `scratch` in
-  `cmd/revier/helpers_live_test.go`.
+  `cmd/revier/helpers_live_test.go`. Call `running` there before a test reads
+  a panel's pid.
   - A live test of the core on hc sits in `internal/adapter/hc` for that
     helper, with `hosttest.FakeView` as its view: `view_live_test.go`.
   - Assert that a panel whose program exits at once fails the start only on

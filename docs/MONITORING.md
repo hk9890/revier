@@ -99,7 +99,7 @@ search its comment for the same quoted text, without the closing quote.
   host (`machine`); each save writes one too, with `saved`. Each other `saw`
   line is a change since the last survey, and a `survey` line says a scope
   had no change. When each is written, and when a scope is stale:
-  `rg -n -B6 '^const (Beat|Stale)|^func \(o \*Observer\) Saw' internal/record/observe.go`.
+  `rg -n -B7 '^const (Beat|Stale)|^func \(o \*Observer\) Saw' internal/record/observe.go`.
 - A host that did not list, or a link whose host did not answer, keeps what
   was last seen of it, marked unknown.
 - `pid` and `cmd` are the log's: join a line with the log of the process

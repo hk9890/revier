@@ -1,4 +1,6 @@
-// Package hosttest provides the fake Host that layer L2 runs against.
+// Package hosttest provides the fakes of the ports that layers L2 and L4 run
+// against: the host, view, probes, key binder, terminal keys, window rules
+// and remote.
 //
 // It is the reason most of revier can be tested without a terminal, a
 // compositor, or a screen: the core's behaviour - resolution, matching,

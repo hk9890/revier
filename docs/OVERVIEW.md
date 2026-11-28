@@ -9,7 +9,7 @@ A findability map: where things live, and how to search for them.
 | `pkg/revier/` | The ports and the types that cross them, the project model included. |
 | `internal/core/` | All policy: resolution, matching, run-or-raise, toggle-back, survey. |
 | `internal/app/` | The use cases that cross stores, for both surfaces. |
-| `internal/adapter/<tool>/` | One tool each: `kitty`, `hc`, `gnome`, `proc`, `claude`, `opencode`, `execprobe`, `ssh`. |
+| `internal/adapter/<tool>/` | One tool each: `kitty` (runtime, view, terminal keys), `hc` (runtime), `gnome` (window, key binder, window rules), `proc` (processes), `claude` (probe, assistant launcher), `opencode` and `execprobe` (probes), `ssh` (remote). |
 | `internal/panelstart/` | Why a panel's command did not start. |
 | `internal/config/` | TOML loading, its validation, and the template `revier new` writes. |
 | `internal/state/` | What revier learned at runtime: the last project, attached instances. |
@@ -46,7 +46,8 @@ Each package comment says more: `go doc ./internal/<package>`.
 ## The ports
 
 Which interfaces of `pkg/revier` are ports, and what each is:
-[docs/design/architecture.md](design/architecture.md#ports).
+[docs/design/architecture.md](design/architecture.md#ports). Its window host is
+`WindowController`, which is a `Host`.
 
 ## Finding things
 

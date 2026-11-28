@@ -44,7 +44,8 @@ the remote screen.
 
 ```bash
 S=$PWD/hako-private/scratch; mkdir -p "$S/projects" "$S/state"   # fixed, so each run finds the last one's state
-C=/tmp/hc.$(basename "$PWD"); mkdir -p -m 700 "$C/run"           # short: a socket path over 107 bytes cannot be bound
+C=/tmp/hc.$(id -u).$(printf %s "$PWD" | md5sum | cut -c1-8)        # short: a socket path over 107 bytes cannot be bound
+mkdir -p -m 700 "$C" "$C/run"
 hcp() { env -u DBUS_SESSION_BUS_ADDRESS -u HC_TERMINAL_ID -u HC_TERMINAL_SOCKET -u HC_SESSION SHELL=/bin/sh XDG_CONFIG_HOME=$C XDG_STATE_HOME=$C XDG_RUNTIME_DIR=$C/run HC_SOCKET=$C/s.sock "$@"; }
 printf '[hosts]\nruntime = ["hc"]\nview = ["none"]\nwindow = ["none"]\n' > "$S/config.toml"   # never touch a real window
 cat > "$S/projects/demo.toml" <<EOF
@@ -84,11 +85,14 @@ on the user's desktop; without `window = ["none"]` a window target launches a
 real application and moves the user's focus.
 
 Leave the core and `$S` in place for the recipes below;
-[Clean up](#clean-up) removes them.
+[Clean up](#clean-up) removes them. Run Clean up before the first recipe of a
+new task: the directories are fixed, so a task that skipped it leaves its
+core, projects and sessions behind.
 
 `revier new` and `revier open <unknown name>` write into
-`$REVIER_CONFIG_HOME/projects` and run `mise trust` on the directory. Export
-`MISE_STATE_DIR=$S/mise` as well, so the trust lands outside the user's list.
+`$REVIER_CONFIG_HOME/projects` and run `mise trust` on the directory. Add
+`export MISE_STATE_DIR=$S/mise` to `hako-private/scratch.sh`, so the trust
+lands outside the user's list.
 Point a `git_url` you test cloning with at a local bare repository
 (`git init --bare $S/origin.git`).
 
@@ -153,6 +157,7 @@ from the agent monitor recipe on PATH. File a transcript for the
 conversation too: revier resumes only a conversation Claude Code has filed.
 
 ```bash
+agentpane                       # sets $pid: a new bash starts without it
 printf '{"pid": %s, "status": "idle", "sessionId": "abc-123", "cwd": "%s"}' "$pid" "$S" > "$CLAUDE_CONFIG_DIR/sessions/$pid.json"
 mkdir -p "$CLAUDE_CONFIG_DIR/projects/-filed" && echo '{"type":"user"}' > "$CLAUDE_CONFIG_DIR/projects/-filed/abc-123.jsonl"
 hcp ./bin/revier session save   # prints "1 agent conversation recorded"
@@ -232,6 +237,7 @@ Start the TUI with the fake `claude` and `CLAUDE_CONFIG_DIR` from the agent
 monitor recipe in its environment:
 
 ```bash
+agentpane     # sets $pid: a new bash starts without it
 st waiting    # the row moves to the top as attention
 ```
 

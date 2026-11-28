@@ -35,6 +35,7 @@ directory on each run; it is never committed.
 
    ```bash
    git fetch origin
+   git worktree prune    # a reboot clears /tmp and leaves the old registration
    git worktree add --detach /tmp/revier-release-vX.Y.Z origin/main
    mise -C /tmp/revier-release-vX.Y.Z run quality:full
    ```
