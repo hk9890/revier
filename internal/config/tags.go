@@ -78,16 +78,15 @@ func ValidateTagKey(key string) error {
 }
 
 // errTagsShape refuses a write whose result is not the file with the asked-for
-// tags and nothing else changed, or that would declare the tags a second time.
+// tags and nothing else changed, or that declares the tags twice.
 var errTagsShape = errors.New("the tags are not written as plain keys under [tags]; change them by hand")
 
 // WriteTags sets each of set in the [tags] table of a project file and
 // removes each key of remove, line by line. Comments stay, and so does every
-// other value: a write that would change one is refused, and so is one that
-// adds a problem, and one that sets a tag where the file declares its tags
-// with no [tags] header: as dotted keys, an inline table or sub-tables alone.
-// Tags that are already as asked are not written. The blank lines at the end
-// of the file are not kept.
+// other value: a write that would change one is refused, such as a removal of
+// a dotted key, and so is one that adds a problem, and one that leaves a
+// [tags] table beside dotted keys. Tags that are already as asked are not
+// written. The blank lines at the end of the file are not kept.
 func WriteTags(file string, set []core.Tag, remove []string, inh Inherited) (core.Project, error) {
 	for _, t := range set {
 		if err := ValidateTagKey(t.Key); err != nil {
@@ -133,18 +132,13 @@ func WriteTags(file string, set []core.Tag, remove []string, inh Inherited) (cor
 		return loadProject(file, data, inh), nil
 	}
 	change := func(lines []string, _ projectFile) ([]string, error) {
-		// Tags with no [tags] header, such as dotted keys, would get a second
-		// table here: TOML refuses that, and the decoder does not.
-		if _, ok := before["tags"]; ok && len(set) > 0 && !hasTagsTable(lines) {
-			return nil, errTagsShape
-		}
 		for i, t := range set {
 			lines = putTag(lines, t.Key, literals[i])
 		}
 		for _, key := range remove {
 			lines = dropTag(lines, key)
 		}
-		if after, err := tagsDoc(strings.Join(lines, "\n")); err != nil || !reflect.DeepEqual(after, want) {
+		if after, err := tagsDoc(strings.Join(lines, "\n")); err != nil || !reflect.DeepEqual(after, want) || tagsTwice(lines) {
 			return nil, errTagsShape
 		}
 		return lines, nil
@@ -164,8 +158,26 @@ func tagsDoc(text string) (map[string]any, error) {
 	return doc, nil
 }
 
-func hasTagsTable(lines []string) bool {
-	return slices.ContainsFunc(tables(lines), func(t table) bool { return !t.array && t.name == "tags" })
+// dottedTags is the start of a line that declares the tags as a dotted key.
+var dottedTags = regexp.MustCompile(`^\s*(?:tags|"tags"|'tags')\s*\.`)
+
+// tagsTwice reports whether the tags are declared both as dotted keys at the
+// top of the file and as a [tags] table. TOML refuses that, and the decoder
+// does not.
+func tagsTwice(lines []string) bool {
+	all := tables(lines)
+	if !slices.ContainsFunc(all, func(t table) bool { return !t.array && t.name == "tags" }) {
+		return false
+	}
+	for i := 0; i < all[0].end; i++ {
+		if at := keyLine.FindStringSubmatchIndex(lines[i]); at != nil {
+			if dottedTags.MatchString(lines[i]) {
+				return true
+			}
+			i, _ = valueEnd(lines, i, at[1])
+		}
+	}
+	return false
 }
 
 // putTag puts key = literal under [tags], adding the table at the end of the

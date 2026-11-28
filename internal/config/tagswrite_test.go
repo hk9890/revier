@@ -138,13 +138,15 @@ func TestWriteTagsRefusesWhatItCannotWriteAgain(t *testing.T) {
 
 // Tags the file declares without a [tags] header get no second table beside
 // them: TOML allows a table once, which the decoder here does not enforce for
-// every shape.
+// every shape. A file that has both already is not written either.
 func TestWriteTagsAddsNoSecondTable(t *testing.T) {
 	for name, text := range map[string]string{
 		"a dotted key":         "tags.type = \"work\"\n" + taggedHome,
 		"a spaced dotted key":  "tags . type = \"work\"\n" + taggedHome,
 		"a quoted dotted key":  "\"tags\".type = \"work\"\n" + taggedHome,
 		"a dotted refused tag": "tags.count = 3\n" + taggedHome,
+		"a dotted sub-table":   "tags.type.a = \"work\"\n" + taggedHome + "[tags.b]\nc = \"d\"\n",
+		"both":                 "tags.type = \"work\"\n" + taggedHome + "[tags]\nb = \"2\"\n",
 		"an empty inline":      "tags = {}\n" + taggedHome,
 		"a quoted header":      taggedHome + "[\"tags\"]\ntype = \"work\"\n",
 		"an empty quoted one":  taggedHome + "[\"tags\"]\n",
@@ -155,6 +157,34 @@ func TestWriteTagsAddsNoSecondTable(t *testing.T) {
 		}
 		if got := readTagFile(t, file); got != text {
 			t.Errorf("%s: a refused write changed the file:\n%s", name, got)
+		}
+	}
+}
+
+// What only looks like a dotted tags key, and a sub-table, which TOML allows
+// before its parent, do not stop a write; nor does a second declaration the
+// write itself removes.
+func TestWriteTagsTakesWhatDeclaresTheTagsOnce(t *testing.T) {
+	added := "\n[tags]\nadded = \"x\"\n"
+	for name, c := range map[string]struct {
+		text, want string
+		remove     []string
+	}{
+		"a sub-table":            {text: taggedHome + "[tags.sub]\na = \"b\"\n", want: taggedHome + "[tags.sub]\na = \"b\"\n" + added},
+		"a key of another table": {text: taggedHome + "[other]\ntags.a = \"b\"\n", want: taggedHome + "[other]\ntags.a = \"b\"\n" + added},
+		"a line of a string":     {text: "x = \"\"\"\ntags.a = 1\n\"\"\"\n" + taggedHome, want: "x = \"\"\"\ntags.a = 1\n\"\"\"\n" + taggedHome + added},
+		"the last of both":       {text: "tags.a = \"1\"\n" + taggedHome + "\n[tags]\nb = \"2\"\n", want: "tags.a = \"1\"\n" + taggedHome, remove: []string{"b"}},
+	} {
+		file := tagFile(t, c.text)
+		var set []core.Tag
+		if c.remove == nil {
+			set = []core.Tag{{Key: "added", Value: "x"}}
+		}
+		if _, err := config.WriteTags(file, set, c.remove, config.Inherited{}); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+		if got := readTagFile(t, file); got != c.want {
+			t.Errorf("%s: file =\n%s\nwant\n%s", name, got, c.want)
 		}
 	}
 }
