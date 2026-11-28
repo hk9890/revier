@@ -12,7 +12,7 @@ mise run quality:full      # + L4                               (pre-handoff)
 ## Layers
 
 The layer decides whether a test can run at all on a machine with no display.
-Only L6 ever reaches one.
+Only L6 ever reaches one. L5 was retired and its number is not reused.
 
 | Layer | Substrate | Tag | Covers |
 |---|---|---|---|

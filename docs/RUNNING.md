@@ -33,14 +33,18 @@ config, state, runtime directory and socket, and no session bus. Any `hc`
 command starts a core when none answers its socket, so run every `hc` and
 every `./bin/revier` through `hcp`. revier starts a core as the unit
 `revier-hc-<socket hash>` of the user's service manager; under `hcp` it reaches no manager
-and starts the core detached. A Bash call keeps no variable and no function,
-and the worktree check refuses most commands after a `.`: write the setup
-lines of the recipes to `hako-private/scratch.sh`, start each set of recipe
-lines with `. hako-private/scratch.sh` in a file of its own, and run that file
-with `bash <file>` from the worktree root. `REVIER_SSH_CONFIG` points the remote screen's
+and starts the core detached. `REVIER_SSH_CONFIG` points the remote screen's
 "new" (alt+r, then alt+n) and the check for this machine at a scratch ssh
 configuration instead of `~/.ssh/config`; set it whenever a recipe reaches
 the remote screen.
+
+Run each recipe as a file, because a Bash call keeps no variable and no
+function, and the worktree check refuses most commands after a `.`:
+
+1. Write the setup lines of the recipes to `hako-private/scratch.sh`.
+2. Write each set of recipe lines to a file of its own that starts with
+   `. hako-private/scratch.sh`.
+3. Run that file with `bash <file>` from the worktree root.
 
 ```bash
 S=$PWD/hako-private/scratch; mkdir -p "$S/projects" "$S/state"   # fixed, so each run finds the last one's state
