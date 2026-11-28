@@ -123,8 +123,7 @@ the idle ones, in one group:
 1. Those whose prompt cache is warm, the one that goes cold soonest first. A
    prompt to an agent costs the least while its cache is warm.
 2. Those whose cache is cold, the one that spoke last first.
-3. Those that report no cache, such as opencode agents, the one that spoke
-   last first.
+3. Those that report no cache, the one that spoke last first.
 
 The list opens with no query, on the first agent that waits for you in the
 order above. It skips working agents because they need

@@ -546,6 +546,13 @@ func (al *agentList) reload(items []list.Item) {
 // user yet. That is the first agent of their order (listedOrder): the one
 // whose cache goes cold soonest, while a cache is warm.
 func (al *agentList) selectOpenRow() {
+	al.selectWorthALook()
+	al.place = true
+}
+
+// selectWorthALook puts the cursor on the first of the rows in view most
+// worth a look, by agentRank.
+func (al *agentList) selectWorthALook() {
 	best, rank := 0, len(agentRank)
 	for i, item := range al.list.VisibleItems() {
 		if it, ok := item.(agentItem); ok && agentRank[it.agent.State.Status] < rank {
@@ -553,7 +560,6 @@ func (al *agentList) selectOpenRow() {
 		}
 	}
 	al.list.Select(best)
-	al.place = true
 }
 
 // selected is the row under the cursor.
@@ -688,8 +694,9 @@ func (al *agentList) edit(msg keyPress) tea.Cmd {
 	return cmd
 }
 
-// setFilter is every change to the query. The first match is selected, as on
-// a project query.
+// setFilter is every change to the query. The first match that waits for the
+// user is selected, else the first match: the matches keep the order's
+// groups, so the working agents stand above the agent typed for.
 func (al *agentList) setFilter(q string) {
 	al.filter = q
 	if al.query.Value() != q {
@@ -697,6 +704,7 @@ func (al *agentList) setFilter(q string) {
 	}
 	if q != "" {
 		al.list.SetFilterText(q)
+		al.selectWorthALook()
 		return
 	}
 	al.list.ResetFilter()

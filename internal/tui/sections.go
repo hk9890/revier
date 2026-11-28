@@ -77,15 +77,17 @@ func (m *Model) field() *textinput.Model {
 
 // query applies a section's query to its rows. The first match is selected,
 // as the list selects it on a project query: typing an agent's name is a
-// choice of that agent. An empty agent query hands the choice back to the
-// pane (chooseAgent).
+// choice of that agent. Of the agents, it is the match the pane would choose
+// (firstAgent): the matches keep the order's groups, so the working agents
+// stand above the agent typed for. An empty agent query hands the choice back
+// to the pane (chooseAgent).
 func (m *Model) query(f focus, q string) {
 	switch f {
 	case focusAgents:
 		m.afilter, m.achosen, m.akept = q, agentKey{}, agentKey{}
 		m.ainput.SetValue(q)
 		if q != "" {
-			m.pickAgent(0)
+			m.pickAgent(m.firstAgent(m.agentRows()))
 		}
 	default:
 		m.setFilter(q)

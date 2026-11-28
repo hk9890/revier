@@ -224,9 +224,10 @@ func TestTheProjectPaneOrdersItsAgentsAsTheAgentListDoes(t *testing.T) {
 }
 
 // An agent query over the pane keeps the groups of the order: a working
-// agent stays above a waiting one that holds the query whole.
+// agent stays above a waiting one that holds the query whole. The cursor goes
+// to the waiting one, and Enter to its panel.
 func TestAnAgentQueryInThePaneKeepsTheWorkingAgentsFirst(t *testing.T) {
-	m, _, _ := listedSurface(t, 160, 40,
+	m, rt, _ := listedSurface(t, 160, 40,
 		listed{project: "alpha", status: revier.StatusIdle, on: "tests"},
 		listed{project: "alpha", status: revier.StatusRunning, on: "txexsxtxs"})
 	m, _ = press(m.Said(), "tab")
@@ -236,6 +237,28 @@ func TestAnAgentQueryInThePaneKeepsTheWorkingAgentsFirst(t *testing.T) {
 	working, waiting := strings.Index(body, "txexsxtxs"), strings.LastIndex(body, "tests\n")
 	if working < 0 || waiting < 0 || working > waiting {
 		t.Errorf("pane = %q, want the working agent above the waiting one", body)
+	}
+	_, cmd := press(m, "enter")
+	runAll(cmd)
+	if !slices.Equal(rt.PanelFocuses, []revier.PanelID{"1"}) {
+		t.Errorf("panel focuses = %v, want the waiting agent's panel", rt.PanelFocuses)
+	}
+}
+
+// A query over the agent list puts the cursor on the first match that waits
+// for the user, past the working agents its group order puts above it.
+func TestAQueryOverTheAgentListGoesToTheWaitingMatch(t *testing.T) {
+	m, rt, _ := listedWorld(t, 140, 30,
+		listed{project: "alpha", status: revier.StatusAttention, on: "tests"},
+		listed{project: "beta", status: revier.StatusRunning, on: "txexsxtxs"})
+	m, _ = press(m, "tests")
+	if row := selectedRow(t, m); !strings.Contains(row, "tests") || strings.Contains(row, "txexsxtxs") {
+		t.Fatalf("selected = %q, want the agent that waits", row)
+	}
+	_, cmd := press(m, "enter")
+	runAll(cmd)
+	if !slices.Equal(rt.PanelFocuses, []revier.PanelID{"1"}) {
+		t.Errorf("panel focuses = %v, want the waiting agent's panel", rt.PanelFocuses)
 	}
 }
 
