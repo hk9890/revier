@@ -118,7 +118,7 @@ func TestTagRefusesAMalformedOrContradictoryTag(t *testing.T) {
 	t.Chdir(tagScratch(t))
 	// An empty --match is a script's empty variable: read as no --match, it
 	// would tag the project of this directory.
-	for _, args := range [][]string{{"type"}, {"a b=c"}, {"type=work", "--remove", "type"}, {"--remove", ""}, {"--match", "", "type=work"}} {
+	for _, args := range [][]string{{"type"}, {"a b=c"}, {"type=work", "--remove", "type"}, {"--remove", ""}, {"--match", "", "type=work"}, {"type=work", "type=private"}} {
 		if _, err := tagRun(t, args...); err == nil {
 			t.Errorf("revier tag %q: want an error", args)
 		}

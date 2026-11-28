@@ -145,6 +145,9 @@ func cmdTag(w io.Writer, args []string) error {
 		if slices.Contains(remove, t.Key) {
 			return fmt.Errorf("tag %q is both set and removed", t.Key)
 		}
+		if i := slices.IndexFunc(set, func(s core.Tag) bool { return s.Key == t.Key }); i >= 0 && set[i].Value != t.Value {
+			return fmt.Errorf("tag %q is set twice, to %q and %q", t.Key, set[i].Value, t.Value)
+		}
 		set = append(set, t)
 	}
 	selects := len(selector) > 0 || *match != ""
@@ -176,11 +179,6 @@ func cmdTag(w io.Writer, args []string) error {
 	}
 	failed := 0
 	for _, p := range picks {
-		if p.File == "" {
-			fmt.Fprintf(os.Stderr, "revier: %s: is in no project file, so it has no tags to write\n", p.Name)
-			failed++
-			continue
-		}
 		written, err := config.WriteTags(p.File, set, remove, cfg.Inherited())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "revier: %s: %v\n", p.Name, err)

@@ -21,22 +21,28 @@ import (
 // `-t key=value` splits at. The rest of the project loads either way, since
 // a tag only selects.
 func projectTags(data []byte) (map[string]string, []error) {
-	var file struct {
-		Tags map[string]any `toml:"tags"`
-	}
-	if _, err := toml.Decode(string(data), &file); err != nil {
+	// The key is read as written, as the line editor finds it: a struct
+	// field would also take [Tags], which no write could then reach.
+	var raw map[string]any
+	if _, err := toml.Decode(string(data), &raw); err != nil {
 		return nil, []error{fmt.Errorf("tags: %w", err)}
 	}
+	table, _ := raw["tags"].(map[string]any)
+	if _, ok := raw["tags"]; ok && table == nil {
+		return nil, []error{errors.New("tags: tags is a table of key = \"value\"; it is left out")}
+	}
 	var refused []error
-	tags := make(map[string]string, len(file.Tags))
-	for _, key := range slices.Sorted(maps.Keys(file.Tags)) {
-		value := file.Tags[key]
+	tags := make(map[string]string, len(table))
+	for _, key := range slices.Sorted(maps.Keys(table)) {
+		value := table[key]
 		s, ok := value.(string)
 		switch {
 		case key == "":
 			refused = append(refused, fmt.Errorf("tag %q: the key is empty, so -t cannot select it; the tag is left out", key))
 		case strings.Contains(key, "="):
 			refused = append(refused, fmt.Errorf("tag %q: the key holds \"=\", where -t key=value splits; the tag is left out", key))
+		case !ok && nested(value):
+			refused = append(refused, fmt.Errorf("tag %q: a tag's value is a string, not a table or an array; the tag is left out", key))
 		case !ok:
 			refused = append(refused, fmt.Errorf("tag %q: the value is %T, not a string; quote it; the tag is left out", key, value))
 		default:
@@ -47,6 +53,16 @@ func projectTags(data []byte) (map[string]string, []error) {
 		tags = nil
 	}
 	return tags, refused
+}
+
+// nested reports whether a TOML value is a table or an array, which quoting
+// does not make a string.
+func nested(value any) bool {
+	switch value.(type) {
+	case map[string]any, []any, []map[string]any:
+		return true
+	}
+	return false
 }
 
 // bareKey is a key the line editor finds again: a quoted one it does not
@@ -130,7 +146,8 @@ func putTag(lines []string, key, literal string) []string {
 }
 
 // dropTag removes key from [tags], and the table with it when nothing but
-// blank lines and comments is left under it. A key the editor does not read,
+// blank lines and comments is left under it; a table at the end of the file
+// takes the blank lines before it, which putTag wrote. A key the editor does not read,
 // such as a quoted or a dotted one, keeps the table: without its header it
 // would land in the table above.
 func dropTag(lines []string, key string) []string {
@@ -148,7 +165,16 @@ func dropTag(lines []string, key string) []string {
 					return lines
 				}
 			}
-			return dropLines(lines, t.header, t.header+1)
+			last := t.end == len(lines)
+			lines = dropLines(lines, t.header, t.header+1)
+			if last {
+				end := len(lines)
+				for end > 0 && strings.TrimSpace(lines[end-1]) == "" {
+					end--
+				}
+				lines = append(lines[:end], "")
+			}
+			return lines
 		}
 	}
 	return lines

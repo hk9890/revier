@@ -59,6 +59,25 @@ func TestTheProjectScreenEditsAndDeletesATag(t *testing.T) {
 	}
 }
 
+// Enter and Enter again on a tag writes nothing: a value with a leading
+// space or a tab, which the input shows another way, stays as the file has
+// it.
+func TestAnUnchangedTagEditWritesNothing(t *testing.T) {
+	body := demoProject + "\n[tags]\nnote = \" draft\\tnow\"\n"
+	m, file, _ := projectSurface(t, body, hosttest.NewRuntime("rt"))
+	m, _ = press(m, "alt+e")
+	m = downs(m, 50)
+	m, _ = press(m, "up") // the tag note
+	m, _ = press(m, "enter")
+	m, _ = press(m, "enter")
+	if got := fileText(t, file); got != body {
+		t.Errorf("an unchanged edit rewrote the file:\n%s", got)
+	}
+	if strings.Contains(screen(m), "Error") {
+		t.Errorf("an unchanged edit reported an error:\n%s", screen(m))
+	}
+}
+
 // A new tag that is not key=value is refused, and the file stays as it was.
 func TestTheProjectScreenRefusesATagWithNoValue(t *testing.T) {
 	m, file, _ := projectSurface(t, demoProject, hosttest.NewRuntime("rt"))

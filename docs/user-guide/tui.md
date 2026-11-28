@@ -50,7 +50,8 @@ Under it the pane shows the project's status, path, git URL and
   as it is now.
 
 The tags take one line. When they do not fit, the line ends in how many more
-there are: click it to show every tag, and click it again to close it.
+there are, or a tag too long for the line ends in …: click it to show every
+tag whole, and click it again to close it.
 
 When a file does not load or a host does not answer, the pane gives the
 reason. When the project directory is missing and the project has a

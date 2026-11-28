@@ -307,3 +307,23 @@ home = true
     [[target.runtime.panels]]
     kind = "shell"
 `
+
+// tagFile writes text as a project file of its own, demo.toml, and returns
+// its path; readTagFile reads it back.
+func tagFile(t *testing.T, text string) string {
+	t.Helper()
+	file := filepath.Join(t.TempDir(), "demo.toml")
+	if err := os.WriteFile(file, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return file
+}
+
+func readTagFile(t *testing.T, file string) string {
+	t.Helper()
+	data, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}

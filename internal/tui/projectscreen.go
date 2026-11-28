@@ -24,9 +24,9 @@ import (
 // file of the highlighted project, as the config screen is config.toml
 // (decisions/0081). Its name, path and git_url are typed in place, its
 // targets are listed as the project has them, config.toml's among them, each
-// with the form the config screen uses, and its tags are typed in place too. A change is written as it is made,
-// to the project file alone, and the surface takes the project as it now
-// loads.
+// with the form the config screen uses, and its tags are typed in place too.
+// A change is written as it is made, to the project file alone, and the
+// surface takes the project as it now loads.
 //
 // A name is the file's name, so a new one moves the file; a link's host
 // and its name there are the link's identity and are shown, not offered.
@@ -58,7 +58,8 @@ type projectScreen struct {
 	edit     textinput.Model    // a field's value, while it is typed
 	tform    targetForm         // the target being added or changed, while its form is up
 	formAt   int                // the target the form changes, or one past the last for a new one
-	dropping bool               // whether the target under the cursor waits on a y to be deleted
+	dropping bool               // whether the tag or target under the cursor waits on a y to be deleted
+	started  string             // what the edit held when it began, after the input took it
 }
 
 func newProjectScreen(th theme.Theme) projectScreen {
@@ -238,6 +239,7 @@ func (ps *projectScreen) startEdit(sf surface, value string) tea.Cmd {
 	// cursor instead of running off the right edge, typed blind.
 	ps.edit.SetWidth(max(sf.list-lipgloss.Width(cursor(sf.theme, true))-configLabelWidth-1, 8))
 	ps.edit.SetValue(value)
+	ps.started = ps.edit.Value()
 	ps.edit.CursorEnd()
 	return ps.edit.Focus()
 }
@@ -254,7 +256,7 @@ func (ps *projectScreen) editKey(sf surface, msg keyPress) (projectResult, tea.C
 		ps.edit.Blur()
 		return res, nil
 	case key.Matches(msg, sf.keys.Enter):
-		res = ps.saveEdit(sf, strings.TrimSpace(ps.edit.Value()))
+		res = ps.saveEdit(sf, ps.edit.Value())
 		if res.err == nil {
 			ps.edit.Blur()
 		}
@@ -268,14 +270,17 @@ func (ps *projectScreen) editKey(sf surface, msg keyPress) (projectResult, tea.C
 }
 
 // saveEdit writes what was typed on the cursor's row: a tag's new value, a
-// new tag as key=value, or a field's value.
+// new tag as key=value, or a field's value. A tag's value is written as
+// typed, spaces kept, and only when it changed: the input shows a tab or a
+// newline as a space, and an Enter that changed nothing must not write that.
 func (ps *projectScreen) saveEdit(sf surface, typed string) projectResult {
 	if tag, ok := ps.tagRow(); ok {
-		if typed == ps.text.Tags[tag] {
+		if typed == ps.started {
 			return projectResult{}
 		}
 		return ps.writeTags(sf, []core.Tag{{Key: tag, Value: typed}}, nil)
 	}
+	typed = strings.TrimSpace(typed)
 	if ps.row == ps.addTagRow() {
 		t, err := core.ParseTag(typed)
 		if err != nil {

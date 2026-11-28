@@ -1,32 +1,12 @@
 package config_test
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/hk9890/revier/internal/config"
 	"github.com/hk9890/revier/internal/core"
 )
-
-func tagFile(t *testing.T, text string) string {
-	t.Helper()
-	file := filepath.Join(t.TempDir(), "demo.toml")
-	if err := os.WriteFile(file, []byte(text), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return file
-}
-
-func readTagFile(t *testing.T, file string) string {
-	t.Helper()
-	data, err := os.ReadFile(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(data)
-}
 
 // A first tag adds the table at the end; every line before it stays, and a
 // value is written as TOML reads it back.
@@ -100,6 +80,42 @@ func TestRefusedTagsAreInKeyOrder(t *testing.T) {
 	}
 	if got := strings.Join(keys, ","); got != `tag "alpha",tag "mid",tag "zeta"` {
 		t.Errorf("refusals = %s, want them by key", got)
+	}
+}
+
+// A first tag added and then removed leaves the file as it was, byte for
+// byte: the blank line the add put before the table goes with it.
+func TestWriteTagsAddThenRemoveLeavesTheFileAsItWas(t *testing.T) {
+	file := tagFile(t, taggedHome)
+	if _, err := config.WriteTags(file, []core.Tag{{Key: "type", Value: "work"}}, nil, config.Inherited{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.WriteTags(file, nil, []string{"type"}, config.Inherited{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := readTagFile(t, file); got != taggedHome {
+		t.Errorf("file =\n%q\nwant\n%q", got, taggedHome)
+	}
+}
+
+// Only a table written [tags] holds tags: the reader and the writer agree on
+// the key, so a tag that loads is one revier tag can change.
+func TestATableOfAnotherCaseHoldsNoTags(t *testing.T) {
+	_, p := loadOne(t, "", taggedHome+"\n[Tags]\ntype = \"work\"\n")
+	if len(p.Tags) != 0 {
+		t.Errorf("Tags = %v, want none from [Tags]", p.Tags)
+	}
+}
+
+// A table or an array under [tags] is told apart from a value quoting mends.
+func TestATagThatIsATableSaysAValueIsAString(t *testing.T) {
+	_, p := loadOne(t, "", taggedHome+"\n[tags]\nlist = [\"a\"]\n[tags.extra]\na = \"b\"\n")
+	var all strings.Builder
+	for _, err := range p.TagRefused {
+		all.WriteString(err.Error() + "\n")
+	}
+	if strings.Contains(all.String(), "quote it") || strings.Count(all.String(), "not a table or an array") != 2 {
+		t.Errorf("refusals =\n%s\nwant each to say a value is a string, without quote it", all.String())
 	}
 }
 
