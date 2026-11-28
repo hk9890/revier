@@ -203,8 +203,8 @@ func TestAnOpenSweepsTheTerminalsNoWindowTook(t *testing.T) {
 	}
 }
 
-// A view's window runs revier's attach when the host names revier's binary,
-// with hc by its path and the socket named.
+// A view's window runs revier's attach, which titles and holds it, when the
+// host names revier's binary, with hc by its path and the socket named.
 func TestAttachPanelRunsRevierToHoldTheWindow(t *testing.T) {
 	dir := hcLink(t)
 	t.Setenv("PATH", dir)
@@ -217,7 +217,7 @@ func TestAttachPanelRunsRevierToHoldTheWindow(t *testing.T) {
 		t.Error("AttachPanel with a \"=\" in revier's path passed; env would read it as a variable")
 	}
 	// An upgrade can remove the binary under a running revier: the window
-	// then shows the terminal unheld rather than not at all.
+	// then shows the terminal untitled and unheld rather than not at all.
 	got, err = (&hc.Host{Socket: "/s.sock", Revier: filepath.Join(t.TempDir(), "gone")}).AttachPanel("t7")
 	if want := []string{"env", "HC_SOCKET=/s.sock", filepath.Join(dir, "hc"), "attach", "t7"}; err != nil || !slices.Equal(got, want) {
 		t.Errorf("AttachPanel with revier gone = %q, %v; want %q", got, err, want)
@@ -225,25 +225,33 @@ func TestAttachPanelRunsRevierToHoldTheWindow(t *testing.T) {
 }
 
 // A window is titled with its panel's title, as one line of plain text, or
-// with its program's name, never with the attach command. A terminal that is
-// gone titles nothing.
+// with its program's name, never with the attach command. The program is the
+// one hc started, not the foreground, which hc reads too late for a first
+// attach. A terminal that is gone titles nothing.
 func TestAWindowIsTitledBeforeItsAttach(t *testing.T) {
-	for name, tc := range map[string]struct{ title, want string }{
-		"the panel's title":  {"Claude Code", "\x1b]2;Claude Code\x1b\\"},
-		"no title":           {"", "\x1b]2;claude\x1b\\"},
-		"control characters": {"a\x1b]2;b\x07\nc \u00e4", "\x1b]2;a c \u00e4\x1b\\"},
+	for name, tc := range map[string]struct {
+		title      string
+		foreground map[string]any
+		want       string
+	}{
+		"the panel's title":  {"Claude Code", nil, "Claude Code"},
+		"no title":           {"", nil, "claude"},
+		"a blank title":      {" \x07\n", nil, "claude"},
+		"control characters": {"a\x1b]2;b\x07\nc ä", nil, "a c ä"},
+		"another foreground": {"", map[string]any{"pid": 10, "argv": []string{"/usr/bin/ssh", "host"}}, "claude"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			c, sock := newCore(t)
 			term := revierTerminal("t1", "live", "")
+			term.PID, term.Foreground = 10, tc.foreground
 			if tc.title != "" {
 				term.Labels["revier.title"] = tc.title
 			}
 			c.terminals = []*fakeTerminal{term}
 			var out bytes.Buffer
 			(&hc.Host{Socket: sock}).Title(t.Context(), "t1", &out)
-			if out.String() != tc.want {
-				t.Errorf("the window got %q, want %q", out.String(), tc.want)
+			if want := "\x1b]2;" + tc.want + "\x1b\\"; out.String() != want {
+				t.Errorf("the window got %q, want %q", out.String(), want)
 			}
 		})
 	}

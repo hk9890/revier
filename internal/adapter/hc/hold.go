@@ -35,8 +35,9 @@ const heldLines = 1000
 // window waits for a person, not for the core.
 const heldWait = 5 * time.Second
 
-// titleWait bounds the call that titles a window: the attach waits for it.
-const titleWait = time.Second
+// titleWait bounds the call that titles a window: the attach waits for it,
+// and until it runs the window echoes what is typed.
+const titleWait = 300 * time.Millisecond
 
 // heldPoll is how often a held window asks whether revier removed its
 // terminal, as a close or a shutdown does.
@@ -60,12 +61,13 @@ func (h *Host) Attach(ctx context.Context, bin string, panel revier.PanelID, in,
 	return attachErr
 }
 
-// title gives the window the panel's title, or its program's name, until the
-// program sets one of its own: a terminal names a window with no title after
-// the command it started, here the attach. hc's attach sends the title a
-// program set already, which replaces this one. It is written to the window
-// alone, never to hc's terminal, whose title a probe reads. A core that does
-// not answer leaves the window untitled, as the attach is what matters.
+// title gives the window the panel's title, or the name of the program hc
+// started in it, until the program sets one of its own: a terminal names a
+// window with no title after the command it started, here the attach. hc's
+// attach sends the title a program set already, which replaces this one. It
+// is written to the window alone, never to hc's terminal, whose title a probe
+// reads. A core that does not answer leaves the window untitled, as the attach
+// is what matters.
 func (h *Host) title(ctx context.Context, panel revier.PanelID, out io.Writer) {
 	calls, cancel := context.WithTimeout(ctx, titleWait)
 	defer cancel()
@@ -78,9 +80,13 @@ func (h *Host) title(ctx context.Context, panel revier.PanelID, out io.Writer) {
 	if err := s.call("terminal.get", map[string]any{"terminal": panel.String()}, &t); err != nil {
 		return
 	}
-	// One line of plain text: a control character would end the sequence.
-	text := strings.Join(strings.Fields(plain.Text(cmp.Or(t.Labels[titleLabel], programOf(t)))), " ")
-	_, _ = fmt.Fprintf(out, "\x1b]2;%s\x1b\\", text)
+	_, _ = fmt.Fprintf(out, "\x1b]2;%s\x1b\\", cmp.Or(oneLine(t.Labels[titleLabel]), oneLine(programOf(t))))
+}
+
+// oneLine is s as one line of plain text: a control character would end the
+// sequence that carries it.
+func oneLine(s string) string {
+	return strings.Join(strings.Fields(plain.Text(s)), " ")
 }
 
 // hold shows what a finished terminal of revier's left on out, with how its

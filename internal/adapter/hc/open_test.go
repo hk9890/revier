@@ -93,15 +93,16 @@ func TestOpenLabelsAndNamesEachTerminal(t *testing.T) {
 
 // A title holds whatever the realization's name holds: a label value is
 // free text, so a separator, a newline or an '=' survives as written, and the
-// realization's Match finds what Open made. A var's value survives the same
-// way.
+// realization's Match finds what Open made. A var's value and a panel's title
+// survive the same way, and no var is revier's title label.
 func TestFreeTextSurvivesTheRoundTrip(t *testing.T) {
 	_, sock := newCore(t)
 	h := &hc.Host{Socket: sock}
 	name := "demo | pipe/slash\nline=ü\ttab"
 	r := revier.Realization{
 		Name: name, Match: revier.Match{Title: "^" + regexp.QuoteMeta(name) + "$"},
-		Vars: map[string]string{"note": "a=b | c/d\nü"},
+		Vars:   map[string]string{"note": "a=b | c/d\nü"},
+		Panels: []revier.PanelSpec{{Kind: revier.PanelShell, Title: "x=y | z/w\nü"}},
 	}
 	ref, err := h.Open(t.Context(), r)
 	if err != nil {
@@ -116,6 +117,14 @@ func TestFreeTextSurvivesTheRoundTrip(t *testing.T) {
 	}
 	if v := instances[0].Panels[0].Vars["note"]; v != r.Vars["note"] {
 		t.Errorf("var = %q, want %q", v, r.Vars["note"])
+	}
+	if vars := instances[0].Panels[0].Vars; len(vars) != 1 {
+		t.Errorf("vars = %v, want note alone: the title label is revier's own", vars)
+	}
+	var window strings.Builder
+	h.Title(t.Context(), instances[0].Panels[0].ID, &window)
+	if want := "\x1b]2;x=y | z/w ü\x1b\\"; window.String() != want {
+		t.Errorf("the window got %q, want %q", window.String(), want)
 	}
 }
 
@@ -427,6 +436,7 @@ func TestOpenRefusesWhatHcWouldNotKeep(t *testing.T) {
 		"a key with =":    {Name: "home", Vars: map[string]string{"a=b": "x"}},
 		"an empty value":  {Name: "home", Vars: map[string]string{"k": ""}},
 		"revier's label":  {Name: "home", Vars: map[string]string{"revier.name": "x"}},
+		"the title label": {Name: "home", Vars: map[string]string{"revier.title": "x"}},
 		"no such dir":     {Name: "home", Dir: filepath.Join(t.TempDir(), "gone")},
 		"not UTF-8 value": {Name: "home", Vars: map[string]string{"k": "\xff"}},
 	} {

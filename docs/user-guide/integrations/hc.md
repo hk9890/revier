@@ -102,7 +102,9 @@ run `hc server restart --fresh` from a terminal outside tmux to replace it.
   `revier session restore` to open the workspaces again.
 - Terminals on a machine hc added are not listed, and one that does not
   answer slows each listing by up to 3 s.
-- A panel's `title` shows only until its program sets one. A panel with no
-  `title` shows its program's name until then.
+- A kitty panel shows its `title` only until its program sets one. Without a
+  `title` it shows the first word of its command, such as `sh` for a wrapper
+  or a link. When the program clears its title, as some do on exit, the panel
+  shows `env`. A terminal you attach by hand shows no `title`.
 - A terminal you attach to by hand in a kitty of your own is not the
   workspace's window: a press opens the workspace's own window beside it.
