@@ -99,9 +99,9 @@ func TestARunIsNamedAsAShellReadsItBack(t *testing.T) {
 		run  runlog.Run
 		want string
 	}{
-		{runlog.Run{Argv: []string{"sh", "-c", "echo a b; true"}, Finished: done}, `sh -c 'echo a b; true'`},
+		{runlog.Run{Argv: []string{"sh", "-c", "echo a b; true"}, Finished: done}, `-- sh -c 'echo a b; true'`},
 		{runlog.Run{Argv: []string{"git", "status"}, Filter: `grep -q "it's" TODO`, Finished: done}, `--filter 'grep -q "it'\''s" TODO' -- git status`},
-		{runlog.Run{Argv: []string{"echo", ""}, Finished: done}, `echo ''`},
+		{runlog.Run{Argv: []string{"echo", ""}, Finished: done}, `-- echo ''`},
 	} {
 		if got := runCommand(c.run); got != c.want {
 			t.Errorf("runCommand(%q, filter %q) = %s, want %s", c.run.Argv, c.run.Filter, got, c.want)

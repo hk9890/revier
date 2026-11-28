@@ -465,6 +465,7 @@ func loadProject(path string, data []byte, inh Inherited) core.Project {
 		prepared.LocalOnly = localOnly(inh.Targets, p)
 	}
 	prepared.Status, prepared.StatusRefused = projectStatuses(data)
+	prepared.Tags, prepared.TagRefused = projectTags(data)
 	var unrendered []error
 	prepared.Agents, unrendered = renderAgents(p, agents)
 	prepared.AgentRefused = append(agentRefused, unrendered...)
@@ -507,6 +508,7 @@ func Problems(p core.Project) []error {
 		}
 	}
 	out = append(out, p.StatusRefused...)
+	out = append(out, p.TagRefused...)
 	return append(out, p.AgentRefused...)
 }
 
@@ -540,10 +542,10 @@ func newProblems(before, after core.Project) []error {
 		what, _, _ := strings.Cut(err.Error(), ":")
 		return what
 	}
-	for _, err := range slices.Concat(before.StatusRefused, before.AgentRefused) {
+	for _, err := range slices.Concat(before.StatusRefused, before.AgentRefused, before.TagRefused) {
 		had[place(err)] = true
 	}
-	for _, err := range slices.Concat(after.StatusRefused, after.AgentRefused) {
+	for _, err := range slices.Concat(after.StatusRefused, after.AgentRefused, after.TagRefused) {
 		if !had[place(err)] {
 			out = append(out, err)
 		}

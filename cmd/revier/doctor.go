@@ -74,7 +74,7 @@ func cmdDoctor(out io.Writer, args []string) error {
 				problemLine(w, what, what, err.Error())
 			}
 		}
-		for _, err := range slices.Concat(p.StatusRefused, p.AgentRefused) {
+		for _, err := range slices.Concat(p.StatusRefused, p.TagRefused, p.AgentRefused) {
 			what := subject(err.Error())
 			problemLine(w, what, what, err.Error())
 		}

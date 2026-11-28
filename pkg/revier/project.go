@@ -43,8 +43,10 @@ type Project struct {
 
 	// Tags are the user's own key=value marks on the project, such as
 	// type=private, which a listing and a run in every project select by.
-	// A link's tags are its file's here, not the host's.
-	Tags map[string]string `toml:"tags" json:"tags,omitempty"`
+	// A link's tags are its file's here, not the host's. The loader reads
+	// them from the file's [tags] table apart from the rest, so a tag it
+	// cannot select by is left out alone and the project still loads.
+	Tags map[string]string `toml:"-" json:"tags,omitempty"`
 }
 
 // Link is where a remote project is: the host as ssh knows it, and the name

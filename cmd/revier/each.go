@@ -388,7 +388,8 @@ func cmdEachLog(w io.Writer, args []string) error {
 
 // runCommand is how a run is named in a listing: what it ran, the tags and
 // the filter that chose where, and whether it got to the end. Each word is quoted as a shell
-// reads it back, so the line can be pasted to run the same command again.
+// reads it back, and the command always follows "--", so the line pasted
+// after `revier each` runs the same command again.
 func runCommand(r runlog.Run) string {
 	var words []string
 	for _, t := range r.Tags {
@@ -397,9 +398,7 @@ func runCommand(r runlog.Run) string {
 	if r.Filter != "" {
 		words = append(words, "--filter", shell.Quote(r.Filter))
 	}
-	if len(words) > 0 {
-		words = append(words, "--")
-	}
+	words = append(words, "--")
 	for _, w := range r.Argv {
 		words = append(words, shell.Quote(w))
 	}
