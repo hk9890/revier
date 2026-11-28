@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"log/slog"
 	"os"
@@ -255,7 +256,7 @@ func valueScan(lines []string, i, col int) (int, int, []string) {
 			case c == ']' || c == '}':
 				depth--
 				end, endCol = i, j+1
-			case c == ' ' || c == '\t':
+			case c == ' ' || c == '\t' || c == '\r':
 			default:
 				end, endCol = i, j+1
 			}
@@ -273,11 +274,24 @@ func valueScan(lines []string, i, col int) (int, int, []string) {
 // file keeps its permissions. A write that succeeds logs "config written" at
 // INFO with path, the file written through any link: config.toml or a
 // project's file.
+//
+// A file whose every line ends in CRLF keeps that: the line editor splits at
+// "\n", so a line it adds ends in "\n" alone, and the file would come out
+// mixed. A file that is mixed already is written as the editor left it.
 func replaceFile(path string, data []byte) error {
+	if old, err := os.ReadFile(path); err == nil && allCRLF(old) {
+		data = bytes.ReplaceAll(bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n")), []byte("\n"), []byte("\r\n"))
+	}
 	real, err := fsutil.WriteThrough(path, data)
 	if err != nil {
 		return err
 	}
 	slog.Info("config written", "path", real)
 	return nil
+}
+
+// allCRLF reports whether a file has line ends and each one is CRLF.
+func allCRLF(data []byte) bool {
+	lf := bytes.Count(data, []byte("\n"))
+	return lf > 0 && bytes.Count(data, []byte("\r\n")) == lf
 }
