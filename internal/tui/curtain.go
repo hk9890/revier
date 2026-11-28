@@ -26,7 +26,7 @@ import (
 const (
 	curtainBar          = 62
 	curtainSecondaryBar = 40
-	curtainCount        = 10
+	curtainCount        = 11
 )
 
 // curtainButtonLines is how many lines the button adds under the block: two
@@ -193,7 +193,6 @@ func (m curtainModel) layout() curtainScreen {
 	}
 	blockWidth := m.walkWidth()
 	if m.state.End != nil {
-		blockWidth = 0
 		for _, l := range lines {
 			blockWidth = max(blockWidth, lipgloss.Width(l))
 		}
@@ -212,9 +211,9 @@ func (m curtainModel) layout() curtainScreen {
 	return screen
 }
 
-// walkWidth is the width the block is centred on while the walk runs. No
-// note and no line that says what runs counts: they come and go with the
-// steps, and the block would move with them.
+// walkWidth is the width the block is centred on while the walk runs, and at
+// its end unless the summary is wider. No note and no line that says what runs
+// counts: they come and go with the steps, and the block would move with them.
 func (m curtainModel) walkWidth() int {
 	width := m.barWidth() + curtainCount
 	if m.main && !m.compact {
@@ -297,9 +296,12 @@ func (m curtainModel) lines() (lines []string, label, hint string) {
 	return lines, "Cancel", "ctrl+c cancel · esc hide · tab layout"
 }
 
-// runs is the line that says what runs now. It is drawn before the first
-// report too, so that the block keeps its height.
+// runs is the line that says what runs now. It is blank before the first
+// report, so that the block keeps its height.
 func (m curtainModel) runs() string {
+	if m.state.Line == "" {
+		return ""
+	}
 	return m.spinner() + " " + m.th.Meta.Render(m.state.Line+" …")
 }
 

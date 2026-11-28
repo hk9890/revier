@@ -318,16 +318,16 @@ func TestAStateThatChangesTheFormClearsTheScreen(t *testing.T) {
 // noCurtain launches nothing: a run a test feeds by hand opens no curtain.
 func noCurtain(revier.Monitor, string, bool) []string { return nil }
 
-// walkReports is every report of a restore or a shutdown of 12 projects, two
-// steps each, in which some steps fail or are left open; and the run that
+// walkReports is every report of a restore or a shutdown of 12 projects with
+// those targets, in which some steps fail or are left open; and the run that
 // takes them.
-func walkReports(mode string) (*curtainRun, []core.Progress) {
+func walkReports(mode string, targets []revier.TargetName) (*curtainRun, []core.Progress) {
 	broke := errors.New("the window did not appear in the time that the launch waits for it, so nothing is bound to the target")
 	var restores []core.RestoreStep
 	var closes []core.CloseStep
 	for i := range 12 {
 		p := revier.ProjectName(fmt.Sprintf("project-%02d", i))
-		for _, target := range []revier.TargetName{"home", "editor-of-the-project"} {
+		for _, target := range targets {
 			restores = append(restores, core.RestoreStep{Project: p, Target: target, Action: core.RestoreLaunch})
 			closes = append(closes, core.CloseStep{Project: p, Target: target})
 		}
@@ -376,16 +376,22 @@ func corner(m curtainModel) (top, left int, shape curtainShape) {
 
 // The block stays where it is, and keeps the form whose change clears the
 // screen, from the plan of a walk to its last report, whatever its steps come
-// to.
+// to. A short summary keeps its column.
 func TestTheBlockStaysInPlaceWhileTheWalkRuns(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
 		main, compact bool
-	}{{"main", true, false}, {"compact", true, true}, {"secondary", false, false}} {
+		targets       []revier.TargetName
+	}{
+		{"main", true, false, []revier.TargetName{"home", "editor"}},
+		{"main wide", true, false, []revier.TargetName{"home", "editor-of-the-project", "diff-of-the-project", "page-of-the-project"}},
+		{"compact", true, true, []revier.TargetName{"home", "editor"}},
+		{"secondary", false, false, []revier.TargetName{"home", "editor"}},
+	} {
 		for _, mode := range []string{"restore", "shutdown"} {
 			for _, size := range []struct{ width, height int }{{213, 54}, {160, 40}, {101, 18}, {80, 24}} {
 				t.Run(fmt.Sprintf("%s %s %dx%d", tc.name, mode, size.width, size.height), func(t *testing.T) {
-					r, reports := walkReports(mode)
+					r, reports := walkReports(mode, tc.targets)
 					m := sized(curtainModel{main: tc.main, compact: tc.compact, th: theme.Default()}, size.width, size.height)
 					m.state = r.state
 					top, left, shape := corner(m)
@@ -402,9 +408,33 @@ func TestTheBlockStaysInPlaceWhileTheWalkRuns(t *testing.T) {
 							}
 						}
 					}
+					m.state.End = &curtain.End{OK: true, Title: "Restore done", Summary: "24 opened"}
+					if _, gotLeft, _ := corner(m); gotLeft != left {
+						t.Errorf("the end moved the block from column %d to %d", left, gotLeft)
+					}
 				})
 			}
 		}
+	}
+}
+
+// A project's row wider than the bar is centred, and not cut.
+func TestAWideRowIsCentred(t *testing.T) {
+	r, _ := walkReports("restore", []revier.TargetName{"home", "editor-of-the-project", "diff-of-the-project", "page-of-the-project"})
+	m := sized(curtainModel{main: true, th: theme.Default()}, 100, 40)
+	m.state = r.state
+	for _, l := range strings.Split(ansi.Strip(m.View().Content), "\n") {
+		if strings.Contains(l, "project-00") && !strings.HasSuffix(l, "page-of-the-project") {
+			t.Errorf("the row is cut: %q", l)
+		}
+	}
+}
+
+// Before the first report no line says what runs.
+func TestNoReportDrawsNoSpinner(t *testing.T) {
+	m, s := curtainOn(t, true)
+	if got := screen(shown(t, m, s, curtain.State{Mode: "restore"})); strings.Contains(got, "…") {
+		t.Errorf("the screen says something runs:\n%s", got)
 	}
 }
 
