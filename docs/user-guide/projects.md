@@ -100,7 +100,7 @@ revier tag type=work language=go     # set two tags
 revier tag --remove language         # remove one
 revier tag                           # print the project's tags
 revier tag -p shop type=work         # tag another project
-revier tag --match dynatrace type=work   # tag every project the word finds
+revier tag --match dynatrace type=work   # every project whose name, directory or repository holds the word
 ```
 
 `revier tag` writes the `[tags]` table of the project file and keeps the rest

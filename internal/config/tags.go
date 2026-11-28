@@ -6,6 +6,7 @@ import (
 	"maps"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -28,7 +29,8 @@ func projectTags(data []byte) (map[string]string, []error) {
 	}
 	var refused []error
 	tags := make(map[string]string, len(file.Tags))
-	for key, value := range file.Tags {
+	for _, key := range slices.Sorted(maps.Keys(file.Tags)) {
+		value := file.Tags[key]
 		s, ok := value.(string)
 		switch {
 		case key == "":
@@ -127,7 +129,10 @@ func putTag(lines []string, key, literal string) []string {
 	return append(out, "[tags]", key+" = "+literal, "")
 }
 
-// dropTag removes key from [tags], and the table with it when no tag is left.
+// dropTag removes key from [tags], and the table with it when nothing but
+// blank lines and comments is left under it. A key the editor does not read,
+// such as a quoted or a dotted one, keeps the table: without its header it
+// would land in the table above.
 func dropTag(lines []string, key string) []string {
 	for _, t := range tables(lines) {
 		if t.array || t.name != "tags" {
@@ -139,7 +144,7 @@ func dropTag(lines []string, key string) []string {
 				continue
 			}
 			for i := t.header + 1; i < t.end; i++ {
-				if keyLine.MatchString(lines[i]) {
+				if text := strings.TrimSpace(lines[i]); text != "" && !strings.HasPrefix(text, "#") {
 					return lines
 				}
 			}

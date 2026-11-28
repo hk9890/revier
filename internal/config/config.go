@@ -494,7 +494,8 @@ func loadProject(path string, data []byte, inh Inherited) core.Project {
 
 // Problems is every reason a loaded project is not whole: the project-wide
 // refusal first, then one per refused target, then one per refused
-// [[status]] table, then one per refused [[agent]] table or key. It is
+// [[status]] table, then one per tag left out of [tags], then one per refused
+// [[agent]] table or key. It is
 // empty for a project that loaded entire, which is what `revier new` asks
 // before it keeps a file.
 func Problems(p core.Project) []error {
@@ -516,8 +517,8 @@ func Problems(p core.Project) []error {
 // write is refused for. A write is refused for what it breaks and not for
 // what was broken before it, else one unfixed target would lock every other
 // edit of the file, and the file could only be repaired by hand. A problem
-// is the project's, one target's by name, or one status place's or named
-// agent's: the opening of its refusal, since a TOML error in the tables
+// is the project's, one target's by name, or one status place's, named
+// agent's or tag's: the opening of its refusal, since a TOML error in the tables
 // names a line, and an edit above them moves it.
 func newProblems(before, after core.Project) []error {
 	had := map[string]bool{}

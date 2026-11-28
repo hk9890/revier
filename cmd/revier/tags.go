@@ -110,7 +110,17 @@ func cmdTag(w io.Writer, args []string) error {
 	project := projectFlag(fs)
 	var selector tagFlags
 	selector.register(fs)
-	match := fs.String("match", "", "every project this word finds")
+	// An empty word is refused: read as no --match, a script's empty
+	// variable would tag the project the directory resolves to.
+	var word string
+	match := &word
+	fs.Func("match", "every project whose name, directory or repository holds this word", func(value string) error {
+		if value == "" {
+			return errors.New("it names no word")
+		}
+		word = value
+		return nil
+	})
 	var remove []string
 	fs.Func("remove", "remove the tag with this key; given again, each", func(key string) error {
 		if key == "" {
@@ -186,7 +196,9 @@ func cmdTag(w io.Writer, args []string) error {
 }
 
 // tagPicks is the projects a tag command acts on: those -t and --match select
-// together, else the one -p names, else the one this directory is in.
+// together, else the one -p names, else the one this directory is in. The
+// match reads the project files alone, as the rest of the command does: a
+// word in an agent's activity finds a project for list --match, not here.
 func tagPicks(projects []core.Project, name string, selector []core.Tag, match string, selects bool) ([]core.Project, error) {
 	if !selects {
 		ask := core.Ask{Name: revier.ProjectName(name)}

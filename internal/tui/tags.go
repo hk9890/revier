@@ -37,7 +37,10 @@ func tagsRow(th theme.Theme, tags []core.Tag, w int, open, hover bool) (string, 
 	}
 	shown, n, cut := closedTags(tags, room)
 	value := style.Render(shown)
-	if n < len(tags) {
+	switch {
+	case n == 0:
+		value = meta.Render(clipTo(more(len(tags)), room))
+	case n < len(tags):
 		value += meta.Render(tagGap + more(len(tags)-n))
 	}
 	return head + value + "\n", n < len(tags) || cut

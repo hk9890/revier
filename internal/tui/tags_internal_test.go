@@ -43,6 +43,15 @@ func TestClosedTagsShowWhatFitsAndCountTheRest(t *testing.T) {
 	}
 }
 
+// A pane with no room for any tag shows the count alone, within the room.
+func TestATagsRowWithNoRoomForATagIsTheCountAlone(t *testing.T) {
+	tags := tagList("a", "1", "b", "2", "c", "3", "d", "4", "e", "5", "f", "6")
+	row, _ := tagsRow(theme.Default(), tags, detailLabelWidth+5, false, false)
+	if got := strings.TrimSuffix(plain.Text(row), "\n"); got != pad("Tags", detailLabelWidth)+"+6 mo" {
+		t.Errorf("row = %q, want the label and the count cut to the room", got)
+	}
+}
+
 // A tag cut in the closed row opens, and the open row wraps it, so a click
 // shows every tag whole.
 func TestACutTagOpensAndWrapsWhole(t *testing.T) {

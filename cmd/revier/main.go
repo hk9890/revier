@@ -143,7 +143,9 @@ usage:
   revier tag [-p name | [-t key=value].. [--match <word>]] [key=value].. [--remove key]..
                                 set and remove tags of this directory's
                                 project, of the named one, or of every project
-                                selected; with neither, print the tags
+                                selected; --match finds a project by its name,
+                                directory or repository alone; with nothing
+                                to write, print the tags
   revier events [--days n] [--local]
                                 what revier did in each project in the last n
                                 days (7), one JSON line per event, with what

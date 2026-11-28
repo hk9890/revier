@@ -734,10 +734,11 @@ func agentFacts(th theme.Theme, it agentItem, now time.Time, w int) string {
 	if it.project.GitURL != "" {
 		line("Git URL", it.project.GitURL, th.Path)
 	}
-	// This pane is read and not clicked, so its tags row is open: a closed
-	// one would hide tags that nothing here can show.
+	// The row stays closed, as the project pane's does, so many tags cannot
+	// push the mirror off a pane that does not scroll; the project pane opens
+	// it.
 	if tags := core.SortedTags(it.project.Tags); len(tags) > 0 {
-		row, _ := tagsRow(th, tags, w, true, false)
+		row, _ := tagsRow(th, tags, w, false, false)
 		b.WriteString(row)
 	}
 	line("Harness", harnessOf(it.agent), th.Path)
