@@ -1,4 +1,5 @@
-// Package build carries the version stamped in by the build task.
+// Package build carries the version, commit and date that .goreleaser.yaml and
+// the build task of .mise.toml stamp in by ldflags.
 package build
 
 var (

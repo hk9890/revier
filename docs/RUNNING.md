@@ -33,15 +33,23 @@ config, state, runtime directory and socket, and no session bus. Any `hc`
 command starts a core when none answers its socket, so run every `hc` and
 every `./bin/revier` through `hcp`. revier starts a core as the unit
 `revier-hc-<socket hash>` of the user's service manager; under `hcp` it reaches no manager
-and starts the core detached. Set all of it, every time, in the one shell
-that runs the recipes below. `REVIER_SSH_CONFIG` points the remote screen's
+and starts the core detached. `REVIER_SSH_CONFIG` points the remote screen's
 "new" (alt+r, then alt+n) and the check for this machine at a scratch ssh
 configuration instead of `~/.ssh/config`; set it whenever a recipe reaches
 the remote screen.
 
+Run each recipe as a file, because a Bash call keeps no variable and no
+function, and the worktree check refuses most commands after a `.`:
+
+1. Write the setup lines of the recipes to `hako-private/scratch.sh`.
+2. Write each set of recipe lines to a file of its own that starts with
+   `. hako-private/scratch.sh`.
+3. Run that file with `bash <file>` from the worktree root.
+
 ```bash
-S=$(mktemp -d); mkdir -p "$S/projects" "$S/state"
-C=$(mktemp -d /tmp/hc.XXXX); mkdir -m 700 "$C/run"   # short: a socket path over 107 bytes cannot be bound
+S=$PWD/hako-private/scratch; mkdir -p "$S/projects" "$S/state"   # fixed, so each run finds the last one's state
+C=/tmp/hc.$(id -u).$(printf %s "$PWD" | md5sum | cut -c1-8)        # short: a socket path over 107 bytes cannot be bound
+mkdir -p -m 700 "$C" "$C/run"
 hcp() { env -u DBUS_SESSION_BUS_ADDRESS -u HC_TERMINAL_ID -u HC_TERMINAL_SOCKET -u HC_SESSION SHELL=/bin/sh XDG_CONFIG_HOME=$C XDG_STATE_HOME=$C XDG_RUNTIME_DIR=$C/run HC_SOCKET=$C/s.sock "$@"; }
 printf '[hosts]\nruntime = ["hc"]\nview = ["none"]\nwindow = ["none"]\n' > "$S/config.toml"   # never touch a real window
 cat > "$S/projects/demo.toml" <<EOF
@@ -65,6 +73,7 @@ name = "agent"
 EOF
 export REVIER_CONFIG_HOME=$S REVIER_STATE_HOME=$S/state
 tabs() { for a in $(hcp hc ls --json | jq -r '.terminals[].address'); do hcp hc get "$a" --json | jq -c '{address, tab: .labels["revier.tab"], place: .labels["revier.tabplace"], argv: .foreground.argv}'; done; }
+# end of the setup lines
 
 hcp ./bin/revier status -p demo    # which hosts were selected
 hcp ./bin/revier doctor            # what did not load whole, and its fix; last line: runtime hc is shown by no view
@@ -80,11 +89,14 @@ on the user's desktop; without `window = ["none"]` a window target launches a
 real application and moves the user's focus.
 
 Leave the core and `$S` in place for the recipes below;
-[Clean up](#clean-up) removes them.
+[Clean up](#clean-up) removes them. Run Clean up before the first recipe of a
+new task: the directories are fixed, so a task that skipped it leaves its
+core, projects and sessions behind.
 
 `revier new` and `revier open <unknown name>` write into
-`$REVIER_CONFIG_HOME/projects` and run `mise trust` on the directory. Export
-`MISE_STATE_DIR=$S/mise` as well, so the trust lands outside the user's list.
+`$REVIER_CONFIG_HOME/projects` and run `mise trust` on the directory. Add
+`export MISE_STATE_DIR=$S/mise` to `hako-private/scratch.sh`, so the trust
+lands outside the user's list.
 Point a `git_url` you test cloning with at a local bare repository
 (`git init --bare $S/origin.git`).
 
@@ -95,7 +107,8 @@ To exercise the agent monitor, use the demo's agent panel. Its state is what
 `claude agents --json` lists for the terminal's pid, so put a `claude` first on
 PATH that lists the files of a scratch sessions directory, and write the terminal's file there. hc reads a
 terminal's foreground process about twice a second, so `agentpane` finds a
-new agent a moment after it starts:
+new agent a moment after it starts. Add the lines up to `st` to
+`hako-private/scratch.sh`:
 
 ```bash
 export CLAUDE_CONFIG_DIR=$S/claude; mkdir -p "$S/bin" "$CLAUDE_CONFIG_DIR/sessions"
@@ -105,8 +118,10 @@ agentpane() {                                         # the workspace's agent te
   set -- $(for a in $(hcp hc ls --json | jq -r '.terminals[].address'); do hcp hc get "$a" --json | jq -r 'select(.foreground.argv[0]=="claude") | "\(.foreground.pid) \(.address)"'; done | head -1)
   pid=$1 pane=$2
 }
-agentpane
 st() { printf '{"pid": %s, "status": "%s"}' "$pid" "$1" > "$CLAUDE_CONFIG_DIR/sessions/$pid.json"; }
+# end of the setup lines
+
+agentpane
 st busy       # -> running
 st waiting    # -> attention
 st idle       # -> idle
@@ -146,6 +161,7 @@ from the agent monitor recipe on PATH. File a transcript for the
 conversation too: revier resumes only a conversation Claude Code has filed.
 
 ```bash
+agentpane                       # sets $pid: a new bash starts without it
 printf '{"pid": %s, "status": "idle", "sessionId": "abc-123", "cwd": "%s"}' "$pid" "$S" > "$CLAUDE_CONFIG_DIR/sessions/$pid.json"
 mkdir -p "$CLAUDE_CONFIG_DIR/projects/-filed" && echo '{"type":"user"}' > "$CLAUDE_CONFIG_DIR/projects/-filed/abc-123.jsonl"
 hcp ./bin/revier session save   # prints "1 agent conversation recorded"
@@ -181,16 +197,18 @@ Run the agent monitor recipe first: this one needs its `$S/bin` on PATH and its
 session file.
 
 Put a stand-in `ssh` first on PATH that runs the panel's command line here,
-under a second configuration that plays the host:
+under a second configuration that plays the host. Add the lines up to `ln` to
+`hako-private/scratch.sh`:
 
 ```bash
-H=$(mktemp -d); mkdir -p "$H/projects" "$H/state"            # the host: no runtime, it is reached over ssh alone
+H=$S/host; mkdir -p "$H/projects" "$H/state"                 # the host: no runtime, it is reached over ssh alone
 printf '[hosts]\nruntime = ["none"]\nwindow = ["none"]\n' > "$H/config.toml"
 cp "$S/projects/demo.toml" "$H/projects/demo.toml"           # with the demo's agent panel
 printf '[remote]\nhost = "fakehost"\nproject = "demo"\n' > "$S/projects/far.toml"
 printf '#!/bin/sh\nshift\nexec sh -c "$1"\n' > "$S/bin/loginsh"   # a login shell that keeps this PATH
 printf '#!/bin/sh\nwhile [ "$1" != "--" ]; do shift; done; shift; shift\nREVIER_CONFIG_HOME=%s REVIER_STATE_HOME=%s/state SHELL=%s/bin/loginsh exec sh -c "$1"\n' "$H" "$H" "$S" > "$S/bin/ssh"
-chmod +x "$S/bin/ssh" "$S/bin/loginsh"; ln -s "$PWD/bin/revier" "$S/bin/revier"
+chmod +x "$S/bin/ssh" "$S/bin/loginsh"; ln -sf "$PWD/bin/revier" "$S/bin/revier"
+# end of the setup lines
 
 hcp ./bin/revier open far                                    # two terminals, each the stand-in ssh become the host's panel
 REVIER_CONFIG_HOME=$H ./bin/revier list --json demo          # the host's view: the agent under its tag, on host "proc"
@@ -223,6 +241,7 @@ Start the TUI with the fake `claude` and `CLAUDE_CONFIG_DIR` from the agent
 monitor recipe in its environment:
 
 ```bash
+agentpane     # sets $pid: a new bash starts without it
 st waiting    # the row moves to the top as attention
 ```
 
@@ -249,33 +268,6 @@ so a stale one skews the next session's first result.
 Read `survey` for `available`: a window-only target reports `false` on a machine
 with no window host, which is the expected headless result and not a failure.
 
-## Record the README clips
-
-`scripts/demo/record` re-records the README's four clips in
-`.github/assets/`: `popup.webp` (search and jump), `agents.webp` (the agent
-list), `tools.webp` (the editor and ticket keys) and `restore.webp` (shutdown
-and restore). It drives a libvirt VM's GNOME desktop with `virsh send-key` and
-records it with GNOME's own screencast, so nothing reaches this desktop:
-
-```bash
-scripts/demo/record <lease-id>          # builds revier, writes .github/assets/*.webp
-scripts/demo/record <lease-id> /tmp/x   # anywhere else, to compare first
-```
-
-- Give it a new lease that `scripts/lease-desktop` prepared, as
-  [Drive the desktop on a werft lease](#drive-the-desktop-on-a-werft-lease)
-  says, but in tier `full`: the clips take kitty's theme, font and window
-  frame from the user's setup, which a `plain` lease lacks. A lease that ran
-  other checks first keeps their workspace kitty, and the popup shows their
-  projects.
-- This machine needs ffmpeg with libwebp, `python3-pil` for `/usr/bin/python3`,
-  and the JetBrainsMono Nerd Font, which draws the keycaps.
-- The recording uses a scratch configuration and fake agents. The script
-  points the trigger key and the editor and ticket keys at them, sets a plain
-  background and 1920x1080, and puts all of it back when it exits.
-- Open each clip in a browser before you commit: ffmpeg cannot decode an
-  animated WebP.
-
 ## Drive the desktop on a werft lease
 
 The GNOME host, kitty's `Open` and `Focus`, the kitty view over hc, the
@@ -300,6 +292,8 @@ Call the Skill tool with `werft:werft` for the lease flow.
   GNOME session's environment and defines `kitty_socket` and `gnome_wait`.
 - After a rebuild, run `scripts/lease-desktop <lease-id>` again: it replaces
   `revier` in the lease, also while the popup runs it.
+- To re-record the README clips, run `scripts/demo/record <lease-id>` on a
+  new lease in tier `full`; its header holds the requirements.
 - Send a key the way the user presses it to the lease's `domain`, which
   `werft --json leases` prints: `virsh -c qemu:///system send-key <domain> KEY_LEFTALT KEY_SPACE`.
 
@@ -392,10 +386,10 @@ and press the key in the lease's kitty.
 
 ## Clean up
 
-Run this in the shell that ran the recipes, once the last recipe that uses
+Run this after `. hako-private/scratch.sh`, once the last recipe that uses
 `$S` is done; they share its state:
 
 ```bash
-[ -n "$C" ] && hcp hc server stop   # the private core only; ends every terminal it runs
-rm -rf "$S" "$H" "$C"
+hcp hc server stop    # the private core only; ends every terminal it runs
+rm -rf "$S" "$C"      # $H is inside $S
 ```

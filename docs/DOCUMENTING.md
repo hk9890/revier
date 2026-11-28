@@ -1,7 +1,7 @@
 # Documenting
 
-The standard is the `instruction-writing:writing-project-docs` skill. Below is
-this repository's delta, which wins where the two disagree.
+Call the Skill tool with `instruction-writing:writing-project-docs` for the
+standard. Below is this repository's delta, which wins where the two disagree.
 
 ## Four trees, four owners
 
@@ -24,6 +24,9 @@ user guide or the code; write them there, not in `product.md`,
 A design doc states the model as a whole. A record states one choice and what
 it rejected. A design doc cites a record and does not repeat its argument.
 
+What describes an adapter or the core from the inside stays in the Go comment
+beside it: no design doc and no record owns it.
+
 ## `docs/decisions/`
 
 The standard owns the record's format, its three tests and its lifecycle.
@@ -33,8 +36,6 @@ The standard owns the record's format, its three tests and its lifecycle.
 - Before a merge, check that no other branch took the record's number: two
   files with one number merge without a conflict. When the number changes,
   change it in the commit message, the PR title and the PR body too.
-- Leave what describes an adapter or the core from the inside in the Go
-  comment beside it: no design doc owns it.
 - When a record is withdrawn and nothing replaces it, delete it and remove
   every citation of it in the tree. A Go comment that cited it keeps its own
   words, with no number.

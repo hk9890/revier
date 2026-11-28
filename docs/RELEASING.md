@@ -30,13 +30,14 @@ directory on each run; it is never committed.
    `git fetch --tags origin && git tag --list "v*"`.
 2. Write the `CHANGELOG.md` section (see below) and land it like any other
    change: worktree, PR, merge ([CHANGE-WORKFLOW.md](CHANGE-WORKFLOW.md)).
-3. Create a worktree detached at the merged commit, and run the gate in it.
-   Run steps 3 and 4 from the main checkout's root:
+3. Create a throwaway worktree in `/tmp`, detached at the merged commit, and
+   run the gate in it:
 
    ```bash
    git fetch origin
-   git worktree add --detach .claude/worktrees/release-vX.Y.Z origin/main
-   mise -C .claude/worktrees/release-vX.Y.Z run quality:full
+   git worktree prune    # a reboot clears /tmp and leaves the old registration
+   git worktree add --detach /tmp/revier-release-vX.Y.Z origin/main
+   mise -C /tmp/revier-release-vX.Y.Z run quality:full
    ```
 
    Check each commit since the last tag against the section, as
@@ -44,16 +45,16 @@ directory on each run; it is never committed.
    says. A change with no entry goes back to step 2.
 
    ```bash
-   git -C .claude/worktrees/release-vX.Y.Z log --no-merges --oneline \
+   git -C /tmp/revier-release-vX.Y.Z log --no-merges --oneline \
      "$(git describe --tags --abbrev=0 origin/main)"..HEAD
    ```
 
 4. Tag the worktree's commit, push the tag, then remove the worktree:
 
    ```bash
-   git -C .claude/worktrees/release-vX.Y.Z tag -a vX.Y.Z -m "revier vX.Y.Z"
+   git -C /tmp/revier-release-vX.Y.Z tag -a vX.Y.Z -m "revier vX.Y.Z"
    git push origin vX.Y.Z
-   git worktree remove .claude/worktrees/release-vX.Y.Z
+   git worktree remove /tmp/revier-release-vX.Y.Z
    ```
 
 5. Dispatch the workflow and watch it. The run takes a few seconds to
@@ -90,12 +91,12 @@ needs must live in the tagged commit. To move the tag onto such a fix:
 1. Land the `release.yml` fix by PR ([CHANGE-WORKFLOW.md](CHANGE-WORKFLOW.md)).
 2. Create a new detached worktree at the new `origin/main` and run the gate,
    as in step 3 of [Cut a release](#cut-a-release).
-3. From the main checkout's root, move the tag and remove the worktree:
+3. Move the tag and remove the worktree:
 
    ```bash
-   git -C .claude/worktrees/release-vX.Y.Z tag -f -a vX.Y.Z -m "revier vX.Y.Z"
+   git -C /tmp/revier-release-vX.Y.Z tag -f -a vX.Y.Z -m "revier vX.Y.Z"
    git push -f origin vX.Y.Z
-   git worktree remove .claude/worktrees/release-vX.Y.Z
+   git worktree remove /tmp/revier-release-vX.Y.Z
    ```
 
 4. Dispatch and verify again, as in steps 5 and 6 of
