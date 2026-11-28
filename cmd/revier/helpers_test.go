@@ -346,3 +346,14 @@ type attachingRuntime struct {
 }
 
 func (r attachingRuntime) AttachCommand(revier.TargetRef) ([]string, error) { return r.argv, nil }
+
+// listApp is the demo project, open with an agent at work on Dtop, and tm,
+// a closed project in task-manager whose repository is taskmgr.
+func listApp(t *testing.T) *app {
+	t.Helper()
+	rt := hosttest.NewRuntime("hc")
+	rt.Add("home", "", revier.Panel{ID: "7", Title: "claude busy Dtop authentication options"})
+	tm := core.PrepareProject(revier.Project{Name: "tm", Path: "/x/task-manager", GitURL: "git@github.com:o/taskmgr.git"})
+	c := &core.Core{Runtime: rt, View: rt, Probes: []revier.AgentProbe{hosttest.TitleProbe{Harness: "claude"}}}
+	return withState(t, &app{cfg: &config.Config{}, projects: []core.Project{demoProject(t), tm}, stateRoot: t.TempDir(), core: c}, &state.State{})
+}

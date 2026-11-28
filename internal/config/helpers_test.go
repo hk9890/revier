@@ -280,3 +280,30 @@ func sharedTyped(t *testing.T, shared []map[string]any) []revier.Target {
 	}
 	return typed
 }
+
+// loadOne loads config.toml and one project file, demo.toml.
+func loadOne(t *testing.T, cfgText, body string) (*config.Config, core.Project) {
+	t.Helper()
+	root := projectsRoot(t, cfgText, map[string]string{"demo.toml": body})
+	cfg, projects, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(projects) != 1 {
+		t.Fatalf("Load: %d projects, want 1", len(projects))
+	}
+	return cfg, projects[0]
+}
+
+// taggedHome is a project file whose home loads whole, for the tests of its
+// [tags] to add to.
+const taggedHome = `path = "/tmp/demo"
+[[target]]
+name = "home"
+home = true
+  [target.runtime]
+  name = "session:{{.Name}}"
+  match = { title = "^session:{{.Name}}$" }
+    [[target.runtime.panels]]
+    kind = "shell"
+`

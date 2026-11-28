@@ -8,17 +8,6 @@ import (
 	"github.com/hk9890/revier/internal/config"
 )
 
-const taggedHome = `path = "/tmp/demo"
-[[target]]
-name = "home"
-home = true
-  [target.runtime]
-  name = "session:{{.Name}}"
-  match = { title = "^session:{{.Name}}$" }
-    [[target.runtime.panels]]
-    kind = "shell"
-`
-
 // A tag a selector cannot name is left out alone, with its reason among the
 // project's problems: the project and its other tags load.
 func TestATagThatCannotBeSelectedIsLeftOutAlone(t *testing.T) {
