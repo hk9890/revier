@@ -138,7 +138,7 @@ func WriteTags(file string, set []core.Tag, remove []string, inh Inherited) (cor
 		for _, key := range remove {
 			lines = dropTag(lines, key)
 		}
-		if after, err := tagsDoc(strings.Join(lines, "\n")); err != nil || !reflect.DeepEqual(after, want) || tagsTwice(lines) {
+		if after, err := tagsDoc(strings.Join(lines, "\n")); err != nil || !reflect.DeepEqual(after, want) || declaredTwice(lines, "tags") {
 			return nil, errTagsShape
 		}
 		return lines, nil
@@ -156,28 +156,6 @@ func tagsDoc(text string) (map[string]any, error) {
 		delete(doc, "tags")
 	}
 	return doc, nil
-}
-
-// dottedTags is the start of a line that declares the tags as a dotted key.
-var dottedTags = regexp.MustCompile(`^\s*(?:tags|"tags"|'tags')\s*\.`)
-
-// tagsTwice reports whether the tags are declared both as dotted keys at the
-// top of the file and as a [tags] table. TOML refuses that, and the decoder
-// does not.
-func tagsTwice(lines []string) bool {
-	all := tables(lines)
-	if !slices.ContainsFunc(all, func(t table) bool { return !t.array && t.name == "tags" }) {
-		return false
-	}
-	for i := 0; i < all[0].end; i++ {
-		if at := keyLine.FindStringSubmatchIndex(lines[i]); at != nil {
-			if dottedTags.MatchString(lines[i]) {
-				return true
-			}
-			i, _ = valueEnd(lines, i, at[1])
-		}
-	}
-	return false
 }
 
 // putTag puts key = literal under [tags], adding the table at the end of the

@@ -181,6 +181,29 @@ func TestSetRefusesAKeyItCannotEditInPlace(t *testing.T) {
 	}
 }
 
+// A value whose table the file declares as dotted keys gets no second table:
+// TOML allows a table once, which the decoder here does not enforce.
+func TestSetAddsNoSecondTable(t *testing.T) {
+	for name, text := range map[string]string{
+		"dotted":        "ui.theme = \"catppuccin-mocha\"\n",
+		"quoted dotted": "\"ui\" . theme = \"catppuccin-mocha\"\n",
+		"both":          "ui.theme = \"catppuccin-mocha\"\n\n[ui]\ntrigger_key = \"alt-j\"\n",
+	} {
+		root := writeConfig(t, text)
+		if err := config.Set(root, "ui", "glyphs", "ascii"); err == nil {
+			t.Errorf("%s: want an error", name)
+		}
+		if got := readConfig(t, root); got != text {
+			t.Errorf("%s: config.toml = %q, want it unchanged", name, got)
+		}
+	}
+
+	root := writeConfig(t, "hosts.runtime = [\"hc\"]\n")
+	if err := config.Set(root, "ui", "glyphs", "ascii"); err != nil {
+		t.Errorf("a dotted key of another table: %v", err)
+	}
+}
+
 // A config.toml linked in from elsewhere, a dotfiles repository, is written
 // through the link, and the file keeps its permissions.
 func TestSetWritesThroughASymlinkAndKeepsTheMode(t *testing.T) {
