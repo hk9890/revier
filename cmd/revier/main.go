@@ -140,6 +140,10 @@ usage:
                                 the command printed in one project
   revier tags [--json]          every tag the project files carry, and the
                                 projects that carry each
+  revier tag [-p name | [-t key=value].. [--match <word>]] [key=value].. [--remove key]..
+                                set and remove tags of this directory's
+                                project, of the named one, or of every project
+                                selected; with neither, print the tags
   revier events [--days n] [--local]
                                 what revier did in each project in the last n
                                 days (7), one JSON line per event, with what
@@ -370,6 +374,9 @@ func run(out io.Writer, args []string) error {
 	case "tags":
 		// No app: the tags are in the project files, and no host has them.
 		return cmdTags(out, args)
+	case "tag":
+		// No app, for the reason tags has none.
+		return cmdTag(out, args)
 	case "agent":
 		// Its own app: how long an agent command may take is one of its
 		// flags, and the hosts are probed and listed inside that bound.

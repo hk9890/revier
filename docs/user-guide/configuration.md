@@ -59,7 +59,7 @@ board = "https://github.com/example/shop/projects/1"
 | `path` | string | required | The project's directory, written in full or from `~`, your home directory. revier refuses a relative path. |
 | `git_url` | string | none | The repository `path` is a clone of. When `path` is missing, opening the project clones it. No whitespace, no shell metacharacters, no user or token in an `http(s)` URL, and no link to a page of the repository, such as `.../tree/main`. |
 | `[vars]` | table of strings | none | Your own values for [templates](#templates): `{{.Vars.board}}`. |
-| `[tags]` | table of strings | none | Your own marks on the project, such as `type = "work"`. `revier list -t type=work` and `revier each -t type=work` select by them, and `revier tags` lists them. A link's tags are those in its file on this machine. revier leaves out a tag whose value is not a string, or whose key is empty or holds `=`, and `revier doctor` names it; the rest of the project loads. |
+| `[tags]` | table of strings | none | Your own marks on the project, such as `type = "work"`. `revier tag` writes them, `revier list -t type=work` and `revier each -t type=work` select by them, and `revier tags` lists them. A link's tags are those in its file on this machine. revier leaves out a tag whose value is not a string, or whose key is empty or holds `=`, and `revier doctor` names it; the rest of the project loads. |
 | `[[target]]` | array of tables | none | The project's [targets](#targets). |
 | `[[status]]` | array of tables | none | Statuses in this project's pane. See [extending/status.md](extending/status.md). |
 

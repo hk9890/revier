@@ -93,7 +93,18 @@ The fields and rules are in [Actions](configuration.md#actions).
 ## Tag projects
 
 Tags are your own `key=value` marks on a project, such as which projects are
-work and which are private. Add them to the project file:
+work and which are private. To tag the project of the current directory:
+
+```bash
+revier tag type=work language=go     # set two tags
+revier tag --remove language         # remove one
+revier tag                           # print the project's tags
+revier tag -p shop type=work         # tag another project
+revier tag --match dynatrace type=work   # tag every project the word finds
+```
+
+`revier tag` writes the `[tags]` table of the project file and keeps the rest
+of the file as it is. You can also write the table by hand:
 
 ```toml
 # ~/.config/revier/projects/shop.toml

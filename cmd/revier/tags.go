@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"os"
+	"slices"
 	"strings"
 	"text/tabwriter"
 
@@ -80,7 +84,7 @@ func cmdTags(w io.Writer, args []string) error {
 		return printJSON(w, out)
 	}
 	if len(uses) == 0 {
-		_, _ = fmt.Fprintln(w, "no project has a tag. add them under [tags] in a project file")
+		_, _ = fmt.Fprintln(w, "no project has a tag. add one with revier tag key=value")
 		return nil
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
@@ -94,4 +98,122 @@ func cmdTags(w io.Writer, args []string) error {
 		_, _ = fmt.Fprintf(tw, "%s\t%d\t%s\n", plain.Line(u.String()), len(u.Projects), strings.Join(names, " "))
 	}
 	return tw.Flush()
+}
+
+// cmdTag sets, removes or prints the tags of the project of this directory,
+// of the one -p names, or of every project -t and --match select. It writes
+// the project files alone and asks no host. A directory in no project is an
+// error, never the last project or the focused window's: a tag written to the
+// wrong project would select it silently from then on.
+func cmdTag(w io.Writer, args []string) error {
+	fs := flag.NewFlagSet("tag", flag.ContinueOnError)
+	project := projectFlag(fs)
+	var selector tagFlags
+	selector.register(fs)
+	match := fs.String("match", "", "every project this word finds")
+	var remove []string
+	fs.Func("remove", "remove the tag with this key; given again, each", func(key string) error {
+		if key == "" {
+			return errors.New("it names no tag")
+		}
+		remove = append(remove, key)
+		return nil
+	})
+	pos, err := parseArgs(fs, args)
+	if err != nil {
+		return err
+	}
+	var set []core.Tag
+	for _, a := range pos {
+		t, err := core.ParseTag(a)
+		if err != nil {
+			return fmt.Errorf("usage: revier tag [key=value].. [--remove key]..: %w", err)
+		}
+		if err := config.ValidateTagKey(t.Key); err != nil {
+			return err
+		}
+		if slices.Contains(remove, t.Key) {
+			return fmt.Errorf("tag %q is both set and removed", t.Key)
+		}
+		set = append(set, t)
+	}
+	selects := len(selector) > 0 || *match != ""
+	if *project != "" && selects {
+		return errors.New("usage: revier tag -p <name> takes no -t and no --match")
+	}
+
+	root, err := config.Root()
+	if err != nil {
+		return err
+	}
+	cfg, projects, err := config.Load(root)
+	if err != nil {
+		return err
+	}
+	warnProblems(cfg, projects)
+	picks, err := tagPicks(projects, *project, selector, *match, selects)
+	if err != nil {
+		return err
+	}
+
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	defer func() { _ = tw.Flush() }()
+	if len(set) == 0 && len(remove) == 0 {
+		for _, p := range picks {
+			tagLine(tw, p)
+		}
+		return nil
+	}
+	failed := 0
+	for _, p := range picks {
+		if p.File == "" {
+			fmt.Fprintf(os.Stderr, "revier: %s: is in no project file, so it has no tags to write\n", p.Name)
+			failed++
+			continue
+		}
+		written, err := config.WriteTags(p.File, set, remove, cfg.Inherited())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "revier: %s: %v\n", p.Name, err)
+			failed++
+			continue
+		}
+		tagLine(tw, written)
+	}
+	if failed > 0 {
+		return fmt.Errorf("%s not written", core.Count(failed, "project"))
+	}
+	return nil
+}
+
+// tagPicks is the projects a tag command acts on: those -t and --match select
+// together, else the one -p names, else the one this directory is in.
+func tagPicks(projects []core.Project, name string, selector []core.Tag, match string, selects bool) ([]core.Project, error) {
+	if !selects {
+		ask := core.Ask{Name: revier.ProjectName(name)}
+		if name == "" {
+			ask.Dir = workingDir()
+		}
+		p, err := (&core.Core{}).ProjectFor(context.Background(), projects, ask)
+		if err != nil {
+			return nil, err
+		}
+		return []core.Project{p}, nil
+	}
+	picks := core.WithTags(projects, selector)
+	if match != "" {
+		picks = slices.DeleteFunc(picks, func(p core.Project) bool { return !core.Matches(revier.ProjectView{Project: p.Project}, match) })
+	}
+	if len(picks) == 0 {
+		return nil, errors.New("no project matches the selection")
+	}
+	return picks, nil
+}
+
+// tagLine is one project and its tags, by key.
+func tagLine(w io.Writer, p core.Project) {
+	words := []string{}
+	for _, t := range core.SortedTags(p.Tags) {
+		words = append(words, plain.Line(t.String()))
+	}
+	_, _ = fmt.Fprintf(w, "%s\t%s\n", p.Label(), dash(strings.Join(words, " ")))
 }

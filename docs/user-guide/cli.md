@@ -19,7 +19,8 @@ in full.
 | `revier` | The TUI. See [The TUI](tui.md). |
 | `revier popup` | The TUI in a kitty window of its own. |
 | `revier list` | Print every project, its state, agents and targets. |
-| `revier tags` | Print every tag the project files carry, and the projects that carry each. See [Tag projects](projects.md#tag-projects). |
+| `revier tag` | Set, remove or print the tags of a project, or of every project `-t` or `--match` selects. See [Tag projects](projects.md#tag-projects). |
+| `revier tags` | Print every tag the project files carry, and the projects that carry each. |
 | `revier new` | Write a project file for the current directory. |
 | `revier rename <old> <new>` | Give a closed project a new name. See [Projects](projects.md). |
 | `revier open` | Run-or-raise the project's workspace. |

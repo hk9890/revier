@@ -113,7 +113,7 @@ func TestTagsWithNoneSaysWhereToAddThem(t *testing.T) {
 	if err := cmdTags(&out, nil); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "[tags]") {
+	if !strings.Contains(out.String(), "revier tag key=value") {
 		t.Errorf("revier tags with none = %q, want where to add them", out.String())
 	}
 }
