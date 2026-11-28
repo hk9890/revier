@@ -160,6 +160,8 @@ type Model struct {
 	ainput    textinput.Model    // the agent query, with its own cursor
 	alines    []lineSpan         // the pane lines each agent row takes, for the cursor and a click
 	afield    int                // the pane line the agent query is on, -1 with no Agents section
+	tagspan   lineSpan           // the pane lines of the tags row while a click on it opens or closes it, empty otherwise
+	tagsOpen  bool               // the tags row shows every tag, one to a line
 	before    revier.ProjectName // the project the cursor was on when the query began, for when it is cleared
 	confirm   revier.ProjectName // the project a delete is waiting on an answer for
 	ctarget   revier.TargetName  // the target of confirm whose entry the delete removes, empty for the file

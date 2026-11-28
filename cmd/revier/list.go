@@ -25,12 +25,17 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	conversations := fs.Bool("conversations", false, "with --json, name the conversation each agent holds")
 	match := fs.String("match", "", "only the projects this word finds")
 	agents := fs.Bool("agents", false, "one row per agent, with its address")
+	var tags tagFlags
+	tags.register(fs)
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
 	}
 	if *match != "" && len(pos) > 0 {
 		return errors.New("usage: revier list --match <word> takes no project names")
+	}
+	if len(tags) > 0 && len(pos) > 0 {
+		return errors.New("usage: revier list --tag <key=value> takes no project names")
 	}
 	if *conversations && (!*asJSON || *agents) {
 		return errors.New("usage: revier list --conversations needs --json and no --agents")
@@ -58,6 +63,14 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 		}
 		if len(projects) == 0 {
 			return unknownProjects(unknown)
+		}
+	}
+	// A tag is in the project file, so the selection is made before the
+	// survey, which then asks the hosts about the chosen projects alone.
+	if len(tags) > 0 {
+		projects = core.WithTags(projects, tags)
+		if len(projects) == 0 {
+			return fmt.Errorf("no project has the tags %s", tags.String())
 		}
 	}
 

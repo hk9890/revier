@@ -40,14 +40,17 @@ machine shows its link name, for example `far@buildbox`; see
 ### The pane
 
 The pane's top line holds the project's name, which opens the project screen.
-Under it the pane shows the project's status, path and git URL, then two
-sections:
+Under it the pane shows the project's status, path, git URL and
+[tags](projects.md#tag-projects), then two sections:
 
 - **Targets**: each target, its key and its state, then each window you
   attached with `revier attach`.
 - **Agents**: each agent as the [agent list](#the-agent-list) shows it,
   without the project. Under the list is the terminal of the selected agent,
   as it is now.
+
+The tags take one line. When they do not fit, the line ends in how many more
+there are: click it to show every tag, and click it again to close it.
 
 When a file does not load or a host does not answer, the pane gives the
 reason. When the project directory is missing and the project has a

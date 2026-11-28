@@ -153,6 +153,9 @@ the list of projects is revier's.
 - The popup the desktop key opens: the TUI in kitty on GNOME, hidden and
   raised again
 - JSON output
+- Tags: the user's own key and value on a project, which a listing and a
+  command run in every project select by. They are free text with no schema,
+  because the classes a user sorts projects into are the user's, not revier's
 - Projects on another machine, surveyed by the revier installed there
   (decisions/0040)
 - Saved sessions and shutdown

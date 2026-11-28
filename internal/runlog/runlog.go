@@ -54,6 +54,7 @@ type Run struct {
 	ID       string    `json:"id"`
 	Argv     []string  `json:"argv"`
 	Filter   string    `json:"filter,omitempty"`
+	Tags     []string  `json:"tags,omitempty"`
 	Started  time.Time `json:"started"`
 	Finished time.Time `json:"finished,omitzero"`
 	Results  []Result  `json:"results"`
@@ -82,9 +83,9 @@ const summaryFile = "summary.json"
 // Start creates the directory for a new run and saves its empty summary. The
 // id is the start time, so a listing sorted by name is sorted by age, and the
 // process id, so two runs started in the same second do not collide.
-func Start(stateRoot string, argv []string, filter string, now time.Time) (*Run, error) {
+func Start(stateRoot string, argv []string, filter string, tags []string, now time.Time) (*Run, error) {
 	id := fmt.Sprintf("%s-%d", now.Format("2006-01-02T15-04-05"), os.Getpid())
-	r := &Run{ID: id, Argv: argv, Filter: filter, Started: now, Results: []Result{}, Dir: filepath.Join(Dir(stateRoot), id)}
+	r := &Run{ID: id, Argv: argv, Filter: filter, Tags: tags, Started: now, Results: []Result{}, Dir: filepath.Join(Dir(stateRoot), id)}
 	if err := os.MkdirAll(Dir(stateRoot), 0o755); err != nil {
 		return nil, fmt.Errorf("create run directory: %w", err)
 	}

@@ -41,8 +41,8 @@ func clicked(it list.Item) any {
 //
 // A row of the list or of the pane is chosen with one click and opened with a
 // second, as a row of a file manager is: choosing it costs nothing and opening
-// it opens a window. The project's name over the pane, the footer's error and
-// a button on the bar are not rows but things to do, and one click does them,
+// it opens a window. The project's name over the pane, its tags row, the
+// footer's error and a button on the bar are not rows but things to do, and one click does them,
 // on release, so a drag that begins on one runs nothing.
 //
 // Whatever the pointer is over is lit, so each of them says it can be clicked
@@ -197,6 +197,9 @@ func (m Model) clickAction(p press) (tea.Model, tea.Cmd) {
 		return m.focusOn(focus(m.over.index)), nil
 	case hoverName:
 		return m.openProject()
+	case hoverTags:
+		m.tagsOpen = !m.tagsOpen
+		return m, nil
 	}
 	return m, nil
 }

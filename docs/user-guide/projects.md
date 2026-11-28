@@ -90,6 +90,31 @@ revier run "copy path" -p shop    # in the project shop
 
 The fields and rules are in [Actions](configuration.md#actions).
 
+## Tag projects
+
+Tags are your own `key=value` marks on a project, such as which projects are
+work and which are private. Add them to the project file:
+
+```toml
+# ~/.config/revier/projects/shop.toml
+[tags]
+type = "work"
+language = "go"
+```
+
+Each value is one string. Then select by them:
+
+```bash
+revier tags                          # every tag in use, and its projects
+revier list -t type=private          # the private projects
+revier each -t language=go -- go mod tidy
+```
+
+More than one `-t` selects the projects that carry every tag given. A value
+must match whole and in the same case. The TUI shows the tags in the
+project's pane; click the row to see every tag when they do not fit on one
+line. The fields are in [Project file](configuration.md#project-file).
+
 ## Run one command in every project
 
 Pull every repository before you start the day:

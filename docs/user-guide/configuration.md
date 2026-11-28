@@ -23,7 +23,7 @@ Which file can hold which table:
 
 | Table or key | `config.toml` | project file | link file |
 |---|---|---|---|
-| `path`, `git_url`, `[vars]` | no | yes | yes |
+| `path`, `git_url`, `[vars]`, `[tags]` | no | yes | yes |
 | `[remote]` | no | no (it makes the file a link) | yes |
 | `[[target]]` with `[target.window]`, `[target.runtime]`, `[target.command]` | yes, shared | yes | no |
 | `[[target]]` with `[target.remote.window]`, `[target.remote.runtime]` | yes, shared | no | yes |
@@ -59,6 +59,7 @@ board = "https://github.com/example/shop/projects/1"
 | `path` | string | required | The project's directory, written in full or from `~`, your home directory. revier refuses a relative path. |
 | `git_url` | string | none | The repository `path` is a clone of. When `path` is missing, opening the project clones it. No whitespace, no shell metacharacters, no user or token in an `http(s)` URL, and no link to a page of the repository, such as `.../tree/main`. |
 | `[vars]` | table of strings | none | Your own values for [templates](#templates): `{{.Vars.board}}`. |
+| `[tags]` | table of strings | none | Your own marks on the project, such as `type = "work"`. `revier list -t type=work` and `revier each -t type=work` select by them, and `revier tags` lists them. A link's tags are those in its file on this machine. |
 | `[[target]]` | array of tables | none | The project's [targets](#targets). |
 | `[[status]]` | array of tables | none | Statuses in this project's pane. See [extending/status.md](extending/status.md). |
 

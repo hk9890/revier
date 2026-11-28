@@ -734,6 +734,11 @@ func agentFacts(th theme.Theme, it agentItem, now time.Time, w int) string {
 	if it.project.GitURL != "" {
 		line("Git URL", it.project.GitURL, th.Path)
 	}
+	// This pane is read and not clicked, so its tags row stays closed.
+	if tags := core.SortedTags(it.project.Tags); len(tags) > 0 {
+		row, _ := tagsRow(th, tags, w, false, false)
+		b.WriteString(row)
+	}
 	line("Harness", harnessOf(it.agent), th.Path)
 	if name := it.name(); name != "" {
 		line("Name", name, th.Path)

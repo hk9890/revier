@@ -35,10 +35,11 @@ const usage = `revier - a project-grouped control surface for running agents
 
 usage:
   revier                        the TUI: every project, its agent state, its targets
-  revier list [--json [--conversations] | --agents [--json]] [--match <word> | name..]
+  revier list [--json [--conversations] | --agents [--json]] [-t key=value].. [--match <word> | name..]
                                 what the TUI shows, printed once, or for the
                                 named projects, exiting 1 after them when a
-                                name is no project's; --match lists the
+                                name is no project's; -t lists the projects
+                                that carry every tag given; --match lists the
                                 projects whose name, directory, repository,
                                 name on a link's host or agent activity holds
                                 the word, or whose agent has the word as the
@@ -130,9 +131,12 @@ usage:
                                 closes only the agents, --targets only what holds
                                 no agent; refuses while an agent is busy unless
                                 --force
-  revier each [--filter '<sh>'] [-n] -- <cmd>
+  revier each [-t key=value].. [--filter '<sh>'] [-n] -- <cmd>
                                 run one command in every project's directory;
-                                --filter only where a shell test exits 0
+                                -t only in the projects that carry every tag
+                                given; --filter only where a shell test exits 0
+  revier tags [--json]          every tag the project files carry, and the
+                                projects that carry each
   revier each log [run [project]]
                                 past runs of it, one run's results, or what
                                 the command printed in one project
@@ -363,6 +367,9 @@ func run(out io.Writer, args []string) error {
 		// fail, that has nothing to do with running a command in directories.
 		// No deadline either, for the reason runAction has none.
 		return cmdEach(out, args)
+	case "tags":
+		// No app: the tags are in the project files, and no host has them.
+		return cmdTags(out, args)
 	case "agent":
 		// Its own app: how long an agent command may take is one of its
 		// flags, and the hosts are probed and listed inside that bound.
