@@ -126,9 +126,8 @@ the idle ones, in one group:
 3. Those that report no cache, such as opencode agents, the one that spoke
    last first.
 
-The list opens with no query, on the first agent that waits for you: the one
-whose cache goes cold soonest, or, when no cache is warm, the one that spoke
-last. It skips working agents because they need
+The list opens with no query, on the first agent that waits for you in the
+order above. It skips working agents because they need
 nothing from you yet. When every agent is working or `unknown`, it opens on
 the first row. The project pane's Agents stand in the same order.
 

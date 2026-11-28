@@ -125,6 +125,18 @@ func TestAmongEqualsTheAgentThatSpokeLastIsMirrored(t *testing.T) {
 	}
 }
 
+// Among working agents, which the order keeps by panel, the one that spoke
+// last is mirrored.
+func TestAmongWorkingAgentsTheOneThatSpokeLastIsMirrored(t *testing.T) {
+	now := time.Now()
+	m, _, _ := shownWorld(t, 140, 30,
+		shownAgent{status: revier.StatusRunning, screen: "older worker", at: now.Add(-time.Hour)},
+		shownAgent{status: revier.StatusRunning, screen: "newer worker", at: now.Add(-time.Minute)})
+	if body := pane(m); !strings.Contains(body, "newer worker") || strings.Contains(body, "older worker") {
+		t.Errorf("pane = %q, want the working agent that spoke last", body)
+	}
+}
+
 // The pane keeps the agent it chose while no other is more worth a look: an
 // equal that speaks does not take the mirror, and the scroll in it.
 func TestAnAgentThatSpeaksDoesNotTakeTheMirrorFromItsEqual(t *testing.T) {

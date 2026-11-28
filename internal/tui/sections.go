@@ -144,9 +144,8 @@ func (m Model) agentRows() []agentRow {
 		return nil
 	}
 	all := make([]agentRow, len(v.Agents))
-	now := m.now()
 	for i, a := range v.Agents {
-		all[i] = agentRow{agentItem: newAgentItem(a, v.Project, m.adetails[keyOf(a)], now)}
+		all[i] = agentRow{agentItem: newAgentItem(a, v.Project, m.adetails[keyOf(a)], m.aorderAt)}
 	}
 	order := listedOrder(m.aorderAt)
 	slices.SortStableFunc(all, func(a, b agentRow) int { return order(a.agentItem, b.agentItem) })

@@ -543,7 +543,8 @@ func (al *agentList) reload(items []list.Item) {
 // agents most worth a look, by the agentRank the project pane chooses by. The
 // list puts the working agents first, so the cursor passes over them to the
 // first agent that waits for the user: a working agent needs nothing from the
-// user yet. That is the agent whose cache goes cold soonest (listedOrder).
+// user yet. That is the first agent of their order (listedOrder): the one
+// whose cache goes cold soonest, while a cache is warm.
 func (al *agentList) selectOpenRow() {
 	best, rank := 0, len(agentRank)
 	for i, item := range al.list.VisibleItems() {

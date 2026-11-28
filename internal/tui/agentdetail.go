@@ -48,11 +48,12 @@ type detailsMsg struct {
 // askDetails sends for what every agent of the project under the list's
 // cursor said last, and when: when another project comes under it, and again
 // on every survey. The pane's agent rows draw it as the agent list's do, and
-// which agent the pane mirrors first depends on when each spoke. The read runs
-// off the update loop, so the screen never waits on it.
+// which agent the pane mirrors first depends on when each agent's cache goes
+// cold and when each spoke. The read runs off the update loop, so the screen
+// never waits on it.
 //
-// The agent list asks for every agent on the surface instead: its rows stand
-// in the order the agents spoke in.
+// The agent list asks for every agent on the surface instead: its order
+// depends on the same two (listedOrder).
 func (m *Model) askDetails(msg tea.Msg) tea.Cmd {
 	name, agents := m.detailsWanted()
 	if len(agents) == 0 {
@@ -218,13 +219,16 @@ var agentRank = map[revier.Status]int{
 	revier.StatusUnknown:   2,
 }
 
-// firstAgent is the row most worth a look, by agentRank. Among equals, the
-// first in the rows' order (listedOrder): the one whose cache goes cold
-// soonest.
+// firstAgent is the row most worth a look, by agentRank. Among agents that
+// wait, the first in the rows' order (listedOrder): the one whose cache goes
+// cold soonest. Among the others, which that order keeps by panel, the one
+// that spoke last.
 func (m Model) firstAgent(rows []agentRow) int {
 	best := 0
 	for i := range rows {
-		if agentRank[rows[i].agent.State.Status] < agentRank[rows[best].agent.State.Status] {
+		a, b := rows[i], rows[best]
+		by := agentRank[a.agent.State.Status] - agentRank[b.agent.State.Status]
+		if by < 0 || by == 0 && !a.waits() && a.detail.At.After(b.detail.At) {
 			best = i
 		}
 	}
