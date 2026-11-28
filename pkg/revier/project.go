@@ -1,5 +1,7 @@
 // Package revier holds the ports and shared types of revier: the interfaces an
-// adapter implements and the values that cross between the core and a host.
+// adapter implements and the values that cross between the core and a host,
+// the project model included. It is public because an out-of-tree adapter
+// imports it.
 //
 // What each port is for is in docs/design/architecture.md. Every operation
 // revier performs is the same one: run-or-raise a named target, revier's or

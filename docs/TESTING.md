@@ -12,7 +12,7 @@ mise run quality:full      # + L4                               (pre-handoff)
 ## Layers
 
 The layer decides whether a test can run at all on a machine with no display.
-Only L6 ever reaches one. Do not number a new layer L5.
+Only L6 ever reaches one. L5 was retired and its number is not reused.
 
 | Layer | Substrate | Tag | Covers |
 |---|---|---|---|
@@ -114,14 +114,10 @@ host maintained for nobody.
   revier's labels. Point the paths in `hc_integration_test.go` at them.
 - Run hc in a live test on a private core only: `world` in
   `internal/adapter/hc/helpers_live_test.go`, `scratch` in
-  `cmd/revier/helpers_live_test.go`.
+  `cmd/revier/helpers_live_test.go`. Call `running` there before a test reads
+  a panel's pid.
   - A live test of the core on hc sits in `internal/adapter/hc` for that
     helper, with `hosttest.FakeView` as its view: `view_live_test.go`.
-  - A live test of the CLI calls `scratch`: it names the view kitty in the
-    scratch `config.toml` and puts `hosttest.FakeView` in kitty's place
-    through `viewOf`, so no run opens a window.
-  - Wait for a panel's program with `running` before a test reads its pid:
-    hc reads a terminal's foreground process about twice a second.
   - Assert that a panel whose program exits at once fails the start only on
     the fake core, with `exitRun` in `internal/adapter/hc/helpers_test.go`:
     a real core lists the terminal before or after it ends, so a live test

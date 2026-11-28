@@ -1,5 +1,8 @@
 // Command revier is the CLI, and with no arguments the TUI.
 //
+// It constructs the adapter of every port. It also calls the claude adapter
+// directly, and reads the variable names of the proc adapter.
+//
 // Every command here is one process per invocation: a keybinding spawns it,
 // does one thing, and exits. There is no daemon, which is why the commands
 // avoid work they do not need - `go` never surveys every project, only the one
