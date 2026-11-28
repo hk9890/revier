@@ -29,8 +29,8 @@ func TestTheAgentListFiltersAndHandsBackWithNoRootModel(t *testing.T) {
 	sf := surface{theme: th, spun: th, keys: newKeyMap(nil), list: 60, pane: 40, page: 5}
 	al := newAgentScreen(th)
 	al.reload(agentItems(views, nil, time.Now()))
-	if it, ok := al.selected(); !ok || it.project.Name != "beta" {
-		t.Fatalf("selected = %+v, want the agent that needs the user first", it)
+	if it, ok := al.selected(); !ok || it.project.Name != "alpha" {
+		t.Fatalf("selected = %+v, want the working agent, which the list puts first", it)
 	}
 	if got := al.totals(); got[revier.StatusRunning] != 1 || got[revier.StatusAttention] != 1 {
 		t.Errorf("totals = %v, want one agent in each state", got)

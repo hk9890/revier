@@ -209,23 +209,22 @@ func (m *Model) chooseAgent() {
 }
 
 // agentRank orders the agents by how much each is worth a look: one that
-// needs the user, then one at rest, then one still working, then one whose
-// state is unknown.
+// waits for the user, asking or at rest, then one still working, then one
+// whose state is unknown.
 var agentRank = map[revier.Status]int{
 	revier.StatusAttention: 0,
-	revier.StatusIdle:      1,
-	revier.StatusRunning:   2,
-	revier.StatusUnknown:   3,
+	revier.StatusIdle:      0,
+	revier.StatusRunning:   1,
+	revier.StatusUnknown:   2,
 }
 
 // firstAgent is the row most worth a look, by agentRank. Among equals, the
-// one that spoke last.
+// first in the rows' order (listedOrder): the one whose cache goes cold
+// soonest.
 func (m Model) firstAgent(rows []agentRow) int {
 	best := 0
 	for i := range rows {
-		a, b := rows[i].agent, rows[best].agent
-		by := agentRank[a.State.Status] - agentRank[b.State.Status]
-		if by < 0 || by == 0 && m.adetails[keyOf(a)].At.After(m.adetails[keyOf(b)].At) {
+		if agentRank[rows[i].agent.State.Status] < agentRank[rows[best].agent.State.Status] {
 			best = i
 		}
 	}

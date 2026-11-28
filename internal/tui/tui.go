@@ -156,6 +156,7 @@ type Model struct {
 	tcursor   int                // the target row the pane's cursor is on
 	tlines    []int              // the pane line each target row is on, for the cursor and a click
 	acursor   int                // the agent row the pane's cursor is on
+	aorderAt  time.Time          // the moment the pane last ordered its agent rows at: a press acts on the rows as drawn, not as a cache gone cold since reorders them
 	afilter   string             // the query over the agent rows
 	ainput    textinput.Model    // the agent query, with its own cursor
 	alines    []lineSpan         // the pane lines each agent row takes, for the cursor and a click

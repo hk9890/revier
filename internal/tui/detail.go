@@ -137,6 +137,7 @@ func (m *Model) syncDetail() {
 		m.forgetPane()
 	}
 	m.tcursor = clampRow(m.tcursor, len(m.targetRows()))
+	m.aorderAt = m.now()
 	m.chooseAgent()
 	m.detail.SetContent(m.detailContent(v))
 	// A viewport keeps its offset over a content that got shorter, and the

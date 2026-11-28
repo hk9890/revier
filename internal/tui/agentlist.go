@@ -1,11 +1,12 @@
 package tui
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -22,7 +23,7 @@ import (
 )
 
 // The agent list is the surface's second list: every agent of every project,
-// one row each, the ones that need the user first. The project list answers
+// one row each, in listedOrder. The project list answers
 // "which project", and this one "which agent", which is the question when
 // thirty of them run across ten projects. The key that opens the surface
 // switches between the two, and the surface always opens on the projects.
@@ -394,22 +395,87 @@ func partOffsets(text string, parts []string) []int {
 	return out
 }
 
-// listedRank is the order of the states on the agent list: the agents that
-// need the user, the ones working, the ones at rest, and the ones whose state
-// nothing says.
+// listedRank is the order of the states on the agent list: the agents
+// working, then the ones that wait for the user, asking or at rest, as one
+// group, and the ones whose state nothing says.
 var listedRank = map[revier.Status]int{
-	revier.StatusAttention: 0,
-	revier.StatusRunning:   1,
-	revier.StatusIdle:      2,
-	revier.StatusUnknown:   3,
+	revier.StatusRunning:   0,
+	revier.StatusAttention: 1,
+	revier.StatusIdle:      1,
+	revier.StatusUnknown:   2,
 }
 
-// agentItems is every agent on the surface as the agent list orders them. An
-// agent that needs the user or is at rest stands by when it spoke, the latest
-// first: the one that just stopped is the one to look at. A working agent
-// speaks all the time, and a row that moved on every line would not be
-// readable, so those stand by project and panel, and so does an agent whose
-// state or time nothing says.
+// cacheTier is how a waiting agent's prompt cache stands at now: warm, cold,
+// or not said, which a harness with no cache gives.
+type cacheTier int
+
+const (
+	cacheWarm cacheTier = iota
+	cacheCold
+	cacheUnsaid
+)
+
+// waits reports whether the agent waits for the user: it asks, or is at
+// rest.
+func (i agentItem) waits() bool {
+	s := i.agent.State.Status
+	return s == revier.StatusAttention || s == revier.StatusIdle
+}
+
+func (i agentItem) cacheTier(now time.Time) cacheTier {
+	switch until := i.detail.CacheUntil; {
+	case until.IsZero():
+		return cacheUnsaid
+	case until.After(now):
+		return cacheWarm
+	}
+	return cacheCold
+}
+
+// listedOrder is the order of the agent list, and of the project pane's
+// Agents, at now. A waiting agent whose cache is warm stands by when the
+// cache goes cold, the soonest first: a prompt to it before then costs the
+// least. One whose cache is cold, and after them one whose harness says no
+// cache, stand by when it spoke, the latest first. A working agent speaks
+// all the time, and a row that moved on every line would not be readable, so
+// those stand by project and panel, and so does an agent whose state nothing
+// says.
+func listedOrder(now time.Time) func(a, b agentItem) int {
+	return func(a, b agentItem) int {
+		byProject := cmp.Compare(a.project.Name, b.project.Name)
+		if by := cmp.Compare(listedRank[a.agent.State.Status], listedRank[b.agent.State.Status]); by != 0 {
+			return by
+		}
+		if !a.waits() {
+			return byProject
+		}
+		ta, tb := a.cacheTier(now), b.cacheTier(now)
+		switch {
+		case ta != tb:
+			return cmp.Compare(ta, tb)
+		case ta == cacheWarm:
+			return cmp.Or(a.detail.CacheUntil.Compare(b.detail.CacheUntil), byProject)
+		}
+		return cmp.Or(latestFirst(a.detail.At, b.detail.At), byProject)
+	}
+}
+
+// latestFirst orders two moments the latest first, and a moment nothing
+// says after every other.
+func latestFirst(a, b time.Time) int {
+	switch {
+	case a.Equal(b):
+		return 0
+	case a.IsZero():
+		return 1
+	case b.IsZero():
+		return -1
+	}
+	return b.Compare(a)
+}
+
+// agentItems is every agent on the surface as the agent list orders them
+// (listedOrder).
 func agentItems(views []revier.ProjectView, details map[agentKey]revier.AgentDetail, now time.Time) []list.Item {
 	var items []agentItem
 	for _, v := range views {
@@ -417,17 +483,7 @@ func agentItems(views []revier.ProjectView, details map[agentKey]revier.AgentDet
 			items = append(items, newAgentItem(a, v.Project, details[keyOf(a)], now))
 		}
 	}
-	timed := func(s revier.Status) bool { return s == revier.StatusAttention || s == revier.StatusIdle }
-	sort.SliceStable(items, func(i, j int) bool {
-		a, b := items[i], items[j]
-		if ra, rb := listedRank[a.agent.State.Status], listedRank[b.agent.State.Status]; ra != rb {
-			return ra < rb
-		}
-		if at, bt := a.detail.At, b.detail.At; timed(a.agent.State.Status) && !at.Equal(bt) {
-			return !at.IsZero() && (bt.IsZero() || at.After(bt))
-		}
-		return a.project.Name < b.project.Name
-	})
+	slices.SortStableFunc(items, listedOrder(now))
 	out := make([]list.Item, len(items))
 	for i, it := range items {
 		out[i] = it
@@ -485,11 +541,9 @@ func (al *agentList) reload(items []list.Item) {
 
 // selectOpenRow puts the cursor on the row the list opens on: the first of the
 // agents most worth a look, by the agentRank the project pane chooses by. The
-// list puts the agents that ask first, then the working ones, then the ones at
-// rest, so with none asking the cursor passes over the working agents to the
-// first at rest: a working agent needs nothing from the user yet. Within a
-// state the latest to speak is first, so the row is the agent that asked
-// last, else the one that stopped last.
+// list puts the working agents first, so the cursor passes over them to the
+// first agent that waits for the user: a working agent needs nothing from the
+// user yet. That is the agent whose cache goes cold soonest (listedOrder).
 func (al *agentList) selectOpenRow() {
 	best, rank := 0, len(agentRank)
 	for i, item := range al.list.VisibleItems() {

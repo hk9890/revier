@@ -17,11 +17,12 @@ import (
 	"github.com/hk9890/revier/pkg/revier"
 )
 
-// shownAgent is one agent of shownWorld: its state, when it spoke last, and
-// what its panel shows.
+// shownAgent is one agent of shownWorld: its state, when it spoke last, when
+// its prompt cache goes cold, and what its panel shows.
 type shownAgent struct {
 	status revier.Status
 	at     time.Time
+	cache  time.Time
 	screen string
 }
 
@@ -49,7 +50,7 @@ func unsaidWorld(t *testing.T, width, height int, agents ...shownAgent) (tui.Mod
 		id := revier.PanelID(fmt.Sprint(i + 1))
 		p := hosttest.NewDetailedProbe("claude", marker)
 		p.State = revier.AgentState{Harness: "claude", Status: a.status, Activity: marker + " task"}
-		p.Said[id] = revier.AgentDetail{At: a.at}
+		p.Said[id] = revier.AgentDetail{At: a.at, CacheUntil: a.cache}
 		probes, fakes = append(probes, p), append(fakes, p)
 		panels = append(panels, revier.Panel{ID: id, Kind: revier.PanelTool, Title: "claude " + marker})
 		rt.Screens[id] = a.screen
@@ -63,18 +64,20 @@ func unsaidWorld(t *testing.T, width, height int, agents ...shownAgent) (tui.Mod
 	return resize(refreshed(t, c, projects, stateWith(t, nil), nil), width, height), rt, fakes
 }
 
-// The pane mirrors an agent's panel without the cursor going there: the one
-// that needs the user comes first, then one at rest, then one working.
-func TestTheAgentThatNeedsYouIsMirroredFirst(t *testing.T) {
+// The pane mirrors an agent's panel without the cursor going there: of the
+// agents that wait for the user, asking or at rest alike, the one whose cache
+// goes cold soonest, and a working one only when none waits.
+func TestTheAgentWhoseCacheGoesColdFirstIsMirrored(t *testing.T) {
+	now := time.Now()
 	m, _, _ := shownWorld(t, 140, 30,
-		shownAgent{status: revier.StatusIdle, screen: "resting now"},
+		shownAgent{status: revier.StatusAttention, cache: now.Add(50 * time.Minute), screen: "merge now or wait?"},
 		shownAgent{status: revier.StatusRunning, screen: "still at it"},
-		shownAgent{status: revier.StatusAttention, screen: "merge now or wait?"})
+		shownAgent{status: revier.StatusIdle, cache: now.Add(10 * time.Minute), screen: "resting now"})
 	body := pane(m)
-	if !strings.Contains(body, "Screen") || !strings.Contains(body, "merge now or wait?") {
-		t.Errorf("pane does not mirror the agent that needs the user:\n%s", body)
+	if !strings.Contains(body, "Screen") || !strings.Contains(body, "resting now") {
+		t.Errorf("pane does not mirror the agent whose cache goes cold first:\n%s", body)
 	}
-	if strings.Contains(body, "resting now") || strings.Contains(body, "still at it") {
+	if strings.Contains(body, "merge now or wait?") || strings.Contains(body, "still at it") {
 		t.Errorf("pane mirrors another agent's panel:\n%s", body)
 	}
 
@@ -83,6 +86,31 @@ func TestTheAgentThatNeedsYouIsMirroredFirst(t *testing.T) {
 		shownAgent{status: revier.StatusIdle, screen: "resting now"})
 	if body := pane(m); !strings.Contains(body, "resting now") {
 		t.Errorf("pane = %q, want the agent at rest before the working one", body)
+	}
+}
+
+// A press acts on the agent row it is drawn on: a cache that goes cold after
+// the pane was drawn does not reorder the rows under the cursor.
+func TestEnterGoesToTheAgentDrawnUnderThePaneCursor(t *testing.T) {
+	now := time.Now()
+	m, rt, _ := shownWorld(t, 140, 30,
+		shownAgent{status: revier.StatusIdle, at: now.Add(-59 * time.Minute), cache: now.Add(30 * time.Second), screen: "soon cold"},
+		shownAgent{status: revier.StatusIdle, at: now.Add(-20 * time.Minute), cache: now.Add(40 * time.Minute), screen: "warm"},
+		shownAgent{status: revier.StatusIdle, at: now.Add(-3 * time.Hour), cache: now.Add(-2 * time.Hour), screen: "cold"})
+	m, hand := clocked(m)
+	m, _ = press(m, "tab")
+	m, _ = press(m, "down")
+	if row := paneCursor(m); !strings.Contains(row, "agent-1") {
+		t.Fatalf("pane cursor = %q, want the second row", row)
+	}
+	*hand = hand.Add(time.Minute)
+	m, cmd := press(m, "enter")
+	if cmd == nil {
+		t.Fatalf("enter on an agent ran nothing:\n%s", drawn(m))
+	}
+	cmd()
+	if len(rt.PanelFocuses) != 1 || rt.PanelFocuses[0] != "2" {
+		t.Errorf("panel focuses = %v, want panel 2, the agent the cursor was drawn on", rt.PanelFocuses)
 	}
 }
 
@@ -112,11 +140,11 @@ func TestAnAgentThatSpeaksDoesNotTakeTheMirrorFromItsEqual(t *testing.T) {
 }
 
 // An agent that comes to be more worth a look than the one the pane chose
-// takes the mirror.
+// takes the mirror: one that comes to wait for the user, from one at work.
 func TestAnAgentThatComesToNeedYouTakesTheMirror(t *testing.T) {
 	m, _, fakes := shownWorld(t, 140, 30,
-		shownAgent{status: revier.StatusIdle, screen: "first agent's screen"},
-		shownAgent{status: revier.StatusRunning, screen: "second agent's screen"})
+		shownAgent{status: revier.StatusRunning, screen: "first agent's screen"},
+		shownAgent{status: revier.StatusUnknown, screen: "second agent's screen"})
 	fakes[1].State.Status = revier.StatusAttention
 	m = survey(m).Said().Mirrored()
 	if body := pane(m); !strings.Contains(body, "second agent's screen") || strings.Contains(body, "first agent's screen") {
@@ -210,7 +238,7 @@ func TestAnUnknownAgentsPaneNamesTheLogsKey(t *testing.T) {
 // spoke decides nothing.
 func TestTheOneAgentMostWorthALookIsMirroredAtOnce(t *testing.T) {
 	m, _, _ := unsaidWorld(t, 140, 30,
-		shownAgent{status: revier.StatusIdle, screen: "resting now"},
+		shownAgent{status: revier.StatusRunning, screen: "still at it"},
 		shownAgent{status: revier.StatusAttention, screen: "merge now or wait?"})
 	if body := pane(m.Mirrored()); !strings.Contains(body, "merge now or wait?") {
 		t.Errorf("pane = %q, want the agent that needs the user before any answer", body)
@@ -222,8 +250,8 @@ func TestTheOneAgentMostWorthALookIsMirroredAtOnce(t *testing.T) {
 // forward leaves the chosen one mirrored.
 func TestMovingTheAgentCursorChoosesThatAgent(t *testing.T) {
 	m, _, fakes := shownWorld(t, 140, 30,
-		shownAgent{status: revier.StatusIdle, screen: "first agent's screen"},
-		shownAgent{status: revier.StatusAttention, screen: "second agent's screen"})
+		shownAgent{status: revier.StatusRunning, screen: "first agent's screen"},
+		shownAgent{status: revier.StatusIdle, screen: "second agent's screen"})
 	m, _ = press(m, "tab")
 	if row := paneCursor(m); !strings.Contains(row, "agent-1") {
 		t.Fatalf("pane cursor = %q after tab, want the agent the pane mirrored", row)
@@ -233,7 +261,7 @@ func TestMovingTheAgentCursorChoosesThatAgent(t *testing.T) {
 	if body := pane(m); !strings.Contains(body, "first agent's screen") || strings.Contains(body, "second agent's screen") {
 		t.Fatalf("pane = %q after up, want the agent moved to", body)
 	}
-	fakes[0].State.Status = revier.StatusRunning
+	fakes[1].State.Status = revier.StatusAttention
 	m = survey(m).Said().Mirrored()
 	if body := pane(m); !strings.Contains(body, "first agent's screen") {
 		t.Errorf("pane = %q after a survey, want the chosen agent still mirrored", body)
@@ -244,8 +272,8 @@ func TestMovingTheAgentCursorChoosesThatAgent(t *testing.T) {
 // pending, and not over the screen of the agent the cursor left.
 func TestTheScreenOfTheAgentThePaneCursorLeftIsNotShownUnderTheNext(t *testing.T) {
 	m, _, _ := shownWorld(t, 140, 30,
-		shownAgent{status: revier.StatusIdle, screen: "first agent's screen"},
-		shownAgent{status: revier.StatusAttention, screen: "second agent's screen"})
+		shownAgent{status: revier.StatusRunning, screen: "first agent's screen"},
+		shownAgent{status: revier.StatusIdle, screen: "second agent's screen"})
 	m, _ = press(m, "tab")
 	m, _ = press(m, "up")
 	if body := pane(m); strings.Contains(body, "second agent's screen") || !strings.Contains(body, "reading...") {
