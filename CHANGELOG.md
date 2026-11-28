@@ -42,8 +42,8 @@ Each section is also the text of its release on the
   first match that waits for you.** When none waits, the agent list puts it on
   the first match, and the pane on the working match that spoke last.
 - **A write to a file with a multi-line string no longer fails or lands in the
-  wrong place.** A line such as `[x]` or `path = ...` inside a `"""` or `'''`
-  string was read as part of the file. The config screen refused the change.
+  wrong place.** This happened when a `"""` or `'''` string held a line such as
+  `[x]` or `path = ...`. The config screen refused the change.
   The project screen could write the new path or clone URL into the string and
   leave the real value as it was. A rename of a link could make it point to
   another project on its host.
@@ -53,8 +53,8 @@ Each section is also the text of its release on the
 - **A write keeps the Windows line ends of a project file or `config.toml`.**
   Before, the lines that revier wrote ended differently from the rest. This
   includes a rename that changes a link file.
-- **alt+del in a text field, with the cursor on the last character, no longer
-  crashes the TUI.**
+- **alt+del or ctrl+del in a text field, with the cursor on the last character,
+  no longer crashes the TUI.**
 - **With the hc runtime, a kitty panel shows its `title` until its program sets
   one.** Without a `title`, it shows the first word of its command. Before, a
   panel whose program set no title, such as a shell, was called `env`. A panel
