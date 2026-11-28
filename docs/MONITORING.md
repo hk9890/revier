@@ -68,12 +68,12 @@ search its comment for the same quoted text, without the closing quote.
 ## The state record
 
 - `$STATE/record/YYYY-MM-DD.jsonl` holds one JSON line per thing revier did,
-  `by` `did`, with `err` when it failed, and per change a surface's survey
-  saw, `by` `saw`. It is never pruned (decisions/0151).
-- `kind` names what a line is. The comment of its `Kind` constant says when
-  it is written and which fields it carries:
+  `by` `did`, with `err` when it failed, and what a survey saw, `by` `saw`. It
+  is never pruned (decisions/0151).
+- `kind` names what a line is.
   `go doc ./internal/record KindSnapshot` prints every kind a survey writes,
-  `go doc ./internal/record KindGo` every kind an operation writes.
+  each with when it is written. `go doc ./internal/record KindGo` prints every
+  kind an operation writes.
 - Read it with `revier state --at <time>`: what was open then, per machine.
   `revier state --session <id>` names why each difference between a save and
   what was open when it was made is one; `revier state --help` lists the

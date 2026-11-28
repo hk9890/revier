@@ -33,12 +33,12 @@ Its rules are not visible from the code.
 
 ### Design intent, and any change to the model
 
-**MUST read [docs/design/architecture.md](docs/design/architecture.md) before
-the first edit under `pkg/revier/` or `internal/core/`, and before writing any
-plan that touches `cmd/`, `pkg/` or `internal/`. MUST read
-[docs/design/product.md](docs/design/product.md) before any change to the
-model, and [docs/design/README.md](docs/design/README.md) before the first edit
-under `docs/design/`.** The model and its boundaries are not visible from the
+**MUST read [docs/design/architecture.md](docs/design/architecture.md) and
+[docs/design/product.md](docs/design/product.md) before the first edit under
+`pkg/revier/` or `internal/core/`, and before writing any plan that touches
+`cmd/`, `pkg/` or `internal/`. MUST read
+[docs/design/README.md](docs/design/README.md) before the first edit under
+`docs/design/`.** The model and its boundaries are not visible from the
 code.
 
 ### Decisions in force
