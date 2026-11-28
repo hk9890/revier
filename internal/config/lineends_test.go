@@ -54,3 +54,15 @@ func TestAWriteLeavesAMixedFileMixed(t *testing.T) {
 		t.Errorf("file = %q, want %q", got, want)
 	}
 }
+
+// A rename writes a link's name on the host, with the file's own line ends.
+func TestARenameKeepsCRLFLineEnds(t *testing.T) {
+	root := projectsRoot(t, "", map[string]string{"far.toml": crlf("[remote]\nhost = \"box\"\n")})
+	p, err := config.Rename(root, "far", "near", config.Inherited{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := readTagFile(t, p.File), crlf("[remote]\nhost = \"box\"\nproject = \"far\"\n"); got != want {
+		t.Errorf("file = %q, want %q", got, want)
+	}
+}

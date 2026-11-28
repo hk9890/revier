@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -83,8 +84,8 @@ func TestRefusedTagsAreInKeyOrder(t *testing.T) {
 	}
 }
 
-// A first tag added and then removed leaves the file as it was, byte for
-// byte: the blank line the add put before the table goes with it.
+// A first tag added and then removed leaves a file that ends in one newline
+// as it was: the blank line the add put before the table goes with it.
 func TestWriteTagsAddThenRemoveLeavesTheFileAsItWas(t *testing.T) {
 	file := tagFile(t, taggedHome)
 	if _, err := config.WriteTags(file, []core.Tag{{Key: "type", Value: "work"}}, nil, config.Inherited{}); err != nil {
@@ -132,5 +133,54 @@ func TestWriteTagsRefusesWhatItCannotWriteAgain(t *testing.T) {
 	}
 	if _, err := config.WriteTags(file, []core.Tag{{Key: "a b", Value: "c"}}, nil, config.Inherited{}); err == nil {
 		t.Error("a key that is not bare: want an error")
+	}
+}
+
+// A write changes the asked-for tags and no other value: a key that cannot be
+// removed is an error and not a write that did nothing, and a line inside a
+// quoted key's string is not the key it reads as.
+func TestWriteTagsChangesNothingElse(t *testing.T) {
+	for name, c := range map[string]struct{ tags, remove string }{
+		"a key with =": {"type = \"work\"\n", "type=work"},
+		"a dotted key": {"lang.main = \"go\"\n", "lang"},
+		"a table":      {"type = \"work\"\n[tags.sub]\na = \"b\"\n", "sub"},
+	} {
+		text := taggedHome + "\n[tags]\n" + c.tags
+		file := tagFile(t, text)
+		if _, err := config.WriteTags(file, nil, []string{c.remove}, config.Inherited{}); err == nil {
+			t.Errorf("%s: want an error", name)
+		}
+		if got := readTagFile(t, file); got != text {
+			t.Errorf("%s: a refused write changed the file:\n%s", name, got)
+		}
+	}
+
+	text := taggedHome + "\n[tags]\n\"a=b\" = \"\"\"\ntype = \"x\"\n[x]\n\"\"\"\ntype = \"work\"\n"
+	file := tagFile(t, text)
+	if _, err := config.WriteTags(file, nil, []string{"type"}, config.Inherited{}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := readTagFile(t, file), strings.TrimSuffix(text, "type = \"work\"\n"); got != want {
+		t.Errorf("file =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// Tags that are already as asked are not written: the file is not replaced,
+// and a table of comments keeps its header.
+func TestWriteTagsThatChangesNothingDoesNotWrite(t *testing.T) {
+	file := tagFile(t, taggedHome+"\n[tags]\n# type = \"work\"\n")
+	before, err := os.Stat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.WriteTags(file, nil, []string{"absent"}, config.Inherited{}); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Stat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(before, after) || !before.ModTime().Equal(after.ModTime()) {
+		t.Error("a write that changes nothing replaced the file")
 	}
 }

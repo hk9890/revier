@@ -1,6 +1,7 @@
 package tui_test
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -59,22 +60,66 @@ func TestTheProjectScreenEditsAndDeletesATag(t *testing.T) {
 	}
 }
 
-// Enter and Enter again on a tag writes nothing: a value with a leading
-// space or a tab, which the input shows another way, stays as the file has
-// it.
+// Enter and Enter again on a tag writes nothing, and a value the input cannot
+// hold is not typed over: either way the file keeps it.
 func TestAnUnchangedTagEditWritesNothing(t *testing.T) {
-	body := demoProject + "\n[tags]\nnote = \" draft\\tnow\"\n"
+	for value, refused := range map[string]bool{` draft `: false, `a\tb`: true} {
+		body := demoProject + "\n[tags]\nnote = \"" + value + "\"\n"
+		m, file, _ := projectSurface(t, body, hosttest.NewRuntime("rt"))
+		m, _ = press(m, "alt+e")
+		m = downs(m, 50)
+		m, _ = press(m, "up") // the tag note
+		m, _ = press(m, "enter")
+		if got := strings.Contains(screen(m), "holds a tab or a newline"); got != refused {
+			t.Errorf("note = %q: refused %v, want %v:\n%s", value, got, refused, screen(m))
+		}
+		_, _ = press(m, "enter")
+		if got := fileText(t, file); got != body {
+			t.Errorf("note = %q: an unchanged edit rewrote the file:\n%s", value, got)
+		}
+	}
+}
+
+// The row that adds a tag does not overwrite one the project has.
+func TestAddingATagTheProjectHasIsRefused(t *testing.T) {
+	body := demoProject + "\n[tags]\ntype = \"work\"\n"
 	m, file, _ := projectSurface(t, body, hosttest.NewRuntime("rt"))
 	m, _ = press(m, "alt+e")
 	m = downs(m, 50)
-	m, _ = press(m, "up") // the tag note
 	m, _ = press(m, "enter")
+	m = typeInto(m, "type=private")
 	m, _ = press(m, "enter")
-	if got := fileText(t, file); got != body {
-		t.Errorf("an unchanged edit rewrote the file:\n%s", got)
+	if got := fileText(t, file); got != body || !strings.Contains(screen(m), "already") {
+		t.Errorf("file =\n%s\nscreen:\n%s", got, screen(m))
 	}
-	if strings.Contains(screen(m), "Error") {
-		t.Errorf("an unchanged edit reported an error:\n%s", screen(m))
+}
+
+// A long key is cut to the label column, so it does not run into its value.
+func TestALongTagKeyStandsApartFromItsValue(t *testing.T) {
+	m, _, _ := projectSurface(t, demoProject+"\n[tags]\ninfrastructure = \"work\"\n", hosttest.NewRuntime("rt"))
+	m, _ = press(m, "alt+e")
+	if !strings.Contains(screen(m), "infrastructu… work") {
+		t.Errorf("the key is not cut before its value:\n%s", screen(m))
+	}
+}
+
+// Another process can add a tag while the screen is up: the cursor follows
+// the tag that was edited, by its key.
+func TestTheCursorFollowsTheEditedTag(t *testing.T) {
+	body := demoProject + "\n[tags]\ntype = \"work\"\n"
+	m, file, _ := projectSurface(t, body, hosttest.NewRuntime("rt"))
+	m, _ = press(m, "alt+e")
+	m = downs(m, 50)
+	m, _ = press(m, "up")
+	if err := os.WriteFile(file, []byte(body+"aaa = \"1\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, _ = press(m, "enter")
+	m = typeInto(clearField(m), "private")
+	m, _ = press(m, "enter")
+	m, _ = press(m, "alt+d")
+	if !strings.Contains(screen(m), `delete tag "type"?`) {
+		t.Errorf("the cursor left the edited tag:\n%s", screen(m))
 	}
 }
 

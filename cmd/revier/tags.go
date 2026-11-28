@@ -114,7 +114,7 @@ func cmdTag(w io.Writer, args []string) error {
 	// variable would tag the project the directory resolves to.
 	var word string
 	match := &word
-	fs.Func("match", "every project whose name, directory or repository holds this word", func(value string) error {
+	fs.Func("match", "every project whose name, directory, repository or name on a link's host holds this word", func(value string) error {
 		if value == "" {
 			return errors.New("it names no word")
 		}
@@ -123,8 +123,8 @@ func cmdTag(w io.Writer, args []string) error {
 	})
 	var remove []string
 	fs.Func("remove", "remove the tag with this key; given again, each", func(key string) error {
-		if key == "" {
-			return errors.New("it names no tag")
+		if err := config.ValidateTagKey(key); err != nil {
+			return err
 		}
 		remove = append(remove, key)
 		return nil

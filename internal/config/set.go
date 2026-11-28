@@ -78,12 +78,18 @@ func valueAt(text, table, key string) (string, error) {
 	return literalOf(v)
 }
 
+// keyPart is one part of a TOML key: bare, or quoted either way.
+const keyPart = `(?:[A-Za-z0-9_-]+|"(?:[^"\\]|\\.)*"|'[^']*')`
+
 var (
 	// headerLine is a table header, [name] or [[name]], with an optional
 	// comment after it.
 	headerLine = regexp.MustCompile(`^\s*(\[\[?)\s*([A-Za-z0-9_.-]+)\s*\]\]?\s*(#.*)?$`)
-	// keyLine is the start of a bare key's line, up to where its value begins.
-	keyLine = regexp.MustCompile(`^\s*([A-Za-z0-9_-]+)\s*=\s*`)
+	// keyLine is the start of a key's line, up to where its value begins. It
+	// takes a quoted and a dotted key too, so the editor reads past their
+	// values; the key it captures is as written, so only a bare one is ever
+	// the key an edit names.
+	keyLine = regexp.MustCompile(`^\s*(` + keyPart + `(?:\s*\.\s*` + keyPart + `)*)\s*=\s*`)
 )
 
 // setKey puts key = literal under [table] in text. A missing table is added
@@ -218,8 +224,8 @@ func valueEnd(lines []string, i, col int) (int, int) {
 
 // valueScan is valueEnd, with each comment on the value's lines. A bracket
 // opens a value that runs until it is closed, over as many lines as that
-// takes, and so does a """ or ”' string, which can hold a line that reads as
-// a header or a key; a quote hides brackets and comment marks inside it.
+// takes, and so does a multi-line string, basic or literal, which can hold a
+// line that reads as a header or a key; a quote hides brackets and comment marks inside it.
 func valueScan(lines []string, i, col int) (int, int, []string) {
 	depth := 0
 	var quote byte
@@ -279,8 +285,8 @@ func valueScan(lines []string, i, col int) (int, int, []string) {
 // "\n", so a line it adds ends in "\n" alone, and the file would come out
 // mixed. A file that is mixed already is written as the editor left it.
 func replaceFile(path string, data []byte) error {
-	if old, err := os.ReadFile(path); err == nil && allCRLF(old) {
-		data = bytes.ReplaceAll(bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n")), []byte("\n"), []byte("\r\n"))
+	if old, err := os.ReadFile(path); err == nil {
+		data = withLineEnds(old, data)
 	}
 	real, err := fsutil.WriteThrough(path, data)
 	if err != nil {
@@ -288,6 +294,14 @@ func replaceFile(path string, data []byte) error {
 	}
 	slog.Info("config written", "path", real)
 	return nil
+}
+
+// withLineEnds is data with CRLF line ends when every line of old has them.
+func withLineEnds(old, data []byte) []byte {
+	if !allCRLF(old) {
+		return data
+	}
+	return bytes.ReplaceAll(bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n")), []byte("\n"), []byte("\r\n"))
 }
 
 // allCRLF reports whether a file has line ends and each one is CRLF.

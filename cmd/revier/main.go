@@ -144,8 +144,9 @@ usage:
                                 set and remove tags of this directory's
                                 project, of the named one, or of every project
                                 selected; --match finds a project by its name,
-                                directory or repository alone; with nothing
-                                to write, print the tags
+                                directory, repository or name on a link's
+                                host, not by its agents; with nothing to
+                                write, print the tags
   revier events [--days n] [--local]
                                 what revier did in each project in the last n
                                 days (7), one JSON line per event, with what

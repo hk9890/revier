@@ -40,7 +40,7 @@ func Rename(root string, from, to revier.ProjectName, inh Inherited) (core.Proje
 	}
 	text := string(data)
 	if declared.Remote != nil && declared.Remote.Project == "" {
-		text = setKey(text, "remote", "project", quote(string(from)))
+		text = string(withLineEnds(data, []byte(setKey(text, "remote", "project", quote(string(from))))))
 	}
 	before := loadProject(old, data, inh)
 	p, err := writeUnless(root, to, text, inh, func(p core.Project) []error { return newProblems(before, p) })

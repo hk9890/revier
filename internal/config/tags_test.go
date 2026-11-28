@@ -47,3 +47,12 @@ func TestALinkKeepsItsTags(t *testing.T) {
 		t.Errorf("Tags = %v, problems %v; want type=work and none", p.Tags, config.Problems(p))
 	}
 }
+
+// A project one value makes invalid keeps its tags, so a listing by tag
+// shows it and its reason.
+func TestAnInvalidProjectKeepsItsTags(t *testing.T) {
+	_, p := loadOne(t, "", "path = 3\n[tags]\ntype = \"work\"\n")
+	if p.Invalid == nil || p.Tags["type"] != "work" {
+		t.Errorf("Invalid = %v, Tags = %v; want a reason and type=work", p.Invalid, p.Tags)
+	}
+}

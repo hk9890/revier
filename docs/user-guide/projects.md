@@ -100,13 +100,15 @@ revier tag type=work language=go     # set two tags
 revier tag --remove language         # remove one
 revier tag                           # print the project's tags
 revier tag -p shop type=work         # tag another project
-revier tag --match dynatrace type=work   # every project whose name, directory or repository holds the word
+revier tag --match dynatrace type=work   # every project the word finds
 ```
 
 `revier tag` writes the `[tags]` table of the project file and keeps the rest
 of the file as it is. The project screen (alt+e) edits the tags too: Enter on
 a tag changes its value, alt+d removes it, and the last row adds one typed as
-`key=value`. You can also write the table by hand:
+`key=value`. `--match` finds a project by its name, directory, repository or
+name on a link's host, not by its agents. You can also write the table by
+hand:
 
 ```toml
 # ~/.config/revier/projects/shop.toml
@@ -139,7 +141,7 @@ revier each -- git pull --ff-only
 Projects run one at a time, with no input. Each project prints one line:
 `ok`, `failed`, or why it was skipped. The output of each project goes to a
 log, not to the terminal: `revier each log` shows it, with each run's
-command quoted so that you can paste it into a shell. `revier each --help`
+command quoted so that you can paste it after `revier each`. `revier each --help`
 has the filters.
 
 ## Save and restore sessions

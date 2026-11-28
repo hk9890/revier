@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -12,7 +13,6 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/hk9890/revier/internal/core"
-	"github.com/hk9890/revier/pkg/revier"
 )
 
 // projectTags is the [tags] table of a project file, and why each tag left
@@ -25,7 +25,7 @@ func projectTags(data []byte) (map[string]string, []error) {
 	// field would also take [Tags], which no write could then reach.
 	var raw map[string]any
 	if _, err := toml.Decode(string(data), &raw); err != nil {
-		return nil, []error{fmt.Errorf("tags: %w", err)}
+		return nil, nil // the loader reports it, about the whole file
 	}
 	table, _ := raw["tags"].(map[string]any)
 	if _, ok := raw["tags"]; ok && table == nil {
@@ -77,15 +77,24 @@ func ValidateTagKey(key string) error {
 	return nil
 }
 
+// errTagsShape refuses a write whose result is not the file with the asked-for
+// tags and nothing else changed.
+var errTagsShape = errors.New("the tags are not written as plain keys under [tags]; change them by hand")
+
 // WriteTags sets each of set in the [tags] table of a project file and
-// removes each key of remove, line by line, so every other line of the file
-// stays as it was. A table left with no tag goes, its comments kept. The
-// write is refused for a problem it adds, and when the tags the file loads
-// with are not the ones asked for, such as where the file writes them as a
-// dotted key or an inline table.
+// removes each key of remove, line by line. Comments stay, and so does every
+// other value: a write that would change one is refused, such as where the
+// file writes the tags as a dotted key or an inline table, and so is one that
+// adds a problem. Tags that are already as asked are not written. The blank
+// lines at the end of the file are not kept.
 func WriteTags(file string, set []core.Tag, remove []string, inh Inherited) (core.Project, error) {
 	for _, t := range set {
 		if err := ValidateTagKey(t.Key); err != nil {
+			return core.Project{}, err
+		}
+	}
+	for _, key := range remove {
+		if err := ValidateTagKey(key); err != nil {
 			return core.Project{}, err
 		}
 	}
@@ -93,20 +102,34 @@ func WriteTags(file string, set []core.Tag, remove []string, inh Inherited) (cor
 	if err != nil {
 		return core.Project{}, err
 	}
-	old, _ := projectTags(data)
-	want := maps.Clone(old)
-	if want == nil {
-		want = map[string]string{}
+	before, err := tagsDoc(string(data))
+	if err != nil {
+		return core.Project{}, fmt.Errorf("%s: %w", file, err)
+	}
+	want, tags := maps.Clone(before), map[string]any{}
+	if value, ok := before["tags"]; ok {
+		table, ok := value.(map[string]any)
+		if !ok {
+			return core.Project{}, fmt.Errorf("%s: %w", file, errTagsShape)
+		}
+		tags = maps.Clone(table)
 	}
 	literals := make([]string, len(set))
 	for i, t := range set {
-		want[t.Key] = t.Value
+		tags[t.Key] = t.Value
 		if literals[i], err = literalOf(t.Value); err != nil {
 			return core.Project{}, fmt.Errorf("tag %q: %w", t.Key, err)
 		}
 	}
 	for _, key := range remove {
-		delete(want, key)
+		delete(tags, key)
+	}
+	want["tags"] = tags
+	if len(tags) == 0 {
+		delete(want, "tags")
+	}
+	if reflect.DeepEqual(before, want) {
+		return loadProject(file, data, inh), nil
 	}
 	change := func(lines []string, _ projectFile) ([]string, error) {
 		for i, t := range set {
@@ -115,15 +138,24 @@ func WriteTags(file string, set []core.Tag, remove []string, inh Inherited) (cor
 		for _, key := range remove {
 			lines = dropTag(lines, key)
 		}
+		if after, err := tagsDoc(strings.Join(lines, "\n")); err != nil || !reflect.DeepEqual(after, want) {
+			return nil, errTagsShape
+		}
 		return lines, nil
 	}
-	check := func(_ revier.Project, p core.Project) error {
-		if !maps.Equal(p.Tags, want) {
-			return errors.New("the tags are not written as plain keys under [tags]; change them by hand")
-		}
-		return nil
+	return editProject(file, inh, change, nil)
+}
+
+// tagsDoc is a project file's values, an empty [tags] as none.
+func tagsDoc(text string) (map[string]any, error) {
+	var doc map[string]any
+	if _, err := toml.Decode(text, &doc); err != nil {
+		return nil, err
 	}
-	return editProject(file, inh, change, check)
+	if table, ok := doc["tags"].(map[string]any); ok && len(table) == 0 {
+		delete(doc, "tags")
+	}
+	return doc, nil
 }
 
 // putTag puts key = literal under [tags], adding the table at the end of the
@@ -147,9 +179,9 @@ func putTag(lines []string, key, literal string) []string {
 
 // dropTag removes key from [tags], and the table with it when nothing but
 // blank lines and comments is left under it; a table at the end of the file
-// takes the blank lines before it, which putTag wrote. A key the editor does not read,
-// such as a quoted or a dotted one, keeps the table: without its header it
-// would land in the table above.
+// takes every blank line before it, the one putTag wrote among them. A key
+// the editor does not change, a quoted or a dotted one, keeps the table:
+// without its header it would land in the table above.
 func dropTag(lines []string, key string) []string {
 	for _, t := range tables(lines) {
 		if t.array || t.name != "tags" {

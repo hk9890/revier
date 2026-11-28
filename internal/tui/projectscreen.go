@@ -59,7 +59,6 @@ type projectScreen struct {
 	tform    targetForm         // the target being added or changed, while its form is up
 	formAt   int                // the target the form changes, or one past the last for a new one
 	dropping bool               // whether the tag or target under the cursor waits on a y to be deleted
-	started  string             // what the edit held when it began, after the input took it
 }
 
 func newProjectScreen(th theme.Theme) projectScreen {
@@ -212,7 +211,15 @@ func (ps *projectScreen) key(sf surface, msg keyPress) (projectResult, tea.Cmd) 
 	case onTag && key.Matches(msg, sf.keys.Delete):
 		ps.dropping = true
 	case onTag && key.Matches(msg, sf.keys.Enter):
-		return res, ps.startEdit(sf, ps.text.Tags[tag])
+		cmd := ps.startEdit(sf, ps.text.Tags[tag])
+		// The input turns a tab and a newline into a space, so writing what
+		// it holds would lose them.
+		if ps.edit.Value() != ps.text.Tags[tag] {
+			ps.edit.Blur()
+			res.err = fmt.Errorf("tag %q holds a tab or a newline; change it with revier tag", tag)
+			return res, nil
+		}
+		return res, cmd
 	case ps.row == ps.addTagRow() && key.Matches(msg, sf.keys.Enter):
 		return res, ps.startEdit(sf, "")
 	case onTarget && key.Matches(msg, sf.keys.Delete):
@@ -239,7 +246,6 @@ func (ps *projectScreen) startEdit(sf surface, value string) tea.Cmd {
 	// cursor instead of running off the right edge, typed blind.
 	ps.edit.SetWidth(max(sf.list-lipgloss.Width(cursor(sf.theme, true))-configLabelWidth-1, 8))
 	ps.edit.SetValue(value)
-	ps.started = ps.edit.Value()
 	ps.edit.CursorEnd()
 	return ps.edit.Focus()
 }
@@ -269,30 +275,30 @@ func (ps *projectScreen) editKey(sf surface, msg keyPress) (projectResult, tea.C
 	return res, cmd
 }
 
-// saveEdit writes what was typed on the cursor's row: a tag's new value, a
-// new tag as key=value, or a field's value. A tag's value is written as
-// typed, spaces kept, and only when it changed: the input shows a tab or a
-// newline as a space, and an Enter that changed nothing must not write that.
+// saveEdit writes what was typed on the cursor's row: a tag's new value, as
+// typed, a new tag as key=value, or a field's value. The cursor follows a tag
+// by its key, since the file read back can hold others.
 func (ps *projectScreen) saveEdit(sf surface, typed string) projectResult {
-	if tag, ok := ps.tagRow(); ok {
-		if typed == ps.started {
-			return projectResult{}
+	tag, onTag := ps.tagRow()
+	t := core.Tag{Key: tag, Value: typed}
+	if !onTag {
+		typed = strings.TrimSpace(typed)
+		if ps.row != ps.addTagRow() {
+			return ps.saveField(sf, ps.fields()[ps.row], typed)
 		}
-		return ps.writeTags(sf, []core.Tag{{Key: tag, Value: typed}}, nil)
-	}
-	typed = strings.TrimSpace(typed)
-	if ps.row == ps.addTagRow() {
-		t, err := core.ParseTag(typed)
-		if err != nil {
+		var err error
+		if t, err = core.ParseTag(typed); err != nil {
 			return projectResult{err: err}
 		}
-		res := ps.writeTags(sf, []core.Tag{t}, nil)
-		if res.err == nil {
-			ps.row = ps.addTargetRow() + 1 + slices.Index(ps.tagKeys(), t.Key)
+		if was, ok := ps.text.Tags[t.Key]; ok {
+			return projectResult{err: fmt.Errorf("tag %q is already %q; change it on its own row", t.Key, was)}
 		}
-		return res
 	}
-	return ps.saveField(sf, ps.fields()[ps.row], typed)
+	res := ps.writeTags(sf, []core.Tag{t}, nil)
+	if i := slices.Index(ps.tagKeys(), t.Key); res.err == nil && i >= 0 {
+		ps.row = ps.addTargetRow() + 1 + i
+	}
+	return res
 }
 
 // writeTags sets and removes tags in the project file, as revier tag does.
@@ -555,7 +561,8 @@ func (ps *projectScreen) screen(sf surface) (string, int) {
 	}
 	for i, tag := range ps.tagKeys() {
 		r := ps.addTargetRow() + 1 + i
-		row(r, plain.Line(tag), typed(r, plain.Line(ps.text.Tags[tag])), "")
+		// A key as wide as the label column would run into its value.
+		row(r, ellipsis(plain.Line(tag), configLabelWidth-1), typed(r, plain.Line(ps.text.Tags[tag])), "")
 	}
 	row(ps.addTagRow(), "+", typed(ps.addTagRow(), "add a tag"), "type key=value")
 

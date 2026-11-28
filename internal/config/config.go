@@ -437,7 +437,11 @@ func invalid(path string, err error) core.Project {
 func loadProject(path string, data []byte, inh Inherited) core.Project {
 	p, parts, err := decodeProject(data, inh.Targets)
 	if err != nil {
-		return invalid(path, fmt.Errorf("%s: %w", path, err))
+		// Its tags still select it: a listing by tag must show the project
+		// and its reason, not leave it out (decisions/0085).
+		bad := invalid(path, fmt.Errorf("%s: %w", path, err))
+		bad.Tags, bad.TagRefused = projectTags(data)
+		return bad
 	}
 	p.Name = nameOf(path)
 	// A path is expanded once, here, so every consumer - templates, working
