@@ -53,6 +53,9 @@ func TestRenameRefusesALinkWhoseRemoteIsDottedKeys(t *testing.T) {
 	if _, err := config.Rename(root, "far", "near", config.Inherited{}); err == nil {
 		t.Error("want an error")
 	}
+	if _, err := os.Stat(config.ProjectFile(root, "near")); !os.IsNotExist(err) {
+		t.Errorf("the new file: err = %v, want none written", err)
+	}
 	if got, want := readTagFile(t, config.ProjectFile(root, "far")), "remote.host = \"box\"\n"; got != want {
 		t.Errorf("file = %q, want %q", got, want)
 	}

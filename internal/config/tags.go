@@ -78,13 +78,13 @@ func ValidateTagKey(key string) error {
 }
 
 // errTagsShape refuses a write whose result is not the file with the asked-for
-// tags and nothing else changed, or that declares the tags twice.
+// tags and nothing else changed, or that adds a second declaration of them.
 var errTagsShape = errors.New("the tags are not written as plain keys under [tags]; change them by hand")
 
 // WriteTags sets each of set in the [tags] table of a project file and
 // removes each key of remove, line by line. Comments stay, and so does every
 // other value: a write that would change one is refused, such as a removal of
-// a dotted key, and so is one that adds a problem, and one that leaves a
+// a dotted key, and so is one that adds a problem, and one that adds a
 // [tags] table beside dotted keys. Tags that are already as asked are not
 // written. The blank lines at the end of the file are not kept.
 func WriteTags(file string, set []core.Tag, remove []string, inh Inherited) (core.Project, error) {
@@ -138,7 +138,8 @@ func WriteTags(file string, set []core.Tag, remove []string, inh Inherited) (cor
 		for _, key := range remove {
 			lines = dropTag(lines, key)
 		}
-		if after, err := tagsDoc(strings.Join(lines, "\n")); err != nil || !reflect.DeepEqual(after, want) || declaredTwice(lines, "tags") {
+		text := strings.Join(lines, "\n")
+		if after, err := tagsDoc(text); err != nil || !reflect.DeepEqual(after, want) || addsSecondTable(string(data), text, "tags") {
 			return nil, errTagsShape
 		}
 		return lines, nil

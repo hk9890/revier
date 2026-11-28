@@ -25,7 +25,7 @@ import (
 // read back: a key the line editor does not find where it looks, such as one
 // written as a dotted key or an inline table, would otherwise land twice or
 // not at all. That is refused, and the file stays as it was; so is a write
-// that leaves the table beside dotted keys of it.
+// that adds the table beside dotted keys of it.
 func Set(root, table, key string, value any) error {
 	path := File(root)
 	old, err := os.ReadFile(path)
@@ -42,10 +42,7 @@ func Set(root, table, key string, value any) error {
 	if err != nil {
 		was = &Config{}
 	}
-	text, err := setKey(string(old), table, key, literal)
-	if err != nil {
-		return fmt.Errorf("%s: %w", path, err)
-	}
+	text := setKey(string(old), table, key, literal)
 	next, err := parse([]byte(text))
 	if err != nil {
 		return fmt.Errorf("%s: %s.%s: %w", path, table, key, err)
@@ -54,7 +51,10 @@ func Set(root, table, key string, value any) error {
 		return fmt.Errorf("%s: %w", path, err)
 	}
 	if got, err := valueAt(text, table, key); err != nil || got != literal {
-		return fmt.Errorf("%s: %w", path, errNotPlain(table, key))
+		return fmt.Errorf("%s: %s.%s is not written as a plain key under [%s]; change it by hand", path, table, key, table)
+	}
+	if addsSecondTable(string(old), text, table) {
+		return fmt.Errorf("%s: %w", path, errDotted(table))
 	}
 	return replaceFile(path, []byte(text))
 }
@@ -96,22 +96,9 @@ var (
 	keyLine = regexp.MustCompile(`^\s*(` + keyPart + `(?:\s*\.\s*` + keyPart + `)*)\s*=\s*`)
 )
 
-// errNotPlain refuses a value the line editor cannot write where it looks.
-func errNotPlain(table, key string) error {
-	return fmt.Errorf("%s.%s is not written as a plain key under [%s]; change it by hand", table, key, table)
-}
-
 // setKey puts key = literal under [table] in text. A missing table is added
-// at the end of the file. A result that declares the table twice is an error.
-func setKey(text, table, key, literal string) (string, error) {
-	text = withKey(text, table, key, literal)
-	if declaredTwice(strings.Split(text, "\n"), table) {
-		return "", errNotPlain(table, key)
-	}
-	return text, nil
-}
-
-func withKey(text, table, key, literal string) string {
+// at the end of the file.
+func setKey(text, table, key, literal string) string {
 	lines := strings.Split(text, "\n")
 	for _, t := range tables(lines) {
 		if !t.array && t.name == table {
@@ -125,17 +112,32 @@ func withKey(text, table, key, literal string) string {
 	return out + "[" + table + "]\n" + key + " = " + literal + "\n"
 }
 
-// declaredTwice reports whether a table is declared both as dotted keys at the
-// top of the file and by its header. TOML refuses that, and the decoder does
-// not.
-func declaredTwice(lines []string, name string) bool {
-	all := tables(lines)
-	if !slices.ContainsFunc(all, func(t table) bool { return !t.array && t.name == name }) {
+// addsSecondTable reports whether a write declares a table by its header
+// beside dotted keys of it, where the file did not. TOML refuses that, and the
+// decoder does not.
+func addsSecondTable(before, after, name string) bool {
+	return declaredTwice(after, name) && !declaredTwice(before, name)
+}
+
+// errDotted refuses a write that would add a table beside dotted keys of it.
+func errDotted(table string) error {
+	return fmt.Errorf("%s is written as dotted keys; write it as a [%s] table by hand first", table, table)
+}
+
+func declaredTwice(text, name string) bool {
+	// The decoder skips a byte order mark.
+	lines := strings.Split(strings.TrimPrefix(text, "\ufeff"), "\n")
+	if !slices.ContainsFunc(tables(lines), func(t table) bool { return !t.array && t.name == name }) {
 		return false
 	}
 	quoted := regexp.QuoteMeta(name)
 	dotted := regexp.MustCompile(`^\s*(?:` + quoted + `|"` + quoted + `"|'` + quoted + `')\s*\.`)
-	for i := 0; i < all[0].end; i++ {
+	for i := 0; i < len(lines); i++ {
+		// Any header ends the top of the file, also one headerLine does not
+		// read, such as a quoted one.
+		if strings.HasPrefix(strings.TrimSpace(lines[i]), "[") {
+			return false
+		}
 		if at := keyLine.FindStringSubmatchIndex(lines[i]); at != nil {
 			if dotted.MatchString(lines[i]) {
 				return true

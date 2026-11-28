@@ -41,8 +41,9 @@ func Rename(root string, from, to revier.ProjectName, inh Inherited) (core.Proje
 	}
 	text := string(data)
 	if declared.Remote != nil && declared.Remote.Project == "" {
-		if text, err = setKey(text, "remote", "project", quote(string(from))); err != nil {
-			return core.Project{}, fmt.Errorf("%s: %w", old, err)
+		text = setKey(text, "remote", "project", quote(string(from)))
+		if addsSecondTable(string(data), text, "remote") {
+			return core.Project{}, fmt.Errorf("%s: %w", old, errDotted("remote"))
 		}
 		text = string(withLineEnds(data, []byte(text)))
 	}

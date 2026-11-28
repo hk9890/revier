@@ -138,7 +138,7 @@ func TestWriteTagsRefusesWhatItCannotWriteAgain(t *testing.T) {
 
 // Tags the file declares without a [tags] header get no second table beside
 // them: TOML allows a table once, which the decoder here does not enforce for
-// every shape. A file that has both already is not written either.
+// every shape.
 func TestWriteTagsAddsNoSecondTable(t *testing.T) {
 	for name, text := range map[string]string{
 		"a dotted key":         "tags.type = \"work\"\n" + taggedHome,
@@ -146,7 +146,7 @@ func TestWriteTagsAddsNoSecondTable(t *testing.T) {
 		"a quoted dotted key":  "\"tags\".type = \"work\"\n" + taggedHome,
 		"a dotted refused tag": "tags.count = 3\n" + taggedHome,
 		"a dotted sub-table":   "tags.type.a = \"work\"\n" + taggedHome + "[tags.b]\nc = \"d\"\n",
-		"both":                 "tags.type = \"work\"\n" + taggedHome + "[tags]\nb = \"2\"\n",
+		"a byte order mark":    "\ufefftags.type = \"work\"\n" + taggedHome,
 		"an empty inline":      "tags = {}\n" + taggedHome,
 		"a quoted header":      taggedHome + "[\"tags\"]\ntype = \"work\"\n",
 		"an empty quoted one":  taggedHome + "[\"tags\"]\n",
@@ -163,7 +163,7 @@ func TestWriteTagsAddsNoSecondTable(t *testing.T) {
 
 // What only looks like a dotted tags key, and a sub-table, which TOML allows
 // before its parent, do not stop a write; nor does a second declaration the
-// write itself removes.
+// file already had, which v0.32.0 wrote.
 func TestWriteTagsTakesWhatDeclaresTheTagsOnce(t *testing.T) {
 	added := "\n[tags]\nadded = \"x\"\n"
 	for name, c := range map[string]struct {
@@ -173,6 +173,8 @@ func TestWriteTagsTakesWhatDeclaresTheTagsOnce(t *testing.T) {
 		"a sub-table":            {text: taggedHome + "[tags.sub]\na = \"b\"\n", want: taggedHome + "[tags.sub]\na = \"b\"\n" + added},
 		"a key of another table": {text: taggedHome + "[other]\ntags.a = \"b\"\n", want: taggedHome + "[other]\ntags.a = \"b\"\n" + added},
 		"a line of a string":     {text: "x = \"\"\"\ntags.a = 1\n\"\"\"\n" + taggedHome, want: "x = \"\"\"\ntags.a = 1\n\"\"\"\n" + taggedHome + added},
+		"a quoted table":         {text: taggedHome + "[\"other\"]\ntags.a = \"b\"\n", want: taggedHome + "[\"other\"]\ntags.a = \"b\"\n" + added},
+		"a change of both":       {text: "tags.a = \"1\"\n" + taggedHome + "\n[tags]\nb = \"2\"\n", want: "tags.a = \"1\"\n" + taggedHome + "\n[tags]\nb = \"2\"\nadded = \"x\"\n"},
 		"the last of both":       {text: "tags.a = \"1\"\n" + taggedHome + "\n[tags]\nb = \"2\"\n", want: "tags.a = \"1\"\n" + taggedHome, remove: []string{"b"}},
 	} {
 		file := tagFile(t, c.text)

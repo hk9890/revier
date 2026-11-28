@@ -185,9 +185,9 @@ func TestSetRefusesAKeyItCannotEditInPlace(t *testing.T) {
 // TOML allows a table once, which the decoder here does not enforce.
 func TestSetAddsNoSecondTable(t *testing.T) {
 	for name, text := range map[string]string{
-		"dotted":        "ui.theme = \"catppuccin-mocha\"\n",
-		"quoted dotted": "\"ui\" . theme = \"catppuccin-mocha\"\n",
-		"both":          "ui.theme = \"catppuccin-mocha\"\n\n[ui]\ntrigger_key = \"alt-j\"\n",
+		"dotted":            "ui.theme = \"catppuccin-mocha\"\n",
+		"quoted dotted":     "\"ui\" . theme = \"catppuccin-mocha\"\n",
+		"a byte order mark": "\ufeffui.theme = \"catppuccin-mocha\"\n",
 	} {
 		root := writeConfig(t, text)
 		if err := config.Set(root, "ui", "glyphs", "ascii"); err == nil {
@@ -198,9 +198,17 @@ func TestSetAddsNoSecondTable(t *testing.T) {
 		}
 	}
 
-	root := writeConfig(t, "hosts.runtime = [\"hc\"]\n")
-	if err := config.Set(root, "ui", "glyphs", "ascii"); err != nil {
-		t.Errorf("a dotted key of another table: %v", err)
+	for name, c := range map[string]struct{ text, want string }{
+		"a dotted key of another table": {"hosts.runtime = [\"hc\"]\n", "hosts.runtime = [\"hc\"]\n\n[ui]\nglyphs = \"ascii\"\n"},
+		"a file that has both":          {"ui.theme = \"catppuccin-mocha\"\n\n[ui]\nglyphs = \"nerd\"\n", "ui.theme = \"catppuccin-mocha\"\n\n[ui]\nglyphs = \"ascii\"\n"},
+	} {
+		root := writeConfig(t, c.text)
+		if err := config.Set(root, "ui", "glyphs", "ascii"); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+		if got := readConfig(t, root); got != c.want {
+			t.Errorf("%s: config.toml = %q, want %q", name, got, c.want)
+		}
 	}
 }
 
