@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -254,4 +255,73 @@ func (s *syncBuffer) String() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.b.String()
+}
+
+// A window shows the panel's title until its program's own, which hc sends
+// again at the attach, replaces it, and the terminal's title stays the
+// program's. The test binary is revier here.
+func TestAViewsWindowIsTitledUntilItsProgramTitlesIt(t *testing.T) {
+	script, err := exec.LookPath("script")
+	if err != nil {
+		t.Skip("script is not installed; the attach needs a terminal")
+	}
+	for name, tc := range map[string]struct{ run, own, shown string }{
+		"a program that titles":   {`printf '\033]2;its own\007'; exec sleep 30`, "its own", "its own"},
+		"a program that does not": {"exec sleep 30", "", "the panel"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h, c := world(t), ctx(t)
+			h.Revier = os.Args[0]
+			if _, err := h.Open(c, revier.Realization{Name: "home", Panels: []revier.PanelSpec{
+				{Kind: revier.PanelAgent, Title: "the panel", Command: []string{"sh", "-c", tc.run}},
+			}}); err != nil {
+				t.Fatalf("Open: %v", err)
+			}
+			titled := func(in []revier.Instance) bool { return len(in) == 1 && in[0].Panels[0].Title == tc.own }
+			argv, err := h.AttachPanel(waitFor(t, h, titled)[0].Panels[0].ID)
+			if err != nil {
+				t.Fatalf("AttachPanel: %v", err)
+			}
+			window := windowCmd(script, argv)
+			if _, err := window.StdinPipe(); err != nil {
+				t.Fatal(err)
+			}
+			var shown syncBuffer
+			window.Stdout = &shown
+			if err := window.Start(); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = window.Process.Kill(); _ = window.Wait() })
+			// hc's attach clears the screen as it first draws, and sends the
+			// program's title in the same paint.
+			deadline := time.Now().Add(10 * time.Second)
+			var titles []string
+			for !strings.Contains(shown.String(), "\x1b[2J") || len(titles) == 0 || titles[len(titles)-1] != tc.shown {
+				if time.Now().After(deadline) {
+					t.Fatalf("the window was titled %q in %q, want %q last", titles, shown.String(), tc.shown)
+				}
+				time.Sleep(50 * time.Millisecond)
+				titles = titlesIn(shown.String())
+			}
+			if titles[0] != "the panel" {
+				t.Errorf("the window was titled %q, want the panel's title first", titles)
+			}
+			time.Sleep(300 * time.Millisecond)
+			if titles = titlesIn(shown.String()); titles[len(titles)-1] != tc.shown {
+				t.Errorf("the window was titled %q, want %q to stay", titles, tc.shown)
+			}
+			if in, err := h.Instances(c); err != nil || !titled(in) {
+				t.Errorf("Instances = %+v, %v; want the terminal's title still %q: the window's is not hc's", in, err, tc.own)
+			}
+		})
+	}
+}
+
+// titlesIn is each title a window's output sets, in order.
+func titlesIn(output string) []string {
+	var titles []string
+	for _, m := range regexp.MustCompile("\x1b\\][02];([^\x07\x1b]*)").FindAllStringSubmatch(output, -1) {
+		titles = append(titles, m[1])
+	}
+	return titles
 }

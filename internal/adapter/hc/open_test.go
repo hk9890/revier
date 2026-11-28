@@ -25,7 +25,7 @@ import (
 // Each panel is a terminal with no parent, not kept, removed when its
 // program exits, named after the instance and its place, and labelled with
 // the instance, the name, the token and place 0 of the first tab, its place
-// in the tab, and the realization's vars.
+// in the tab, its title when it has one, and the realization's vars.
 func TestOpenLabelsAndNamesEachTerminal(t *testing.T) {
 	c, sock := newCore(t)
 	dir := t.TempDir()
@@ -34,7 +34,7 @@ func TestOpenLabelsAndNamesEachTerminal(t *testing.T) {
 		Name: "home", Dir: dir, Match: revier.Match{Title: "^home$"},
 		Vars: map[string]string{"revier_target": "home"},
 		Panels: []revier.PanelSpec{
-			{Kind: revier.PanelAgent, Command: []string{"sh", "-c", "sleep 30"}, Dir: dir},
+			{Kind: revier.PanelAgent, Title: "Claude Code", Command: []string{"sh", "-c", "sleep 30"}, Dir: dir},
 			{Kind: revier.PanelShell, Dir: dir},
 		},
 	}
@@ -61,8 +61,8 @@ func TestOpenLabelsAndNamesEachTerminal(t *testing.T) {
 	for i, run := range runs {
 		labels := asMap(run["labels"])
 		if labels["revier.instance"] != id || labels["revier.name"] != "home" || labels["revier.panel"] != []string{"0", "1"}[i] ||
-			labels["revier.tab"] != token || labels["revier.tabplace"] != "0" || labels["revier_target"] != "home" || len(labels) != 6 {
-			t.Errorf("run %d labels = %v, want the instance, name, tab, tab place, place and var", i, labels)
+			labels["revier.tab"] != token || labels["revier.tabplace"] != "0" || labels["revier_target"] != "home" || len(labels) != []int{7, 6}[i] {
+			t.Errorf("run %d labels = %v, want the instance, name, tab, tab place, place and var, and a title on the first alone", i, labels)
 		}
 		if run["name"] != "rv-"+id+"-"+[]string{"0", "1"}[i] || run["no_parent"] != true || run["keep"] != false || run["cwd"] != dir {
 			t.Errorf("run %d = %v, want named after the instance, no parent, not kept, in %s", i, run, dir)
@@ -72,6 +72,9 @@ func TestOpenLabelsAndNamesEachTerminal(t *testing.T) {
 		if run["rm"] != (i == 1) {
 			t.Errorf("run %d rm = %v, want %v", i, run["rm"], i == 1)
 		}
+	}
+	if title := asMap(runs[0]["labels"])["revier.title"]; title != "Claude Code" {
+		t.Errorf("the agent's title label = %v, want Claude Code", title)
 	}
 	// A bare program name could name one of the user's hc templates, which hc
 	// would run in its place; a path never does.
@@ -90,15 +93,16 @@ func TestOpenLabelsAndNamesEachTerminal(t *testing.T) {
 
 // A title holds whatever the realization's name holds: a label value is
 // free text, so a separator, a newline or an '=' survives as written, and the
-// realization's Match finds what Open made. A var's value survives the same
-// way.
+// realization's Match finds what Open made. A var's value and a panel's title
+// survive the same way, and no var is revier's title label.
 func TestFreeTextSurvivesTheRoundTrip(t *testing.T) {
 	_, sock := newCore(t)
 	h := &hc.Host{Socket: sock}
 	name := "demo | pipe/slash\nline=ü\ttab"
 	r := revier.Realization{
 		Name: name, Match: revier.Match{Title: "^" + regexp.QuoteMeta(name) + "$"},
-		Vars: map[string]string{"note": "a=b | c/d\nü"},
+		Vars:   map[string]string{"note": "a=b | c/d\nü"},
+		Panels: []revier.PanelSpec{{Kind: revier.PanelShell, Title: "x=y | z/w\nü"}},
 	}
 	ref, err := h.Open(t.Context(), r)
 	if err != nil {
@@ -113,6 +117,14 @@ func TestFreeTextSurvivesTheRoundTrip(t *testing.T) {
 	}
 	if v := instances[0].Panels[0].Vars["note"]; v != r.Vars["note"] {
 		t.Errorf("var = %q, want %q", v, r.Vars["note"])
+	}
+	if vars := instances[0].Panels[0].Vars; len(vars) != 1 {
+		t.Errorf("vars = %v, want note alone: the title label is revier's own", vars)
+	}
+	var window strings.Builder
+	h.Title(t.Context(), instances[0].Panels[0].ID, &window)
+	if want := "\x1b]2;x=y | z/w ü\x1b\\"; window.String() != want {
+		t.Errorf("the window got %q, want %q", window.String(), want)
 	}
 }
 
@@ -424,6 +436,7 @@ func TestOpenRefusesWhatHcWouldNotKeep(t *testing.T) {
 		"a key with =":    {Name: "home", Vars: map[string]string{"a=b": "x"}},
 		"an empty value":  {Name: "home", Vars: map[string]string{"k": ""}},
 		"revier's label":  {Name: "home", Vars: map[string]string{"revier.name": "x"}},
+		"the title label": {Name: "home", Vars: map[string]string{"revier.title": "x"}},
 		"no such dir":     {Name: "home", Dir: filepath.Join(t.TempDir(), "gone")},
 		"not UTF-8 value": {Name: "home", Vars: map[string]string{"k": "\xff"}},
 	} {
