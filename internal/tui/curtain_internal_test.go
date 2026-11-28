@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -11,8 +12,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/hk9890/revier/internal/core"
 	"github.com/hk9890/revier/internal/curtain"
 	"github.com/hk9890/revier/internal/theme"
+	"github.com/hk9890/revier/pkg/revier"
 )
 
 // curtainOn is a curtain on a real socket, sized as a monitor, and the
@@ -114,8 +117,8 @@ func ended() curtain.State {
 	return st
 }
 
-// The main curtain lists the steps by project, and the note of the one that
-// runs says what runs now.
+// The main curtain lists the steps by project, and one line under the list
+// says what runs now.
 func TestTheMainCurtainListsTheStepsByProject(t *testing.T) {
 	m, s := curtainOn(t, true)
 	got := screen(shown(t, m, s, halfway))
@@ -124,10 +127,8 @@ func TestTheMainCurtainListsTheStepsByProject(t *testing.T) {
 			t.Errorf("screen lacks %q:\n%s", want, got)
 		}
 	}
-	for _, l := range strings.Split(got, "\n") {
-		if strings.Contains(l, "bravo") && !strings.Contains(l, "opening 3 of 5") {
-			t.Errorf("the line of the project that runs lacks what runs: %q", l)
-		}
+	if strings.Index(got, "opening 3 of 5") < strings.Index(got, "charlie") {
+		t.Errorf("what runs is not under the list:\n%s", got)
 	}
 }
 
@@ -311,6 +312,110 @@ func TestAStateThatChangesTheFormClearsTheScreen(t *testing.T) {
 		if batch {
 			m = shown(t, m, s, tc.st)
 		}
+	}
+}
+
+// noCurtain launches nothing: a run a test feeds by hand opens no curtain.
+func noCurtain(revier.Monitor, string, bool) []string { return nil }
+
+// walkReports is every report of a restore or a shutdown of 12 projects, two
+// steps each, in which some steps fail or are left open; and the run that
+// takes them.
+func walkReports(mode string) (*curtainRun, []core.Progress) {
+	broke := errors.New("the window did not appear in the time that the launch waits for it, so nothing is bound to the target")
+	var restores []core.RestoreStep
+	var closes []core.CloseStep
+	for i := range 12 {
+		p := revier.ProjectName(fmt.Sprintf("project-%02d", i))
+		for _, target := range []revier.TargetName{"home", "editor-of-the-project"} {
+			restores = append(restores, core.RestoreStep{Project: p, Target: target, Action: core.RestoreLaunch})
+			closes = append(closes, core.CloseStep{Project: p, Target: target})
+		}
+	}
+	var reports []core.Progress
+	if mode == "shutdown" {
+		reports = append(reports, core.Progress{Phase: core.PhaseRecheck}, core.Progress{Phase: core.PhaseSave})
+		for i, step := range closes {
+			res := core.CloseResult{CloseStep: step}
+			p := core.Progress{Phase: core.PhaseClose, N: i + 1, Of: len(closes), Label: step.Name(), Closed: res}
+			reports = append(reports, p)
+			switch i % 5 {
+			case 2:
+				res.Err = broke
+			case 3:
+				res.Open = true
+			}
+			p.Done, p.Closed = true, res
+			reports = append(reports, p)
+		}
+		rows, steps := closeRows(closes)
+		return newCurtain(noCurtain, mode, rows, steps), append(reports, core.Progress{Phase: core.PhaseWait})
+	}
+	for i, step := range restores {
+		res := core.RestoreResult{RestoreStep: step}
+		p := core.Progress{Phase: core.PhaseLaunch, N: i + 1, Of: len(restores), Label: string(step.Target), Restored: res}
+		reports = append(reports, p)
+		if i%5 == 2 {
+			res.Err = broke
+		}
+		p.Done, p.Restored = true, res
+		reports = append(reports, p)
+	}
+	rows, steps := restoreRows(restores)
+	return newCurtain(noCurtain, mode, rows, steps), append(reports, core.Progress{Phase: core.PhaseHome, Label: "project-00"})
+}
+
+// corner is where the block's title is drawn, and the block's form.
+func corner(m curtainModel) (top, left int, shape curtainShape) {
+	rows := strings.Split(ansi.Strip(m.View().Content), "\n")
+	for rows[top] == "" {
+		top++
+	}
+	return top, len(rows[top]) - len(strings.TrimLeft(rows[top], " ")), m.shape()
+}
+
+// The block stays where it is, and keeps the form whose change clears the
+// screen, from the plan of a walk to its last report, whatever its steps come
+// to.
+func TestTheBlockStaysInPlaceWhileTheWalkRuns(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		main, compact bool
+	}{{"main", true, false}, {"compact", true, true}, {"secondary", false, false}} {
+		for _, mode := range []string{"restore", "shutdown"} {
+			for _, size := range []struct{ width, height int }{{213, 54}, {160, 40}, {101, 18}, {80, 24}} {
+				t.Run(fmt.Sprintf("%s %s %dx%d", tc.name, mode, size.width, size.height), func(t *testing.T) {
+					r, reports := walkReports(mode)
+					m := sized(curtainModel{main: tc.main, compact: tc.compact, th: theme.Default()}, size.width, size.height)
+					m.state = r.state
+					top, left, shape := corner(m)
+					for i, p := range reports {
+						r.take(p)
+						m.state = r.state
+						if gotTop, gotLeft, gotShape := corner(m); gotTop != top || gotLeft != left || gotShape != shape {
+							t.Fatalf("report %d (%s): the block is at row %d column %d with %+v, it was at row %d column %d with %+v:\n%s",
+								i, m.state.Line, gotTop, gotLeft, gotShape, top, left, shape, ansi.Strip(m.View().Content))
+						}
+						for _, l := range strings.Split(m.View().Content, "\n") {
+							if w := ansi.StringWidth(l); w > size.width {
+								t.Fatalf("report %d: a line is %d wide on a monitor of %d: %q", i, w, size.width, ansi.Strip(l))
+							}
+						}
+					}
+				})
+			}
+		}
+	}
+}
+
+// A note that fits the monitor is whole in the summary.
+func TestTheSummaryShowsALongNoteWhole(t *testing.T) {
+	m, s := curtainOn(t, true)
+	st := ended()
+	st.Rows[3].Note = strings.Repeat("why ", 26) + "end"
+	m = shown(t, m, s, st)
+	if got := screen(m); !strings.Contains(got, st.Rows[3].Note) {
+		t.Errorf("the summary cuts a note that fits:\n%s", got)
 	}
 }
 

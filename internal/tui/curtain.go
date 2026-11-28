@@ -22,8 +22,12 @@ import (
 // main monitor's curtain lists every step; another monitor's shows the
 // title and the bar. A curtain ends when its socket does.
 
-// curtainWidth is the widest the main curtain's block is drawn.
-const curtainWidth = 72
+// The bars' widths, and the columns right of a bar that its count takes.
+const (
+	curtainBar          = 62
+	curtainSecondaryBar = 40
+	curtainCount        = 10
+)
 
 // curtainButtonLines is how many lines the button adds under the block: two
 // blank, the button, one blank and the hint.
@@ -187,22 +191,38 @@ func (m curtainModel) layout() curtainScreen {
 		button = m.buttonStyle().Render("  " + label + "  ")
 		lines = append(lines, button, "", m.th.Help.Render(hint))
 	}
-	blockWidth := 0
-	for _, l := range lines {
-		blockWidth = max(blockWidth, lipgloss.Width(l))
+	blockWidth := m.walkWidth()
+	if m.state.End != nil {
+		blockWidth = 0
+		for _, l := range lines {
+			blockWidth = max(blockWidth, lipgloss.Width(l))
+		}
 	}
 	top, left := max(0, (m.height-len(lines))/2), max(0, (m.width-blockWidth)/2)
 	pad := strings.Repeat(" ", left)
 	var b strings.Builder
 	b.WriteString(strings.Repeat("\n", top))
 	for _, l := range lines {
-		b.WriteString(pad + l + "\n")
+		b.WriteString(pad + m.clip(l, m.width-left) + "\n")
 	}
 	screen := curtainScreen{text: b.String(), button: curtainButton{row: -1}}
 	if buttonAt >= 0 {
 		screen.button = curtainButton{row: top + buttonAt, from: left, to: left + lipgloss.Width(button)}
 	}
 	return screen
+}
+
+// walkWidth is the width the block is centred on while the walk runs. No
+// note and no line that says what runs counts: they come and go with the
+// steps, and the block would move with them.
+func (m curtainModel) walkWidth() int {
+	width := m.barWidth() + curtainCount
+	if m.main && !m.compact {
+		for _, r := range m.projectRows() {
+			width = max(width, lipgloss.Width(r.steps))
+		}
+	}
+	return width
 }
 
 // curtainShape is how many lines the block has, and its button.
@@ -245,20 +265,25 @@ func (m curtainModel) lines() (lines []string, label, hint string) {
 		var failed []string
 		for _, r := range st.Rows {
 			if r.State == curtain.RowFailed {
-				failed = append(failed, m.clip(th.Attention.Render(m.icon(r.State)+" "+r.Project+" "+r.Label+": "+oneLine(r.Note))))
+				failed = append(failed, th.Attention.Render(m.icon(r.State)+" "+r.Project+" "+r.Label+": "+oneLine(r.Note)))
 			}
 		}
 		lines = append(lines, m.fit(failed, nil, m.room(len(lines)))...)
 	case m.compact:
-		lines = append(lines, m.spinner()+" "+th.Meta.Render(st.Line+" …"))
+		lines = append(lines, m.runs())
 	default:
-		rows, first, running := m.projectRows()
-		tail := []string{""}
-		switch {
-		case end != nil:
-			tail = append(tail, th.Meta.Render(end.Summary))
-		case !running && st.Line != "":
-			tail = append(tail, m.spinner()+" "+th.Meta.Render(st.Line+" …"))
+		var rows []string
+		var first []bool
+		for _, r := range m.projectRows() {
+			row := r.steps
+			if r.note != "" {
+				row += "   " + r.note
+			}
+			rows, first = append(rows, row), append(first, r.first)
+		}
+		tail := []string{"", m.runs()}
+		if end != nil {
+			tail[1] = th.Meta.Render(end.Summary)
 		}
 		lines = append(lines, m.fit(rows, first, m.room(len(lines)+len(tail)))...)
 		lines = append(lines, tail...)
@@ -270,6 +295,12 @@ func (m curtainModel) lines() (lines []string, label, hint string) {
 		return lines, "Cancelling…", "stops after the step that runs · ctrl+c again quits now"
 	}
 	return lines, "Cancel", "ctrl+c cancel · esc hide · tab layout"
+}
+
+// runs is the line that says what runs now. It is drawn before the first
+// report too, so that the block keeps its height.
+func (m curtainModel) runs() string {
+	return m.spinner() + " " + m.th.Meta.Render(m.state.Line+" …")
 }
 
 // room is how many rows fit between the fixed lines above them and the
@@ -310,12 +341,13 @@ func (m curtainModel) fit(rows []string, first []bool, room int) []string {
 	return append(out, m.th.Help.Render(fmt.Sprintf("+%d more", len(rows)-n)))
 }
 
-// clip cuts a line to the monitor's width, so that it stays one line.
-func (m curtainModel) clip(line string) string {
+// clip cuts a line to width, so that it stays one line. A monitor not yet
+// sized cuts none.
+func (m curtainModel) clip(line string, width int) string {
 	if m.width <= 0 {
 		return line
 	}
-	return ellipsis(line, m.width)
+	return ellipsis(line, width)
 }
 
 // oneLine is a note on one line: the lines of an error that joins several
@@ -341,10 +373,7 @@ func (m curtainModel) title() string {
 
 // bar is the progress bar and the count of steps done.
 func (m curtainModel) bar() string {
-	width := curtainWidth - 10
-	if !m.main {
-		width = 40
-	}
+	width := m.barWidth()
 	n, of := m.state.N, m.state.Of
 	fill := 0
 	if of > 0 {
@@ -353,6 +382,13 @@ func (m curtainModel) bar() string {
 	return m.th.Accent.Render(strings.Repeat("━", fill)) +
 		m.th.Border.Render(strings.Repeat("━", width-fill)) +
 		"  " + m.th.Meta.Render(fmt.Sprintf("%d / %d", n, of))
+}
+
+func (m curtainModel) barWidth() int {
+	if m.main {
+		return curtainBar
+	}
+	return curtainSecondaryBar
 }
 
 func (m curtainModel) buttonStyle() lipgloss.Style {
@@ -385,11 +421,16 @@ func (m curtainModel) icon(s curtain.RowState) string {
 	return m.th.Help.Render(m.th.Glyphs.Stopped)
 }
 
-// projectRows is one line per project, in the order of the walk: the
-// project's state, its name, each step's state and label, and a note on the
-// step that runs, failed or was skipped. first marks the line of a project
-// whose step runs or failed; running says whether a step runs.
-func (m curtainModel) projectRows() (lines []string, first []bool, running bool) {
+// curtainRow is one project's line: its state, its name and each step's
+// state and label; and a note on the step that failed or was skipped. first
+// marks a project whose step runs or failed.
+type curtainRow struct {
+	steps, note string
+	first       bool
+}
+
+// projectRows is one row per project, in the order of the walk.
+func (m curtainModel) projectRows() []curtainRow {
 	var order []string
 	steps := map[string][]curtain.Row{}
 	nameWidth := 0
@@ -401,15 +442,13 @@ func (m curtainModel) projectRows() (lines []string, first []bool, running bool)
 		steps[r.Project] = append(steps[r.Project], r)
 	}
 	th := m.th
+	var rows []curtainRow
 	for _, project := range order {
 		var parts []string
 		var note string
 		for _, r := range steps[project] {
 			parts = append(parts, m.icon(r.State)+" "+th.Meta.Render(r.Label))
 			switch {
-			case r.State == curtain.RowRunning:
-				running = true
-				note = th.Meta.Render(m.state.Line + " …")
 			case r.State == curtain.RowFailed && note == "":
 				note = th.Attention.Render(r.Label + ": " + oneLine(r.Note))
 			case r.State == curtain.RowSkipped && note == "":
@@ -421,15 +460,14 @@ func (m curtainModel) projectRows() (lines []string, first []bool, running bool)
 		if state == curtain.RowWaiting || state == curtain.RowSkipped {
 			name = th.NameDim
 		}
-		line := m.icon(state) + "  " + name.Render(project+strings.Repeat(" ", nameWidth-lipgloss.Width(project))) +
-			"   " + strings.Join(parts, "  ")
-		if note != "" {
-			line += "   " + note
-		}
-		lines = append(lines, m.clip(line))
-		first = append(first, state == curtain.RowRunning || state == curtain.RowFailed)
+		rows = append(rows, curtainRow{
+			steps: m.icon(state) + "  " + name.Render(project+strings.Repeat(" ", nameWidth-lipgloss.Width(project))) +
+				"   " + strings.Join(parts, "  "),
+			note:  note,
+			first: state == curtain.RowRunning || state == curtain.RowFailed,
+		})
 	}
-	return lines, first, running
+	return rows
 }
 
 // projectState is the state a project's line shows: the step that runs,
