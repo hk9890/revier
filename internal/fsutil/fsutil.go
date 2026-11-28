@@ -1,5 +1,7 @@
 // Package fsutil holds the file-system idioms the stores share: the atomic
-// write, the write through a link, and the path behind every link.
+// write, the write through a link, and the path behind every link. The window
+// rules of internal/adapter/gnome write their own: wctl checks the new file
+// before it replaces the old one.
 package fsutil
 
 import (

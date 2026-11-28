@@ -8,6 +8,9 @@
 // agent was doing - its conversation and the directory it worked in - which no
 // project file can carry, because neither existed when the file was written.
 //
+// It also names seen.toml, what a surface last saw, which an end with no
+// shutdown saves.
+//
 // It is separate from internal/state because the two have different
 // lifecycles. state.json is one live document, pruned on read against the
 // instances that exist now; these are many durable artifacts that must survive

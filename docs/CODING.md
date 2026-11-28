@@ -19,10 +19,6 @@ the behaviour associated with it.
 | A test fake of a port that a test configures and reads back | `internal/hosttest` |
 | Any other fake, such as a port that fails or blocks | the test files of its package, as [TESTING.md](TESTING.md#conventions) says |
 
-Before a change to a port or to a decision the core makes, read the records in
-[docs/decisions/](decisions/) that bear on it: one may already settle it, or
-name the alternative it rejected.
-
 Keep the project model in `pkg/revier`: `Project`, `Target`, and the types of
 their fields, such as `Command`, `Link` and `HostKind`. It crosses a port: the
 `Remote` port's `Survey` and `Conversations` return `ProjectView`, which

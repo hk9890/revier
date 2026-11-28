@@ -1,6 +1,7 @@
 // Package ledger is the state file, the event file, the state record and the
 // per-project press lock as the core uses them: the one implementation of
-// core.Ledger outside a test.
+// core.Ledger outside a test, and the one caller of state.Update, which holds
+// the state file's lock.
 package ledger
 
 import (

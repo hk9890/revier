@@ -90,15 +90,16 @@ search its comment for the same quoted text, without the closing quote.
   raise, not of the change.
 - A popup that wctl's overlay hid logs `popup: hidden by the desktop` when
   the next press raises it, or when a slow refresh's survey lists it
-  minimized; until then it surveys every ten seconds and writes `saw` lines.
+  minimized; until then it surveys at the rate of a surface with no focus
+  (`blurredRefresh` in `internal/tui/tui.go`) and writes `saw` lines.
   A `popup: raise` line with `minimized=true` follows Esc's hide too. A popup
   that shows a screen, asks a question, such as a delete, or walks a restore
   or a shutdown logs no such line.
 - A `snapshot` is a whole survey of one scope, this machine or one linked
-  host (`machine`): at a surface's first survey, at the first of a day, when
-  the project list changed, and at each save, with `saved`. Each other `saw`
-  line is a change since the last survey. A scope with no change for five
-  minutes writes a `survey` line; one with no line for six is stale.
+  host (`machine`); each save writes one too, with `saved`. Each other `saw`
+  line is a change since the last survey, and a `survey` line says a scope
+  had no change. When each is written, and when a scope is stale:
+  `rg -n -B6 '^const (Beat|Stale)|^func \(o \*Observer\) Saw' internal/record/observe.go`.
 - A host that did not list, or a link whose host did not answer, keeps what
   was last seen of it, marked unknown.
 - `pid` and `cmd` are the log's: join a line with the log of the process

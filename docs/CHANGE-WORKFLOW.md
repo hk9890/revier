@@ -9,6 +9,9 @@ a clean `main`: no edit, no commit, no branch switch there.
   It checks out `origin/main` under `.claude/worktrees/<name>` on branch
   `worktree-<name>`.
 - Run every command from inside the worktree.
+- Enter the worktree before you start a subagent or a workflow. Start it in
+  that worktree, or give it an isolated worktree of its own: a subagent cannot
+  create one.
 - Tag a release from a detached worktree instead;
   [RELEASING.md](RELEASING.md) has the commands.
 - Remove the worktree and its branch once the PR is merged, from the main
@@ -50,7 +53,8 @@ Call the Skill tool with `commit-commands:commit` for the standard flow.
 
 ## Push and PR
 
-Push the branch the worktree tool made, under its own name.
+Push the branch the worktree tool made, under its own name. When a task names
+another branch, keep `worktree-<name>` and tell the user.
 
 ```bash
 git push -u origin HEAD

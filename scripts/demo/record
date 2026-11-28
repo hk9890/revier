@@ -3,6 +3,21 @@
 # prepared. Keys go in with virsh send-key, GNOME's own screencast records each
 # clip at 30 fps, and compose.py lays the pressed keys over it. Nothing runs on
 # this desktop.
+#
+# Usage: scripts/demo/record <lease-id> [output dir]. The output dir defaults
+# to .github/assets/; give another one to compare first.
+#
+# - Give it a new lease in tier full: the clips take kitty's theme, font and
+#   window frame from the user's setup, which a plain lease lacks. A lease
+#   that ran other checks first keeps their workspace kitty, and the popup
+#   shows their projects.
+# - This machine needs ffmpeg with libwebp, python3-pil for /usr/bin/python3,
+#   and the JetBrainsMono Nerd Font, which draws the keycaps.
+# - The guest side uses a scratch configuration and fake agents. It points the
+#   trigger key and the editor and ticket keys at them, sets a plain
+#   background and 1920x1080, and teardown.sh puts all of it back on exit.
+# - Open each clip in a browser before you commit: ffmpeg cannot decode an
+#   animated WebP.
 set -eu
 
 id="${1:?usage: scripts/demo/record <lease-id> [output dir]}"
