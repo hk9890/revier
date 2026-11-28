@@ -8,6 +8,12 @@
 // the terminal of the one under the cursor mirrored beside it as the project
 // pane mirrors it.
 //
+// The dialogs are here too: the screens that stand over the surface, which
+// the dialog type lists, the config screen among them. So is the curtain's
+// screen, a model of its own that NewCurtain builds: it runs in a window of
+// its own on each monitor while a full shutdown or a restore from the popup
+// runs.
+//
 // Every project, target and agent it draws comes from core.SurveyLocal,
 // refreshed on a timer that never overlaps itself and that slows down while
 // the terminal has no focus, with what core.AskRemotes last brought
@@ -564,6 +570,14 @@ func (m *Model) clearForRaise() {
 
 // hiddenByDesktop takes the desktop's hide of the popup as Esc's, and the
 // next raise as Esc's raise.
+//
+// The desktop hides the popup by its overlay rule, when another window takes
+// the focus. hiddenByDesktop logs "popup: hidden by the desktop", with no
+// field of its own, at the focus a press gives the popup it raised from
+// minimized, or at a survey, listed since the last blur or focus, that lists
+// the popup minimized while it has no focus. Until then the popup surveys
+// every blurredRefresh, ten seconds, unless a launch is coming up, and records
+// what it saw. A popup that does not takesHide logs no such line.
 func (m *Model) hiddenByDesktop() {
 	slog.Info("popup: hidden by the desktop")
 	m.hideTaken()
@@ -605,6 +619,9 @@ func (m Model) Survey() tea.Cmd {
 		report, err := c.SurveyLocal(ctx, projects)
 		if err == nil {
 			// The agents here. A link's are recorded when its host answers.
+			// The surface is the one caller, so no "agent session" event is
+			// written while none runs, or while a hidden popup surveys
+			// nothing.
 			events.Sessions(report.Views)
 		}
 		return surveyMsg{report: report, err: err, look: look}
@@ -924,7 +941,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// it the rounds of the linked hosts that a survey starts: a round
 		// trip to each of them a second is for nothing. A launch still coming
 		// up keeps the chain until its window is claimed or the launch
-		// expires, since the survey is what claims it.
+		// expires, since the survey is what claims it. A failure that
+		// recovers while the popup is hidden writes its "<msg>: recovered"
+		// line (logging.Repeat) at the next call that succeeds: a linked
+		// host's at the raise, and a survey's at the raise too once the chain
+		// ended.
 		if m.hidden {
 			if !m.claiming() {
 				m.idle = true

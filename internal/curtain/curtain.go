@@ -1,5 +1,5 @@
-// Package curtain is the socket between the surface that runs a shutdown or
-// a restore and its curtains, one on each monitor. The
+// Package curtain is the socket between the surface that runs a full
+// shutdown or a restore and its curtains, one on each monitor. The
 // surface listens and sends the state of the walk; each curtain connects,
 // draws the latest state, and sends back what the user pressed.
 //

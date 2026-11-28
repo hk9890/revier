@@ -44,9 +44,8 @@ Call the Skill tool with `commit-commands:commit` for the standard flow.
 - A change to behaviour updates every place that describes it: `README.md`,
   the page of `docs/user-guide/` that covers it, package doc comments, test
   comments.
-- A new, renamed or changed log `msg` (its fields, or when it is written) has
-  a comment at its call site that says when it is written and which fields it
-  carries.
+- A new, renamed or changed log `msg` or state record kind meets the
+  [call-site comment rule](REVIEWING.md#quality-rules).
 
 ## Push and PR
 

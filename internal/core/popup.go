@@ -85,7 +85,8 @@ func (c *Core) Popup(ctx context.Context, argv func(context.Context) []string) (
 	}
 	if w, ok := popupWindow(before); ok {
 		// Logs "popup: raise" with ref and minimized: the press raises the
-		// open popup.
+		// open popup. minimized is true after a hide by Esc or a go too, as
+		// gnome's Hide minimizes the window.
 		slog.Info("popup: raise", "ref", w.Ref, "minimized", w.Minimized)
 		// The surface reads it at the focus the raise gives it, so it is on
 		// record first. A key typed in at the raise costs

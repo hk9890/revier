@@ -1,5 +1,8 @@
-// Package fsutil holds the file-system idioms the stores share: the atomic
-// write, the write through a link, and the path behind every link.
+// Package fsutil holds the file-system idioms revier shares: the atomic write,
+// the write through a link, and RealPath, the path behind every link.
+//
+// The popup's window rules do not use WriteFile: gnome's RuleWriter.WriteOwn
+// writes its own temporary file, has wctl check it, and renames it in place.
 package fsutil
 
 import (

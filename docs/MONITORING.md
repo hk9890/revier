@@ -8,8 +8,8 @@ doc reads what it already did.
 - One JSON line per record, in `$STATE/logs/revier-YYYY-MM-DD.log`.
 - `$STATE` is `$REVIER_STATE_HOME`, else `$XDG_STATE_HOME/revier`, else
   `~/.local/state/revier` (`internal/state.Root`).
-- Files older than 14 days are removed when a day's first file is created
-  (`internal/logging.Keep`).
+- A file older than `internal/logging.Keep` days is gone; its comment says
+  when the removal runs.
 - Every process appends to the same file: keybindings, the TUI, a restore. Split
   them by `pid`.
 - A remote project's operations run in the revier on its host, and log there.
@@ -41,8 +41,8 @@ doc reads what it already did.
 - `INFO` — an operation that succeeded.
 - `ERROR` — an operation that failed. An error the TUI showed in its footer that no operation logged has `msg` `tui`.
 - `WARN` — an error revier carried on past: a state file it could not read or save, a probe that reported unknown, a window it could not place or bind.
-- A failure that recurs every refresh — a probe, a host's listing (`instances`), a remote host, the TUI's state file — is one `WARN` per different `err`, then one `INFO` `<msg>: recovered` (`logging.Repeat`). Its `was` is the `err` of the last failed refresh, `last_failed` when that refresh failed, and `failures` how many refreshes failed.
-- Silence after a `WARN` means no refresh of that process succeeded since: it still failed, with an `err` already written, or it did not refresh. A hidden popup does not refresh, so its `recovered` comes at its next raise. Read the end of an outage from `last_failed`, not from the time of the line.
+- A failure that recurs every refresh — a probe, a host's listing (`instances`), a remote host, the TUI's state file — is one `WARN` per different `err`, then one `INFO` `<msg>: recovered`. `go doc ./internal/logging Repeat` names the fields of both.
+- Silence after a `WARN` means no refresh of that process succeeded since: it still failed, with an `err` already written, or it did not refresh. Read the end of an outage from `last_failed`, not from the time of the line.
 
 ## Operations
 
@@ -64,45 +64,20 @@ search its comment for the same quoted text, without the closing quote.
   fields. `--local` leaves out the linked hosts.
 - A press is in the log and in the event file. Explain a failure from the
   log: a failed operation writes no event. Its error is in the state record.
-- `agent session` lines come from the TUI alone, so none are written while no
-  surface runs, or while the popup is hidden and no launch of its own is
-  coming up.
 
 ## The state record
 
 - `$STATE/record/YYYY-MM-DD.jsonl` holds one JSON line per thing revier did,
   `by` `did`, with `err` when it failed, and per change a surface's survey
   saw, `by` `saw`. It is never pruned (decisions/0151).
-- `kind` names what a line is: the `ran`, `snapshot` and `survey` lines below
-  are values of `kind`.
+- `kind` names what a line is. The comment of its `Kind` constant says when
+  it is written and which fields it carries:
+  `go doc ./internal/record KindSnapshot` prints every kind a survey writes,
+  `go doc ./internal/record KindGo` every kind an operation writes.
 - Read it with `revier state --at <time>`: what was open then, per machine.
   `revier state --session <id>` names why each difference between a save and
   what was open when it was made is one; `revier state --help` lists the
   reasons.
-- A `ran` line is a run of a command target that moved the focus, with the
-  `host` and `ref` the focus moved to. It is written only when that differs
-  from the run on record, and it opens nothing: `revier state` lists it as
-  done and holds no target open for it.
-- A `saw` line comes from a surface alone: with no TUI or popup running, the
-  record holds only what operations did. `revier list` writes no `saw`
-  line, only what its prune changed in the state file.
-- A hidden popup surveys nothing unless a launch of its own is still coming
-  up, so it writes no `saw` line until its
-  next raise. A change made while it was hidden carries the time of that
-  raise, not of the change.
-- A popup that wctl's overlay hid logs `popup: hidden by the desktop` when
-  the next press raises it, or when a slow refresh's survey lists it
-  minimized; until then it surveys every ten seconds and writes `saw` lines.
-  A `popup: raise` line with `minimized=true` follows Esc's hide too. A popup
-  that shows a screen, asks a question, such as a delete, or walks a restore
-  or a shutdown logs no such line.
-- A `snapshot` is a whole survey of one scope, this machine or one linked
-  host (`machine`): at a surface's first survey, at the first of a day, when
-  the project list changed, and at each save, with `saved`. Each other `saw`
-  line is a change since the last survey. A scope with no change for five
-  minutes writes a `survey` line; one with no line for six is stale.
-- A host that did not list, or a link whose host did not answer, keeps what
-  was last seen of it, marked unknown.
 - `pid` and `cmd` are the log's: join a line with the log of the process
   that wrote it.
 

@@ -73,7 +73,9 @@ func cmdList(ctx context.Context, a *app, args []string) error {
 	// accumulate refs to closed windows forever. A list is the first settle
 	// of its process, so no window is new to it and it claims nothing for the
 	// launch on record; it can bind a late launch, which needs no new window,
-	// or end one past its time.
+	// or end one past its time. A list is no surface and writes no "saw"
+	// line: the state record gets the "did" lines of what the settle changed
+	// in the state file.
 	a.core.Settle(report, a.projects, time.Now())
 
 	if *match != "" {

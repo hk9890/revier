@@ -1,7 +1,8 @@
 // Package plain takes off what an agent, a tool or a status command wrote
-// for the terminal, so that what is left is drawn as text. An agent's message
-// must be. The harness cannot clean it for revier, since it
-// does not own what a tool wrote into the transcript it keeps.
+// for the terminal, so that what is left is drawn as text, by the TUI and by
+// the command line. An agent's message must be drawn as text: the harness
+// cannot clean it for revier, since it does not own what a tool wrote into
+// the transcript it keeps.
 package plain
 
 import (

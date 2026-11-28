@@ -74,8 +74,9 @@ func NoServiceManager(t *testing.T, run string) {
 	}
 }
 
-// NoTools empties PATH for the test, so the code under test finds no tool to
-// start: the test starts no process, and mise's trust list is left as it was.
+// NoTools sets PATH to one empty directory for the test, so the code under
+// test finds no tool to start: the test starts no process, and mise's trust
+// list is left as it was.
 func NoTools(t *testing.T) {
 	t.Helper()
 	t.Setenv("PATH", t.TempDir())

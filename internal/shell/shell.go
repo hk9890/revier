@@ -1,5 +1,8 @@
 // Package shell quotes a word so that a POSIX shell and fish read it back as
 // that one word.
+//
+// It quotes the line `ssh` runs on a host, each command `revier each` lists,
+// the assistant's status line, and the rename `revier doctor` suggests.
 package shell
 
 import "strings"

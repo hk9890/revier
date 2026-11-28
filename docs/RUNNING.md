@@ -303,8 +303,9 @@ Call the Skill tool with `werft:werft` for the lease flow.
   the lease's PATH and runs `revier setup install` there.
 - Run revier and hc in the lease without `REVIER_CONFIG_HOME` or `hcp`: its
   configuration, state and hc core are scratch already.
-- Write each block below to a file under `hako-private/`, copy it in with
-  `scp -F <ssh_config> <file> <lease-id>:`, and run it in one ssh call:
+- Write each block below to a file in a directory from `mktemp -d`, and keep
+  the path it prints: the next command runs in a fresh shell. Copy the file in
+  with `scp -F <ssh_config> <file> <lease-id>:`, and run it in one ssh call:
   `ssh -F <ssh_config> <lease-id> 'sh ./<file>'`. A variable then lives
   across its lines, and the block's quotes need no escaping.
 - Start a block that reaches the desktop with `. ./session.sh`: it sets the

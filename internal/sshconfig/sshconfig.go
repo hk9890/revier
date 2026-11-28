@@ -13,8 +13,9 @@ import (
 	"strings"
 )
 
-// Path is the user's ssh configuration file, or what REVIER_SSH_CONFIG
-// names instead: the override a test, and scripts/drive, run against.
+// Path is the user's ssh configuration file, ~/.ssh/config, or what
+// REVIER_SSH_CONFIG names instead: the override a test, and scripts/drive,
+// run against.
 func Path() (string, error) {
 	if p := os.Getenv("REVIER_SSH_CONFIG"); p != "" {
 		return p, nil

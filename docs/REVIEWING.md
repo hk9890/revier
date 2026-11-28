@@ -22,3 +22,10 @@ with the correct form.
   fact is a citation, and only for a fact that its record carries. A wrong form
   quoted in backticks, as in a report of it, is no number. Flag a number in any
   other form, or a citation on any other fact.
+- **Call-site comment**: a new, renamed or changed log `msg` (its fields, or
+  when it is written) has a comment at its call site that says when it is
+  written and which fields it carries. A new or changed state record kind has
+  the same in the comment of its `Kind` constant in `internal/record`.
+  [MONITORING.md](MONITORING.md) reads a line's meaning from that comment
+  alone. Flag a `msg` or a kind without one, or a comment the change made
+  false.
